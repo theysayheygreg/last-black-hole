@@ -1,0 +1,21 @@
+{
+  "algorithm": "sha256(path NUL sha256 LF, sorted by path)",
+  "sha256": "0d29aa0d7fe51f49c553f50160e1347beffd7c8075d4f62474fdd4a2fa831140",
+  "files": [
+    {
+      "path": "analysis.json",
+      "bytes": 24716,
+      "sha256": "5e73b0aaac47807c92af83aa60a493d3f88b0c027f07f32a426c95400ab39d18"
+    },
+    {
+      "path": "benchmark/benchmark.json",
+      "bytes": 8851,
+      "sha256": "0db488788cb4debffe46d691ed663b1091a001f2b78588e9da32cd179c5dd746"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 915,
+      "sha256": "d38236ee79bafa82c0857223af7909f81e78cf92ba352c32092c98af3b028f62"
+    }
+  ]
+}

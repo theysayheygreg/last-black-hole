@@ -186,6 +186,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairSharedPublicEvidence",
+    file: "multiplayer-state-pair-shared-public-evidence.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

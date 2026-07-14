@@ -1,0 +1,10 @@
+{
+  "at": "2026-07-14T01:20:35.285Z",
+  "message": "normal-8-seat-6 failed before first state pair: {\"code\":4401,\"reason\":\"manifest verification failed\",\"at\":1783992031823}",
+  "stack": [
+    "Error: normal-8-seat-6 failed before first state pair: {\"code\":4401,\"reason\":\"manifest verification failed\",\"at\":1783992031823}",
+    "    at setupPopulation (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:764:13)",
+    "    at async runScenario (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:1086:19)",
+    "    at async main (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:2256:56)"
+  ]
+}

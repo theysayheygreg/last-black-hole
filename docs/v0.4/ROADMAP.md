@@ -648,6 +648,37 @@ overlays, connection lineage, ACK/recovery, and one canonical writer. Do not
 begin compression, cadence policy, hosted economics, heavy-sim work, or
 24/48/96.
 
+**S19 shared-public cohorts — tested, rejected, and reverted:** a private
+authority/tick-scoped experiment shared public source/core transitions and
+exact public keyframe/delta decisions only when target hashes and acknowledged
+base hashes matched. A 22-comparison focused oracle and a counterbalanced
+synthetic eight-recipient benchmark preserved exact positional bytes and
+semantics. The synchronized synthetic ceiling reduced mean publish time from
+16.94/16.83 ms to 10.74/10.90 ms.
+
+That cohort does not exist in normal product admission. Publisher keys retain
+recipient-specific connection epochs and state-pair IDs; deltas also retain the
+exact ACKed-base hash, while runtime transition cohorts retain recipient
+revision-tracker snapshot identity. Staggered joins, scheduling, and ACK
+progression therefore produced zero public keyframe and zero public delta reuse
+in profiler-off isolated-process 1/4/8 runs. The single fixed-order run observed
+higher CPU/tail values and 4.95 to 4.80 Hz at eight, but is not used to estimate
+a causal regression magnitude. Four still normalizes to 72,425 B/s mean; eight
+normalizes to 81,187 B/s and remains clock-failing.
+The implementation commit `5074e42` is reverted by `5f4d3c3`; S18 remains the
+release default. Evidence is sealed under `docs/v0.4/evidence/state-pair-s19/`.
+
+S6's accepted prepared public projection/core work remains intact; S19 was a
+distinct cross-recipient runtime-transition and publisher-cohort layer. The
+registered 38-suite `multiplayer-network` lane passes once after the revert
+with retries disabled.
+
+The next bounded lane is a compression pilot against S18 positional JSON. It
+must clear four-player normalized bandwidth without regressing eight-player
+authority CPU/p95, preserve exact semantics and fallback, and leave cadence
+policy unchanged. Hosted economics, heavy-sim work, and 24/48/96 remain closed
+until this low-count admission sequence is decision-ready.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

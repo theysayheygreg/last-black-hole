@@ -2998,9 +2998,17 @@ cleanup with unchanged S15 bytes and S17 one-frame materialization.
 
 **Where it landed:** Option 4. S15 positional JSON + S17 lazy composition +
 S18 trusted proof is the release-default experiment; S16 binary remains opt-in.
+
+### Q: Does S19 shared public work admit four/eight without changing lineage?
+
+| Date | Decision |
+|------|----------|
+| Jul 13 | S19 may reuse public work only inside one match authority and one tick, and only for exact target plus acknowledged-base cohorts. Owner state, connection lineage, recovery, pending/retired ledgers, and ACK mutation stay per recipient. |
+| Jul 13 | The exact synthetic cohort is real but not representative: publisher keys retain per-recipient connection epochs/state-pair IDs and exact ACKed-base hashes, while runtime cohorts retain recipient revision-tracker snapshot identity. Staggered scheduling/ACK progression yielded zero keyframe/delta reuse at 1/4/8. Changing those isolation or lineage inputs to force hits is rejected. |
+| Jul 13 | Decision: revert `5074e42` with `5f4d3c3`, keep S18 positional JSON as default, admit only one player, and next run a bounded compression pilot with four-player bandwidth and eight-player CPU/tail gates. |
 Each match/group owns one dedicated logical authority, and concurrent matches
 multiply that isolated authority horizontally.
 
-**Door status:** Closed for 4/8 product admission, compression, cadence policy,
-hosted/heavy-sim work, and 24/48/96. Open only for bounded same-tick public
-projection/core/delta sharing with exact per-recipient correctness evidence.
+**Door status:** Closed for 4/8 product admission, further shared-public work,
+cadence policy, hosted/heavy-sim work, and 24/48/96. Open only for the bounded
+compression pilot above; do not start it from this decision record.

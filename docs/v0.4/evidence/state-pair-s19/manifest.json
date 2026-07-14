@@ -1,0 +1,13 @@
+{
+  "schema": "lbh-s19-shared-public-rejected-manifest-v1",
+  "analysisSha256": "5e73b0aaac47807c92af83aa60a493d3f88b0c027f07f32a426c95400ab39d18",
+  "baselineCompositeSha256": "df2441176514833357645959815053be53adaa23c8b434ec7548bf4cc52169f7",
+  "candidateCompositeSha256": "79765292714530595321902fb5bf3a5cfa502b02d5c4c46c9c6cca95739c4a23",
+  "benchmarkSha256": "0db488788cb4debffe46d691ed663b1091a001f2b78588e9da32cd179c5dd746",
+  "experimentSourceBindings": {
+    "scripts/authority-delta-publisher.cjs": "b1468627e4a2177b66d60b70afc09abaf37a012b7e7f1f9674000501470bd9a7",
+    "scripts/runtime-state-pair-integration.cjs": "1eeffee37125192333d678d6ceb1b2130976b3b48419ab3efd49e2962618dd86",
+    "scripts/sim-runtime.cjs": "28c3de0f9acf173e084d14b074557102422083e1c551cb4895be5d282c8452cb",
+    "tests/runtime-state-pair-integration.cjs": "884f341cbfe98c187cbce73449d54867f26b668e1b4ee5e46c58d3f9c429bf40"
+  }
+}

@@ -1,0 +1,677 @@
+{
+  "schema": "lbh-s19-shared-public-rejected-analysis-v1",
+  "authorityBoundary": "One dedicated logical authority remains the sole gameplay writer for one match/group; concurrent matches multiply this boundary horizontally.",
+  "releaseDefault": "S15 positional JSON plus S17 lazy materialization and S18 trusted proof; S16 binary remains opt-in. S19 runtime changes are reverted.",
+  "experiment": {
+    "implementationCommit": "5074e42",
+    "revertCommit": "5f4d3c3",
+    "baselineCompositeSha256": "df2441176514833357645959815053be53adaa23c8b434ec7548bf4cc52169f7",
+    "candidateCompositeSha256": "79765292714530595321902fb5bf3a5cfa502b02d5c4c46c9c6cca95739c4a23",
+    "exactFocusedComparisons": 22,
+    "focusedMismatches": 0,
+    "counterbalancedBenchmark": {
+      "sha256": "0db488788cb4debffe46d691ed663b1091a001f2b78588e9da32cd179c5dd746",
+      "schema": "lbh-s19-shared-public-counterbalanced-v1",
+      "rows": [
+        {
+          "schema": "lbh-s19-shared-public-benchmark-row-v1",
+          "label": "round-a-baseline",
+          "sharedPublicWork": false,
+          "recipients": 8,
+          "warmup": 30,
+          "iterations": 160,
+          "publishMilliseconds": {
+            "mean": 16.94034604374997,
+            "p50": 16.013041000000158,
+            "p95": 23.471333999999842,
+            "p99": 28.275959000000512
+          },
+          "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+          "shared": {
+            "runtime": {
+              "enabled": false,
+              "scope": "one authority instance and one authoritative tick",
+              "ticks": 0,
+              "eligibleRecipients": 0,
+              "sourceBuilds": 0,
+              "sourceReuses": 0,
+              "coreBuilds": 0,
+              "coreReuses": 0,
+              "misses": {
+                "disabled": 1520
+              },
+              "activeSources": 0,
+              "sourceHighWater": 0,
+              "cohortHighWater": 0,
+              "sourceCapPerTick": 4,
+              "cleanupCount": 0,
+              "allocationProxyBytes": 0,
+              "reusedAllocationProxyBytes": 0,
+              "rawClientIdentityKeys": 0
+            },
+            "publisher": {
+              "enabled": false,
+              "scope": "one authority instance and one authoritative target tick",
+              "ticks": 0,
+              "eligibleRecipients": 0,
+              "keyframeBuilds": 0,
+              "keyframeReuses": 0,
+              "deltaBuilds": 0,
+              "deltaReuses": 0,
+              "misses": {
+                "disabled": 1520
+              },
+              "activeKeyframeCohorts": 0,
+              "activeDeltaCohorts": 0,
+              "keyframeHighWater": 0,
+              "deltaHighWater": 0,
+              "configuredCohortBound": 16,
+              "cleanupCount": 0,
+              "reusedCanonicalBytes": 0,
+              "rawClientIdentityKeys": 0
+            }
+          },
+          "correctness": {
+            "receiverErrors": 0,
+            "pendingPairs": 0,
+            "ackRejected": 0
+          }
+        },
+        {
+          "schema": "lbh-s19-shared-public-benchmark-row-v1",
+          "label": "round-a-candidate",
+          "sharedPublicWork": true,
+          "recipients": 8,
+          "warmup": 30,
+          "iterations": 160,
+          "publishMilliseconds": {
+            "mean": 10.741244718750005,
+            "p50": 10.691667000000052,
+            "p95": 10.944500000000062,
+            "p99": 12.601042000000234
+          },
+          "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+          "shared": {
+            "runtime": {
+              "enabled": true,
+              "scope": "one authority instance and one authoritative tick",
+              "ticks": 190,
+              "eligibleRecipients": 1520,
+              "sourceBuilds": 190,
+              "sourceReuses": 1330,
+              "coreBuilds": 190,
+              "coreReuses": 1330,
+              "misses": {
+                "tracker-cohort": 190
+              },
+              "activeSources": 1,
+              "sourceHighWater": 1,
+              "cohortHighWater": 1,
+              "sourceCapPerTick": 4,
+              "cleanupCount": 189,
+              "allocationProxyBytes": 1151960,
+              "reusedAllocationProxyBytes": 8063720,
+              "rawClientIdentityKeys": 0
+            },
+            "publisher": {
+              "enabled": true,
+              "scope": "one authority instance and one authoritative target tick",
+              "ticks": 190,
+              "eligibleRecipients": 1520,
+              "keyframeBuilds": 190,
+              "keyframeReuses": 7,
+              "deltaBuilds": 189,
+              "deltaReuses": 1323,
+              "misses": {
+                "ack-base-cohort": 189,
+                "target-hash": 1
+              },
+              "activeKeyframeCohorts": 1,
+              "activeDeltaCohorts": 1,
+              "keyframeHighWater": 1,
+              "deltaHighWater": 1,
+              "configuredCohortBound": 16,
+              "cleanupCount": 189,
+              "reusedCanonicalBytes": 10694481,
+              "rawClientIdentityKeys": 0
+            }
+          },
+          "correctness": {
+            "receiverErrors": 0,
+            "pendingPairs": 0,
+            "ackRejected": 0
+          }
+        },
+        {
+          "schema": "lbh-s19-shared-public-benchmark-row-v1",
+          "label": "round-b-candidate",
+          "sharedPublicWork": true,
+          "recipients": 8,
+          "warmup": 30,
+          "iterations": 160,
+          "publishMilliseconds": {
+            "mean": 10.896214843749998,
+            "p50": 10.66845900000044,
+            "p95": 11.94366700000046,
+            "p99": 14.984207999999853
+          },
+          "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+          "shared": {
+            "runtime": {
+              "enabled": true,
+              "scope": "one authority instance and one authoritative tick",
+              "ticks": 190,
+              "eligibleRecipients": 1520,
+              "sourceBuilds": 190,
+              "sourceReuses": 1330,
+              "coreBuilds": 190,
+              "coreReuses": 1330,
+              "misses": {
+                "tracker-cohort": 190
+              },
+              "activeSources": 1,
+              "sourceHighWater": 1,
+              "cohortHighWater": 1,
+              "sourceCapPerTick": 4,
+              "cleanupCount": 189,
+              "allocationProxyBytes": 1151960,
+              "reusedAllocationProxyBytes": 8063720,
+              "rawClientIdentityKeys": 0
+            },
+            "publisher": {
+              "enabled": true,
+              "scope": "one authority instance and one authoritative target tick",
+              "ticks": 190,
+              "eligibleRecipients": 1520,
+              "keyframeBuilds": 190,
+              "keyframeReuses": 7,
+              "deltaBuilds": 189,
+              "deltaReuses": 1323,
+              "misses": {
+                "ack-base-cohort": 189,
+                "target-hash": 1
+              },
+              "activeKeyframeCohorts": 1,
+              "activeDeltaCohorts": 1,
+              "keyframeHighWater": 1,
+              "deltaHighWater": 1,
+              "configuredCohortBound": 16,
+              "cleanupCount": 189,
+              "reusedCanonicalBytes": 10694481,
+              "rawClientIdentityKeys": 0
+            }
+          },
+          "correctness": {
+            "receiverErrors": 0,
+            "pendingPairs": 0,
+            "ackRejected": 0
+          }
+        },
+        {
+          "schema": "lbh-s19-shared-public-benchmark-row-v1",
+          "label": "round-b-baseline",
+          "sharedPublicWork": false,
+          "recipients": 8,
+          "warmup": 30,
+          "iterations": 160,
+          "publishMilliseconds": {
+            "mean": 16.830391631250013,
+            "p50": 16.27258400000028,
+            "p95": 19.448665999999776,
+            "p99": 28.82641599999988
+          },
+          "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+          "shared": {
+            "runtime": {
+              "enabled": false,
+              "scope": "one authority instance and one authoritative tick",
+              "ticks": 0,
+              "eligibleRecipients": 0,
+              "sourceBuilds": 0,
+              "sourceReuses": 0,
+              "coreBuilds": 0,
+              "coreReuses": 0,
+              "misses": {
+                "disabled": 1520
+              },
+              "activeSources": 0,
+              "sourceHighWater": 0,
+              "cohortHighWater": 0,
+              "sourceCapPerTick": 4,
+              "cleanupCount": 0,
+              "allocationProxyBytes": 0,
+              "reusedAllocationProxyBytes": 0,
+              "rawClientIdentityKeys": 0
+            },
+            "publisher": {
+              "enabled": false,
+              "scope": "one authority instance and one authoritative target tick",
+              "ticks": 0,
+              "eligibleRecipients": 0,
+              "keyframeBuilds": 0,
+              "keyframeReuses": 0,
+              "deltaBuilds": 0,
+              "deltaReuses": 0,
+              "misses": {
+                "disabled": 1520
+              },
+              "activeKeyframeCohorts": 0,
+              "activeDeltaCohorts": 0,
+              "keyframeHighWater": 0,
+              "deltaHighWater": 0,
+              "configuredCohortBound": 16,
+              "cleanupCount": 0,
+              "reusedCanonicalBytes": 0,
+              "rawClientIdentityKeys": 0
+            }
+          },
+          "correctness": {
+            "receiverErrors": 0,
+            "pendingPairs": 0,
+            "ackRejected": 0
+          }
+        }
+      ],
+      "transcriptUnique": 1,
+      "comparisons": [
+        {
+          "order": "baseline-candidate",
+          "baseline": {
+            "mean": 16.94034604374997,
+            "p50": 16.013041000000158,
+            "p95": 23.471333999999842,
+            "p99": 28.275959000000512
+          },
+          "candidate": {
+            "mean": 10.741244718750005,
+            "p50": 10.691667000000052,
+            "p95": 10.944500000000062,
+            "p99": 12.601042000000234
+          }
+        },
+        {
+          "order": "candidate-baseline",
+          "candidate": {
+            "mean": 10.896214843749998,
+            "p50": 10.66845900000044,
+            "p95": 11.94366700000046,
+            "p99": 14.984207999999853
+          },
+          "baseline": {
+            "mean": 16.830391631250013,
+            "p50": 16.27258400000028,
+            "p95": 19.448665999999776,
+            "p99": 28.82641599999988
+          }
+        }
+      ],
+      "parity": {
+        "mismatches": 0
+      },
+      "diagnosticScope": "synthetic synchronized cohort; not product admission"
+    }
+  },
+  "scenarios": [
+    {
+      "population": 1,
+      "baseline": {
+        "receiverHz": 9.7,
+        "projectionAndPublishMs": {
+          "count": 202,
+          "totalObserved": 202,
+          "p50": 13.779209000000264,
+          "p95": 15.94866699999875,
+          "p99": 19.86291699999856,
+          "max": 23.09137499999997
+        },
+        "authorityOneCoreFraction": 0.1719143819143819
+      },
+      "candidate": {
+        "receiverHz": 9.75,
+        "projectionAndPublishMs": {
+          "count": 202,
+          "totalObserved": 202,
+          "p50": 16.971958000001905,
+          "p95": 18.71929100000125,
+          "p99": 19.238499999999476,
+          "max": 20.261332999998558
+        },
+        "authorityOneCoreFraction": 0.2033643982083514,
+        "actualWorstMeanBytesPerSecond": 58817.35,
+        "actualOneSecondP95BytesPerSecond": 61184,
+        "normalized10Hz": {
+          "perRecipient": {
+            "recipient-1": {
+              "observedHz": 9.75,
+              "pairScale": 1.0256410256410255,
+              "normalized10HzBytesPerSecond": 60313.09102564103
+            }
+          },
+          "worstMeanBytesPerSecond": 60313.09102564103,
+          "oneSecondP95BytesPerSecond": 62738.743589743586
+        },
+        "sharedPublic": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 260,
+          "eligibleRecipients": 260,
+          "keyframeBuilds": 260,
+          "keyframeReuses": 0,
+          "deltaBuilds": 258,
+          "deltaReuses": 0,
+          "misses": {
+            "ack-base-cohort": 258,
+            "target-hash": 2
+          },
+          "activeKeyframeCohorts": 1,
+          "activeDeltaCohorts": 1,
+          "keyframeHighWater": 1,
+          "deltaHighWater": 1,
+          "configuredCohortBound": 16,
+          "cleanupCount": 259,
+          "reusedCanonicalBytes": 0,
+          "rawClientIdentityKeys": 0
+        },
+        "correctness": {
+          "uniqueRecipientMapping": true,
+          "noClientErrors": true,
+          "authorityReceiverCountDeltaAtMostOnePerClient": true,
+          "receiverBasesApplicable": true,
+          "exactSynchronizedInputSchedule": true,
+          "noHighWaterOrQueuePolicyTransition": true,
+          "accountingComplete": true,
+          "passed": true
+        },
+        "gate": {
+          "correctness": true,
+          "cadence": true,
+          "authorityClock": true,
+          "overloadNormal": true,
+          "normalizedMean": true,
+          "normalizedP95": true,
+          "queuesClear": true
+        },
+        "productAdmissionPassed": true
+      },
+      "comparison": {
+        "cadenceDeltaHz": 0.05000000000000071,
+        "projectionP50ReductionFraction": -0.23170771268521873,
+        "projectionP95ReductionFraction": -0.1737213523865484,
+        "authorityCpuReductionFraction": -0.1829399957336464
+      }
+    },
+    {
+      "population": 4,
+      "baseline": {
+        "receiverHz": 9.8,
+        "projectionAndPublishMs": {
+          "count": 205,
+          "totalObserved": 205,
+          "p50": 51.38795899999968,
+          "p95": 53.6512500000008,
+          "p99": 54.511083999999755,
+          "max": 56.009374999999636
+        },
+        "authorityOneCoreFraction": 0.5893104259712818
+      },
+      "candidate": {
+        "receiverHz": 9.8,
+        "projectionAndPublishMs": {
+          "count": 204,
+          "totalObserved": 204,
+          "p50": 53.95670899999823,
+          "p95": 58.76545900000019,
+          "p99": 60.98474999999962,
+          "max": 65.97791599999982
+        },
+        "authorityOneCoreFraction": 0.6225441332178265,
+        "actualWorstMeanBytesPerSecond": 71345.55,
+        "actualOneSecondP95BytesPerSecond": 75840,
+        "normalized10Hz": {
+          "perRecipient": {
+            "recipient-1": {
+              "observedHz": 9.8,
+              "pairScale": 1.0204081632653061,
+              "normalized10HzBytesPerSecond": 69242.78673469389
+            },
+            "recipient-2": {
+              "observedHz": 9.8,
+              "pairScale": 1.0204081632653061,
+              "normalized10HzBytesPerSecond": 65763.55204081633
+            },
+            "recipient-3": {
+              "observedHz": 9.85,
+              "pairScale": 1.015228426395939,
+              "normalized10HzBytesPerSecond": 68842.99314720812
+            },
+            "recipient-4": {
+              "observedHz": 9.85,
+              "pairScale": 1.015228426395939,
+              "normalized10HzBytesPerSecond": 72424.66827411167
+            }
+          },
+          "worstMeanBytesPerSecond": 72424.66827411167,
+          "oneSecondP95BytesPerSecond": 76986.7157360406
+        },
+        "sharedPublic": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 268,
+          "eligibleRecipients": 1060,
+          "keyframeBuilds": 1060,
+          "keyframeReuses": 0,
+          "deltaBuilds": 1052,
+          "deltaReuses": 0,
+          "misses": {
+            "ack-base-cohort": 1052,
+            "target-hash": 8
+          },
+          "activeKeyframeCohorts": 4,
+          "activeDeltaCohorts": 4,
+          "keyframeHighWater": 4,
+          "deltaHighWater": 4,
+          "configuredCohortBound": 16,
+          "cleanupCount": 267,
+          "reusedCanonicalBytes": 0,
+          "rawClientIdentityKeys": 0
+        },
+        "correctness": {
+          "uniqueRecipientMapping": true,
+          "noClientErrors": true,
+          "authorityReceiverCountDeltaAtMostOnePerClient": true,
+          "receiverBasesApplicable": true,
+          "exactSynchronizedInputSchedule": true,
+          "noHighWaterOrQueuePolicyTransition": true,
+          "accountingComplete": true,
+          "passed": true
+        },
+        "gate": {
+          "correctness": true,
+          "cadence": true,
+          "authorityClock": true,
+          "overloadNormal": true,
+          "normalizedMean": false,
+          "normalizedP95": true,
+          "queuesClear": true
+        },
+        "productAdmissionPassed": false
+      },
+      "comparison": {
+        "cadenceDeltaHz": 0,
+        "projectionP50ReductionFraction": -0.049987391015053895,
+        "projectionP95ReductionFraction": -0.09532320309404385,
+        "authorityCpuReductionFraction": -0.05639422922438553
+      }
+    },
+    {
+      "population": 8,
+      "baseline": {
+        "receiverHz": 4.95,
+        "projectionAndPublishMs": {
+          "count": 103,
+          "totalObserved": 103,
+          "p50": 115.65224999999919,
+          "p95": 122.02866699999868,
+          "p99": 127.87275000000045,
+          "max": 131.28999999999905
+        },
+        "authorityOneCoreFraction": 0.6432072145636197
+      },
+      "candidate": {
+        "receiverHz": 4.8,
+        "projectionAndPublishMs": {
+          "count": 100,
+          "totalObserved": 100,
+          "p50": 121.30124999999862,
+          "p95": 125.66450000000259,
+          "p99": 126.4706669999996,
+          "max": 127.11516699999993
+        },
+        "authorityOneCoreFraction": 0.646929173693086,
+        "actualWorstMeanBytesPerSecond": 39623.35,
+        "actualOneSecondP95BytesPerSecond": 40941,
+        "normalized10Hz": {
+          "perRecipient": {
+            "recipient-1": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 74724.39896907218
+            },
+            "recipient-2": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 74790.01597938145
+            },
+            "recipient-3": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 74699.19123711341
+            },
+            "recipient-4": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 75424.8613402062
+            },
+            "recipient-5": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 81186.7170103093
+            },
+            "recipient-6": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 74670.11907216496
+            },
+            "recipient-7": {
+              "observedHz": 4.85,
+              "pairScale": 2.061855670103093,
+              "normalized10HzBytesPerSecond": 74645.68608247423
+            },
+            "recipient-8": {
+              "observedHz": 4.8,
+              "pairScale": 2.0833333333333335,
+              "normalized10HzBytesPerSecond": 74666.56666666668
+            }
+          },
+          "worstMeanBytesPerSecond": 81186.7170103093,
+          "oneSecondP95BytesPerSecond": 83915.36082474228
+        },
+        "sharedPublic": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 143,
+          "eligibleRecipients": 1088,
+          "keyframeBuilds": 1088,
+          "keyframeReuses": 0,
+          "deltaBuilds": 1073,
+          "deltaReuses": 0,
+          "misses": {
+            "ack-base-cohort": 1073,
+            "target-hash": 15
+          },
+          "activeKeyframeCohorts": 8,
+          "activeDeltaCohorts": 8,
+          "keyframeHighWater": 8,
+          "deltaHighWater": 8,
+          "configuredCohortBound": 16,
+          "cleanupCount": 142,
+          "reusedCanonicalBytes": 0,
+          "rawClientIdentityKeys": 0
+        },
+        "correctness": {
+          "uniqueRecipientMapping": true,
+          "noClientErrors": true,
+          "authorityReceiverCountDeltaAtMostOnePerClient": true,
+          "receiverBasesApplicable": true,
+          "exactSynchronizedInputSchedule": true,
+          "noHighWaterOrQueuePolicyTransition": true,
+          "accountingComplete": true,
+          "passed": true
+        },
+        "gate": {
+          "correctness": true,
+          "cadence": false,
+          "authorityClock": false,
+          "overloadNormal": false,
+          "normalizedMean": false,
+          "normalizedP95": false,
+          "queuesClear": true
+        },
+        "productAdmissionPassed": false
+      },
+      "comparison": {
+        "cadenceDeltaHz": -0.15000000000000036,
+        "projectionP50ReductionFraction": -0.04884470470742652,
+        "projectionP95ReductionFraction": -0.029794908765199857,
+        "authorityCpuReductionFraction": -0.005786563093810093
+      }
+    }
+  ],
+  "decision": {
+    "keep": false,
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "The synchronized synthetic cohort is byte-exact and faster, but real publisher keys retain recipient-specific connection epochs and state-pair IDs; delta keys additionally retain exact ACKed-base hashes, while runtime transition cohorts retain recipient revision-tracker snapshot identity. Staggered scheduling and ACK progression therefore record zero exact keyframe/delta reuse at 1/4/8. The single fixed-order run observes higher CPU/tail values and 4.95 to 4.80 Hz at eight, but zero reuse alone is sufficient to revert rather than weaken revision, ACK-base, or lineage semantics.",
+    "gatesChanged": [],
+    "gatesUnchanged": [
+      "four-player normalized mean",
+      "eight-player cadence",
+      "eight-player authority clock",
+      "eight-player normalized mean"
+    ],
+    "nextLane": "Run a bounded compression pilot against S18 positional JSON with strict four-player bandwidth and eight-player authority CPU/tail gates; do not change authority cadence or make S16 binary the default."
+  },
+  "redTeam": {
+    "reviewer": "Independent read-only agent",
+    "confirmedP1": [],
+    "remainingP1P2": [],
+    "resolvedP2": [
+      "Real admissions recorded zero publisher keyframe/delta reuse and regressed authority CPU/tail latency; mandatory revert 5f4d3c3 removes the ineffective default-on path.",
+      "The synchronized focused oracle and microbenchmark manufacture cohorts not formed by staggered product admission; both are labeled synthetic ceilings, not admission evidence.",
+      "Sealed isolated-process artifacts do not export runtime source/core counters; the decision makes no upstream-core reuse claim and relies only on exported publisher cohort counters.",
+      "One fixed 20-second ordering limits precise regression attribution, but deterministic zero publisher reuse is independently sufficient to reject the mechanism."
+    ],
+    "removedP3Diagnostics": [
+      "Non-causal cache-miss labels",
+      "Tautological identity counter",
+      "Incomplete reused-byte accounting"
+    ]
+  },
+  "rejectedEvidence": {
+    "path": "rejected-co-located",
+    "reason": "The co-located attempt failed during eight-seat manifest admission and is not used for performance or admission."
+  },
+  "retainedBaseline": "S6 prepared public projection/core work remains accepted and prevents repeat validation/canonicalization/hashing within each recipient lane. S19 was a distinct cross-recipient runtime-transition and publisher-cohort layer; reverting it does not remove S6.",
+  "limitations": [
+    "Machine-local raw WebSocket loopback",
+    "One fixed-order 20-second profiler-off isolated-process window per population per side; observed candidate differences are not a counterbalanced causal estimate",
+    "Counterbalanced microbenchmark uses deliberately synchronized histories not produced by real staggered admission",
+    "Isolated product artifacts export publisher cohort counters, not runtime source/core counters; no upstream-core reuse claim is made",
+    "No WAN, TLS, hosted fleet, compression, cadence policy, heavy sim, or 24/48/96 claim"
+  ]
+}

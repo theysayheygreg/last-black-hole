@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-13 — v0.4 S19 shared-public experiment rejected
+
+- Implemented one authority-instance/tick-scoped public source/core and exact
+  ACK-base cohort cache at `5074e42`, with owner overlays, connection lineage,
+  ACK/recovery mutation, and the one-writer boundary kept per recipient.
+- Proved 22 focused wire/semantic comparisons and a counterbalanced synthetic
+  eight-recipient benchmark with zero mismatch. The deliberately synchronized
+  benchmark showed a 35–37% mean publish reduction.
+- Ran separate-authority, isolated-client 1/4/8 windows. Recipient-specific
+  connection epochs/state-pair IDs, exact ACKed-base hashes, and revision-
+  tracker snapshots diverged under staggered scheduling and ACK progression,
+  producing zero public keyframe/delta cache hits. A single fixed-order window
+  observed higher CPU/p95 values and 4.95 to 4.80 Hz at eight; it is not used
+  for a causal regression-magnitude claim.
+- Reverted the mechanism at `5f4d3c3` instead of weakening component revision,
+  ACK-base, or lineage semantics. Preserved the valid evidence and the rejected
+  co-located attempt under `docs/v0.4/evidence/state-pair-s19/`.
+- Selected a bounded compression pilot as the next lane; it must win the
+  four-player bandwidth gate without worsening eight-player authority CPU/p95.
+- Kept S6 prepared public projection/core work intact, and passed all 38
+  registered `multiplayer-network` suites once after the revert with retries
+  disabled.
+
 > Human-readable version history of design docs.
 > Git is authoritative. This is for quick scanning without `git log`.
 

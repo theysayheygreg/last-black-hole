@@ -1,0 +1,300 @@
+{
+  "schema": "lbh-s19-shared-public-counterbalanced-v1",
+  "rows": [
+    {
+      "schema": "lbh-s19-shared-public-benchmark-row-v1",
+      "label": "round-a-baseline",
+      "sharedPublicWork": false,
+      "recipients": 8,
+      "warmup": 30,
+      "iterations": 160,
+      "publishMilliseconds": {
+        "mean": 16.94034604374997,
+        "p50": 16.013041000000158,
+        "p95": 23.471333999999842,
+        "p99": 28.275959000000512
+      },
+      "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+      "shared": {
+        "runtime": {
+          "enabled": false,
+          "scope": "one authority instance and one authoritative tick",
+          "ticks": 0,
+          "eligibleRecipients": 0,
+          "sourceBuilds": 0,
+          "sourceReuses": 0,
+          "coreBuilds": 0,
+          "coreReuses": 0,
+          "misses": {
+            "disabled": 1520
+          },
+          "activeSources": 0,
+          "sourceHighWater": 0,
+          "cohortHighWater": 0,
+          "sourceCapPerTick": 4,
+          "cleanupCount": 0,
+          "allocationProxyBytes": 0,
+          "reusedAllocationProxyBytes": 0,
+          "rawClientIdentityKeys": 0
+        },
+        "publisher": {
+          "enabled": false,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 0,
+          "eligibleRecipients": 0,
+          "keyframeBuilds": 0,
+          "keyframeReuses": 0,
+          "deltaBuilds": 0,
+          "deltaReuses": 0,
+          "misses": {
+            "disabled": 1520
+          },
+          "activeKeyframeCohorts": 0,
+          "activeDeltaCohorts": 0,
+          "keyframeHighWater": 0,
+          "deltaHighWater": 0,
+          "configuredCohortBound": 16,
+          "cleanupCount": 0,
+          "reusedCanonicalBytes": 0,
+          "rawClientIdentityKeys": 0
+        }
+      },
+      "correctness": {
+        "receiverErrors": 0,
+        "pendingPairs": 0,
+        "ackRejected": 0
+      }
+    },
+    {
+      "schema": "lbh-s19-shared-public-benchmark-row-v1",
+      "label": "round-a-candidate",
+      "sharedPublicWork": true,
+      "recipients": 8,
+      "warmup": 30,
+      "iterations": 160,
+      "publishMilliseconds": {
+        "mean": 10.741244718750005,
+        "p50": 10.691667000000052,
+        "p95": 10.944500000000062,
+        "p99": 12.601042000000234
+      },
+      "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+      "shared": {
+        "runtime": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative tick",
+          "ticks": 190,
+          "eligibleRecipients": 1520,
+          "sourceBuilds": 190,
+          "sourceReuses": 1330,
+          "coreBuilds": 190,
+          "coreReuses": 1330,
+          "misses": {
+            "tracker-cohort": 190
+          },
+          "activeSources": 1,
+          "sourceHighWater": 1,
+          "cohortHighWater": 1,
+          "sourceCapPerTick": 4,
+          "cleanupCount": 189,
+          "allocationProxyBytes": 1151960,
+          "reusedAllocationProxyBytes": 8063720,
+          "rawClientIdentityKeys": 0
+        },
+        "publisher": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 190,
+          "eligibleRecipients": 1520,
+          "keyframeBuilds": 190,
+          "keyframeReuses": 7,
+          "deltaBuilds": 189,
+          "deltaReuses": 1323,
+          "misses": {
+            "ack-base-cohort": 189,
+            "target-hash": 1
+          },
+          "activeKeyframeCohorts": 1,
+          "activeDeltaCohorts": 1,
+          "keyframeHighWater": 1,
+          "deltaHighWater": 1,
+          "configuredCohortBound": 16,
+          "cleanupCount": 189,
+          "reusedCanonicalBytes": 10694481,
+          "rawClientIdentityKeys": 0
+        }
+      },
+      "correctness": {
+        "receiverErrors": 0,
+        "pendingPairs": 0,
+        "ackRejected": 0
+      }
+    },
+    {
+      "schema": "lbh-s19-shared-public-benchmark-row-v1",
+      "label": "round-b-candidate",
+      "sharedPublicWork": true,
+      "recipients": 8,
+      "warmup": 30,
+      "iterations": 160,
+      "publishMilliseconds": {
+        "mean": 10.896214843749998,
+        "p50": 10.66845900000044,
+        "p95": 11.94366700000046,
+        "p99": 14.984207999999853
+      },
+      "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+      "shared": {
+        "runtime": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative tick",
+          "ticks": 190,
+          "eligibleRecipients": 1520,
+          "sourceBuilds": 190,
+          "sourceReuses": 1330,
+          "coreBuilds": 190,
+          "coreReuses": 1330,
+          "misses": {
+            "tracker-cohort": 190
+          },
+          "activeSources": 1,
+          "sourceHighWater": 1,
+          "cohortHighWater": 1,
+          "sourceCapPerTick": 4,
+          "cleanupCount": 189,
+          "allocationProxyBytes": 1151960,
+          "reusedAllocationProxyBytes": 8063720,
+          "rawClientIdentityKeys": 0
+        },
+        "publisher": {
+          "enabled": true,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 190,
+          "eligibleRecipients": 1520,
+          "keyframeBuilds": 190,
+          "keyframeReuses": 7,
+          "deltaBuilds": 189,
+          "deltaReuses": 1323,
+          "misses": {
+            "ack-base-cohort": 189,
+            "target-hash": 1
+          },
+          "activeKeyframeCohorts": 1,
+          "activeDeltaCohorts": 1,
+          "keyframeHighWater": 1,
+          "deltaHighWater": 1,
+          "configuredCohortBound": 16,
+          "cleanupCount": 189,
+          "reusedCanonicalBytes": 10694481,
+          "rawClientIdentityKeys": 0
+        }
+      },
+      "correctness": {
+        "receiverErrors": 0,
+        "pendingPairs": 0,
+        "ackRejected": 0
+      }
+    },
+    {
+      "schema": "lbh-s19-shared-public-benchmark-row-v1",
+      "label": "round-b-baseline",
+      "sharedPublicWork": false,
+      "recipients": 8,
+      "warmup": 30,
+      "iterations": 160,
+      "publishMilliseconds": {
+        "mean": 16.830391631250013,
+        "p50": 16.27258400000028,
+        "p95": 19.448665999999776,
+        "p99": 28.82641599999988
+      },
+      "transcriptSha256": "4b557c6c57d9ce3d133b3ff0967c19b7470a610434f2d4c74869a3b8cc9bb365",
+      "shared": {
+        "runtime": {
+          "enabled": false,
+          "scope": "one authority instance and one authoritative tick",
+          "ticks": 0,
+          "eligibleRecipients": 0,
+          "sourceBuilds": 0,
+          "sourceReuses": 0,
+          "coreBuilds": 0,
+          "coreReuses": 0,
+          "misses": {
+            "disabled": 1520
+          },
+          "activeSources": 0,
+          "sourceHighWater": 0,
+          "cohortHighWater": 0,
+          "sourceCapPerTick": 4,
+          "cleanupCount": 0,
+          "allocationProxyBytes": 0,
+          "reusedAllocationProxyBytes": 0,
+          "rawClientIdentityKeys": 0
+        },
+        "publisher": {
+          "enabled": false,
+          "scope": "one authority instance and one authoritative target tick",
+          "ticks": 0,
+          "eligibleRecipients": 0,
+          "keyframeBuilds": 0,
+          "keyframeReuses": 0,
+          "deltaBuilds": 0,
+          "deltaReuses": 0,
+          "misses": {
+            "disabled": 1520
+          },
+          "activeKeyframeCohorts": 0,
+          "activeDeltaCohorts": 0,
+          "keyframeHighWater": 0,
+          "deltaHighWater": 0,
+          "configuredCohortBound": 16,
+          "cleanupCount": 0,
+          "reusedCanonicalBytes": 0,
+          "rawClientIdentityKeys": 0
+        }
+      },
+      "correctness": {
+        "receiverErrors": 0,
+        "pendingPairs": 0,
+        "ackRejected": 0
+      }
+    }
+  ],
+  "transcriptUnique": 1,
+  "comparisons": [
+    {
+      "order": "baseline-candidate",
+      "baseline": {
+        "mean": 16.94034604374997,
+        "p50": 16.013041000000158,
+        "p95": 23.471333999999842,
+        "p99": 28.275959000000512
+      },
+      "candidate": {
+        "mean": 10.741244718750005,
+        "p50": 10.691667000000052,
+        "p95": 10.944500000000062,
+        "p99": 12.601042000000234
+      }
+    },
+    {
+      "order": "candidate-baseline",
+      "candidate": {
+        "mean": 10.896214843749998,
+        "p50": 10.66845900000044,
+        "p95": 11.94366700000046,
+        "p99": 14.984207999999853
+      },
+      "baseline": {
+        "mean": 16.830391631250013,
+        "p50": 16.27258400000028,
+        "p95": 19.448665999999776,
+        "p99": 28.82641599999988
+      }
+    }
+  ],
+  "parity": {
+    "mismatches": 0
+  },
+  "diagnosticScope": "synthetic synchronized cohort; not product admission"
+}
