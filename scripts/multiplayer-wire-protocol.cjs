@@ -826,7 +826,13 @@ function encodeWireFrame(frame, options = {}) {
       fail("wrong-compression-manifest", "compression manifest is unsupported");
     }
     const positionalWire = encodeWireFrame(frame, { ...options, compressionContext: null });
-    try { return encodeCompressedStatePair(positionalWire); }
+    try {
+      const wire = encodeCompressedStatePair(positionalWire);
+      if (wire.length > frameByteLimit(frame.type)) {
+        fail("frame-too-large", `${frame.type} compressed frame is ${wire.length} bytes; limit is ${frameByteLimit(frame.type)}`, 4409);
+      }
+      return wire;
+    }
     catch (error) {
       if (error instanceof CompressionCodecError) fail(error.code, error.message);
       throw error;

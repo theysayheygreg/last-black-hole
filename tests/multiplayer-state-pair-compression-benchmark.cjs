@@ -9,7 +9,9 @@ const zlib = require("zlib");
 const { performance } = require("perf_hooks");
 const { createAuthorityDeltaPublisher } = require("../scripts/authority-delta-publisher.cjs");
 const { codecContext, POSITIONAL_CODEC_MANIFEST_HASH } = require("../scripts/state-pair-positional-codec.cjs");
-const { createStatePairWireEncoder } = require("../scripts/multiplayer-wire-protocol.cjs");
+const { createStatePairWireEncoder, parseWireFrame, SERVER_TO_CLIENT } = require("../scripts/multiplayer-wire-protocol.cjs");
+const { encodeCompressedStatePair, decodeCompressedStatePair } =
+  require("../scripts/state-pair-compression-codec.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const MANIFEST_HASH = `sha256:${"7".repeat(64)}`;
@@ -64,11 +66,11 @@ function corpus() {
   const wires = [];
   for (let beat = 1; beat <= BEATS; beat += 1) {
     const produced = publisher.publish({ identity: IDENTITY, ...views(beat), allowMixed: true, encodeWire: encoder });
-    wires.push({ bytes: Buffer.from(produced.encodedWire, "utf8"),
+    wires.push({ bytes: Buffer.from(produced.encodedWire, "utf8"), frame: produced.frame,
       laneClass: `${produced.publicKind}+${produced.ownerKind}` });
     assert.strictEqual(publisher.acknowledge(IDENTITY, ack(produced.frame)).accepted, true);
   }
-  return wires;
+  return { wires, context };
 }
 
 const CODECS = Object.freeze([
@@ -90,7 +92,21 @@ const CODECS = Object.freeze([
 ]);
 
 function main() {
-  const wires = corpus();
+  const { wires, context } = corpus();
+  let selectedEnvelopeExactComparisons = 0;
+  let selectedEnvelopeSemanticComparisons = 0;
+  let selectedEnvelopeAckTranscriptComparisons = 0;
+  for (const sample of wires) {
+    const decodedBytes = decodeCompressedStatePair(encodeCompressedStatePair(sample.bytes));
+    assert(decodedBytes.equals(sample.bytes));
+    selectedEnvelopeExactComparisons += 1;
+    const decodedFrame = parseWireFrame(decodedBytes, { direction: SERVER_TO_CLIENT,
+      positionalContext: context, requirePositional: true });
+    assert.deepStrictEqual(decodedFrame, sample.frame);
+    selectedEnvelopeSemanticComparisons += 1;
+    assert.deepStrictEqual(ack(decodedFrame), ack(sample.frame));
+    selectedEnvelopeAckTranscriptComparisons += 1;
+  }
   const byCodec = new Map(CODECS.map((codec) => [codec.name, { compressionMs: [], decompressionMs: [],
     ratios: [], compressedBytes: [], byClass: new Map() }]));
   let exactComparisons = 0;
@@ -131,6 +147,8 @@ function main() {
   const result = { schema: "lbh-s20-codec-selection-benchmark-v1", counterbalancedRounds: ROUNDS,
     representativeWires: wires.length, sourceWireBytes: distribution(wires.map((entry) => entry.bytes.length)),
     laneClasses: [...new Set(wires.map((entry) => entry.laneClass))].sort(), exactComparisons,
+    selectedEnvelopeExactComparisons, selectedEnvelopeSemanticComparisons,
+    selectedEnvelopeAckTranscriptComparisons,
     envelopeBytesCharged: 64, hiddenPerMessageDeflate: false, codecs, selectionGate: {
       maximumP95EnvelopeRatio: 0.8, maximumP95AuthorityCompressionMilliseconds: 0.5 },
     selected, transcriptSha256: crypto.createHash("sha256")

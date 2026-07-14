@@ -198,6 +198,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairCompressionEvidence",
+    file: "multiplayer-state-pair-compression-evidence.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

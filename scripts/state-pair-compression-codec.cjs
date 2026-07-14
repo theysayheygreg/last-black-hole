@@ -11,8 +11,8 @@ const CODEC_ID = 1;
 const CODEC_NAME = "brotli-quality-1";
 const MAGIC = Buffer.from("LBHZ", "ascii");
 const HEADER_BYTES = 64;
-const MAX_COMPRESSED_BYTES = 256 * 1024;
 const MAX_ORIGINAL_BYTES = 256 * 1024;
+const MAX_COMPRESSED_BYTES = MAX_ORIGINAL_BYTES - HEADER_BYTES;
 const MANIFEST = Object.freeze({
   schema: CODEC_SCHEMA,
   version: CODEC_VERSION,

@@ -822,7 +822,7 @@ function createSimWebSocketAdapter(options = {}) {
     return Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH });
   }
 
-  function compressForState(state, wire, frame) {
+  function compressForState(state, wire, frame, sourceDigest = null) {
     if (!compressionContextFor(state) || frame?.type !== "statePair") return wire;
     const started = performance.now();
     const compressed = encodeCompressedStatePair(wire);
@@ -832,7 +832,8 @@ function createSimWebSocketAdapter(options = {}) {
     compressionCodecStats.compressionMilliseconds += performance.now() - started;
     let retained = compressedStatePairWires.get(state);
     if (!retained) { retained = new Map(); compressedStatePairWires.set(state, retained); }
-    retained.set(frame.frameId, Object.freeze({ digest: frame.statePairId, wire: compressed }));
+    const digest = sourceDigest || `sha256:${crypto.createHash("sha256").update(wire).digest("hex")}`;
+    retained.set(frame.frameId, Object.freeze({ sourceDigest: digest, wire: compressed }));
     while (retained.size > 64) retained.delete(retained.keys().next().value);
     compressionCodecStats.retainedFrames = [...connections].reduce((sum, connection) =>
       sum + (compressedStatePairWires.get(connection)?.size || 0), 0);
@@ -911,6 +912,10 @@ function createSimWebSocketAdapter(options = {}) {
       try { onBindingClosed(state.binding); } catch {}
     }
     compressedStatePairWires.delete(state);
+    compressionCodecStats.retainedFrames = [...connections].reduce((sum, connection) =>
+      sum + (compressedStatePairWires.get(connection)?.size || 0), 0);
+    compressionCodecStats.retainedBytes = [...connections].reduce((sum, connection) => sum
+      + [...(compressedStatePairWires.get(connection)?.values() || [])].reduce((bytes, row) => bytes + row.wire.length, 0), 0);
     resetOutbound(state, { cause: "cleanup" });
     state.cleaned = true;
     emitPressureTransition(state, "connection-cleanup");
@@ -1726,7 +1731,7 @@ function createSimWebSocketAdapter(options = {}) {
         stats.reusedEncodedFrames += 1;
         stats.reusedEncodedBytes += encodedBytes;
         stats.reusedDigestVerified += 1;
-        encodedWire = compressForState(state, encodedWire, frame);
+        encodedWire = compressForState(state, encodedWire, frame, publication.encodedDigest);
       } else if (stageProfiler) {
         encodedWire = stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
           recipientKey: profileRecipientKey(state),
@@ -1843,10 +1848,10 @@ function createSimWebSocketAdapter(options = {}) {
         stats.reusedEncodedBytes += bytes;
         stats.reusedDigestVerified += 1;
         const retained = compressedStatePairWires.get(state)?.get(frame.frameId);
-        if (compressionContextFor(state) && retained?.digest === frame.statePairId) {
+        if (compressionContextFor(state) && retained?.sourceDigest === publication.encodedDigest) {
           wire = retained.wire;
           compressionCodecStats.reusedFrames += 1;
-        } else wire = compressForState(state, wire, frame);
+        } else wire = compressForState(state, wire, frame, publication.encodedDigest);
       } else wire = encodeForState(state, frame);
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
