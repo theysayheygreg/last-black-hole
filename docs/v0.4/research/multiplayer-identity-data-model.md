@@ -144,7 +144,7 @@ it does not mean public discovery.
 | `authority_instance_id` | UUIDv7; placement service | One workload process/actor incarnation; durable placement record | Workload identity, not match identity; `INTERNAL` | Fleet/audit/service wire; never client replay or public roster |
 | `authority_lease_id` | UUIDv7 plus monotonic `lease_epoch`; placement service | One writer lease; renews heartbeat deadline, epoch rotates on replacement; cloud + authority | Single-writer fence for one `run_id`; `SECURITY` | Restricted fleet/settlement logs and service wire; never client wire/replay |
 | `admission_ticket_id` / `resume_ticket_id` | UUIDv7 `jti` inside signed token or opaque digest record; control plane | Single use, 30–60 s; rotate/reissue; digest/replay record until TTL | Binds account/profile/session/run/authority lease/connection incarnation/capabilities; id `SECURITY`, token `SECRET` | `jti` in restricted audit, token never logged/replayed/URL; token only admission wire |
-| `authority_grant_id` / command secret | UUIDv7 record plus 256-bit opaque secret or signed proof; authority/control plane | Connection/reconnect-window lifetime; rotate each connection/role change; hash only | Input/action capability for one membership/epoch; id `SECURITY`, secret `SECRET` | Grant id in restricted logs/wire; secret never logs/replay/snapshot |
+| `authority_grant_id` / command secret | UUIDv7 record plus 256-bit opaque secret or signed proof; authority/control plane | Connection/reconnect-window lifetime; rotate each connection or gameplay-scope change; hash only. Lobby-role changes do not change gameplay scope | Input/action capability for one membership/epoch; id `SECURITY`, secret `SECRET` | Grant id in restricted logs/wire; secret never logs/replay/snapshot |
 | `command_seq` / `input_seq` | Unsigned monotonic integer; client, accepted by authority | Per membership/grant stream; persisted through reconnect cursor as declared | Ordering/idempotency, not authentication; `PUBLIC_RUN`/`INTERNAL` | Game wire and diagnostic replay are allowed |
 | `event_id` / `event_seq` / `snapshot_id` | UUIDv7 or run-local monotonic integer; authority | Run lifetime plus bounded replay/result retention | Causal recovery/idempotency keys; visibility follows event lane | Authorized game wire/replay/logs; private lane never enters public replay |
 | `result_id` | UUIDv7; authority derives or control plane assigns | Immutable, one per `(run, membership, result_version)`; cloud | Final sim fact envelope; `OWNER`/`INTERNAL` | Service wire/audit/owner history; public replay receives projection only |
@@ -225,7 +225,7 @@ erDiagram
     SESSION ||--o{ SESSION_MEMBER : contains
     ACCOUNT ||--o{ SESSION_MEMBER : joins
     SESSION ||--o{ RUN : creates
-    RUN ||--|| RUN_PLACEMENT : placed_by
+    RUN ||--o{ RUN_PLACEMENT : placed_by
     AUTHORITY_INSTANCE ||--o{ AUTHORITY_LEASE : acquires
     RUN ||--o{ AUTHORITY_LEASE : fenced_by
     RUN ||--o{ RUN_MEMBERSHIP : seats
@@ -309,7 +309,7 @@ admission_ticket(ticket_id PK, kind, session_id FK, run_id FK,
 
 authority_instance(authority_instance_id PK, region, host_id, workload_identity,
                    artifact_digest, state, started_at, heartbeat_at, drained_at)
-run_placement(placement_id PK, run_id FK UNIQUE, requested_region,
+run_placement(placement_id PK, run_id FK, requested_region,
               selected_region, authority_instance_id FK, placement_attempt,
               state, created_at, assigned_at,
               UNIQUE(run_id, placement_attempt))
@@ -350,6 +350,11 @@ Recommended operational indexes:
   `authority_instance(region, state, heartbeat_at)`, `session(state,
   expires_at)`, and `run_membership(account_id, state, reconnect_until)` for
   placement/reconnect.
+- For the recommended MVP concurrency policy, partial unique indexes on
+  `run_membership(account_id)` and `run_membership(profile_id)` while state is
+  `RESERVED`, `JOINED`, `CONNECTED`, or `DISCONNECTED_RESERVED` prevent a
+  second active hosted run/body. If Greg later permits multiple pilots per
+  account concurrently, remove only the account index; keep the profile index.
 - `run_result(run_id, membership_id)` and `run_settlement(status, settled_at)` for settlement/retry queues.
 - `ledger_entry(profile_id, created_at DESC)` and `profile_revision(profile_id, revision DESC)` for Chronicle/export/conflict checks.
 - `ban(account_id, scope, ends_at)` plus provider subject lookup through `auth_identity` for join checks.
@@ -485,11 +490,11 @@ The streaming gameplay endpoint accepts only the run command grant and derives `
 | Mass-assign profile/result JSON | Free EM/items/upgrades, fake outcome | Allowlist cosmetic/settings patches; durable mutations only through domain commands and sim settlement. |
 | Steal/replay Steam ticket | Account takeover | TLS; exchange immediately; validate audience/AppID and provider response; reject replay; never log ticket. |
 | Steal access/refresh token | Account/session takeover | Short access TTL, audience/scope restrictions, rotated or device-bound refresh token, OS secret storage, family revocation on reuse. |
-| Steal command credential | Pilot hijack | Run-only scope, short TTL, secret hash at rest, authority epoch, sequence checks, rotate on reconnect/role change, rate limit. |
+| Steal command credential | Pilot hijack | Run-only scope, short TTL, secret hash at rest, connection epoch, sequence checks, rotate on reconnect/gameplay-scope change, rate limit. |
 | Guess/share invite | Unauthorized join/harassment | At least 128 random bits, hash at rest, body redemption, short TTL/use count, bind to party/account when possible. |
 | Replay/conflict result | Duplicate rewards or divergent history | Sim service authentication, run lease, immutable result hash, unique `(run,membership)`, atomic idempotent settlement. |
 | Compromised player host | Cheats, kicks, outcome fraud | Host role controls lobby choices only. Hosted sim retains all gameplay and settlement authority. |
-| Host-role race | Two hosts/reset conflict | Versioned session/membership compare-and-swap and host-scoped authority epoch. |
+| Lobby-role race | Two leaders/reset conflict | Versioned session-membership compare-and-swap; exactly one leader; lobby role never creates a gameplay grant or writer epoch. |
 | Local save edit/import | Polluted online economy | Separate local/cloud lineages; no trusted economic merge; tag any approved legacy grant. |
 | Reconnect with stale body | Duplicate pilot or old commands | Stable membership + new connection/grant epoch; explicit incarnation; revoke old connection/grant. |
 | Public event/snapshot leaks private state | Inventory/position/privacy leak | Existing player-local lanes plus server-derived visibility; schema-based outbound projection; never serialize internal objects. |
