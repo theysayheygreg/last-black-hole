@@ -144,6 +144,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SqliteHostedRetention",
+    file: "sqlite-hosted-retention.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "SqliteHostedResultJournal",
     file: "sqlite-hosted-result-journal.cjs",
     lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],

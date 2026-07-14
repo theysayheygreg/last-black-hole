@@ -92,6 +92,7 @@ function configure(db, { referenceAuthorityMode = false } = {}) {
       accepted_result_id TEXT,
       accepted_hash TEXT,
       quarantined_at INTEGER NOT NULL,
+      retain_until INTEGER,
       UNIQUE(run_id, presented_hash)
     );
     CREATE TRIGGER IF NOT EXISTS hosted_run_memberships_max_four_insert
@@ -114,6 +115,11 @@ function configure(db, { referenceAuthorityMode = false } = {}) {
   // resolves immutable product/identity ownership while settling, so only the
   // repository's trusted snapshot path may create the first terminal rows.
   db.exec("DROP TRIGGER IF EXISTS hosted_run_memberships_lock_insert");
+  const conflictColumns = new Set(db.prepare(
+    "SELECT name FROM pragma_table_info('hosted_settlement_conflicts')").all().map((row) => row.name));
+  if (!conflictColumns.has("retain_until")) {
+    db.exec("ALTER TABLE hosted_settlement_conflicts ADD COLUMN retain_until INTEGER");
+  }
   return db;
 }
 
@@ -151,7 +157,9 @@ function assertExactOutcomeSet(payload, memberships) {
 
 class SQLiteHostedSettlementRepository {
   constructor({ filepath, db, now = Date.now, fault = () => {},
-    verifyAcceptedAuthorityResult, resolveRunMemberships, referenceAuthorityMode = false } = {}) {
+    verifyAcceptedAuthorityResult, resolveRunMemberships, referenceAuthorityMode = false,
+    auditRetentionMs = 90 * 24 * 60 * 60 * 1000,
+    conflictRetentionMs = 90 * 24 * 60 * 60 * 1000 } = {}) {
     if (!referenceAuthorityMode && typeof verifyAcceptedAuthorityResult !== "function") {
       throw new TypeError("verifyAcceptedAuthorityResult is required outside explicit reference authority mode");
     }
@@ -168,6 +176,16 @@ class SQLiteHostedSettlementRepository {
       ? (entry) => this._verifyReferenceAcceptance(entry)
       : verifyAcceptedAuthorityResult;
     this.resolveRunMemberships = resolveRunMemberships;
+    if (!Number.isSafeInteger(auditRetentionMs) || auditRetentionMs < 1) {
+      throw new TypeError("auditRetentionMs must be a positive safe integer");
+    }
+    this.auditRetentionMs = auditRetentionMs;
+    if (!Number.isSafeInteger(conflictRetentionMs) || conflictRetentionMs < 1) {
+      throw new TypeError("conflictRetentionMs must be a positive safe integer");
+    }
+    this.conflictRetentionMs = conflictRetentionMs;
+    this.db.prepare(`UPDATE hosted_settlement_conflicts
+      SET retain_until=quarantined_at+? WHERE retain_until IS NULL`).run(conflictRetentionMs);
   }
 
   close() { if (this.ownsDb) this.db.close(); }
@@ -338,9 +356,87 @@ class SQLiteHostedSettlementRepository {
 
   _insertConflict(entry, prior, now) {
     this.db.prepare(`INSERT OR IGNORE INTO hosted_settlement_conflicts
-      (quarantine_id,run_id,presented_result_id,presented_hash,accepted_result_id,accepted_hash,quarantined_at)
-      VALUES (?,?,?,?,?,?,?)`).run(stableId("quarantine", entry.run_id, entry.result_hash), entry.run_id,
-      entry.result_id, entry.result_hash, prior?.result_id || null, prior?.result_hash || null, now);
+      (quarantine_id,run_id,presented_result_id,presented_hash,accepted_result_id,accepted_hash,
+       quarantined_at,retain_until)
+      VALUES (?,?,?,?,?,?,?,?)`).run(stableId("quarantine", entry.run_id, entry.result_hash), entry.run_id,
+      entry.result_id, entry.result_hash, prior?.result_id || null, prior?.result_hash || null, now,
+      now + this.conflictRetentionMs);
+  }
+
+  // Replaces transient result and response bodies with a deterministic,
+  // payload-free receipt. The economic ledger and inventory remain product
+  // state; this only retires transport/result copies after settlement commit.
+  archiveSettledResult(candidate) {
+    if (!candidate || typeof candidate !== "object") reject("HOSTED_SETTLEMENT_INVALID");
+    for (const field of ["result_id", "run_id", "result_hash", "idempotency_key", "settlement_id"]) {
+      validId(candidate[field]);
+    }
+    const archivedAt = this.now();
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const settlement = this.db.prepare(`SELECT * FROM hosted_settlements
+        WHERE settlement_id=? AND result_id=? AND run_id=? AND result_hash=? AND idempotency_key=?`)
+        .get(candidate.settlement_id, candidate.result_id, candidate.run_id,
+          candidate.result_hash, candidate.idempotency_key);
+      const result = this.db.prepare(`SELECT * FROM hosted_match_results
+        WHERE result_id=? AND run_id=? AND result_hash=?`).get(candidate.result_id,
+        candidate.run_id, candidate.result_hash);
+      if (!settlement || !result) reject("HOSTED_SETTLEMENT_FENCED");
+      const receipt = Object.freeze({ receipt_id: stableId("settlement_receipt", settlement.settlement_id),
+        settlement_id: settlement.settlement_id, result_id: settlement.result_id,
+        run_id: settlement.run_id, result_hash: settlement.result_hash,
+        idempotency_key: settlement.idempotency_key, committed_at: settlement.committed_at,
+        archived_at: archivedAt, retain_until: archivedAt + this.auditRetentionMs });
+      const prior = this.db.prepare("SELECT * FROM hosted_result_audit WHERE result_id=?")
+        .get(receipt.result_id);
+      if (prior) {
+        if (prior.run_id !== receipt.run_id || prior.result_hash !== receipt.result_hash
+            || prior.settlement_id !== receipt.settlement_id) reject("HOSTED_SETTLEMENT_CONFLICT");
+        this.db.exec("COMMIT");
+        return Object.freeze({ ...receipt, archived_at: prior.archived_at,
+          retain_until: prior.retain_until, replayed: true });
+      }
+      this.db.prepare(`INSERT INTO hosted_result_audit
+        (result_id,idempotency_key,run_id,result_hash,settlement_id,committed_at,archived_at,retain_until)
+        VALUES (?,?,?,?,?,?,?,?)`).run(receipt.result_id, receipt.idempotency_key, receipt.run_id,
+        receipt.result_hash, receipt.settlement_id, receipt.committed_at, receipt.archived_at,
+        receipt.retain_until);
+      this.db.prepare("UPDATE hosted_match_results SET payload_json='{}' WHERE result_id=?")
+        .run(receipt.result_id);
+      this.db.prepare("UPDATE hosted_settlements SET response_json=? WHERE settlement_id=?")
+        .run(json({ settlement_id: receipt.settlement_id, result_id: receipt.result_id,
+          run_id: receipt.run_id, result_hash: receipt.result_hash,
+          committed_at: receipt.committed_at, archived: true }), receipt.settlement_id);
+      this.db.exec("COMMIT");
+      return receipt;
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  cleanupRetention({ now = this.now(), auditBefore = now, conflictBefore = now, limit = 100 } = {}) {
+    if (![now, auditBefore, conflictBefore, limit].every(Number.isSafeInteger)
+        || limit < 1 || limit > 10_000) reject("HOSTED_SETTLEMENT_INVALID");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const audit = this.db.prepare(`DELETE FROM hosted_result_audit WHERE result_id IN (
+        SELECT result_id FROM hosted_result_audit
+        WHERE placement_acknowledged_at IS NOT NULL AND retain_until<=? AND archived_at<?
+        ORDER BY archived_at,result_id LIMIT ?)`)
+        .run(now, auditBefore, limit).changes;
+      const remaining = limit - Number(audit);
+      const conflicts = remaining > 0 ? this.db.prepare(`DELETE FROM hosted_settlement_conflicts
+        WHERE quarantine_id IN (SELECT quarantine_id FROM hosted_settlement_conflicts
+          WHERE quarantined_at<? AND retain_until IS NOT NULL AND retain_until<=?
+          ORDER BY quarantined_at,quarantine_id LIMIT ?)`)
+        .run(conflictBefore, now, remaining).changes : 0;
+      this.db.exec("COMMIT");
+      return Object.freeze({ auditDeleted: Number(audit), conflictsDeleted: Number(conflicts), limit });
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   _verifyReferenceAcceptance(entry) {

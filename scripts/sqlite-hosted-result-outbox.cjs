@@ -62,6 +62,21 @@ function configure(db, { referenceAuthorityMode = false } = {}) {
     );
     CREATE INDEX IF NOT EXISTS hosted_result_outbox_claim
       ON hosted_result_outbox(state, available_at, accepted_at, result_id);
+    CREATE TABLE IF NOT EXISTS hosted_result_audit (
+      result_id TEXT PRIMARY KEY,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      run_id TEXT NOT NULL UNIQUE,
+      result_hash TEXT NOT NULL,
+      settlement_id TEXT NOT NULL UNIQUE,
+      committed_at INTEGER NOT NULL,
+      archived_at INTEGER NOT NULL,
+      retain_until INTEGER NOT NULL,
+      placement_acknowledged_at INTEGER,
+      CHECK(retain_until >= archived_at),
+      CHECK(placement_acknowledged_at IS NULL OR placement_acknowledged_at >= archived_at)
+    );
+    CREATE INDEX IF NOT EXISTS hosted_result_audit_retention
+      ON hosted_result_audit(placement_acknowledged_at, retain_until, archived_at, result_id);
   `);
   if (referenceAuthorityMode) db.exec(`
     CREATE TABLE IF NOT EXISTS hosted_reference_authority_lineages (
@@ -156,6 +171,14 @@ class SQLiteHostedResultOutbox {
 
   enqueue({ authority, payload } = {}) {
     const canonical = canonicalResult(authority, payload);
+    const archived = this.db.prepare("SELECT * FROM hosted_result_audit WHERE run_id=?")
+      .get(canonical.authority.run_id);
+    if (archived) {
+      if (archived.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
+      return Object.freeze({ result_id: archived.result_id, idempotency_key: archived.idempotency_key,
+        run_id: archived.run_id, result_hash: archived.result_hash, state: "archived",
+        archived_at: archived.archived_at });
+    }
     const prior = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(canonical.authority.run_id);
     if (prior) {
       if (prior.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
@@ -379,6 +402,56 @@ class SQLiteHostedResultOutbox {
     return row ? this._public(row) : null;
   }
   list() { return this.db.prepare("SELECT * FROM hosted_result_outbox ORDER BY accepted_at,result_id").all().map((row) => this._public(row)); }
+
+  // Only rows with a durable settlement are eligible. Pending and leased
+  // rows, plus dead letters that never committed economics, are deliberately
+  // absent from this recovery list.
+  archiveCandidates({ terminalBefore = this.now(), limit = 100 } = {}) {
+    if (!Number.isSafeInteger(terminalBefore) || !Number.isSafeInteger(limit)
+        || limit < 1 || limit > 10_000) reject("HOSTED_RESULT_INVALID");
+    return this.db.prepare(`SELECT o.result_id,o.run_id,o.result_hash,o.idempotency_key,o.state,
+        s.settlement_id,s.committed_at
+      FROM hosted_result_outbox o JOIN hosted_settlements s ON s.result_id=o.result_id
+      WHERE o.state IN ('delivered','dead-letter')
+        AND COALESCE(o.delivered_at,o.accepted_at)<=?
+      ORDER BY COALESCE(o.delivered_at,o.accepted_at),o.result_id LIMIT ?`)
+      .all(terminalBefore, limit).map((row) => Object.freeze({ ...row }));
+  }
+
+  archiveSettled({ receipt, placementAcknowledgedAt = this.now() } = {}) {
+    if (!receipt || typeof receipt !== "object" || !Number.isSafeInteger(placementAcknowledgedAt)) {
+      reject("HOSTED_RESULT_INVALID");
+    }
+    for (const field of ["result_id", "run_id", "result_hash", "idempotency_key", "settlement_id"]) {
+      validId(receipt[field]);
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const row = this.db.prepare(`SELECT * FROM hosted_result_outbox
+        WHERE result_id=? AND run_id=? AND result_hash=? AND idempotency_key=?
+          AND state IN ('delivered','dead-letter')`).get(receipt.result_id, receipt.run_id,
+        receipt.result_hash, receipt.idempotency_key);
+      const audit = this.db.prepare("SELECT * FROM hosted_result_audit WHERE result_id=?")
+        .get(receipt.result_id);
+      if (!row && audit) {
+        if (audit.run_id !== receipt.run_id || audit.result_hash !== receipt.result_hash
+            || audit.settlement_id !== receipt.settlement_id) reject("HOSTED_RESULT_CONFLICT");
+        this.db.exec("COMMIT");
+        return Object.freeze({ archived: true, replayed: true, result_id: audit.result_id });
+      }
+      if (!row || !audit || audit.settlement_id !== receipt.settlement_id
+          || audit.placement_acknowledged_at != null) reject("HOSTED_RESULT_ARCHIVE_NOT_READY");
+      this.db.prepare(`UPDATE hosted_result_audit SET placement_acknowledged_at=?
+        WHERE result_id=? AND placement_acknowledged_at IS NULL`).run(placementAcknowledgedAt, row.result_id);
+      this.db.prepare("DELETE FROM hosted_result_journal WHERE result_id=? AND state='finalized'").run(row.result_id);
+      this.db.prepare("DELETE FROM hosted_result_outbox WHERE result_id=?").run(row.result_id);
+      this.db.exec("COMMIT");
+      return Object.freeze({ archived: true, replayed: false, result_id: row.result_id });
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   accepted(runId) {
     this._requireReferenceMode();
     const row = this.getAuthority(runId);
