@@ -18,6 +18,8 @@
 - Sealed two profiler-off rounds across fresh S20, S23, and S23P controls at
   1/4/8. One and four pass absolute candidate gates. Eight improves S23 but
   still fails at 71.05/69.76 ms p95 and 75.04/72.69 ms p99.
+- Made counterbalanced population order executable evidence: the analyzer now
+  cross-checks each run/aggregate manifest and raw measurement chronology.
 - Rejected promotion because eight misses 50/70 ms tails and one/four fail the
   sealed 10% S20 non-regression envelope. S20 remains the one-through-four
   product path; eight stays closed; S23/S23P stay default-off.

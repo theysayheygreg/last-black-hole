@@ -59,6 +59,50 @@
         }
       }
     ],
+    "orderValidation": [
+      {
+        "round": "round-a",
+        "treatment": "control-s20",
+        "verified": true,
+        "populationOrder": [8, 4, 1],
+        "measurementWindowStartAt": [1784016689878, 1784016718144, 1784016745521]
+      },
+      {
+        "round": "round-a",
+        "treatment": "control-s23",
+        "verified": true,
+        "populationOrder": [4, 1, 8],
+        "measurementWindowStartAt": [1784016777985, 1784016805411, 1784016834325]
+      },
+      {
+        "round": "round-a",
+        "treatment": "candidate-s23p",
+        "verified": true,
+        "populationOrder": [1, 8, 4],
+        "measurementWindowStartAt": [1784016873022, 1784016901780, 1784016930167]
+      },
+      {
+        "round": "round-b",
+        "treatment": "candidate-s23p",
+        "verified": true,
+        "populationOrder": [4, 8, 1],
+        "measurementWindowStartAt": [1784016979598, 1784017008769, 1784017036500]
+      },
+      {
+        "round": "round-b",
+        "treatment": "control-s23",
+        "verified": true,
+        "populationOrder": [8, 1, 4],
+        "measurementWindowStartAt": [1784017073801, 1784017101518, 1784017129419]
+      },
+      {
+        "round": "round-b",
+        "treatment": "control-s20",
+        "verified": true,
+        "populationOrder": [1, 4, 8],
+        "measurementWindowStartAt": [1784017163207, 1784017191208, 1784017220472]
+      }
+    ],
     "profiler": "off",
     "processBoundary": "one authority process plus one isolated client process per recipient",
     "absoluteThresholds": {

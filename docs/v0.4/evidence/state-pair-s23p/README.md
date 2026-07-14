@@ -4,7 +4,9 @@ All six artifacts bind clean commit
 `b9c6825a769864e80711ee9e50a7ba86bfcdc2de`. Each treatment uses one match,
 one dedicated logical authority, and one isolated Node process per recipient.
 The authority profiler is off. Treatment order and each treatment's population
-order reverse between rounds.
+order reverse between rounds. The evidence analyzer verifies each declared
+population order against both the checksum-bound run/aggregate manifests and
+strictly increasing raw measurement-window start times.
 
 | Round | Path | Population order | Composite SHA-256 |
 | --- | --- | --- | --- |
@@ -31,4 +33,3 @@ S23P is not promoted. `analysis.json` recomputes absolute gates, S23 recovery,
 S20 non-regression, proof counters, raw artifact SHAs, and the decision. This is
 machine-local raw WebSocket evidence, not WAN, hosted, fleet, AOI, or high-count
 evidence.
-

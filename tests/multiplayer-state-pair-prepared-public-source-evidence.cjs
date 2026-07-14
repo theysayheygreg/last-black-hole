@@ -12,6 +12,12 @@ const EVIDENCE = path.resolve(process.argv[2]
 const ROUNDS = ["round-a", "round-b"];
 const POPULATIONS = [1, 4, 8];
 const TREATMENTS = ["control-s20", "control-s23", "candidate-s23p"];
+const METHODOLOGY_ROUNDS = [
+  { round: "round-a", treatmentOrder: ["control-s20", "control-s23", "candidate-s23p"],
+    populationOrder: { s20: [8, 4, 1], s23: [4, 1, 8], s23p: [1, 8, 4] } },
+  { round: "round-b", treatmentOrder: ["candidate-s23p", "control-s23", "control-s20"],
+    populationOrder: { s23p: [4, 8, 1], s23: [8, 1, 4], s20: [1, 4, 8] } },
+];
 
 function read(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
@@ -25,6 +31,34 @@ function median(values) {
 
 function ratio(candidate, control, select) {
   return select(candidate) / select(control);
+}
+
+function treatmentOrderKey(treatment) {
+  return treatment === "control-s20" ? "s20"
+    : treatment === "control-s23" ? "s23" : "s23p";
+}
+
+function validateCaptureOrder() {
+  return METHODOLOGY_ROUNDS.flatMap((method) => method.treatmentOrder.map((treatment) => {
+    const directory = path.join(EVIDENCE, method.round, treatment);
+    const validation = validateChecksums(directory);
+    assert(validation.passed, `${method.round}/${treatment} checksum validation failed`);
+    const expected = method.populationOrder[treatmentOrderKey(treatment)];
+    const run = read(path.join(directory, "run.json"));
+    const aggregate = read(path.join(directory, "aggregate.json"));
+    const aggregateOrder = aggregate.scenarios.map((entry) => entry.population);
+    const starts = expected.map((population) => ({ population,
+      windowStartAt: read(path.join(directory, `normal-${population}.json`)).window.startAt }));
+    assert.deepStrictEqual(run.config.populations, expected,
+      `${method.round}/${treatment} configured population order drifted`);
+    assert.deepStrictEqual(aggregateOrder, expected,
+      `${method.round}/${treatment} aggregate population order drifted`);
+    assert(starts.every((entry, index) => index === 0
+      || entry.windowStartAt > starts[index - 1].windowStartAt),
+    `${method.round}/${treatment} measurement chronology contradicts declared order`);
+    return { round: method.round, treatment, verified: true, populationOrder: expected,
+      measurementWindowStartAt: starts.map((entry) => entry.windowStartAt) };
+  }));
 }
 
 function scenario(round, treatment, population) {
@@ -100,6 +134,7 @@ function comparisonsFor(rows, controlTreatment) {
   });
 }
 
+const orderValidation = validateCaptureOrder();
 const rows = ROUNDS.flatMap((round) => TREATMENTS.flatMap((treatment) =>
   POPULATIONS.map((population) => scenario(round, treatment, population))));
 const vsS23 = comparisonsFor(rows, "control-s23");
@@ -120,12 +155,8 @@ const analysis = {
     validateBeforeCommit: "b9c6825a769864e80711ee9e50a7ba86bfcdc2de",
   },
   methodology: {
-    rounds: [
-      { round: "round-a", treatmentOrder: ["control-s20", "control-s23", "candidate-s23p"],
-        populationOrder: { s20: [8, 4, 1], s23: [4, 1, 8], s23p: [1, 8, 4] } },
-      { round: "round-b", treatmentOrder: ["candidate-s23p", "control-s23", "control-s20"],
-        populationOrder: { s23p: [4, 8, 1], s23: [8, 1, 4], s20: [1, 4, 8] } },
-    ],
+    rounds: METHODOLOGY_ROUNDS,
+    orderValidation,
     profiler: "off",
     processBoundary: "one authority process plus one isolated client process per recipient",
     absoluteThresholds: { minimumCadenceHz: 9, overload: "NORMAL", projectionP95Ms: 50,
