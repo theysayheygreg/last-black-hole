@@ -122,4 +122,13 @@ assert.strictEqual(canonical.providerAlternatives.cloudflareDurableObjectCuriosi
   "unproven port experiment, not a capacity forecast");
 assert(!Object.prototype.hasOwnProperty.call(canonical.providerAlternatives, "vercel"),
   "Vercel must remain excluded from live-authority cost rows");
+const canonicalModel = model(canonical, { sourceCommit: "test" });
+const canonicalBase = canonicalModel.rows.find((row) => row.topology === "centralPerMatchAuthority"
+  && row.case === "base" && row.copies === 1000);
+assert.strictEqual(canonicalBase.providerSensitivity.length, 4,
+  "every central row must carry all provider-rate sensitivities");
+assert.strictEqual(canonicalBase.providerSensitivity.find((item) => item.provider === "hetznerCx23").authorityHourUsd,
+  0.0135);
+assert(canonicalBase.providerSensitivity.find((item) => item.provider === "hetznerCx23").contribution
+  > canonicalBase.contribution, "lower provider rate must improve contribution without changing fixed services");
 console.log("v0.4 multiplayer unit-economics tests passed");

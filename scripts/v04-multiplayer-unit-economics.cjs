@@ -241,6 +241,27 @@ function sensitivity(config, row) {
   }).sort((a, b) => Math.abs(b.contributionDeltaUsd) - Math.abs(a.contributionDeltaUsd));
 }
 
+function providerSensitivity(config, row) {
+  if (row.topology !== "centralPerMatchAuthority") return [];
+  return Object.entries(config.providerAlternatives || {}).map(([provider, item]) => {
+    const alternativeRate = item.authorityHourUsd[row.case] ?? item.authorityHourUsd.experimental;
+    const primaryGameplayCost = row.demand.authorityHours * row.unitCosts.costPerAuthorityHour;
+    const alternativeGameplayCost = row.demand.authorityHours * alternativeRate;
+    const totalOperationsCost = row.operations.totalOperationsCost
+      - primaryGameplayCost + alternativeGameplayCost;
+    return {
+      provider,
+      authorityHourUsd: alternativeRate,
+      playerHourUsdAtFourSeats: alternativeRate / 4,
+      hostedPlayerHoursPerDollarAtFourSeats: 4 / alternativeRate,
+      totalOperationsCost: round(totalOperationsCost),
+      contribution: round(row.commercial.netReceiptsBeforeOperations - totalOperationsCost),
+      position: item.position,
+      caveat: item.caveat,
+    };
+  });
+}
+
 function model(config, source = {}) {
   validateConfig(config);
   const rows = [];
@@ -255,6 +276,7 @@ function model(config, source = {}) {
       netReceiptsUsd: money(row.commercial.netReceiptsBeforeOperations),
       operationsUsd: money(row.operations.totalOperationsCost), contributionUsd: money(row.contribution) };
     rounded.sensitivity = sensitivity(config, row);
+    rounded.providerSensitivity = providerSensitivity(config, row);
     return rounded;
   });
   return {
