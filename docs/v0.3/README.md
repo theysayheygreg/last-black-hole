@@ -32,20 +32,22 @@ The working theme is:
 ## Read Order
 
 1. `ROADMAP.md` - v0.3 plan, delegated workstreams, milestones, and gates.
-2. `OPEN-DECISIONS.md` - resolved defaults plus the few decisions still owned
+2. `DECISIONS.md` - detailed v0.3 decisions from the versioned-journal cutoff.
+3. `CHANGELOG.md` - detailed v0.3 changes from the versioned-journal cutoff.
+4. `OPEN-DECISIONS.md` - resolved defaults plus the few decisions still owned
    by Greg.
-3. `RC-GATE.md` - playable release-candidate checklist, current blockers, and
+5. `RC-GATE.md` - playable release-candidate checklist, current blockers, and
    required evidence.
-4. `../reference/CARBON-ENGINE-RESEARCH.md` - Carbon/Destiny/Trinity lessons
+6. `../reference/CARBON-ENGINE-RESEARCH.md` - Carbon/Destiny/Trinity lessons
    being mined for LBH-sized contracts.
-5. `../project/LOCAL-PROTOCOL.md` - current local authority protocol.
-6. `../project/NETWORK-ARCHITECTURE-PLAN.md` - older network plan and context.
-7. `../project/SIM-DECOUPLING-PLAN.md` - previous sim/client split planning.
-8. `../project/MECHANICS-SIM-RENDER-AUDIT.md` - current mechanics and
+7. `../project/LOCAL-PROTOCOL.md` - current local authority protocol.
+8. `../project/NETWORK-ARCHITECTURE-PLAN.md` - older network plan and context.
+9. `../project/SIM-DECOUPLING-PLAN.md` - previous sim/client split planning.
+10. `../project/MECHANICS-SIM-RENDER-AUDIT.md` - current mechanics and
    sim/renderer audit baseline.
-9. `../design/PILLARS.md` and `../design/MOVEMENT.md` - design guardrails.
-10. `../design/TEST-HARNESS.md` - current harness contract.
-11. `../v0.2/ROADMAP.md` - active demo/stabilization roadmap.
+11. `../design/PILLARS.md` and `../design/MOVEMENT.md` - design guardrails.
+12. `../design/TEST-HARNESS.md` - current harness contract.
+13. `../v0.2/ROADMAP.md` - active demo/stabilization roadmap.
 
 ## What v0.3 Is Not
 

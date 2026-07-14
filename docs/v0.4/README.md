@@ -90,23 +90,26 @@ of the architecture and costing program.
 
 1. [`FOUR-HUMAN-PRODUCT-PLAN.md`](FOUR-HUMAN-PRODUCT-PLAN.md) — active human
    product contract from crew muster through rematch.
-2. [`ROADMAP.md`](ROADMAP.md) — staged product, service, and measurement plan.
-3. [`MULTIPLAYER-DECISION-PACKET.md`](MULTIPLAYER-DECISION-PACKET.md) — final
+2. [`DECISIONS.md`](DECISIONS.md) — current v0.4 decisions and status.
+3. [`CHANGELOG.md`](CHANGELOG.md) — detailed v0.4 branch changes.
+4. [`ROADMAP.md`](ROADMAP.md) — staged product, service, and measurement plan.
+5. [`MULTIPLAYER-DECISION-PACKET.md`](MULTIPLAYER-DECISION-PACKET.md) — final
    executive answer to the original architecture and costing request.
-4. [`ARCHITECTURE.md`](ARCHITECTURE.md) — authority, transport, network,
+6. [`ARCHITECTURE.md`](ARCHITECTURE.md) — authority, transport, network,
    identity, recovery, hosting, and private fallback contracts.
-5. [`OPEN-DECISIONS.md`](OPEN-DECISIONS.md) — Greg's product calls, separated
+7. [`OPEN-DECISIONS.md`](OPEN-DECISIONS.md) — Greg's product calls, separated
    from engineering gates.
-6. [`COMPLETION-AUDIT.md`](COMPLETION-AUDIT.md) — requirement-by-requirement
+8. [`COMPLETION-AUDIT.md`](COMPLETION-AUDIT.md) — requirement-by-requirement
    coverage and evidence status.
-7. [`HOSTED-IDENTITY-PLACEMENT-DECISION.md`](HOSTED-IDENTITY-PLACEMENT-DECISION.md)
+9. [`HOSTED-IDENTITY-PLACEMENT-DECISION.md`](HOSTED-IDENTITY-PLACEMENT-DECISION.md)
    — identifier lifetimes, trust boundaries, leases, tickets, settlement, and
    privacy.
-8. [`MULTIPLAYER-UNIT-ECONOMICS.md`](MULTIPLAYER-UNIT-ECONOMICS.md) —
+10. [`MULTIPLAYER-UNIT-ECONOMICS.md`](MULTIPLAYER-UNIT-ECONOMICS.md) —
    reproducible $4.99 economics at 1K/10K/100K/1M copies.
-9. [`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md) —
-   optional friends-only GregBot host behind identity-gated outbound ingress;
-   not a verified hosted-product or public-matchmaking claim.
+11. [`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md) —
+   realistic external test using a disposable Tailscale shared node, Serve,
+   and identity-bound LBH invitations; not a verified hosted-product or
+   public-matchmaking claim.
 
 ## Evidence And Research Anchors
 

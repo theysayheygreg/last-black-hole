@@ -1,210 +1,293 @@
-# Optional Local Internet Host Plan
+# Realistic External Multiplayer Test Plan
 
-> Status: **OPTIONAL / NOT IMPLEMENTED**
+> Status: **SELECTED TEST APPROACH / NOT YET IMPLEMENTED**
 >
-> Product boundary: one private match hosted on GregBot for Greg plus exactly
-> three invited remote players. This is not public matchmaking, verified cloud
-> authority, hosted progression, or production service evidence.
+> Product boundary: one private S20 match for Greg plus exactly three named
+> external testers. This is not public matchmaking, verified cloud authority,
+> hosted progression, or production service evidence.
 
 ## Decision
 
-Add an optional v0.4 private-host lane that exposes a production-built browser
-client and one S20 match authority through an identity-gated outbound tunnel.
-The recommended ingress is a named Cloudflare Tunnel protected by Cloudflare
-Access. Do not port-forward GregBot, expose a development server, or use a
-shared password as the only access control.
+Use **Tailscale device sharing** for the first external LBH multiplayer test.
+Run LBH on a disposable, separately enrolled `lbh-playtest` node and share only
+that node with three named testers. Each tester uses their own Tailscale account
+and tailnet; nobody joins Greg's tailnet.
 
-If all players will install Tailscale, Tailscale Serve with individually
-invited tailnet identities is the safer alternative because it is not publicly
-reachable. Tailscale Funnel is not the default because public reachability
-still requires an application authentication layer.
+Expose one loopback-only LBH origin through Tailscale Serve on HTTPS 443. Keep a
+second admission layer inside LBH: three short-lived, one-use crew invitations
+bound to the authenticated Tailscale identities and four authority seats.
+
+Do not share GregBot itself. Do not use Tailscale Funnel for this test. Funnel
+is public ingress and does not supply Serve's authenticated identity headers.
+Do not use Cloudflare Tunnel or Access for the first external test; they add a
+second provider and more operational surface without improving this fixed,
+three-person playtest.
+
+Official references:
+
+- <https://tailscale.com/kb/1084/sharing>
+- <https://tailscale.com/docs/features/tailscale-serve>
+- <https://tailscale.com/docs/reference/inviting-vs-sharing>
+- <https://tailscale.com/docs/reference/funnel-vs-sharing>
+
+## Tester Contract
+
+Each external tester must:
+
+1. install Tailscale on the play machine;
+2. sign into their own personal Tailscale account/tailnet;
+3. accept a single-use share invitation for `lbh-playtest`;
+4. open the full shared-node name, such as
+   `https://lbh-playtest.<greg-tailnet>.ts.net`;
+5. redeem their separate one-use LBH crew invitation.
+
+The full `hostname.tailnet.ts.net` name is required for a machine shared across
+tailnets. A tester sees only the shared playtest node, not Greg's other
+machines. The share is revoked immediately after the session.
 
 ## Authority And Trust Boundary
 
-- One session has one logical single-writer authority on GregBot.
-- Greg plus three remote players occupy the four admitted S20 seats.
-- A fifth seat is rejected by session, invite, router, and authority gates.
+- One match has one logical single-writer S20 authority.
+- Greg plus three remote humans occupy the four admitted seats.
+- A fifth seat rejects at share, invitation, router, session, and authority
+  boundaries where applicable.
 - Clients own input and presentation only. The authority owns movement,
   Ballpark state, contacts, loot, signal, death, extraction, events, and result.
-- Results are local and visibly unverified. This lane cannot mint cloud
+- Results are local and visibly unverified. This test cannot mint verified
   inventory, currency, entitlement, Chronicle, or competitive history.
-- Host availability and host integrity are trusted for this friends-only mode.
+- The disposable node and match authority are trusted for this friends-only
+  test; the external clients are not trusted as gameplay authorities.
 
 ## Network Shape
 
 ```text
-three invited browsers
-  -> HTTPS/WSS
-  -> Cloudflare Access: exact-email allowlist, short session
-  -> Cloudflare Tunnel: outbound-only connector
-  -> loopback-only ingress on an isolated Linux appliance
-  -> static production client + one S20 match authority
+three named external play machines
+  -> each tester's own Tailscale account/tailnet
+  -> individually accepted share of lbh-playtest only
+  -> HTTPS/WSS :443, constrained by Greg's tailnet grants
+  -> Tailscale Serve with authenticated user identity headers
+  -> one reverse-proxy origin on 127.0.0.1
+  -> static production client + bounded session API + one S20 authority
 
-Greg local client
-  -> the same authority through a local-only route
+Greg's client
+  -> the same HTTPS authority
 ```
 
-Cloudflare Tunnel supports WebSockets and establishes outbound connections, so
-the router requires no inbound rule. References:
+No router port is forwarded. No subnet route or exit node is advertised. The
+authority, control endpoints, and data stores never bind to a LAN or public
+interface.
 
-- <https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/>
-- <https://developers.cloudflare.com/cloudflare-one/faq/cloudflare-tunnels-faq/>
-- <https://developers.cloudflare.com/cloudflare-one/access-controls/policies/>
-- <https://developers.cloudflare.com/network/websockets/>
+## Disposable Playtest Node
 
-## Defense In Depth
+Create a dedicated Linux VM or equivalent isolated appliance on GregBot with
+its own Tailscale node identity, for example `lbh-playtest-01`. It must:
 
-### 1. Isolate the appliance
-
-Run the authority, static client, and narrow reverse proxy in a disposable
-Linux VM or restricted container. It must:
-
-- run as a non-root user with a read-only root filesystem;
-- drop capabilities and apply CPU, memory, process, and file-descriptor limits;
-- mount only immutable build artifacts plus a small ephemeral data volume;
+- run only the pinned LBH production client, reverse proxy, and one authority;
+- run as a non-root user with CPU, memory, process, and file-descriptor limits;
+- mount immutable build artifacts and a small ephemeral match-data volume;
 - have no access to Greg's home directory, SSH keys, Codex/OpenClaw secrets,
-  browser profiles, Docker socket, unrelated project files, or LAN services;
-- publish its origin only on `127.0.0.1` or a private sidecar network;
-- contain no dev server, hot reload, directory listing, source maps, debug API,
-  test API, control-plane admin surface, or public metrics endpoint.
+  browser profiles, Docker socket, unrelated repositories, or LAN services;
+- expose the combined browser/API/WebSocket origin only on `127.0.0.1`;
+- contain no dev server, hot reload, directory listing, source maps, test API,
+  debug API, admin UI, public metrics, subnet router, or exit-node role.
 
-The tunnel connector may reach only this appliance. No router port forwarding
-or general LAN route is allowed.
+Destroying or disconnecting this node must end all external reachability
+without affecting GregBot's other Tailscale services.
 
-### 2. Authenticate the public hostname
+## Tailscale Serve Front Door
 
-Protect the entire hostname, including `/`, `/api/session/*`, and `/ws`, with a
-default-deny Cloudflare Access application.
+Serve one origin so browser assets, HTTP admission, and WebSocket upgrades share
+the same HTTPS authority and exact `Origin` policy:
 
-- Allow only Greg and the three exact guest email addresses.
-- Use email one-time PIN or an existing identity provider.
-- Do not use `Include Everyone`, all valid emails, or a permanent bypass.
-- Use a short Access session lifetime bounded to the play session.
-- Verify the Access application audience/JWT at the local proxy as defense in
-  depth; do not trust a caller-supplied identity header.
-- Serve the client and WebSocket from one origin so browser authentication and
-  exact `Origin` validation remain simple.
+```bash
+tailscale serve --bg http://127.0.0.1:8787
+tailscale serve status
+```
 
-A shared password may be an additional join secret, but never the perimeter.
+Shutdown begins with:
 
-### 3. Admit exactly four players
+```bash
+tailscale serve off
+```
 
-After Access authentication, the host creates three one-use game invitations.
-Each invitation is:
+Serve strips spoofed incoming Tailscale identity headers and adds authenticated
+headers such as `Tailscale-User-Login` to the loopback request. LBH may trust
+those headers only when the origin is loopback-only and reachable exclusively
+through Serve.
 
-- bound to the run, one player alias, and one seat;
-- random, single-use, and no longer than 15 minutes before redemption;
-- entered after login, never placed in a URL, referrer, analytics event, or log;
-- exchanged for a short-lived scoped connection grant;
-- rotated on reconnect while the prior connection epoch is fenced.
+## Access Grants And Sharing
 
-The authority accepts S20 only. Every HTTP and WebSocket envelope has strict
-type, size, sequence, rate, and identifier bounds. WebSocket upgrades require
-WSS, the exact public `Origin`, a valid Access identity, and a valid scoped
-game grant. Queue, reliable-action, heartbeat, reconnect, and idle limits stay
-bounded and fail closed.
+Share `lbh-playtest-01` individually by email or three single-use links. Never
+use a reusable share link for this test. Apply a tailnet grant that limits the
+three exact tester identities to HTTPS 443 on the playtest node. The final rule
+must use the actual node address and verified login identities; conceptually:
 
-### 4. Minimize data and blast radius
+```json
+{
+  "grants": [
+    {
+      "src": [
+        "tester-one@example.com",
+        "tester-two@example.com",
+        "tester-three@example.com"
+      ],
+      "dst": ["<lbh-playtest-tailscale-ip>"],
+      "ip": ["443"]
+    }
+  ]
+}
+```
 
-- Store run-local public aliases, not email addresses or durable account ids.
-- Strip or avoid logging Access cookies, JWTs, invite/grant values, client IP
-  headers, provider identities, and raw payloads.
-- Keep admin, shutdown, inspection, and invitation creation loopback-only.
-- Accept no uploads, mods, chat, arbitrary filenames, or user-authored HTML.
-- Delete ephemeral match state and invitations after shutdown. Retain only a
-  sanitized run summary if explicitly requested.
+Before sending invitations, verify that shared users cannot reach SSH, raw sim,
+database, status, metrics, admin, LAN, subnet, or exit-node services.
+
+## LBH Admission
+
+Tailscale proves which named tester reached the node. LBH still controls who
+occupies the match:
+
+- the host creates three random, single-use crew invitations;
+- each invitation is bound to the run, expected Tailscale login, alias, and
+  seat, and expires within 15 minutes if unused;
+- the invitation is entered after opening LBH and never appears in a URL,
+  referrer, analytics event, or retained log;
+- redemption issues the existing scoped run/membership/connection authority;
+- reconnect rotates connection authority and fences the prior epoch;
+- Tailscale access without a valid LBH invitation cannot occupy a seat;
+- forwarding a crew invitation to a different Tailscale identity fails;
+- the authority accepts S20 only and rejects the fifth seat.
+
+Store public aliases in match state, not email addresses. Keep Tailscale login
+identities only in the smallest bounded admission record required for the live
+session, then delete them during teardown.
 
 ## Implementation Slices
 
-### Slice A — Immutable local appliance
+### T1 — Isolated node and single origin
 
-- Build the static client and authority from a pinned clean v0.4 commit.
-- Add a private-host production profile that exposes only static assets,
-  bounded session admission, and `/ws`.
-- Package it in the isolated appliance described above.
+- Build from a pinned clean v0.4 commit.
+- Package the client, narrow reverse proxy, and one authority in the disposable
+  node.
+- Bind every application listener to loopback.
 - Prove default local/offline launch remains unchanged.
 
-### Slice B — Private admission
+### T2 — Serve and shared-node access
 
-- Add host-created one-use invitations and short-lived connection grants.
-- Bind each grant to run, player alias, seat, protocol, authority incarnation,
-  and connection epoch.
-- Prove replay, mutation, expiry, cross-seat use, and fifth-seat use fail.
+- Enroll the appliance as its own Tailscale node.
+- Configure Serve for the single LBH origin.
+- Add exact-user port-443 grants.
+- Test one external share, revocation, and complete reachability loss.
+- Document the tester install, accept, connect, and troubleshooting flow.
 
-### Slice C — Tunnel and Access adapter
+### T3 — Identity-bound game admission
 
-- Configure a named tunnel for one disposable hostname.
-- Protect the entire hostname with an exact-email Access policy.
-- Verify Access identity at the local proxy and validate exact WebSocket
-  origin. Keep tunnel credentials outside the repo and appliance image.
-- Provide a check-only preflight and an explicit start/stop workflow.
+- Add one-use crew invitations bound to Tailscale login, run, seat, protocol,
+  authority incarnation, and expiry.
+- Consume each invitation exactly once and issue the ordinary scoped connection
+  authority.
+- Prove mutation, replay, expiry, cross-identity, cross-seat, and fifth-seat
+  attempts fail closed.
 
-### Slice D — Session supervisor
+### T4 — Bounded session supervisor
 
-- Start one appliance and one authority, then verify loopback-only listeners.
-- Start the tunnel only after authority readiness and Access-policy checks.
-- Stop the tunnel first on failure or shutdown, then fence the authority,
-  delete invitations, and remove ephemeral state.
-- Auto-stop after a bounded session lifetime or a declared idle interval.
-- Provide one local emergency command that kills ingress immediately.
+- Verify authority readiness before enabling Serve.
+- Auto-stop after the declared session lifetime or idle timeout.
+- Stop Serve first on failure, then fence authority, revoke invitations, remove
+  shares, and delete ephemeral state.
+- Provide one local emergency command that removes ingress immediately.
 
-### Slice E — Four-human validation
+### T5 — Four-human external playtest
 
-- Test from three distinct external browser profiles/networks plus Greg locally.
-- Exercise invite, join, movement, salvage, signal, reconnect, extraction/death,
-  result, leave, and rematch.
-- Record state cadence, application bytes, authority CPU/memory, queue pressure,
-  reconnect time, tunnel disconnects, and cleanup. Label this private-host
-  evidence; do not reuse it as cloud packing or regional-hosting proof.
+- Greg and three external testers enter Crew Muster and launch together.
+- Exercise movement, salvage, signal, reconnect, extraction/death, result,
+  leave, and rematch.
+- Record client network, authority cadence/CPU/memory, queue pressure,
+  reconnect time, direct-versus-relayed Tailscale path, and cleanup outcome.
+- Label all evidence `private shared-node playtest`; do not reuse it as cloud
+  regional, provider-cost, packing, or verified-progression proof.
+
+## Playtest Runbook
+
+### Before the session
+
+1. Boot a fresh `lbh-playtest` appliance from the pinned artifact.
+2. Confirm only expected loopback listeners exist.
+3. Start one four-seat S20 authority and the local reverse proxy.
+4. Enable Serve and verify the full HTTPS name from Greg's client.
+5. Apply exact-user 443 grants.
+6. Send three single-use machine shares.
+7. After each tester accepts, send their separate LBH crew invitation.
+8. Confirm no tester can reach SSH or any non-443 service.
+
+### During the session
+
+1. All four players enter Crew Muster before world time advances.
+2. Confirm names, host, seats, connection state, and next action are readable.
+3. Launch once under host authority.
+4. Complete the planned run and one deliberate reconnect.
+5. Capture only sanitized performance and experience evidence.
+
+### After the session
+
+1. Stop Serve first and verify the HTTPS name is unreachable externally.
+2. Fence and stop the authority.
+3. Revoke all machine shares and unused game invitations.
+4. Delete ephemeral identity and match state.
+5. Archive only the sanitized report and explicitly requested media.
+6. Destroy or reset the appliance before another session.
 
 ## Acceptance Gates
 
-- No inbound router rule and no listener on a non-loopback host interface.
-- An unauthorized email cannot fetch the client or upgrade `/ws`.
-- Access success without a game invitation cannot join a match.
-- Each invitation redeems once; expired, replayed, mutated, and cross-seat
-  grants fail closed.
-- Exactly four seats admit and the fifth rejects at every boundary.
-- Every active client receives S20 at >=9 Hz in the representative profile;
-  mean application traffic remains <=64 KiB/s/client.
+- No external tester becomes a member of Greg's tailnet.
+- Each tester sees only the shared playtest node.
+- No inbound router rule, LAN listener, subnet route, or exit-node role exists.
+- Exact testers can reach HTTPS 443; they cannot reach SSH or any other port.
+- A revoked machine share immediately loses access.
+- A valid Tailscale identity without an LBH invitation cannot join.
+- Each crew invitation redeems once and only for its bound identity and seat.
+- Exactly four seats admit and the fifth rejects without disturbing the match.
+- All four remain staged until the host launches the authority once.
+- Every active client receives S20 at >=9 Hz; mean application traffic remains
+  <=64 KiB/s/client; queues remain bounded.
 - Reconnect fences the old connection epoch before accepting new input.
-- Oversized, malformed, rate-excessive, and wrong-origin requests are rejected
-  without authority instability or unbounded queues.
-- Killing the tunnel immediately removes Internet reachability while local
-  shutdown still fences the authority and deletes ephemeral credentials.
-- Default local/offline play remains network-independent.
+- Stopping Serve removes external reachability before authority cleanup.
+- Local/offline play remains independent of Tailscale availability.
 
-## Capacity And Experience Budget
+## Experience And Capacity Budget
 
 Current S20 evidence is approximately 30–31 KiB/s per recipient. Three remote
-recipients imply roughly 90 KiB/s of application payload leaving GregBot,
-before WebSocket, TLS, tunnel, and retransmission overhead. Require a wired
-host connection, low bufferbloat, and at least 5 Mbit/s stable upstream
-headroom. Measure actual cadence and latency before calling the experience
-playable.
+recipients imply roughly 90 KiB/s of application payload leaving GregBot before
+WebSocket, TLS, Tailscale relay/direct-path, and retransmission overhead.
+Require a wired host connection, low bufferbloat, and at least 5 Mbit/s stable
+upstream headroom.
 
-Cloudflare may terminate long-lived WebSockets during network updates. The
-shipping reconnect/epoch fence therefore remains mandatory.
+Record whether each tester obtains a direct Tailscale path or uses DERP relay.
+Do not require direct connectivity for admission, but separate relay results
+when judging latency and movement feel.
 
 ## Abort Conditions
 
-Stop and close the tunnel if any of the following occurs:
+Stop Serve and end the session immediately if:
 
-- origin binds beyond loopback or any router port is forwarded;
-- Access is bypassed, widened beyond the four exact identities, or not enforced
-  on the WebSocket upgrade;
+- GregBot itself, rather than the disposable node, was shared;
+- any origin binds beyond loopback or a router port is forwarded;
+- shared testers can reach anything except HTTPS 443 on the playtest node;
 - the appliance can read host credentials, home data, Docker socket, or LAN;
-- a fifth seat, stale grant, stale connection epoch, or non-S20 client admits;
+- a Tailscale identity header can be supplied through a non-Serve route;
+- a forwarded, replayed, expired, wrong-identity, or fifth invitation admits;
+- a stale connection epoch or non-S20 client admits;
 - malformed traffic causes authority instability or unbounded queues;
-- private identity, token, IP, or payload data appears in retained logs;
+- private identity, token, IP, or payload data appears in retained evidence;
 - local results reach verified/cloud progression;
-- shutdown cannot prove tunnel closure, authority fencing, and credential
-  deletion.
+- teardown cannot prove Serve closure, share revocation, authority fencing, and
+  ephemeral credential deletion.
 
 ## Explicit Non-Goals
 
 - public discovery, matchmaking, spectators, voice, chat, or moderation;
-- one shared global authority or multiple gameplay writers for the match;
+- browser-only access without installing Tailscale;
+- Cloudflare Tunnel/Access or Tailscale Funnel for the first external test;
+- sharing GregBot, subnet routing, exit-node access, or broad tailnet access;
 - verified cloud progression or storefront entitlement;
-- production SLA, DDoS guarantee, regional hosting, host packing, or cost proof;
+- production SLA, DDoS guarantee, regional hosting, packing, or cost proof;
 - eight players, S23/S23P admission, or 24/48/96-client capacity.

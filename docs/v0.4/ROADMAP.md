@@ -96,12 +96,15 @@ Abort:
 
 ### Optional Lane — GregBot Friends-Only Internet Host
 
-This is an optional private-play bridge, not a prerequisite for the verified
-hosted program. Greg may host one S20 authority locally for himself and exactly
-three invited remote players through an identity-gated outbound tunnel. It
-must use an isolated appliance, loopback-only origin, exact-email perimeter
-authentication, one-use game invitations, four-seat enforcement, unverified
-local results, bounded lifetime, and tunnel-first emergency shutdown.
+This is the selected realistic external playtest bridge, not a prerequisite
+for the verified hosted program. Run one S20 authority on a disposable,
+separately enrolled `lbh-playtest` node and share only that machine with three
+named testers through Tailscale device sharing. Testers use their own tailnets;
+they do not join Greg's. Tailscale Serve exposes one loopback-only HTTPS origin,
+exact-user grants restrict access to port 443, and identity-bound one-use LBH
+invitations enforce the four seats. Results remain local/unverified and the
+node, shares, Serve ingress, invitations, and match state are torn down after
+the bounded session.
 
 The complete plan and abort gates are in
 [`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md). Its

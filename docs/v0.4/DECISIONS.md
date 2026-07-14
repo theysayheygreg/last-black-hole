@@ -1,0 +1,100 @@
+# v0.4 Decisions
+
+> Branch: `codex/v0.4-multiplayer-architecture`
+>
+> This is the decision log for v0.4. Record detailed v0.4 choices here, not in
+> `docs/journal/DECISION-LOG.md`. The project-wide log receives one summarized
+> promotion entry when v0.4 merges, plus any genuinely cross-version rule.
+
+Statuses:
+
+- **ACTIVE** — current v0.4 product or engineering truth.
+- **PROVISIONAL** — selected to unblock testing; Greg has not ratified it as a
+  shipping policy.
+- **REJECTED** — investigated and intentionally closed.
+- **SUPERSEDED** — preserved for history but replaced by a later decision.
+
+## Current Decision Index
+
+| Decision | Status | Detailed source |
+|---|---|---|
+| S20 is the one-through-four-player product path | ACTIVE | `MULTIPLAYER-DECISION-PACKET.md` |
+| one logical single-writer authority per match | ACTIVE | `ARCHITECTURE.md` |
+| eight-player v0.4 admission remains closed | REJECTED | `COMPLETION-AUDIT.md` |
+| four-human product completion is the active goal | ACTIVE | `FOUR-HUMAN-PRODUCT-PLAN.md` |
+| Crew Muster stages players before world time begins | ACTIVE | entry below |
+| external test uses a disposable Tailscale shared node | ACTIVE | `OPTIONAL-LOCAL-INTERNET-HOST.md` |
+| hybrid verified authority plus private continuity | PROVISIONAL | `OPEN-DECISIONS.md` |
+
+## 2026-07-14 — External test uses a disposable Tailscale shared node
+
+**Status:** ACTIVE
+
+The first external four-human test runs one S20 authority on a disposable,
+separately enrolled `lbh-playtest` node. Share only that node with three named
+testers through Tailscale device sharing. Testers use their own accounts and
+tailnets; they never join Greg's tailnet.
+
+Tailscale Serve exposes one loopback-only HTTPS origin. Exact-user port-443
+grants and identity-bound, one-use LBH crew invitations form independent
+network and game admission layers. Do not share GregBot, enable Funnel, add
+Cloudflare as a first-test dependency, advertise subnets/exit-node access, or
+treat the result as verified cloud evidence.
+
+**Why:** this is the shortest private path to an external test while keeping
+the shared surface narrow, revocable, and disposable.
+
+## 2026-07-14 — Crew Muster is the synchronized multiplayer start boundary
+
+**Status:** ACTIVE
+
+One through four humans stage on a frozen match authority before the run. Sim
+time, AI, hazards, and world consequences do not advance until the host launches
+once. Non-host launch, pre-launch gameplay input, and a fifth seat fail closed.
+
+A failed multiplayer admission must remain a visible multiplayer failure. It
+must never silently start a separate local universe. Offline/local launch stays
+available only through its explicit product path.
+
+**Why:** the earlier auto-host/auto-join flow let the first player and AI begin
+consuming the universe while later humans navigated menus. That was technically
+multiplayer but not a fair or understandable human game.
+
+## 2026-07-14 — Four-human product completion follows architecture closeout
+
+**Status:** ACTIVE
+
+The architecture and costing program is closed. The active v0.4 goal is the
+human journey from private crew creation through synchronized launch, shared
+run, reconnect, truthful result, leave, and rematch. Four humans are the
+acceptance gate; one through three humans remain supported party sizes.
+
+Do not reopen eight-player replication, high-count capacity, provider costing,
+host packing, public matchmaking, built-in voice, or production cloud work as
+a substitute for completing this journey.
+
+## 2026-07-14 — Authority and replication product boundary
+
+**Status:** ACTIVE
+
+Verified gameplay uses one logical single-writer authority for each match. If
+`M` matches are concurrent, `M` independently fenced authorities exist. S20 is
+the admitted replication path for one through four clients. Measured packing
+may later place multiple authorities on one host; there is never one global
+gameplay authority and there is no unmeasured packing claim.
+
+S23, S23P, and the reverted split-fragment experiment do not admit eight-player
+v0.4. True authority-free public P2P remains rejected. Private player-hosted
+authority remains a visibly unverified continuity option.
+
+## Decision Routing
+
+Add a v0.4 entry when work changes product behavior, authority/trust ownership,
+protocol admission, persistence semantics, player-visible policy, evidence
+interpretation, or release scope. Ordinary implementation detail belongs only
+in `CHANGELOG.md`.
+
+When v0.4 is promoted, add one project-wide summary to
+`docs/journal/DECISION-LOG.md` linking here. Do not copy every entry into the
+project log.
+

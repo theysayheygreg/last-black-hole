@@ -1,22 +1,17 @@
 # Decision Log
 
-## 2026-07-14 — GregBot Internet hosting is an optional private, unverified lane
+> **Journal policy from 2026-07-14:** this file is the project-wide archive for
+> durable cross-version decisions and summarized version promotions. Detailed
+> branch decisions belong in `docs/vX.Y/DECISIONS.md`. Existing entries below
+> remain intact as historical evidence; do not append routine version-local
+> decisions here. When a version merges, add one larger summary linking to its
+> decision log.
 
-**Decision:** v0.4 may add a friends-only mode in which Greg hosts one S20
-authority for himself and exactly three invited remote players. The preferred
-ingress is a named Cloudflare Tunnel protected by exact-email Cloudflare Access,
-feeding a loopback-only isolated appliance. One-use game invitations remain a
-second admission layer. No router port is opened and no shared password is the
-sole perimeter.
+Version decision logs:
 
-**Why:** this creates a practical four-human playtest path without pretending
-GregBot is a production service or exposing its development environment and
-credentials directly to the Internet.
-
-**Door status:** Optional and not implemented. Closed for public matchmaking,
-verified/cloud progression, broad email/password access, non-loopback origin,
-dev-server exposure, fifth-seat admission, S23/S23P, and reuse as cloud packing
-or regional-hosting proof. See `docs/v0.4/OPTIONAL-LOCAL-INTERNET-HOST.md`.
+- [`v0.2`](../v0.2/DECISIONS.md)
+- [`v0.3`](../v0.3/DECISIONS.md)
+- [`v0.4`](../v0.4/DECISIONS.md) — current active multiplayer line
 
 ## 2026-07-12 — Long evidence separates infrastructure longevity from natural match lifecycle
 

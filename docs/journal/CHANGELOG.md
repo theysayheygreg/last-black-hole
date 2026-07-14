@@ -1,30 +1,17 @@
 # Changelog
 
-## 2026-07-14 — v0.4 Crew Muster stages human multiplayer runs
+> **Journal policy from 2026-07-14:** this file records project-wide releases,
+> version promotions, and large revisions merged between version lines.
+> Detailed branch work belongs in `docs/vX.Y/CHANGELOG.md`. Existing entries
+> below remain an archival history; do not append routine version-local work
+> here. When a version merges, add one summarized revision linking to its
+> detailed changelog.
 
-- Added a frozen 1–4-player authority lobby with one host-controlled launch,
-  four-seat admission, fifth-seat rejection, and no gameplay input before the
-  run begins.
-- Added the human-facing Crew Muster screen and removed split-reality fallback:
-  a failed multiplayer join now stays failed instead of silently starting a
-  separate local universe.
-- Preserved immediate-start test and offline paths, added focused authority
-  coverage, and prevented pre-launch leave/reset from recording a false
-  abandoned run.
+Version changelogs:
 
-## 2026-07-14 — v0.4 human multiplayer product goal opened
-
-### docs/v0.4/ — Added
-- **FOUR-HUMAN-PRODUCT-PLAN.md** — Defines the active front-door through
-  rematch delivery contract, beginning with synchronized Crew Muster.
-
-### Planning truth
-- Architecture and costing remain closed. The v0.4 roadmap now prioritizes a
-  good one-through-four-human S20 game and moves hosted/high-count validation
-  behind that product gate.
-- Corrected stale hosted wording: the provider-neutral SQLite/HTTP reference
-  is implemented locally; production composition and public deployment remain
-  open.
+- [`v0.2`](../v0.2/CHANGELOG.md)
+- [`v0.3`](../v0.3/CHANGELOG.md)
+- [`v0.4`](../v0.4/CHANGELOG.md) — current active multiplayer line
 
 ## 2026-07-14 — v0.4 multiplayer architecture and costing closeout
 

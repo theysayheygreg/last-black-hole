@@ -27,7 +27,9 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
 12. `../reference/CARBON-ENGINE-RESEARCH.md` — source-level Carbon/EVE engine
     lessons to mine without adopting the runtime.
 13. `ROADMAP.md` — current status and what comes next by major area.
-14. `../project/BUILD-STATUS.md` — current local playability snapshot and
+14. `DECISIONS.md` — detailed v0.2 decisions from the versioned-journal cutoff.
+15. `CHANGELOG.md` — detailed v0.2 changes from the versioned-journal cutoff.
+16. `../project/BUILD-STATUS.md` — current local playability snapshot and
    caveats.
 
 ## Version Meaning
@@ -42,7 +44,9 @@ Older docs remain valuable, but they are not all current. When an older page con
 Important current anchors:
 
 - `docs/design/PILLARS.md`
-- `docs/journal/DECISION-LOG.md`
+- `docs/v0.2/DECISIONS.md`
+- `docs/v0.2/CHANGELOG.md`
+- `docs/journal/DECISION-LOG.md` — historical and cross-version decisions
 - `docs/project/LOCAL-PROTOCOL.md`
 - `docs/project/BUILD-STATUS.md`
 - `docs/project/THREEJS-MIGRATION-PLAN.md`
