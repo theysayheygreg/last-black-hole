@@ -133,6 +133,21 @@ function main() {
     equal(rig.outbox.get(leased.result_id).state, "pending", "other pending row remains pending");
     equal(rig.outbox.get(dead.result_id).state, "dead-letter", "unsettled dead letter remains intact");
 
+    const settledDead = add(rig, "run-dead-settled");
+    rig.outbox.db.prepare(`UPDATE hosted_result_outbox SET state='leased',attempts=8,
+      delivery_lease_id='delivery-dead-settled',delivery_lease_owner='dead-worker',
+      delivery_lease_expires_at=? WHERE result_id=?`).run(rig.time.now() + 100, settledDead.result_id);
+    rig.repository.settle(rig.outbox.get(settledDead.result_id));
+    rig.outbox.db.prepare(`UPDATE hosted_result_outbox SET state='dead-letter',available_at=NULL,
+      delivery_lease_id=NULL,delivery_lease_owner=NULL,delivery_lease_expires_at=NULL WHERE result_id=?`)
+      .run(settledDead.result_id);
+    const deadService = new HostedSettlementService({ outbox: rig.outbox, repository: rig.repository,
+      acknowledgePlacementResult: ack([]) });
+    equal(deadService.archiveSettled().archived, 1,
+      "a dead letter with durable settlement is safely archived through the receipt protocol");
+    equal(rig.outbox.get(settledDead.result_id), null,
+      "settled dead-letter transport payload does not remain unbounded");
+
     // Create three fully acknowledged archives using independent rows, then
     // prove retention cleanup honors both cutoff and global limit.
     for (const runId of ["run-audit-1", "run-audit-2", "run-audit-3"]) {
@@ -152,8 +167,8 @@ function main() {
       rig.outbox.archiveSettled({ receipt });
       rig.time.advance(1);
     }
-    equal(Number(rig.repository.db.prepare("SELECT count(*) count FROM hosted_result_audit").get().count), 3,
-      "three minimal audit tuples are retained");
+    equal(Number(rig.repository.db.prepare("SELECT count(*) count FROM hosted_result_audit").get().count), 4,
+      "four minimal audit tuples are retained");
     const insertConflict = rig.repository.db.prepare(`INSERT INTO hosted_settlement_conflicts
       (quarantine_id,run_id,presented_result_id,presented_hash,accepted_result_id,accepted_hash,
        quarantined_at,retain_until) VALUES (?,?,?,?,?,?,?,?)`);
@@ -169,14 +184,14 @@ function main() {
       conflictBefore: rig.time.now(), limit: 2 });
     equal(firstCleanup, { auditDeleted: 2, conflictsDeleted: 0, limit: 2 },
       "cleanup applies one global limit across audit and conflict evidence");
-    equal(Number(rig.repository.db.prepare("SELECT count(*) count FROM hosted_result_audit").get().count), 1,
+    equal(Number(rig.repository.db.prepare("SELECT count(*) count FROM hosted_result_audit").get().count), 2,
       "retention cleanup leaves the unprocessed audit tail");
     equal(rig.repository.cleanupRetention({ now: rig.time.now(), auditBefore: rig.time.now(),
-      conflictBefore: rig.time.now(), limit: 2 }), { auditDeleted: 1, conflictsDeleted: 1, limit: 2 },
-    "next bounded cleanup removes the audit tail and one conflict");
+      conflictBefore: rig.time.now(), limit: 2 }), { auditDeleted: 2, conflictsDeleted: 0, limit: 2 },
+    "next bounded cleanup removes only the audit tail at its limit");
     equal(rig.repository.cleanupRetention({ now: rig.time.now(), auditBefore: rig.time.now(),
-      conflictBefore: rig.time.now(), limit: 2 }).conflictsDeleted, 1,
-    "following bounded cleanup removes the conflict tail");
+      conflictBefore: rig.time.now(), limit: 2 }).conflictsDeleted, 2,
+    "following bounded cleanup removes the conflict tail at its limit");
     equal(rig.outbox.get(pending.result_id).state, "leased", "cleanup never deletes a live lease");
     equal(rig.outbox.get(leased.result_id).state, "pending", "cleanup never deletes pending delivery");
     equal(rig.outbox.get(dead.result_id).state, "dead-letter", "cleanup never deletes unsettled dead letter");
