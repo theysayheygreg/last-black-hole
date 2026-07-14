@@ -1,46 +1,37 @@
 {
   "ok": true,
-  "recordedAt": "2026-07-10T21:08:33.812Z",
+  "recordedAt": "2026-07-14T19:59:18.562Z",
   "branch": "codex/v0.3-ballpark-roadmap",
-  "gitHead": "daa5c84e2678d482cf6b382cafe9db5909373283",
+  "gitHead": "0212712279fe0e9acdba3abe3ec4563aea2a963e",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 88453
+      "durationMs": 92862
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 143820
+      "durationMs": 138003
     },
     {
       "name": "perf",
       "command": "npm run test:perf",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 62275
+      "durationMs": 63469
     },
     {
       "name": "title-prototype",
       "command": "npm run test:title-prototype",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 8447
+      "durationMs": 8762
     }
   ],
-  "dirtyPaths": [
-    "?? docs/journal/screenshots/2026-06-26-fresh-run/",
-    "?? docs/journal/screenshots/2026-06-26-warmed-run-v2/",
-    "?? docs/journal/screenshots/social-promo-2026-06-27-042817/",
-    "?? docs/journal/screenshots/social-promo-2026-06-27-045729/",
-    "?? docs/journal/screenshots/social-promo-2026-06-27-052605/",
-    "?? docs/journal/screenshots/social-promo-2026-06-27-053018/",
-    "?? docs/journal/screenshots/social-promo-2026-06-30-162304/",
-    "?? docs/journal/screenshots/social-promo-2026-06-30-162637/"
-  ]
+  "dirtyPaths": []
 }
