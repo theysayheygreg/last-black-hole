@@ -146,6 +146,13 @@ async function run() {
     expectProtocolError(() => validateWireFrame({
       ...hello, capabilities: ["static-manifest-v1", "state-pair-v1", "runtime-public-components-v1"],
     }), "invalid-field");
+    const bodyCapabilities = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+      "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1",
+      "state-pair-public-body-v1"];
+    validateWireFrame({ ...hello, capabilities: bodyCapabilities }, { direction: CLIENT_TO_SERVER });
+    expectProtocolError(() => validateWireFrame({ ...hello,
+      capabilities: bodyCapabilities.filter((value) => value !== "state-pair-brotli-v1") },
+    { direction: CLIENT_TO_SERVER }), "invalid-field");
     expectProtocolError(() => validateWireFrame({
       type: "manifestAck", manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
       manifestBytes: welcome.manifestBytes, connectionEpoch: 1,

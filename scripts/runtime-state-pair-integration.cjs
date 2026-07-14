@@ -24,6 +24,11 @@ const {
   CAPABILITY: BINARY_CODEC_CAPABILITY,
   codecContext: binaryCodecContext,
 } = require("./state-pair-binary-codec.cjs");
+const {
+  CAPABILITY: PUBLIC_BODY_CAPABILITY,
+} = require("./state-pair-public-body-codec.cjs");
+const { createSharedPublicBodyAuthority } = require("./shared-public-body-authority.cjs");
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY } = require("./state-pair-compression-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -130,6 +135,13 @@ function publicFacts(state, splitRuntimePublic = false) {
   return facts;
 }
 
+function publicBodyFacts(state) {
+  const facts = publicFacts(state, true);
+  for (const key of ["runId", "snapshotId", "tick", "simTime", "lastEventSeq", "fieldRevision",
+    "overloadMode", "lastInputSeq", "lastActionSeq", "type", "full"]) delete facts[key];
+  return facts;
+}
+
 function collectPublicEntities(publicFrame, splitRuntimePublic = false) {
   const state = publicFrame?.state;
   if (!state || typeof state !== "object" || Array.isArray(state)) fail("invalid-source", "public state is required");
@@ -229,11 +241,20 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const fixedManifestHash = requiredString(manifestHash, "manifestHash");
   const preparedProjectionsEnabled = publisherOptions.preparedProjections !== false;
   const publisher = createAuthorityDeltaPublisher({ ...publisherOptions, stageProfiler });
+  const publicBodyAuthority = createSharedPublicBodyAuthority({
+    matchId: fixedMatchId,
+    authorityIncarnation: fixedAuthorityIncarnation,
+    ballparkEpoch: fixedBallparkEpoch,
+    manifestHash: fixedManifestHash,
+    publisherOptions: { ...publisherOptions, stageProfiler },
+  });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
   // Legacy and split recipients may coexist during rollback. Component-name
   // histories cannot share one revision tracker without cross-schema churn.
   const legacyPublicTracker = createRevisionTracker();
+  const publicBodyTracker = createRevisionTracker();
+  let publicBodySource = null;
   const splitPublicTrackers = new Map();
   const ownerTrackers = new Map();
   const admissions = new Map();
@@ -304,6 +325,14 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           || !ticketClaims.capabilities.includes(MIXED_CAPABILITY))) {
       fail("capability-not-admitted", "binary state-pair requires positional JSON fallback and sparse mixed state-pair-v1");
     }
+    if (ticketClaims.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+        && (!ticketClaims.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || !ticketClaims.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+          || !ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+          || !ticketClaims.capabilities.includes(MIXED_CAPABILITY)
+          || ticketClaims.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("capability-not-admitted", "public body v1 requires compressed positional sparse mixed state-pair and excludes binary v1");
+    }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
     const needsOwnerTracker = !ownerTrackers.has(identity.recipientId);
@@ -313,6 +342,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     if (needsOwnerTracker) ownerTrackers.set(identity.recipientId, createRevisionTracker());
     admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
     if (ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+        && !ticketClaims.capabilities.includes(PUBLIC_BODY_CAPABILITY)
         && !splitPublicTrackers.has(admissionKey)) {
       splitPublicTrackers.set(admissionKey, createRevisionTracker());
     }
@@ -345,6 +375,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
     const admission = admissions.get(key(identity));
     const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
+    const sharedPublicBody = admission.capabilities.includes(PUBLIC_BODY_CAPABILITY);
     const shared = {
       schema: VIEW_SCHEMA, runId: fixedMatchId, authorityEpoch: fixedAuthorityIncarnation,
       connectionEpoch: identity.recipientIncarnation, ballparkEpoch: fixedBallparkEpoch,
@@ -378,13 +409,17 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       preparedCounters.hashes += 1;
       return Object.freeze({ view: preparedProjectionView(prepared, preparedContext), prepared });
     };
-    const publicTracker = splitRuntimePublic ? splitPublicTrackers.get(key(identity)) : legacyPublicTracker;
+    const publicTracker = sharedPublicBody ? publicBodyTracker
+      : splitRuntimePublic ? splitPublicTrackers.get(key(identity)) : legacyPublicTracker;
     if (!publicTracker) fail("capability-not-admitted", "split public history is unavailable for this admission");
     const buildPublicCore = () => ({
-      world: { publicFacts: publicFacts(publicFrame.state, splitRuntimePublic) },
+      world: { publicFacts: sharedPublicBody
+        ? publicBodyFacts(publicFrame.state) : publicFacts(publicFrame.state, splitRuntimePublic) },
       entities: publicTracker.project(collectPublicEntities(publicFrame, splitRuntimePublic)),
     });
-    const publicCore = stageProfiler
+    const cachedBody = sharedPublicBody && publicBodySource?.snapshot === snapshot
+      ? publicBodySource.body : null;
+    const publicCore = cachedBody ? null : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
           ...profile,
           outputBytes: canonicalJsonBytes(value).length,
@@ -392,8 +427,14 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           components: value.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
         }), buildPublicCore)
       : buildPublicCore();
-    observePublicCore(publicFrame.snapshotId, publicCore);
-    const publicView = stageProfiler
+    if (publicCore) observePublicCore(publicFrame.snapshotId, publicCore);
+    const body = sharedPublicBody
+      ? cachedBody || publicBodyAuthority.prepareBody({
+          sourceKey: String(snapshot), world: publicCore.world, entities: publicCore.entities,
+        })
+      : null;
+    if (sharedPublicBody && !cachedBody) publicBodySource = Object.freeze({ snapshot, body });
+    const publicView = sharedPublicBody ? null : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_PROJECTION, (value) => ({
           ...profile,
           outputBytes: canonicalJsonBytes(value.view).length,
@@ -421,6 +462,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         }), buildOwnerView)
       : buildOwnerView();
     const publicProjection = publicView;
+    if (sharedPublicBody) {
+      return Object.freeze({ identity, body, ownerView: ownerProjection.view,
+        ownerPrepared: ownerProjection.prepared });
+    }
     const binary = admission.capabilities.includes(BINARY_CODEC_CAPABILITY);
     const positionalEncoder = admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
       ? createStatePairWireEncoder(
@@ -440,28 +485,42 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   }
 
   function publish(binding, publicFrame, ownerFrame) {
-    return publisher.publish(buildViews(binding, publicFrame, ownerFrame));
+    const views = buildViews(binding, publicFrame, ownerFrame);
+    return views.body ? publicBodyAuthority.publish(views) : publisher.publish(views);
   }
 
   function acknowledge(binding, ack) {
-    return publisher.acknowledge(requireAdmission(binding), ack);
+    const identity = requireAdmission(binding);
+    const admission = admissions.get(key(identity));
+    return admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+      ? publicBodyAuthority.acknowledge(identity, ack)
+      : publisher.acknowledge(identity, ack);
   }
 
   function recover(binding) {
-    publisher.rebase(requireAdmission(binding));
+    const identity = requireAdmission(binding);
+    const admission = admissions.get(key(identity));
+    if (admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)) publicBodyAuthority.rebase(identity);
+    else publisher.rebase(identity);
     return true;
   }
 
   function retransmit(binding, frameId) {
-    return publisher.retransmit(requireAdmission(binding), frameId);
+    const identity = requireAdmission(binding);
+    const admission = admissions.get(key(identity));
+    return admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+      ? publicBodyAuthority.retransmit(identity, frameId)
+      : publisher.retransmit(identity, frameId);
   }
 
   function disconnect(binding) {
     let identity;
     try { identity = context(binding); } catch { return false; }
+    const admission = admissions.get(key(identity));
     admissions.delete(key(identity));
     splitPublicTrackers.delete(key(identity));
-    publisher.disconnect(identity);
+    if (admission?.capabilities.includes(PUBLIC_BODY_CAPABILITY)) publicBodyAuthority.disconnect(identity);
+    else publisher.disconnect(identity);
     if (![...admissions.values()].some((entry) => entry.identity.recipientId === identity.recipientId)) {
       ownerTrackers.delete(identity.recipientId);
     }
@@ -517,6 +576,13 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         positionalJsonFallbackRequired: true,
         lossyQuantization: false,
       }),
+      publicBody: Object.freeze({
+        capability: PUBLIC_BODY_CAPABILITY,
+        enabledAdmissions: [...admissions.values()].filter((entry) =>
+          entry.capabilities.includes(PUBLIC_BODY_CAPABILITY)).length,
+        sharedTracker: true,
+        authority: publicBodyAuthority.diagnostics(),
+      }),
       publisher: publisher.diagnostics() });
   }
 
@@ -530,6 +596,7 @@ module.exports = {
   RUNTIME_PUBLIC_COMPONENT_SCHEMA,
   POSITIONAL_CODEC_CAPABILITY,
   BINARY_CODEC_CAPABILITY,
+  PUBLIC_BODY_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   VIEW_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,

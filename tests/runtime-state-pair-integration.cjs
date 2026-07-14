@@ -12,10 +12,15 @@ const { encodeWireFrame, SERVER_TO_CLIENT } = require("../scripts/multiplayer-wi
 const {
   CAPABILITY,
   MIXED_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  POSITIONAL_CODEC_CAPABILITY,
+  PUBLIC_BODY_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   RuntimeStatePairError,
   createRuntimeStatePairAuthority,
 } = require("../scripts/runtime-state-pair-integration.cjs");
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, encodeCompressedStatePair } =
+  require("../scripts/state-pair-compression-codec.cjs");
 
 const MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
 const MANIFEST_HASH = `sha256:${"a".repeat(64)}`;
@@ -134,6 +139,51 @@ function wire(frame) {
 
 async function run() {
   const runner = new TestRunner("RuntimeStatePairIntegration");
+
+  await runner.run("S23 shares one immutable public body while recipient envelopes and owners stay local", async () => {
+    const caps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      "static-manifest-v1"].sort();
+    const a = binding("body-a", { capabilities: caps });
+    const b = binding("body-b", { capabilities: caps });
+    const server = authority();
+    server.admit(a, claims(a));
+    server.admit(b, claims(b));
+    const sourceA = sourceFrames(a, 1);
+    const sourceB = sourceFrames(b, 1);
+    for (const source of [sourceA, sourceB]) {
+      for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
+        source.publicFrame.state.world[lane] = [];
+      }
+    }
+    const firstA = server.publish(a, sourceA.publicFrame, sourceA.ownerFrame);
+    const firstB = server.publish(b, sourceB.publicFrame, sourceB.ownerFrame);
+    assert.strictEqual(firstA.frame.bodyHash, firstB.frame.bodyHash);
+    assert.strictEqual(firstA.frame.public.body, firstB.frame.public.body);
+    assert.notStrictEqual(firstA.frame.sessionId, firstB.frame.sessionId);
+    assert(!JSON.stringify(firstA.frame.public.body).includes("private-player"));
+    const clientA = receiver(a);
+    const acceptedA = clientA.receive(encodeCompressedStatePair(firstA.encodedWire));
+    assert(acceptedA.accepted, acceptedA.reason);
+    assert.deepStrictEqual(acceptedA.state.legacyPublicState.players, sourceA.publicFrame.state.players);
+    assert.strictEqual(acceptedA.state.owner.entities[0].components.ownerState.value.profileId,
+      "private-player-body-a");
+    assert(server.acknowledge(a, acceptedA.ack).accepted);
+    assert.strictEqual(server.retransmit(b, firstB.frame.frameId).encodedWire, firstB.encodedWire);
+    const secondSource = sourceFrames(a, 2);
+    for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
+      secondSource.publicFrame.state.world[lane] = [];
+    }
+    const second = server.publish(a, secondSource.publicFrame, secondSource.ownerFrame);
+    const acceptedSecond = clientA.receive(encodeCompressedStatePair(second.encodedWire));
+    assert(acceptedSecond.accepted, acceptedSecond.reason);
+    assert.strictEqual(acceptedSecond.state.publicBodyHash, second.frame.bodyHash);
+    assert(server.acknowledge(a, acceptedSecond.ack).accepted);
+    const diagnostics = server.diagnostics().publicBody.authority;
+    assert.strictEqual(diagnostics.bodyBuilds, 2);
+    assert.strictEqual(diagnostics.bodyCacheHits, 0);
+    assert.strictEqual(diagnostics.recipients, 2);
+  });
 
   await runner.run("ticket-bound admission drives keyframe ACK delta and exact materialization", async () => {
     const id = binding();

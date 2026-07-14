@@ -1777,6 +1777,10 @@ function createSimWebSocketAdapter(options = {}) {
         && !state.capabilities.includes("state-pair-mixed-v1")) {
       return { accepted: false, action: "reject", reason: "state-pair-mixed-capability-required" };
     }
+    if (frame.pairSchema === "lbh-authority-state-pair-body-v1"
+        && !state.capabilities.includes("state-pair-public-body-v1")) {
+      return { accepted: false, action: "reject", reason: "state-pair-public-body-capability-required" };
+    }
     if (frame.matchId !== state.identity.runId || frame.sessionId !== state.identity.connectionId
       || frame.recipientId !== state.identity.membershipId
       || frame.recipientIncarnation !== state.identity.connectionEpoch
@@ -1896,6 +1900,8 @@ function createSimWebSocketAdapter(options = {}) {
       || !state.capabilities?.includes("state-pair-v1") || frame.matchId !== state.identity.runId
       || (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
         && !state.capabilities.includes("state-pair-mixed-v1"))
+      || (frame.pairSchema === "lbh-authority-state-pair-body-v1"
+        && !state.capabilities.includes("state-pair-public-body-v1"))
       || frame.sessionId !== state.identity.connectionId || frame.recipientId !== state.identity.membershipId
       || frame.recipientIncarnation !== state.identity.connectionEpoch
       || frame.manifestHash !== state.binding?.manifestHash

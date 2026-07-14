@@ -38,7 +38,15 @@ const {
 const {
   CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
   MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+  decodeCompressedStatePair,
 } = require("./state-pair-compression-codec.cjs");
+const {
+  CAPABILITY: PUBLIC_BODY_CAPABILITY,
+  PAIR_SCHEMA: PUBLIC_BODY_PAIR_SCHEMA,
+  BODY_SCHEMA: PUBLIC_BODY_SCHEMA,
+  codecContext: publicBodyCodecContext,
+  decodePublicBodyFrame,
+} = require("./state-pair-public-body-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -68,6 +76,7 @@ const MODES = Object.freeze({
   STATE_PAIR_POSITIONAL_JSON: POSITIONAL_CODEC_CAPABILITY,
   STATE_PAIR_BINARY: BINARY_CODEC_CAPABILITY,
   STATE_PAIR_COMPRESSION: COMPRESSION_CODEC_CAPABILITY,
+  STATE_PAIR_PUBLIC_BODY: PUBLIC_BODY_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -286,12 +295,14 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   const positional = materializeRuntimeComponents && capabilities.includes(POSITIONAL_CODEC_CAPABILITY);
   const binary = positional && capabilities.includes(BINARY_CODEC_CAPABILITY);
   const compressed = positional && !binary && capabilities.includes(COMPRESSION_CODEC_CAPABILITY);
+  const publicBody = compressed && capabilities.includes(PUBLIC_BODY_CAPABILITY);
   let codecContext = positional ? positionalCodecContext({ ...context,
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH }) : null;
   let binaryContext = binary ? binaryCodecContext({ ...context,
     codecManifestHash: BINARY_CODEC_MANIFEST_HASH }) : null;
   let compressionContext = compressed
     ? Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH }) : null;
+  let bodyCodecContext = publicBody ? publicBodyCodecContext(context) : null;
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
   }
@@ -347,7 +358,76 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     staleAccepted: 0, published: 0, recoveryRequests: 0, recoveryEpisodes: 0,
     recoveryCoalesced: 0, recoveryRateLimited: 0, recoveryConvergences: 0,
     observerFailures: 0, ledgerHits: 0, ledgerMisses: 0, ledgerEvictions: 0,
+    publicBodyKeyframes: 0, publicBodyDeltas: 0, publicBodyBaseHits: 0,
+    publicBodyBaseMisses: 0, publicBodyEvictions: 0,
   };
+  const bodyLedger = new Map();
+
+  function bodyHash(body) {
+    return `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(body)).digest("hex")}`;
+  }
+
+  function bodyInternalView(body) {
+    return normalizeView({ schema: "lbh-canonical-projection-v1", lane: "public",
+      runId: body.matchId, authorityEpoch: body.authorityIncarnation, connectionEpoch: 1,
+      ballparkEpoch: body.ballparkEpoch, manifestHash: body.manifestHash,
+      statePairId: body.bodyId, snapshotId: body.bodyId, tick: body.bodyRevision,
+      simTime: body.bodyRevision, eventWatermark: 0, fieldRevision: 0,
+      overloadMode: "NORMAL", world: body.world, entities: body.entities });
+  }
+
+  function retainBody(record) {
+    bodyLedger.delete(record.body.bodyId);
+    bodyLedger.set(record.body.bodyId, record);
+    while (bodyLedger.size > 16) {
+      bodyLedger.delete(bodyLedger.keys().next().value);
+      counters.publicBodyEvictions += 1;
+    }
+  }
+
+  function materializePublicBody(frame) {
+    let body;
+    let internalView;
+    if (frame.public.kind === "keyframe") {
+      body = frame.public.body;
+      internalView = bodyInternalView(body);
+      counters.publicBodyKeyframes += 1;
+    } else {
+      const base = bodyLedger.get(frame.public.baseBodyId);
+      if (!base) {
+        counters.publicBodyBaseMisses += 1;
+        fail("missing-base", "public body delta named no retained global base");
+      }
+      counters.publicBodyBaseHits += 1;
+      if (base.bodyHash !== frame.public.baseHash
+          || base.body.bodyRevision !== frame.public.baseBodyRevision
+          || projectionHash(base.internalView) !== frame.public.structuralBaseHash) {
+        fail("base-mismatch", "public body delta base binding differs from retained body");
+      }
+      const applied = applyStructuralDelta(base.internalView, frame.public.delta,
+        { expectedResultHash: frame.public.structuralResultHash });
+      internalView = applied.view;
+      body = deepFreeze({ schema: PUBLIC_BODY_SCHEMA, matchId: frame.matchId,
+        authorityIncarnation: frame.authorityIncarnation, ballparkEpoch: frame.ballparkEpoch,
+        manifestHash: frame.manifestHash, bodyId: frame.bodyId, bodyRevision: frame.bodyRevision,
+        world: internalView.world, entities: internalView.entities });
+      counters.publicBodyDeltas += 1;
+    }
+    if (body.bodyId !== frame.bodyId || body.bodyRevision !== frame.bodyRevision
+        || bodyHash(body) !== frame.bodyHash) fail("hash-mismatch", "public body result hash mismatch");
+    const record = deepFreeze({ body, bodyHash: frame.bodyHash, internalView });
+    retainBody(record);
+    const projection = normalizeView({ schema: "lbh-canonical-projection-v1", lane: "public",
+      runId: frame.matchId, authorityEpoch: frame.authorityIncarnation,
+      connectionEpoch: frame.recipientIncarnation, ballparkEpoch: frame.ballparkEpoch,
+      manifestHash: frame.manifestHash, statePairId: frame.statePairId,
+      snapshotId: frame.snapshotId, tick: frame.tick, simTime: frame.simTime,
+      eventWatermark: frame.eventWatermark, fieldRevision: frame.fieldRevision,
+      overloadMode: frame.overloadMode, world: body.world, entities: body.entities });
+    return Object.freeze({ body, projection, projectionHash: projectionHash(projection),
+      bodyHash: frame.bodyHash, kind: frame.public.kind,
+      baseBodyId: frame.public.kind === "delta" ? frame.public.baseBodyId : null });
+  }
 
   function count(map, key) {
     map.set(key, (map.get(key) || 0) + 1);
@@ -539,6 +619,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
 
   function receive(raw) {
     let frame;
+    let bodyMeta = null;
     try {
       if (closed) fail("invalid-context", "receiver is torn down");
       enforceLedgerBounds();
@@ -547,7 +628,9 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       if (compressed && typeof raw === "string") {
         fail("compression-frame-required", "negotiated compressed state-pair must use its pinned binary envelope");
       }
-      frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
+      frame = publicBody
+        ? decodePublicBodyFrame(decodeCompressedStatePair(raw), bodyCodecContext)
+        : parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
         ...(compressed ? { compressed: true, compressionContext, positionalContext: codecContext }
           : binary ? (typeof raw !== "string"
           ? { binary: true, binaryContext }
@@ -555,7 +638,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
           : positional ? { positionalContext: codecContext, requirePositional: true } : {}) });
       scanForbiddenKeys(frame);
       if (frame.type !== "statePair"
-          || (frame.pairSchema !== PAIR_SCHEMA && (!allowMixed || frame.pairSchema !== MIXED_PAIR_SCHEMA))) {
+          || (frame.pairSchema !== PAIR_SCHEMA && (!allowMixed || frame.pairSchema !== MIXED_PAIR_SCHEMA)
+            && (!publicBody || frame.pairSchema !== PUBLIC_BODY_PAIR_SCHEMA))) {
         fail("malformed-frame", "expected a negotiated statePair frame");
       }
       if (!sameContextIdentity(context, frame)) fail("identity-mismatch", "state-pair identity does not match receiver");
@@ -577,6 +661,12 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         counters.duplicates += 1;
         return Object.freeze({ accepted: true, duplicate: true, published: false,
           ack: lastAck, state: currentPair });
+      }
+      if (publicBody) {
+        bodyMeta = materializePublicBody(frame);
+        frame = deepFreeze({ ...frame, pairSchema: MIXED_PAIR_SCHEMA,
+          public: deepFreeze({ kind: "keyframe", resultHash: bodyMeta.projectionHash,
+            projection: bodyMeta.projection }) });
       }
       if (!admitted && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
         fail("missing-base", "admission or explicit rebase requires both atomic keyframes");
@@ -656,6 +746,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         ballparkEpoch: frame.ballparkEpoch,
         public: nextPublic.view,
         owner: nextOwner.view,
+        ...(bodyMeta ? { publicBodyId: bodyMeta.body.bodyId,
+          publicBodyRevision: bodyMeta.body.bodyRevision, publicBodyHash: bodyMeta.bodyHash } : {}),
         ...(legacyPublicEntities ? { legacyPublicEntities } : {}),
         ...(legacyPublicState ? { legacyPublicState } : {}),
       });
@@ -671,7 +763,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         frameId: frame.frameId,
         statePairId: frame.statePairId,
         snapshotId: frame.snapshotId,
-        publicHash: nextPublic.hash,
+        publicHash: bodyMeta ? bodyMeta.bodyHash : nextPublic.hash,
         ownerHash: nextOwner.hash,
         ...(frame.pairSchema === MIXED_PAIR_SCHEMA ? {
           pairSchema: frame.pairSchema,
@@ -682,9 +774,9 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
           overloadMode: frame.overloadMode,
           ballparkEpoch: frame.ballparkEpoch,
           manifestHash: frame.manifestHash,
-          publicKind: frame.public.kind,
+          publicKind: bodyMeta ? bodyMeta.kind : frame.public.kind,
           ownerKind: frame.owner.kind,
-          publicBaseSnapshotId: frame.public.baseSnapshotId || null,
+          publicBaseSnapshotId: bodyMeta ? bodyMeta.baseBodyId : frame.public.baseSnapshotId || null,
           ownerBaseSnapshotId: frame.owner.baseSnapshotId || null,
         } : {}),
       });
@@ -775,10 +867,12 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH });
     if (binary) binaryContext = binaryCodecContext({ ...context,
       codecManifestHash: BINARY_CODEC_MANIFEST_HASH });
+    if (publicBody) bodyCodecContext = publicBodyCodecContext(context);
     lastFrameId = 0;
     lastVisibleFingerprint = null;
     lastAck = null;
     clearLedger();
+    bodyLedger.clear();
     admitted = false;
     lastAcceptedPair = null;
     currentPair = null;
@@ -789,6 +883,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
 
   function rebase(reason = "reconnect") {
     clearLedger();
+    bodyLedger.clear();
     admitted = false;
     lastAck = null;
     return beginExplicitRecovery(reason);
@@ -796,6 +891,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
 
   function teardown() {
     clearLedger();
+    bodyLedger.clear();
     admitted = false;
     recoveryEpisode = null;
     currentPair = null;
@@ -815,7 +911,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: binary ? MODES.STATE_PAIR_BINARY : compressed ? MODES.STATE_PAIR_COMPRESSION
+      mode: publicBody ? MODES.STATE_PAIR_PUBLIC_BODY
+        : binary ? MODES.STATE_PAIR_BINARY : compressed ? MODES.STATE_PAIR_COMPRESSION
         : positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
         ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
         : allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
@@ -826,6 +923,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       retainedPublicIdentities: Object.keys(visiblePublicContinuity.retired).length,
       retainedOwnerIdentities: Object.keys(visibleOwnerContinuity.retired).length,
       retainedPairHistory: ledger.size,
+      retainedPublicBodies: bodyLedger.size,
       ledger: {
         entries: ledger.size, bytes: ledgerBytes, highWaterBytes: ledgerHighWaterBytes,
         hits: counters.ledgerHits, misses: counters.ledgerMisses, evictions: counters.ledgerEvictions,
@@ -854,6 +952,7 @@ module.exports = {
   POSITIONAL_CODEC_CAPABILITY,
   BINARY_CODEC_CAPABILITY,
   COMPRESSION_CODEC_CAPABILITY,
+  PUBLIC_BODY_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   DEFAULT_BASE_LEDGER_LIMITS,

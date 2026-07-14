@@ -222,6 +222,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerStatePairPublicBody",
+    file: "multiplayer-state-pair-public-body.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "RuntimePublicComponents",
     file: "runtime-public-components.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

@@ -183,11 +183,16 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     const bodyRevision = nextBodyRevision++;
     const bodyId = `body-${fixed.authorityIncarnation}-${bodyRevision}`;
     const sourceHash = sha256(canonicalJsonBytes({ world, entities }));
-    const body = deepFreeze({ schema: BODY_SCHEMA, ...fixed, bodyId, bodyRevision,
-      world: clone(world), entities: clone(entities) });
+    const provisionalBody = { schema: BODY_SCHEMA, ...fixed, bodyId, bodyRevision,
+      world: clone(world), entities: clone(entities) };
+    const internalView = bodyInternalView(provisionalBody);
+    // The body hash uses the same normalized world/entity order as structural
+    // deltas. Delta application can therefore reconstruct byte-identical body
+    // semantics instead of depending on source traversal order.
+    const body = deepFreeze({ ...provisionalBody, world: internalView.world,
+      entities: internalView.entities });
     scanPublicBodyPrivacy(body);
     const bodyHash = sha256(canonicalJsonBytes(body));
-    const internalView = bodyInternalView(body);
     const structuralHash = projectionHash(internalView);
     const bytes = canonicalJsonBytes(body).length;
     if (bytes > limits.maxBodyBytes) fail("body-too-large", "one public body exceeds the match history byte cap");
@@ -227,8 +232,18 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       counters.cohortCapFallbacks += 1;
       return null;
     }
-    const built = createStructuralDelta(base.internalView, target.internalView,
-      { expectedBaseHash: base.structuralHash });
+    let built;
+    try {
+      built = createStructuralDelta(base.internalView, target.internalView,
+        { expectedBaseHash: base.structuralHash });
+    } catch {
+      // A recipient may ACK an older body while an on-change component moves
+      // away and back to the same value. Its revision fence must advance, but
+      // the structural codec intentionally rejects revision-only deltas. A
+      // full body is the exact, bounded fallback for that cohort.
+      counters.cohortCapFallbacks += 1;
+      return null;
+    }
     const payload = deepFreeze({ kind: "delta", schema: BODY_DELTA_SCHEMA,
       baseBodyId: base.body.bodyId, baseBodyRevision: base.body.bodyRevision,
       baseHash: base.bodyHash, bodyId: target.body.bodyId, bodyRevision: target.body.bodyRevision,

@@ -107,6 +107,7 @@ const {
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   POSITIONAL_CODEC_CAPABILITY,
   BINARY_CODEC_CAPABILITY,
+  PUBLIC_BODY_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
 const {
@@ -122,6 +123,10 @@ const {
   MANIFEST: COMPRESSION_CODEC_MANIFEST,
   MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
 } = require("./state-pair-compression-codec.cjs");
+const {
+  CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
+  CODEC_MANIFEST_HASH: PUBLIC_BODY_CODEC_MANIFEST_HASH,
+} = require("./state-pair-public-body-codec.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -1036,6 +1041,8 @@ const MULTIPLAYER_BINARY_STATE_PAIR_ENABLED = MULTIPLAYER_POSITIONAL_JSON_ENABLE
 const MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED = MULTIPLAYER_POSITIONAL_JSON_ENABLED
   && !MULTIPLAYER_BINARY_STATE_PAIR_ENABLED
   && String(process.env.LBH_SIM_WS_STATE_PAIR_COMPRESSION_V1 || "").trim() === "true";
+const MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED = MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED
+  && String(process.env.LBH_SIM_WS_STATE_PAIR_PUBLIC_BODY_V1 || "").trim() === "true";
 const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
   process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
 ).trim() === "true";
@@ -6236,6 +6243,13 @@ function currentSessionReplicationManifest() {
             codecManifestHash: COMPRESSION_CODEC_MANIFEST_HASH,
             manifest: COMPRESSION_CODEC_MANIFEST,
           },
+          ...(MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED ? {
+            statePairPublicBodyCodec: {
+              capability: PUBLIC_BODY_CAPABILITY,
+              codecManifestHash: PUBLIC_BODY_CODEC_MANIFEST_HASH,
+              manifest: PUBLIC_BODY_CODEC_MANIFEST,
+            },
+          } : {}),
         } : {}),
       } : {}),
     },
@@ -7406,7 +7420,10 @@ const server = http.createServer(async (req, res) => {
                         ? [BINARY_CODEC_CAPABILITY] : []),
                       ...(MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED
                         && body.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
-                        ? [COMPRESSION_CODEC_CAPABILITY] : [])] : [])] : [])]
+                        ? [COMPRESSION_CODEC_CAPABILITY,
+                          ...(MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED
+                            && body.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+                            ? [PUBLIC_BODY_CAPABILITY] : [])] : [])] : [])] : [])]
             : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2

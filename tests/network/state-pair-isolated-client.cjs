@@ -17,14 +17,18 @@ const { CAPABILITY: BINARY_CODEC_CAPABILITY, codecContext: binaryCodecContext,
   require("../../scripts/state-pair-binary-codec.cjs");
 const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY } =
   require("../../scripts/state-pair-compression-codec.cjs");
+const { CAPABILITY: PUBLIC_BODY_CAPABILITY, CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
+  CODEC_MANIFEST_HASH: PUBLIC_BODY_CODEC_MANIFEST_HASH } =
+  require("../../scripts/state-pair-public-body-codec.cjs");
 const { canonicalJsonBytes } = require("../../scripts/session-replication-manifest.cjs");
 const { distribution } = require("./state-pair-product-metrics.cjs");
 
 const INPUT_HZ = 10;
-function requestedCapabilities(binary, compression) {
+function requestedCapabilities(binary, compression, publicBody) {
   return ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
     RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY,
-    ...(binary ? [BINARY_CODEC_CAPABILITY] : []), ...(compression ? [COMPRESSION_CODEC_CAPABILITY] : [])];
+    ...(binary ? [BINARY_CODEC_CAPABILITY] : []), ...(compression ? [COMPRESSION_CODEC_CAPABILITY] : []),
+    ...(publicBody ? [PUBLIC_BODY_CAPABILITY] : [])];
 }
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
@@ -181,7 +185,8 @@ function startInputs({ startAt, durationMs, phase }) {
 }
 
 async function initialize(config) {
-  const capabilities = requestedCapabilities(config.binary === true, config.compression === true);
+  const capabilities = requestedCapabilities(config.binary === true, config.compression === true,
+    config.publicBody === true);
   const issued = await request(config.port, "/multiplayer/ticket", {
     method: "POST", authority: config.authority, body: {
       kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2], capabilities,
@@ -258,7 +263,9 @@ async function initialize(config) {
         if (measuring) measurement.errors.push(`receiver:${outcome.reason}`);
         return;
       }
-      if (projectionHash(outcome.state.public) !== outcome.ack.publicHash
+      if ((outcome.state.publicBodyHash
+        ? outcome.state.publicBodyHash !== outcome.ack.publicHash
+        : projectionHash(outcome.state.public) !== outcome.ack.publicHash)
           || projectionHash(outcome.state.owner) !== outcome.ack.ownerHash) {
         throw new Error("materialized authority/client projection hash mismatch");
       }
@@ -311,6 +318,17 @@ async function initialize(config) {
         || binaryHash !== BINARY_CODEC_MANIFEST_HASH
         || !canonicalJsonBytes(binaryCodec.manifest).equals(canonicalJsonBytes(BINARY_CODEC_MANIFEST))) {
       throw new Error("content-addressed binary codec manifest verification failed");
+    }
+  }
+  if (config.publicBody === true) {
+    const bodyCodec = sessionManifest.publicContent?.statePairPublicBodyCodec;
+    const bodyHash = bodyCodec?.manifest
+      ? `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(bodyCodec.manifest)).digest("hex")}` : null;
+    if (bodyCodec?.capability !== PUBLIC_BODY_CAPABILITY
+        || bodyCodec?.codecManifestHash !== PUBLIC_BODY_CODEC_MANIFEST_HASH
+        || bodyHash !== PUBLIC_BODY_CODEC_MANIFEST_HASH
+        || !canonicalJsonBytes(bodyCodec.manifest).equals(canonicalJsonBytes(PUBLIC_BODY_CODEC_MANIFEST))) {
+      throw new Error("content-addressed public body codec manifest verification failed");
     }
   }
   send({ type: "manifestAck", manifestSchema: issued.body.manifestSchema,

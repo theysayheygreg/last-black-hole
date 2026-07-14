@@ -27,6 +27,7 @@ const {
   encodeCompressedStatePair,
   decodeCompressedStatePair,
 } = require("./state-pair-compression-codec.cjs");
+const { CAPABILITY: PUBLIC_BODY_CAPABILITY } = require("./state-pair-public-body-codec.cjs");
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
 const trustedStatePairLazyCandidateSelectors = new WeakMap();
@@ -276,6 +277,14 @@ function validateHello(frame) {
           || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
       fail("invalid-field", `${COMPRESSION_CODEC_CAPABILITY} requires positional state-pair and excludes binary`);
     }
+    if (frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+        && (!frame.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+          || !frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || !frame.capabilities.includes("runtime-public-components-v1")
+          || !frame.capabilities.includes("state-pair-mixed-v1")
+          || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("invalid-field", `${PUBLIC_BODY_CAPABILITY} requires compressed positional sparse mixed state-pair and excludes binary`);
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -331,6 +340,14 @@ function validateWelcome(frame) {
         && (!frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
           || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
       fail("invalid-field", `${COMPRESSION_CODEC_CAPABILITY} requires positional state-pair and excludes binary`);
+    }
+    if (frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+        && (!frame.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+          || !frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || !frame.capabilities.includes("runtime-public-components-v1")
+          || !frame.capabilities.includes("state-pair-mixed-v1")
+          || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("invalid-field", `${PUBLIC_BODY_CAPABILITY} requires compressed positional sparse mixed state-pair and excludes binary`);
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");

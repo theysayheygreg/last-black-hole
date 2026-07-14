@@ -201,6 +201,29 @@ async function run() {
       "Compression ticket must remain outside the binary codec branch");
   });
 
+  await runner.run("public body capability is ticket-bound to the complete compressed fallback chain", async () => {
+    const registry = createMultiplayerTicketRegistry({ runId: "run-a" });
+    const dependencies = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+      "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1"];
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-body-bad", playerId: "player-body-bad", profileId: "profile-body-bad",
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies.filter((value) => value !== "state-pair-brotli-v1"),
+        "state-pair-public-body-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+    const issued = registry.issueAdmission({
+      membershipId: "membership-body", playerId: "player-body", profileId: "profile-body",
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies, "state-pair-public-body-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    });
+    const redeemed = registry.redeem(issued.ticket, { kind: "admission", runId: "run-a" });
+    assert(redeemed.claims.capabilities.includes("state-pair-public-body-v1"));
+  });
+
   await runner.run("expiry is deterministic under an injected clock", async () => {
     let clock = 10_000;
     const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => clock });

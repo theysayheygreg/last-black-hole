@@ -1,6 +1,7 @@
 "use strict";
 
-const { canonicalJson } = require("./session-replication-manifest.cjs");
+const crypto = require("crypto");
+const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 
 const CAPABILITY = "state-pair-public-body-v1";
 const PAIR_SCHEMA = "lbh-authority-state-pair-body-v1";
@@ -9,6 +10,20 @@ const BODY_DELTA_SCHEMA = "lbh-public-body-delta-v1";
 const MAX_CODEC_BYTES = 256 * 1024;
 const MAX_DEPTH = 40;
 const MAX_NODES = 120000;
+const CODEC_MANIFEST = Object.freeze({
+  schema: "lbh-public-body-codec-manifest-v1",
+  version: 1,
+  capability: CAPABILITY,
+  pairSchema: PAIR_SCHEMA,
+  bodySchema: BODY_SCHEMA,
+  deltaSchema: BODY_DELTA_SCHEMA,
+  canonicalization: "RFC-8785-compatible canonical JSON subset",
+  compressionEnvelope: "state-pair-brotli-v1",
+  semantics: "immutable match-global public body plus recipient-local state-pair lineage envelope",
+  limits: Object.freeze({ maxCodecBytes: MAX_CODEC_BYTES, maxDepth: MAX_DEPTH, maxNodes: MAX_NODES }),
+});
+const CODEC_MANIFEST_HASH = `sha256:${crypto.createHash("sha256")
+  .update(canonicalJsonBytes(CODEC_MANIFEST)).digest("hex")}`;
 const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const PRIVATE_BODY_KEYS = new Set([
   "connectionId", "connectionEpoch", "sessionId", "membershipId", "recipientId",
@@ -201,6 +216,8 @@ module.exports = {
   BODY_SCHEMA,
   BODY_DELTA_SCHEMA,
   MAX_CODEC_BYTES,
+  CODEC_MANIFEST,
+  CODEC_MANIFEST_HASH,
   PRIVATE_BODY_KEYS,
   PublicBodyCodecError,
   codecContext,
