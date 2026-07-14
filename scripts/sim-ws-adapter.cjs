@@ -1569,7 +1569,9 @@ function createSimWebSocketAdapter(options = {}) {
       if (closed || generation !== expectedGeneration || lifecycle.signal.aborted) {
         return { projected: 0, skipped: connections.size, aborted: true };
       }
-      encodeWireFrame(publicFrame, { direction: SERVER_TO_CLIENT });
+      const validatePublicWire = () => encodeWireFrame(publicFrame, { direction: SERVER_TO_CLIENT });
+      if (s23tProfiler) s23tProfiler.measureSync(S23T_STAGES.PUBLIC_CORE, null, validatePublicWire);
+      else validatePublicWire();
     } catch (error) {
       const safe = publicError(error, "public-projection-failed");
       for (const state of connections) {

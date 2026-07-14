@@ -208,6 +208,9 @@ function createS23tPublicBodyProfiler() {
       outer: summary(retained.map((beat) => beat.outerMs)),
       unattributed: summary(retained.map((beat) => beat.unattributedMs)),
       reconciliation: Object.freeze({ ratios: summary(retained.map((beat) => beat.reconciliationRatio)),
+        aggregateRatio: retained.reduce((sum, beat) => sum + beat.outerMs, 0) > 0
+          ? retained.reduce((sum, beat) => sum + beat.exclusiveMs, 0)
+            / retained.reduce((sum, beat) => sum + beat.outerMs, 0) : 0,
         p95UnattributedMs: percentile(retained.map((beat) => beat.unattributedMs), 0.95) }),
       stages: Object.freeze(stageRows), eventLoopDelay: eventLoopSnapshot(),
       gc: Object.freeze({ events: gc.length, duration: summary(gc.map((entry) => entry.durationMs)),
