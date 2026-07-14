@@ -5,6 +5,8 @@ const assert = require("assert");
 const { TestRunner } = require("./helpers.cjs");
 const { CAPABILITY, MIXED_CAPABILITY, createRuntimeStatePairAuthority } =
   require("../scripts/runtime-state-pair-integration.cjs");
+const { ACK_SCHEMA, MIXED_ACK_SCHEMA, MIXED_PAIR_SCHEMA } =
+  require("../scripts/authority-delta-publisher.cjs");
 
 const MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
 const MANIFEST_HASH = `sha256:${"e".repeat(64)}`;
@@ -32,6 +34,21 @@ function frames(id, beat = 1) {
     lastInputSeq: beat, lastActionSeq: beat, state: { profileId: `private-${seatFrom(id)}`, cargo: ["secret"] } } };
 }
 function seatFrom(id) { return id.membershipId.split("-").at(-1); }
+function ackFor(frame) {
+  const mixed = frame.pairSchema === MIXED_PAIR_SCHEMA;
+  return { type: "ack", ackKind: "statePair", ackSchema: mixed ? MIXED_ACK_SCHEMA : ACK_SCHEMA,
+    matchId: frame.matchId, sessionId: frame.sessionId,
+    authorityIncarnation: frame.authorityIncarnation, recipientId: frame.recipientId,
+    recipientIncarnation: frame.recipientIncarnation, frameId: frame.frameId,
+    statePairId: frame.statePairId, snapshotId: frame.snapshotId,
+    publicHash: frame.public.resultHash, ownerHash: frame.owner.resultHash,
+    ...(mixed ? { pairSchema: frame.pairSchema, tick: frame.tick, simTime: frame.simTime,
+      eventWatermark: frame.eventWatermark, fieldRevision: frame.fieldRevision,
+      overloadMode: frame.overloadMode, ballparkEpoch: frame.ballparkEpoch,
+      manifestHash: frame.manifestHash, publicKind: frame.public.kind, ownerKind: frame.owner.kind,
+      publicBaseSnapshotId: frame.public.baseSnapshotId || null,
+      ownerBaseSnapshotId: frame.owner.baseSnapshotId || null } : {}) };
+}
 function server(options = {}) { return createRuntimeStatePairAuthority({ matchId: "match-s22-life",
   authorityIncarnation: 5, ballparkEpoch: 7, manifestSchema: MANIFEST_SCHEMA,
   manifestHash: MANIFEST_HASH, publicProjectionWorkers: 2,
@@ -78,6 +95,25 @@ async function run() {
       assert.deepStrictEqual(Object.keys(input.job).sort(), ["basePublicView", "currentPublicView"]);
     }
     ids.forEach((id) => authority.disconnect(id));
+    await authority.close();
+  });
+
+  await runner.run("ACK base advancement waits behind the recipient worker lease", async () => {
+    const id = binding();
+    const authority = server({ timeoutMs: 100, testRunOptions: { delayMs: 20 } });
+    authority.admit(id, claims(id));
+    const first = await authority.publish(id, ...Object.values(frames(id, 1)));
+    const secondPending = authority.publish(id, ...Object.values(frames(id, 2)));
+    const ackPending = authority.acknowledge(id, ackFor(first.frame));
+    assert.strictEqual(typeof ackPending?.then, "function", "in-flight worker must defer ACK ingestion");
+    const [second, ack] = await Promise.all([secondPending, ackPending]);
+    assert.strictEqual(second.frame.frameId, 2);
+    assert.strictEqual(ack.accepted, true);
+    const diagnostics = authority.diagnostics().publicProjectionWorkers;
+    assert.strictEqual(diagnostics.fallback, 0);
+    assert.strictEqual(diagnostics.pendingAcks, 0);
+    assert.strictEqual(diagnostics.inFlight, 0);
+    authority.disconnect(id);
     await authority.close();
   });
 

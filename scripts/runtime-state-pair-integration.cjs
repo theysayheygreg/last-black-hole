@@ -323,7 +323,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     if (needsOwnerTracker) ownerTrackers.set(identity.recipientId, createRevisionTracker());
     admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
     if (workerPool) workerAdmissions.set(admissionKey, { token: crypto.randomBytes(16).toString("base64url"),
-      generation: 0, latestCommittedGeneration: 0, ackedPublicView: null, pendingPublicViews: new Map() });
+      generation: 0, latestCommittedGeneration: 0, ackedPublicView: null, pendingPublicViews: new Map(),
+      inFlight: 0, ackWaiters: [] });
     if (ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
         && !splitPublicTrackers.has(admissionKey)) {
       splitPublicTrackers.set(admissionKey, createRevisionTracker());
@@ -474,6 +475,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const workerState = workerAdmissions.get(admissionKey);
     if (!workerState) fail("capability-not-admitted", "public worker admission is unavailable");
     const generation = ++workerState.generation;
+    workerState.inFlight += 1;
     const fence = Object.freeze({ matchId: fixedMatchId, authorityIncarnation: fixedAuthorityIncarnation,
       ballparkEpoch: fixedBallparkEpoch, manifestHash: fixedManifestHash,
       recipientToken: workerState.token, recipientIncarnation: viewsIdentity.recipientIncarnation,
@@ -490,6 +492,15 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       workerState.latestCommittedGeneration = generation;
       workerState.pendingPublicViews.set(publication.frame.frameId, publicStage.publicView);
       return publication;
+    };
+    const flushAckWaiters = () => {
+      workerState.inFlight = Math.max(0, workerState.inFlight - 1);
+      if (workerState.inFlight || !workerState.ackWaiters.length) return;
+      const waiters = workerState.ackWaiters.splice(0);
+      for (const waiter of waiters) {
+        try { waiter.resolve(applyAcknowledge(waiter.identity, waiter.ack)); }
+        catch (error) { waiter.reject(error); }
+      }
     };
     return workerPool.run(job, fence, workerTestRunOptions || {}).then((candidate) => {
       const live = workerAdmissions.get(admissionKey);
@@ -511,11 +522,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       } catch (error) {
         return fallback(`validation:${error?.code || error?.name || "unknown"}`);
       }
-    }, (error) => fallback(error?.code || error?.name || "worker-failure"));
+    }, (error) => fallback(error?.code || error?.name || "worker-failure")).finally(flushAckWaiters);
   }
 
-  function acknowledge(binding, ack) {
-    const identity = requireAdmission(binding);
+  function applyAcknowledge(identity, ack) {
     const result = publisher.acknowledge(identity, ack);
     if (workerPool && result.accepted && result.validated !== false && !result.stale) {
       const state = workerAdmissions.get(key(identity));
@@ -530,11 +540,30 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     return result;
   }
 
+  function acknowledge(binding, ack) {
+    const identity = requireAdmission(binding);
+    const state = workerAdmissions.get(key(identity));
+    if (state?.inFlight) {
+      if (state.ackWaiters.length >= 32) {
+        return Object.freeze({ accepted: false, reason: "worker-ack-queue-full" });
+      }
+      return new Promise((resolve, reject) => state.ackWaiters.push({ identity, ack, resolve, reject }));
+    }
+    return applyAcknowledge(identity, ack);
+  }
+
   function recover(binding) {
     const identity = requireAdmission(binding);
     publisher.rebase(identity);
     const state = workerAdmissions.get(key(identity));
-    if (state) { state.generation += 1; state.ackedPublicView = null; state.pendingPublicViews.clear(); }
+    if (state) {
+      state.generation += 1;
+      state.ackedPublicView = null;
+      state.pendingPublicViews.clear();
+      for (const waiter of state.ackWaiters.splice(0)) {
+        waiter.reject(new RuntimeStatePairError("state-pair-rebased", "state pair rebased while ACK awaited"));
+      }
+    }
     return true;
   }
 
@@ -548,7 +577,13 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     admissions.delete(key(identity));
     splitPublicTrackers.delete(key(identity));
     const workerState = workerAdmissions.get(key(identity));
-    if (workerState) workerStats.cleanupCancelled += workerState.pendingPublicViews.size;
+    if (workerState) {
+      workerStats.cleanupCancelled += workerState.pendingPublicViews.size + workerState.ackWaiters.length;
+      for (const waiter of workerState.ackWaiters.splice(0)) {
+        waiter.reject(new RuntimeStatePairError("capability-not-admitted",
+          "binding disconnected while ACK awaited"));
+      }
+    }
     workerAdmissions.delete(key(identity));
     publisher.disconnect(identity);
     if (![...admissions.values()].some((entry) => entry.identity.recipientId === identity.recipientId)) {
@@ -614,6 +649,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         admissions: workerAdmissions.size,
         pendingPublicViews: [...workerAdmissions.values()].reduce((sum, state) =>
           sum + state.pendingPublicViews.size, 0),
+        inFlight: [...workerAdmissions.values()].reduce((sum, state) => sum + state.inFlight, 0),
+        pendingAcks: [...workerAdmissions.values()].reduce((sum, state) => sum + state.ackWaiters.length, 0),
         privacyBoundary: "Only normalized public current/base views and opaque recipient work tokens cross workers.",
       }) : Object.freeze({ enabled: false, configuredWorkers: 0 }),
       publisher: publisher.diagnostics() });
@@ -624,6 +661,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       state.generation += 1;
       workerStats.cleanupCancelled += state.pendingPublicViews.size;
       state.pendingPublicViews.clear();
+      for (const waiter of state.ackWaiters.splice(0)) {
+        waiter.reject(new RuntimeStatePairError("authority-closed", "authority closed while ACK awaited"));
+      }
     }
     await workerPool?.close();
   }

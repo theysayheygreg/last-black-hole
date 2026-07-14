@@ -519,8 +519,7 @@ function validatePublicWorkerCandidate(candidate, identity, state, publicView, p
       || keyframe.projection?.statePairId !== publicView.statePairId
       || keyframe.projection?.snapshotId !== publicView.snapshotId
       || keyframe.projection?.tick !== publicView.tick
-      || keyframe.resultHash !== projectionHash(publicView)
-      || keyframe.resultHash !== projectionHash(keyframe.projection)) {
+      || keyframe.resultHash !== projectionHash(publicView)) {
     fail("invalid-public-worker-result", "public worker keyframe failed authority validation");
   }
   registerAuthorityLanePayload(keyframe, "public", keyframe.projection);
@@ -542,7 +541,7 @@ function validatePublicWorkerCandidate(candidate, identity, state, publicView, p
       fail("invalid-public-worker-result", "public worker delta lineage failed authority validation");
     }
     const applied = applyStructuralDelta(state.acked.public.view, delta.delta);
-    if (projectionHash(applied.view) !== keyframe.resultHash) {
+    if (applied.resultHash !== keyframe.resultHash) {
       fail("invalid-public-worker-result", "public worker delta semantic replay failed");
     }
     registerAuthorityLanePayload(delta, "public", delta.delta);

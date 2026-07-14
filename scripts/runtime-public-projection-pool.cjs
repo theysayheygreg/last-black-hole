@@ -62,13 +62,18 @@ function createRuntimePublicProjectionPool({ size, maxPending = size * 8, timeou
       clearTimeout(request.timer);
       pending.delete(message.requestId);
       try {
+        const elapsedMs = performance.now() - request.started;
+        if (elapsedMs > request.timeoutMs) {
+          counters.timedOut += 1;
+          throw Object.assign(new Error("public-worker-timeout"), { code: "timeout" });
+        }
         if (message.type === "error") throw Object.assign(new Error(message.error), { code: "worker-error" });
         const parsed = parseCandidate(message, request.fence, maxResultBytes);
         counters.completed += 1;
         counters.outputTransferBytes += parsed.transferBytes;
         counters.workerCpuMicros += parsed.workerCpuMicros || 0;
         samples.computeMs.push(parsed.computeMs || 0);
-        samples.roundTripMs.push(performance.now() - request.started);
+        samples.roundTripMs.push(elapsedMs);
         request.resolve(parsed);
       } catch (error) {
         counters.rejected += 1;
@@ -104,12 +109,13 @@ function createRuntimePublicProjectionPool({ size, maxPending = size * 8, timeou
     counters.inputCloneBytes += inputCloneBytes;
     counters.issued += 1;
     return new Promise((resolve, reject) => {
+      const requestTimeoutMs = options.timeoutMs || timeoutMs;
       const timer = setTimeout(() => {
         if (!pending.delete(requestId)) return;
         counters.timedOut += 1;
         reject(Object.assign(new Error("public-worker-timeout"), { code: "timeout" }));
-      }, options.timeoutMs || timeoutMs);
-      pending.set(requestId, { row, fence, resolve, reject, timer, started });
+      }, requestTimeoutMs);
+      pending.set(requestId, { row, fence, resolve, reject, timer, started, timeoutMs: requestTimeoutMs });
       counters.maxPending = Math.max(counters.maxPending, pending.size);
       row.worker.postMessage({ protocol: PROTOCOL, type: options.crash ? "crash" : "job",
         requestId, fence, job, delayMs: options.delayMs || 0 });
