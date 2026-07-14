@@ -1249,6 +1249,16 @@ function init() {
       get lastRunResult() { return lastRunResult; },
       setLastRunResult: (result) => { lastRunResult = result ? JSON.parse(JSON.stringify(result)) : null; },
       getRunResultsViewModel: currentRunResultsViewModel,
+      getEndScreenStateForTest: () => {
+        const timer = gamePhase === 'dead' ? deathTimer : gamePhase === 'escaped' ? escapeTimer : 0;
+        const unlockAt = DEATH_LINGER_DURATION + 1.0;
+        return {
+          phase: gamePhase,
+          timer,
+          unlockAt,
+          canContinue: (gamePhase === 'dead' || gamePhase === 'escaped') && timer > unlockAt,
+        };
+      },
       getChronicleViewModel: buildChronicleViewModel,
       setRecentEchoes: (echoes) => {
         recentEchoes = Array.isArray(echoes) ? echoes.map((echo) => ({ ...echo })).slice(0, 8) : [];

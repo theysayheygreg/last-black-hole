@@ -228,6 +228,11 @@ export function initTestAPI(getState) {
       return getRunResultsViewModel ? getRunResultsViewModel() : null;
     },
 
+    getEndScreenState() {
+      const { getEndScreenStateForTest } = getState();
+      return clone(getEndScreenStateForTest?.() || null);
+    },
+
     getChronicleView() {
       const { getChronicleViewModel } = getState();
       return getChronicleViewModel ? getChronicleViewModel() : null;
