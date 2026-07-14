@@ -193,13 +193,13 @@ Some affordances should be tuned differently per input device:
 | Variable | Starting Value | What It Affects |
 |----------|---------------|-----------------|
 | Ship mass | TBD (1.0 as baseline, scale from there) | Acceleration response, fluid buffeting |
-| Thrust force | TBD (relative to well pull at mid-range) | How fast you can fight the current |
+| Thrust acceleration | 2.5 world-units/s² canonical baseline | Shared by browser fallback and authority through `src/content/movement.data.json`; hull/rig modifiers layer on top |
 | Thrust ramp time | 200ms to full force | Tap = nudge, hold = burn. Acceleration feel. |
 | Turn rate (base) | 180°/s | How fast the ship rotates toward aim |
 | Turn speed curve power | 2.0 (quadratic ease-in) | Nudge precision vs. fast reversal |
 | Turn dead zone | 5° | Prevents jitter near current facing |
 | Turn rate speed scaling | 0.7× at max speed | Committed feel at high speed |
-| Fluid coupling | 0.8 (ship velocity = 80% fluid + 20% own) | How much the flow carries you |
+| Fluid coupling | 1.2/s canonical baseline | How quickly velocity converges toward sampled flow; hull modifiers layer on top |
 | Ship drag (in-current) | Low (TBD) | Momentum carry when riding flow |
 | Ship drag (against-current) | Higher (TBD) | Resistance when fighting flow |
 | Thrust smoothing | 50ms lerp on facing | How quickly the ship changes direction |

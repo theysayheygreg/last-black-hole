@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-07-14 — Orrery RC findings fixed and review path hardened
+
+- Fixed finite well-contact grace so upgraded hulls receive one protection
+  window, emit one event, and then die if they remain inside the well.
+- Replaced the split `1.7`/`2.5` movement baselines with one shared movement
+  data contract consumed by browser fallback physics and authoritative sim.
+- Corrected the browser gravity proof so lethal contact cannot count as
+  evidence of inward pull.
+- Verified the Shallows slingshot/extraction route ten times from fresh sim and
+  browser processes; the reported failure was a too-precise harness waypoint,
+  not fuel exhaustion, so production movement/fuel tuning was left alone.
+- Made title corruption honor reduced motion and removed duplicate remote
+  star/scavenger audio cues.
+- Added a portable visible agent-eval lane and exposed structural audio
+  diagnostics for hosts where a reviewer cannot see an unlocked desktop or
+  hear the audio device.
+- Recorded Orrery's complete review under `docs/project/reviews/` and routed
+  sentry identity, palette hygiene, continuous propulsion audio, and future
+  Ballpark/network scaling work without pretending they were release blockers.
+
 ## 2026-07-14 — v0.3 clean RC evidence and visual harness closure
 
 - Re-ran the complete v0.3 automated lane from a stopped stack with timing

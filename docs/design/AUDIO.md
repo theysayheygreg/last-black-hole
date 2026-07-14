@@ -158,7 +158,7 @@ audio: {
   thrustDuckAmount: 0.7,       // -3dB on ambient while thrusting
 
   // Voice limits
-  maxWellVoices: 4,
+  maxWellVoices: 2,           // nearest two spatial beds; matches v0.3 mixer contract
   maxScavengerVoices: 3,
   maxEventVoices: 4,
 }

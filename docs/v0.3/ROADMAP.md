@@ -214,6 +214,27 @@ These are evidence gates, not missing architecture:
 - Broader catalog/content breadth that does not deepen routes or consequences.
 - Advanced replication deltas and neighborhood transport once multiplayer
   traffic provides real measurements.
+- Incremental Ballpark updates after map/entity growth makes the measured full
+  rebuild material; current Deep Field sync remains inside budget.
+- Network stale-input timeout semantics, deterministic runtime ids, and any
+  prediction reconciliation belong with the multiplayer transport contract.
+
+## Post-RC Visual And Audio Polish
+
+Orrery's 2026-07-14 review found worthwhile presentation work that is not an
+architecture or automated-acceptance blocker:
+
+- give sentries a threat-specific silhouette instead of sharing the ecology
+  sprite family;
+- separate Inhibitor and general-anomaly hue roles, then continue moving the
+  canvas overlay away from inline colors;
+- add a designed thrust/brake/coast audio layer, collapse-death cue, and loot
+  variation after Greg's target-speaker mix review;
+- surface mixer admission/drop diagnostics in the dev panel; the same data is
+  now available to agents through `window.__TEST_API.getAudioDiagnostics()`.
+
+These remain visible work, not silent RC waivers. Their final shape needs the
+visual and listening taste gates rather than an opportunistic code-only retune.
 
 ## Historical Context
 
