@@ -48,6 +48,10 @@ assert.strictEqual(row1k.capacityInputs.safeAuthoritiesPerHost, 2);
 assert(row10k.demand.lifetimePlayerHours > row1k.demand.lifetimePlayerHours);
 assert(row10k.operations.totalOperationsCost > row1k.operations.totalOperationsCost);
 assert(row10k.commercial.netReceiptsBeforeOperations > row1k.commercial.netReceiptsBeforeOperations);
+assert.strictEqual(row10k.unitCosts.costPerAuthorityHour, row1k.unitCosts.costPerAuthorityHour,
+  "host density and authority-hour cost must not change with copies");
+assert.strictEqual(row10k.capacityInputs.safeAuthoritiesPerHost, row1k.capacityInputs.safeAuthoritiesPerHost,
+  "safe authority density is a measured/configured input, never copies-derived");
 
 const local = evaluate(config, 1000, "base", "local");
 assert.strictEqual(local.demand.hostedMultiplayerPlayerHours, 0);
@@ -61,6 +65,20 @@ const resultB = model(JSON.parse(JSON.stringify(config)), { sourceCommit: "abc" 
 assert.deepStrictEqual(resultA, resultB, "same source/config must regenerate exactly");
 assert.strictEqual(resultA.rows.length, 12);
 assert(resultA.rows.every((row) => row.audit.authorityHours.includes("averagePlayersPerMatch")));
+for (const topology of Object.keys(config.topologies)) {
+  for (const caseName of Object.keys(config.cases)) {
+    const rows = resultA.rows.filter((row) => row.topology === topology && row.case === caseName)
+      .sort((a, b) => a.copies - b.copies);
+    for (let index = 1; index < rows.length; index += 1) {
+      assert(rows[index].demand.lifetimePlayerHours >= rows[index - 1].demand.lifetimePlayerHours,
+        `${topology}/${caseName} player-hours must be monotonic with copies`);
+      assert(rows[index].operations.totalOperationsCost >= rows[index - 1].operations.totalOperationsCost,
+        `${topology}/${caseName} operations cost must be monotonic with copies`);
+      assert(rows[index].commercial.netReceiptsBeforeOperations >= rows[index - 1].commercial.netReceiptsBeforeOperations,
+        `${topology}/${caseName} receipts must be monotonic with copies`);
+    }
+  }
+}
 assert.deepStrictEqual(resultA.commercialFeeScenarios,
   { best: { storefrontFeeRate: 0.15, status: "scenario assumption; not claimed as a current universal storefront default" },
     base: { storefrontFeeRate: 0.2, status: "scenario assumption; not claimed as a current universal storefront default" },
