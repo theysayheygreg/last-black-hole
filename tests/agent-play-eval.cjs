@@ -548,20 +548,27 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   const { match: initialPortal } = await waitForWorld((snapshot) =>
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
-  const travel = await steerTo(page, clientId, initialPortal, {
+  const portalApproach = {
     radius: Math.max(0.012, (Number(initialPortal.radius) || 0.06) * 0.25),
     maxCruiseSpeed: 0.27,
     arrivalSpeed: 0.08,
     timeout: 70000,
-  });
-  const ready = await waitForPlayer(
+  };
+  const waitForPortalReady = (label) => waitForPlayer(
     clientId,
     (player) => player.portalInteraction?.portalId === initialPortal.id && player.portalInteraction?.ready === true,
-    { timeout: 7000, label: `portal ${initialPortal.id} ready state` },
+    { timeout: 7000, label },
   );
+  const travel = await steerTo(page, clientId, initialPortal, portalApproach);
+  const ready = await waitForPortalReady(`portal ${initialPortal.id} evidence-ready state`);
   assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
   screenshots.push(await capturePage(page, outputDir, "08-portal-zone-awaiting-confirm"));
 
+  // Capturing the evidence frame can take long enough for strong portal flow
+  // to carry the ship out. Reacquire normal ready state before the real input
+  // instead of widening the production residence/abort contract for the test.
+  await steerTo(page, clientId, initialPortal, portalApproach);
+  await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready state`);
   // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
   await tapGamepadButton(page, 0, 100);
   const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
