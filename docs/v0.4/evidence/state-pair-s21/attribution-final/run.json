@@ -1,0 +1,32 @@
+{
+  "schema": "lbh-s20-compression-run-v1",
+  "commit": "d7c14a5ece995781c9d1565c28a1edfad90d3603",
+  "dirty": false,
+  "seed": 1403105358,
+  "command": "LBH_S20_COMPRESSION=1 LBH_S21_STAGE_PROFILE=1 node tests/multiplayer-state-pair-clock-attribution.cjs",
+  "config": {
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "warmupMs": 5000,
+    "windowMs": 20000,
+    "binary": false,
+    "compression": true,
+    "stageProfile": true
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "node": "v22.22.3"
+  },
+  "s12Binding": {
+    "path": "docs/v0.4/evidence/state-pair-s12/pre-gate",
+    "compositeSha256": "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845"
+  }
+}

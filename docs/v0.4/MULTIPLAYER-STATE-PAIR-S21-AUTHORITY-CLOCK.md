@@ -33,16 +33,19 @@ product A/B because instrumentation is expensive.
 |---|---|---:|---:|---:|---:|
 | profiler A1 | `995d003` | 9.85 / 22.37 | 5.90 / 86.00 | 3.75 / 188.03 | 0.747 |
 | profiler-off B | `bf54903` | 9.75 / 14.60 | 8.85 / 53.92 | 4.95 / 123.20 | 0.650 |
-| profiler A2 | `ec515a8` | 9.85 / 22.27 | 5.90 / 85.76 | 3.75 / 187.29 | 0.743 |
+| profiler A2 final | `d7c14a5` | 9.80 / 22.60 | 5.85 / 87.14 | 3.70 / 199.18 | 0.747 |
 
-The repeat A reproduces the first A closely. B demonstrates the profiler's
-material overhead and is only a same-source control; the two counterbalanced
-S20 rounds remain the admission record.
+The repeat A reproduces cadence, CPU, p50, and stage ordering closely; its
+eight-player p95 tail is 5.9% higher. B demonstrates the profiler's material
+overhead and is only a same-source control; the two counterbalanced S20 rounds
+remain the admission record. Between A1 and final A2, runtime changes are
+limited to diagnostic JSON-size de-duplication and timing labels; worker work
+is test-only and product wire/authority behavior is unchanged.
 
 ## Eight-player critical path
 
-At eight in profiler A2, sim-tick p95 is only 1.41 ms while
-projection/publish is 178.56 ms p50 and 187.29 ms p95. There is no queue,
+At eight in profiler A2, sim-tick p95 is only 1.47 ms while
+projection/publish is 179.62 ms p50 and 199.18 ms p95. There is no queue,
 backpressure, or socket-buffer accumulation. The authority clock is limited by
 serial per-recipient projection/publish work, not by the sim tick or network
 drain.
@@ -55,13 +58,13 @@ means per accepted eight-recipient beat are:
 
 | Stage group | Mean ms/beat | Interpretation |
 |---|---:|---|
-| public core + public projection + public delta candidate | 75.06 | dominant pure public, per-recipient work |
-| owner source + owner projection + owner delta candidate | 5.37 | authority-private; keep local |
+| public core + public projection + public delta candidate | 77.15 | dominant pure public, per-recipient work |
+| owner source + owner projection + owner delta candidate | 5.44 | authority-private; keep local |
 | raw snapshot, manifest, hashes, inclusive pair choice, compression, accounting, queue/send call, ACK | 7.05 | authority-owned fixed/commit work |
-| JSON serialization row | 13.85 | diagnostic row; nesting prevents simple addition |
-| socket-send callback | 618.67 | overlapping async wall latency; never add to CPU |
+| JSON serialization row | 14.12 | diagnostic row; nesting prevents simple addition |
+| socket-send callback | 634.48 | overlapping async wall latency; never add to CPU |
 
-Compression is 0.64 ms/beat, adapter enqueue 0.91 ms/beat, socket send calls
+Compression is 0.63 ms/beat, adapter enqueue 0.94 ms/beat, socket send calls
 0.30 ms/beat, and ACK ingestion 0.09 ms/beat. Optimizing those cannot recover
 the missing eight-player clock. The first useful isolation boundary is pure
 public keyframe/delta construction.

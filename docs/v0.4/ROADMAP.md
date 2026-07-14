@@ -706,8 +706,8 @@ pilot selected:** A profiler-on/off/on diagnostic sequence reproduces the
 instrumented result and proves the profiler's material overhead. The sealed
 S20 rounds remain product truth: eight is still rejected at 5.00/4.90 Hz.
 Attribution locates the critical path in serial per-recipient public work:
-public core/projection/delta construction accounts for 75.06 visible ms per
-accepted eight-recipient beat, while sim-tick p95 is 1.41 ms. Compression,
+public core/projection/delta construction accounts for 77.15 visible ms per
+accepted eight-recipient beat, while sim-tick p95 is 1.47 ms. Compression,
 queue enqueue, socket send calls, and ACK ingestion total under 2 ms/beat.
 Async send callbacks overlap and are excluded from authority CPU; nested stage
 rows are not summed.

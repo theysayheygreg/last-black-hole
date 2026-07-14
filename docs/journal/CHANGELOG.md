@@ -9,7 +9,8 @@
 - Located the eight-player critical path in serial per-recipient public
   core/projection/delta construction. Sim-tick p95 remains 1.41 ms, while
   compression, queueing, socket send calls, and ACK ingestion are too small to
-  recover the missing clock. Marked inclusive/nested and overlapping async
+  recover the missing clock. Final A2 emits pair choice as synchronous
+  inclusive time and marks nested and overlapping async
   stage rows so they cannot be mis-summed as authority CPU.
 - Added a public-only projection-worker feasibility harness. Owner data,
   mixed-pair selection, compression, ACK/ledger mutation, epochs, ordering,
