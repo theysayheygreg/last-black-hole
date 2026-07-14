@@ -415,7 +415,9 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
     wy: wrap(anchor.wy + awayY / awayMag * 0.22, ws),
   };
   const approach = await steerTo(page, clientId, ringPoint, {
-    radius: 0.09,
+    // The playable current is a band, not a precision-docking point. This
+    // tolerance stays outside the kill radius and inside engagement range.
+    radius: 0.12,
     maxCruiseSpeed: 0.31,
     arrivalSpeed: 0.30,
     // A slingshot approach should preserve orbital momentum; stopping at the
