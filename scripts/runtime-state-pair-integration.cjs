@@ -265,6 +265,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const admissions = new Map();
   const preparedPublicSources = new WeakMap();
   const preparedRecipientKey = crypto.randomBytes(32);
+  let lastPreparedSnapshot = 0;
   let shareabilityGeneration = stageProfiler?.generation?.() || 0;
   let shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
   const preparedCounters = { preparations: 0, canonicalizations: 0, hashes: 0 };
@@ -300,11 +301,18 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       identity.recipientId, identity.recipientIncarnation]);
   }
 
-  function preparedIdentityToken(identity) {
+  function admissionBindingToken(binding, identity) {
     return crypto.createHmac("sha256", preparedRecipientKey)
       .update(canonicalJson([identity.matchId, identity.sessionId, identity.authorityIncarnation,
-        identity.recipientId, identity.recipientIncarnation]))
+        identity.recipientId, identity.recipientIncarnation,
+        requiredString(binding.playerId, "playerId"), fixedManifestSchema, fixedManifestHash,
+        binding.capabilities || []]))
       .digest("base64url");
+  }
+
+  function sameCapabilities(left, right) {
+    return Array.isArray(left) && left.length === right.length
+      && left.every((value, index) => value === right[index]);
   }
 
   function context(binding) {
@@ -318,6 +326,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const identity = context(binding);
     if (!ticketClaims || ticketClaims.wireVersion !== "lbh-multiplayer-json-v2"
         || !Array.isArray(ticketClaims.capabilities) || !ticketClaims.capabilities.includes(CAPABILITY)
+        || ticketClaims.membershipId !== identity.recipientId
+        || ticketClaims.playerId !== binding.playerId
         || ticketClaims.manifestSchema !== fixedManifestSchema || ticketClaims.manifestHash !== fixedManifestHash
         || ticketClaims.authorityIncarnation !== fixedAuthorityIncarnation
         || canonicalJson(ticketClaims.capabilities) !== canonicalJson(binding.capabilities || [])) {
@@ -363,7 +373,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fail("recipient-cap", "state-pair recipient history cap reached");
     }
     if (needsOwnerTracker) ownerTrackers.set(identity.recipientId, createRevisionTracker());
-    admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
+    admissions.set(admissionKey, Object.freeze({ identity,
+      playerId: binding.playerId,
+      bindingToken: admissionBindingToken(binding, identity),
+      capabilities: Object.freeze([...ticketClaims.capabilities]) }));
     if (ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
         && !ticketClaims.capabilities.includes(PUBLIC_BODY_CAPABILITY)
         && !splitPublicTrackers.has(admissionKey)) {
@@ -375,16 +388,15 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   function requireAdmission(binding) {
     const identity = context(binding);
     const admission = admissions.get(key(identity));
-    if (!admission || !admission.capabilities.includes(CAPABILITY)) fail("capability-not-admitted", "binding is not admitted for state-pair");
+    if (!admission || admission.playerId !== binding.playerId
+        || !sameCapabilities(binding.capabilities, admission.capabilities)
+        || !admission.capabilities.includes(CAPABILITY)) {
+      fail("capability-not-admitted", "binding is not admitted for state-pair");
+    }
     return identity;
   }
 
   function assertPreparedPublicSourceFrame(publicFrame) {
-    assertSourceEnvelope(publicFrame, "public");
-    if (publicFrame.runId !== fixedMatchId || publicFrame.manifestHash !== fixedManifestHash) {
-      fail("non-atomic-source", "prepared public source is outside this match authority");
-    }
-    positiveInteger(publicFrame.snapshotId, "snapshotId");
     const seen = new WeakSet();
     let objects = 0;
     const assertFrozen = (value) => {
@@ -395,9 +407,33 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       if (!Object.isFrozen(value)) {
         fail("mutable-public-source", "prepared public source must be recursively frozen before proof issuance");
       }
-      for (const child of Object.values(value)) assertFrozen(child);
+      const prototype = Object.getPrototypeOf(value);
+      if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+        fail("mutable-public-source", "prepared public source must contain only plain JSON objects");
+      }
+      const ownKeys = Reflect.ownKeys(value);
+      if (ownKeys.some((entry) => typeof entry === "symbol")) {
+        fail("mutable-public-source", "prepared public source must not contain symbol properties");
+      }
+      for (const property of ownKeys) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, property);
+        if (Array.isArray(value) && property === "length") continue;
+        if (Array.isArray(value)
+            && (!/^(0|[1-9][0-9]*)$/.test(property) || Number(property) >= value.length)) {
+          fail("mutable-public-source", "prepared public source arrays must contain indices only");
+        }
+        if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+          fail("mutable-public-source", "prepared public source must contain enumerable data properties only");
+        }
+        assertFrozen(descriptor.value);
+      }
     };
     assertFrozen(publicFrame);
+    assertSourceEnvelope(publicFrame, "public");
+    if (publicFrame.runId !== fixedMatchId || publicFrame.manifestHash !== fixedManifestHash) {
+      fail("non-atomic-source", "prepared public source is outside this match authority");
+    }
+    positiveInteger(publicFrame.snapshotId, "snapshotId");
   }
 
   function preparePublicSource(publicFrame, consumers) {
@@ -406,6 +442,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     }
     assertPreparedPublicSourceFrame(publicFrame);
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
+    if (snapshot <= lastPreparedSnapshot) {
+      fail("prepared-source-already-issued", "prepared public source may be issued only once");
+    }
     const slots = new Set();
     const intended = new Map();
     for (const consumer of consumers) {
@@ -419,7 +458,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       if (!admission.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)) {
         fail("capability-not-admitted", "recipient is not admitted for prepared public source");
       }
-      const token = preparedIdentityToken(identity);
+      const token = admission.bindingToken;
       if (intended.has(token)) fail("prepared-consumer-set", "prepared public source recipient is duplicated");
       slots.add(ordinal);
       intended.set(token, Object.freeze({ ordinal, consumed: false }));
@@ -434,17 +473,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fail("projection-too-large", "prepared public source exceeds bounded projection input");
     }
     const publicDigest = crypto.createHash("sha256").update(publicText).digest("hex");
-    const publicCore = {
-      world: { publicFacts: publicBodyFacts(publicFrame.state) },
-      entities: publicBodyTracker.project(collectPublicEntities(publicFrame, true)),
-    };
-    const body = publicBodyAuthority.prepareBody({
-      sourceKey: String(snapshot), world: publicCore.world, entities: publicCore.entities,
-    });
     const proof = Object.freeze(Object.create(null));
     preparedPublicSources.set(proof, {
       sourceRef: publicFrame,
-      body,
+      body: null,
       publicBytes,
       publicDigest,
       snapshot,
@@ -456,6 +488,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       remaining: intended.size,
       revoked: false,
     });
+    lastPreparedSnapshot = snapshot;
     preparedPublicSourceCounters.issued += 1;
     preparedPublicSourceCounters.active += 1;
     preparedPublicSourceCounters.publicValidations += 1;
@@ -473,7 +506,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const record = preparedPublicSources.get(proof);
     const identity = requireAdmission(binding);
     const admission = admissions.get(key(identity));
-    const consumer = record?.intended.get(preparedIdentityToken(identity));
+    const consumer = record?.intended.get(admission.bindingToken);
     if (!record || record.revoked || !admission.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
         || record.sourceRef !== publicFrame || record.snapshot !== publicFrame?.snapshotId
         || record.tick !== publicFrame?.tick || record.manifestHash !== fixedManifestHash
@@ -487,7 +520,18 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       }
       rejectPreparedSource("prepared public source proof is forged, stale, duplicate, or cross-scope");
     }
-    record.intended.set(preparedIdentityToken(identity), Object.freeze({ ordinal, consumed: true }));
+    record.intended.set(admission.bindingToken, Object.freeze({ ordinal, consumed: true }));
+    if (!record.body) {
+      const publicCore = {
+        world: { publicFacts: publicBodyFacts(record.sourceRef.state) },
+        entities: publicBodyTracker.project(collectPublicEntities(record.sourceRef, true)),
+      };
+      record.body = publicBodyAuthority.prepareBody({ sourceKey: String(record.snapshot),
+        world: publicCore.world, entities: publicCore.entities });
+      publicBodySource = Object.freeze({ snapshot: record.snapshot, body: record.body,
+        publicFrame: record.sourceRef });
+      observePublicCore(record.snapshot, publicCore);
+    }
     record.remaining -= 1;
     preparedPublicSourceCounters.consumed += 1;
     if (record.remaining === 0) {

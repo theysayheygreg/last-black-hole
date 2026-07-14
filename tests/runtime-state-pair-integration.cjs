@@ -271,33 +271,196 @@ async function run() {
       preparedPublicSource: swapped, preparedRecipientOrdinal: 1,
     }), (error) => error.code === "invalid-prepared-public-source");
 
-    const stale = server.preparePublicSource(beatTwoPublic, [
+    const staleSource = publicBodySourceFrames(a, 3);
+    const stalePublic = deepFreeze(staleSource.publicFrame);
+    const stale = server.preparePublicSource(stalePublic, [
       { binding: a, ordinal: 0 }, { binding: b, ordinal: 1 },
     ]);
     assert(server.finishPreparedPublicSource(stale));
-    assert.throws(() => server.publish(a, beatTwoPublic, beatTwoA.ownerFrame, {
+    assert.throws(() => server.publish(a, stalePublic, staleSource.ownerFrame, {
       preparedPublicSource: stale, preparedRecipientOrdinal: 0,
     }), (error) => error.code === "invalid-prepared-public-source");
 
-    const mutable = publicBodySourceFrames(a, 3).publicFrame;
+    const mutable = publicBodySourceFrames(a, 4).publicFrame;
     Object.freeze(mutable);
     assert.throws(() => server.preparePublicSource(mutable, [{ binding: a, ordinal: 0 }]),
       (error) => error.code === "mutable-public-source");
-    assert.throws(() => server.preparePublicSource(deepFreeze(publicBodySourceFrames(a, 4).publicFrame), [
+    assert.throws(() => server.preparePublicSource(deepFreeze(publicBodySourceFrames(a, 5).publicFrame), [
       { binding: a, ordinal: 0 }, { binding: a, ordinal: 1 },
     ]), (error) => error.code === "prepared-consumer-set");
 
     const beatFive = publicBodySourceFrames(a, 5);
     const beatFivePublic = deepFreeze(beatFive.publicFrame);
     const exactRef = server.preparePublicSource(beatFivePublic, [{ binding: a, ordinal: 0 }]);
-    const equalClone = deepFreeze(JSON.parse(JSON.stringify(beatFivePublic)));
-    assert.throws(() => server.publish(a, equalClone, beatFive.ownerFrame, {
+    const alteredPlayer = { ...a, playerId: "player-lookalike" };
+    assert.throws(() => server.publish(alteredPlayer, beatFivePublic, beatFive.ownerFrame, {
       preparedPublicSource: exactRef, preparedRecipientOrdinal: 0,
+    }), (error) => error.code === "capability-not-admitted");
+    server.publish(a, beatFivePublic, beatFive.ownerFrame, {
+      preparedPublicSource: exactRef, preparedRecipientOrdinal: 0,
+    });
+
+    const beatSix = publicBodySourceFrames(a, 6);
+    const beatSixPublic = deepFreeze(beatSix.publicFrame);
+    const cloneProof = server.preparePublicSource(beatSixPublic, [{ binding: a, ordinal: 0 }]);
+    const equalClone = deepFreeze(JSON.parse(JSON.stringify(beatSixPublic)));
+    assert.throws(() => server.publish(a, equalClone, beatSix.ownerFrame, {
+      preparedPublicSource: cloneProof, preparedRecipientOrdinal: 0,
     }), (error) => error.code === "invalid-prepared-public-source");
     const forged = Object.freeze(Object.create(null));
-    assert.throws(() => server.publish(a, beatFivePublic, beatFive.ownerFrame, {
+    assert.throws(() => server.publish(a, beatSixPublic, beatSix.ownerFrame, {
       preparedPublicSource: forged, preparedRecipientOrdinal: 0,
     }), (error) => error.code === "invalid-prepared-public-source");
+
+    const beatSeven = publicBodySourceFrames(a, 7);
+    const stableWrecks = beatSeven.publicFrame.state.world.wrecks;
+    delete beatSeven.publicFrame.state.world.wrecks;
+    deepFreeze(stableWrecks);
+    let accessorReads = 0;
+    Object.defineProperty(beatSeven.publicFrame.state.world, "wrecks", {
+      enumerable: true,
+      get() { accessorReads += 1; return stableWrecks; },
+    });
+    Object.freeze(beatSeven.publicFrame.state.world);
+    deepFreeze(beatSeven.publicFrame);
+    assert.throws(() => server.preparePublicSource(beatSeven.publicFrame,
+      [{ binding: a, ordinal: 0 }]), (error) => error.code === "mutable-public-source");
+    assert.strictEqual(accessorReads, 0, "proof validation must not execute public-source accessors");
+
+    const topAccessor = publicBodySourceFrames(a, 8).publicFrame;
+    delete topAccessor.type;
+    for (const child of Object.values(topAccessor)) deepFreeze(child);
+    let topAccessorReads = 0;
+    Object.defineProperty(topAccessor, "type", {
+      enumerable: true,
+      get() { topAccessorReads += 1; return "publicState"; },
+    });
+    Object.freeze(topAccessor);
+    assert.throws(() => server.preparePublicSource(topAccessor, [{ binding: a, ordinal: 0 }]),
+      (error) => error.code === "mutable-public-source");
+    assert.strictEqual(topAccessorReads, 0,
+      "proof validation must reject top-level accessors before structural reads");
+
+    const beatNine = publicBodySourceFrames(a, 9);
+    const beatNinePublic = deepFreeze(beatNine.publicFrame);
+    server.preparePublicSource(beatNinePublic, [{ binding: a, ordinal: 0 }]);
+    const equalBeatNineClone = deepFreeze(JSON.parse(JSON.stringify(beatNinePublic)));
+    assert.throws(() => server.preparePublicSource(equalBeatNineClone,
+      [{ binding: a, ordinal: 0 }]), (error) => error.code === "prepared-source-already-issued");
+  });
+
+  await runner.run("S23P seeds the plain S23 path without repeating public work", async () => {
+    const preparedCaps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY,
+      "static-manifest-v1"].sort();
+    const plainCaps = preparedCaps.filter((value) => value !== PREPARED_PUBLIC_SOURCE_CAPABILITY);
+    const prepared = binding("mixed-prepared", { capabilities: preparedCaps });
+    const plain = binding("mixed-plain", { capabilities: plainCaps });
+    const server = authority();
+    server.admit(prepared, claims(prepared));
+    server.admit(plain, claims(plain));
+    const preparedSource = publicBodySourceFrames(prepared, 1);
+    const plainSource = publicBodySourceFrames(plain, 1);
+    const publicFrame = deepFreeze(preparedSource.publicFrame);
+    const proof = server.preparePublicSource(publicFrame, [{ binding: prepared, ordinal: 0 }]);
+    const preparedPublication = server.publish(prepared, publicFrame, preparedSource.ownerFrame, {
+      preparedPublicSource: proof, preparedRecipientOrdinal: 0,
+    });
+    const plainPublication = server.publish(plain, publicFrame, plainSource.ownerFrame);
+    assert.strictEqual(preparedPublication.frame.bodyHash, plainPublication.frame.bodyHash);
+    const diagnostics = server.diagnostics().publicBody.authority;
+    assert.strictEqual(diagnostics.bodyBuilds, 1);
+    assert.strictEqual(diagnostics.bodyHashes, 1);
+    assert.strictEqual(diagnostics.bodyCacheHits, 0);
+  });
+
+  await runner.run("S23P unused proofs do not advance public body history", async () => {
+    const preparedCaps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY,
+      "static-manifest-v1"].sort();
+    const controlCaps = preparedCaps.filter((value) => value !== PREPARED_PUBLIC_SOURCE_CAPABILITY);
+    const prepared = binding("unused", { capabilities: preparedCaps });
+    const controlBinding = { ...prepared, capabilities: controlCaps };
+    const server = authority();
+    const control = authority();
+    server.admit(prepared, claims(prepared));
+    control.admit(controlBinding, claims(controlBinding));
+    const unusedSource = publicBodySourceFrames(prepared, 1);
+    const unusedPublic = deepFreeze(unusedSource.publicFrame);
+    const unusedProof = server.preparePublicSource(unusedPublic, [{ binding: prepared, ordinal: 0 }]);
+    assert(server.finishPreparedPublicSource(unusedProof));
+    assert.strictEqual(server.diagnostics().publicBody.authority.bodyBuilds, 0);
+
+    const liveSource = publicBodySourceFrames(prepared, 2);
+    const livePublic = deepFreeze(liveSource.publicFrame);
+    const liveProof = server.preparePublicSource(livePublic, [{ binding: prepared, ordinal: 0 }]);
+    const candidate = server.publish(prepared, livePublic, liveSource.ownerFrame, {
+      preparedPublicSource: liveProof, preparedRecipientOrdinal: 0,
+    });
+    const baseline = control.publish(controlBinding, livePublic, liveSource.ownerFrame);
+    assert.strictEqual(candidate.frame.bodyId, "body-7-1");
+    assert.strictEqual(candidate.encodedWire, baseline.encodedWire);
+  });
+
+  await runner.run("S23P preserves S23 keyframe delta ACK retransmit and recovery wires", async () => {
+    const preparedCaps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY,
+      "static-manifest-v1"].sort();
+    const controlCaps = preparedCaps.filter((value) => value !== PREPARED_PUBLIC_SOURCE_CAPABILITY);
+    const preparedA = binding("parity-a", { capabilities: preparedCaps });
+    const preparedB = binding("parity-b", { capabilities: preparedCaps });
+    const controlA = { ...preparedA, capabilities: controlCaps };
+    const controlB = { ...preparedB, capabilities: controlCaps };
+    const candidate = authority();
+    const control = authority();
+    candidate.admit(preparedA, claims(preparedA));
+    candidate.admit(preparedB, claims(preparedB));
+    control.admit(controlA, claims(controlA));
+    control.admit(controlB, claims(controlB));
+
+    const publishBeat = (beat) => {
+      const sourceA = publicBodySourceFrames(preparedA, beat);
+      const sourceB = publicBodySourceFrames(preparedB, beat);
+      const publicFrame = deepFreeze(sourceA.publicFrame);
+      const proof = candidate.preparePublicSource(publicFrame, [
+        { binding: preparedA, ordinal: 0 }, { binding: preparedB, ordinal: 1 },
+      ]);
+      const pairA = candidate.publish(preparedA, publicFrame, sourceA.ownerFrame, {
+        preparedPublicSource: proof, preparedRecipientOrdinal: 0,
+      });
+      const pairB = candidate.publish(preparedB, publicFrame, sourceB.ownerFrame, {
+        preparedPublicSource: proof, preparedRecipientOrdinal: 1,
+      });
+      const controlPairA = control.publish(controlA, publicFrame, sourceA.ownerFrame);
+      const controlPairB = control.publish(controlB, publicFrame, sourceB.ownerFrame);
+      assert.strictEqual(pairA.encodedWire, controlPairA.encodedWire);
+      assert.strictEqual(pairB.encodedWire, controlPairB.encodedWire);
+      return { pairA, pairB };
+    };
+
+    const first = publishBeat(1);
+    const clientA = receiver(preparedA);
+    const acceptedFirst = clientA.receive(encodeCompressedPublicBodyStatePair(first.pairA.encodedWire));
+    assert(acceptedFirst.accepted, acceptedFirst.reason);
+    assert(candidate.acknowledge(preparedA, acceptedFirst.ack).accepted);
+    assert(control.acknowledge(controlA, acceptedFirst.ack).accepted);
+    assert.strictEqual(candidate.retransmit(preparedB, first.pairB.frame.frameId).encodedWire,
+      control.retransmit(controlB, first.pairB.frame.frameId).encodedWire);
+
+    const second = publishBeat(2);
+    assert.strictEqual(second.pairA.frame.public.kind, "delta");
+    assert.strictEqual(second.pairB.frame.public.kind, "keyframe");
+    const acceptedSecond = clientA.receive(encodeCompressedPublicBodyStatePair(second.pairA.encodedWire));
+    assert(acceptedSecond.accepted, acceptedSecond.reason);
+    assert(candidate.acknowledge(preparedA, acceptedSecond.ack).accepted);
+    assert(control.acknowledge(controlA, acceptedSecond.ack).accepted);
+    assert(candidate.recover(preparedA));
+    assert(control.recover(controlA));
+    const third = publishBeat(3);
+    assert.strictEqual(third.pairA.frame.public.kind, "keyframe");
   });
 
   await runner.run("S20 fallback and S23 preserve visible semantics owner privacy and ACK consequences", async () => {
@@ -417,6 +580,8 @@ async function run() {
     const forged = { ...claims(id), capabilities: ["static-manifest-v1"] };
     assert.throws(() => server.admit(id, forged), (error) => error instanceof RuntimeStatePairError
       && error.code === "capability-not-admitted");
+    assert.throws(() => server.admit(id, { ...claims(id), playerId: "ticket-player-rival" }),
+      (error) => error instanceof RuntimeStatePairError && error.code === "capability-not-admitted");
     const v1 = binding("v1", { wireVersion: "lbh-multiplayer-json-v1", capabilities: [], manifestSchema: null,
       manifestHash: null, authorityIncarnation: null });
     assert.throws(() => server.admit(v1, claims(v1)), /binding is outside this match authority/);

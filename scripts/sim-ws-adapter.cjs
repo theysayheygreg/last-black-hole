@@ -73,10 +73,39 @@ function replicationStateFrameKey(frame) {
   return null;
 }
 
-function deepFreezeSharedPublicSource(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const child of Object.values(value)) deepFreezeSharedPublicSource(child);
-  return Object.freeze(value);
+function deepFreezeSharedPublicSource(value, seen = new WeakSet()) {
+  if (!value || typeof value !== "object") return value;
+  if (seen.has(value)) {
+    throw new WireProtocolError("invalid-public-source",
+      "prepared public source must not be cyclic", 4403);
+  }
+  seen.add(value);
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+    throw new WireProtocolError("invalid-public-source",
+      "prepared public source must contain only plain JSON objects", 4403);
+  }
+  for (const property of Reflect.ownKeys(value)) {
+    if (typeof property === "symbol") {
+      throw new WireProtocolError("invalid-public-source",
+        "prepared public source must not contain symbol properties", 4403);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, property);
+    if (Array.isArray(value) && property === "length") continue;
+    if (Array.isArray(value)
+        && (!/^(0|[1-9][0-9]*)$/.test(property) || Number(property) >= value.length)) {
+      throw new WireProtocolError("invalid-public-source",
+        "prepared public source arrays must contain indices only", 4403);
+    }
+    if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) {
+      throw new WireProtocolError("invalid-public-source",
+        "prepared public source must contain enumerable data properties only", 4403);
+    }
+    deepFreezeSharedPublicSource(descriptor.value, seen);
+  }
+  Object.freeze(value);
+  seen.delete(value);
+  return value;
 }
 
 function createSimWebSocketAdapter(options = {}) {
@@ -1721,9 +1750,15 @@ function createSimWebSocketAdapter(options = {}) {
     let preparedPublicSource = null;
     let preparedPublicSourceError = null;
     const preparedRecipientOrdinals = new Map();
-    const preparedCandidates = prepareStatePairPublicSource
-      ? statePairCandidates.filter((state) =>
-          state.capabilities?.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)) : [];
+    const preparedCandidates = [];
+    if (prepareStatePairPublicSource) {
+      for (const state of statePairCandidates) {
+        if (state.capabilities?.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
+            && await isBindingCurrent(state, "state-pair-prepared-public-source-precheck")) {
+          preparedCandidates.push(state);
+        }
+      }
+    }
     if (preparedCandidates.length > 0) {
       try {
         const first = preparedCandidates[0];
@@ -1747,12 +1782,18 @@ function createSimWebSocketAdapter(options = {}) {
             }), projectPreparedSource)
           : await projectPreparedSource();
         sharedBodyPublicFrame = deepFreezeSharedPublicSource(projectedPreparedSource);
-        const consumers = preparedCandidates.map((state, ordinal) => {
-          preparedRecipientOrdinals.set(state, ordinal);
-          return Object.freeze({ binding: state.binding, ordinal });
-        });
-        preparedPublicSource = await prepareStatePairPublicSource(sharedBodyPublicFrame,
-          Object.freeze(consumers));
+        const finalFreshness = await Promise.all(preparedCandidates.map((state) =>
+          isBindingCurrent(state, "state-pair-prepared-public-source-final-precheck")));
+        const finalPreparedCandidates = preparedCandidates.filter((state, index) =>
+          finalFreshness[index] && stateIsLive(state));
+        if (finalPreparedCandidates.length > 0) {
+          const consumers = finalPreparedCandidates.map((state, ordinal) => {
+            preparedRecipientOrdinals.set(state, ordinal);
+            return Object.freeze({ binding: state.binding, ordinal });
+          });
+          preparedPublicSource = await prepareStatePairPublicSource(sharedBodyPublicFrame,
+            Object.freeze(consumers));
+        }
       } catch (error) {
         preparedPublicSourceError = error;
       }
