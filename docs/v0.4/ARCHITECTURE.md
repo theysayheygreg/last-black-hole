@@ -255,6 +255,15 @@ failed at first-client state-pair admission and the raw command never started.
 H48/H96 extend 2.25x/4.5x beyond measured bodies and 2x/4x beyond measured
 recipients. They are sensitivity models, not capacity claims.
 
+At the refreshed Fly NA/EU $0.02/GB egress rate, the fitted application traffic
+alone is about $0.023/$0.091/$0.347 per H24/H48/H96 match-hour; X96 is about
+$0.817/hour. This is a network-only floor, not total match cost. The older
+64 KiB/s-client S1 resource-and-egress planning sensitivity is
+$0.2206/$0.4412/$0.8824 per H24/H48/H96 match-hour on Fly; it is not a measured
+bill or safe host allocation. Live paced provider CPU/RSS and worker-barrier
+evidence must replace both before budgeting a heavy mode. See
+[`research/high-player-count-hosting-cost-model.md`](research/high-player-count-hosting-cost-model.md).
+
 Do not reopen multi-writer spatial sharding from these results. First prove a
 live H24 workload. Only consider sharding after an optimized one-writer H96
 fails, traces show stable spatial partitionability, handoff correctness is

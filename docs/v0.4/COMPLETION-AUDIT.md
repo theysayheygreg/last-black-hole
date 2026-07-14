@@ -175,6 +175,12 @@ H48/H96 exceed the measured domain by 2.25x/4.5x bodies and 2x/4x recipients.
 They are far extrapolations. One writer per match remains mandatory; derived-
 work workers at 48/96 never become additional gameplay authorities.
 
+At refreshed Fly NA/EU egress, those application rows imply network-only
+floors of about $0.023/$0.091/$0.347 per H24/H48/H96 match-hour. The older
+64 KiB/s-client S1 total planning sensitivity is
+$0.2206/$0.4412/$0.8824 per match-hour. Both are MODELED: live provider CPU,
+RSS, queues, worker barriers, and safe allocation remain unmeasured.
+
 ### 10. Broad goal prompt and subagent orchestration
 
 **COMPLETE.** `ORCHESTRATION.md` and the project prompt packets define the

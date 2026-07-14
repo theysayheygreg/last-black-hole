@@ -257,6 +257,18 @@ raw command never started according to the orchestrator and `raw.json` is
 absent. Therefore there is no live H24 CPU, cadence, socket, queue, TLS, or
 network measurement and no basis to promote H48/H96.
 
+Cost must preserve the same evidence labels. At Fly's refreshed $0.02/GB
+NA/EU egress rate, the application-traffic rows above imply network-only floors
+of about $0.023/$0.091/$0.347 per H24/H48/H96 match-hour; X96 is about
+$0.817/hour. These exclude TLS/IP, ACKs, loss, retransmit, control, voice, and
+compute. The older 64 KiB/s-client S1 resource-and-egress sensitivity in
+[`research/high-player-count-hosting-cost-model.md`](research/high-player-count-hosting-cost-model.md)
+is $0.2206/$0.4412/$0.8824 per H24/H48/H96 match-hour on Fly. It is a planning
+shape, not an observed provider bill or safe host size. Provider compute cost
+cannot be made honest from the accelerated synthetic writer's local core
+demand; live paced CPU/RSS and deterministic-worker barriers must be measured
+before any heavy-sim budget is approved.
+
 ## Implementation And Measurement Roadmap
 
 1. **Four-player product completion.** Freeze S20 as the product replication
