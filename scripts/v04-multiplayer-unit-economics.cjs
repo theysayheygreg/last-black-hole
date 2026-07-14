@@ -284,7 +284,7 @@ function model(config, source = {}) {
     provenance: { sourceCommit: source.sourceCommit || "UNSPECIFIED",
       modelSourceSha256: source.modelSourceSha256 || sha256(fs.readFileSync(__filename)),
       configSha256: sha256(config) },
-    classification: "deterministic planning model; provider rates pending refresh are not quotes; host density is not a copies-derived capacity claim",
+    classification: "deterministic planning model; provider statuses distinguish official-derived, pending, and planning inputs; none are quotes; host density is not copies-derived",
     commercialFeeScenarios: Object.fromEntries(Object.entries(config.cases).map(([name, item]) => [name, {
       storefrontFeeRate: item.storefrontFeeRate,
       status: "scenario assumption; not claimed as a current universal storefront default",
