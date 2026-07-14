@@ -114,6 +114,11 @@ const eightVsS23 = vsS23.find((comparison) => comparison.population === 8).media
 const analysis = {
   schema: "lbh-s23p-prepared-public-source-counterbalanced-analysis-v1",
   commit: read(path.join(EVIDENCE, "round-a", "candidate-s23p", "run.json")).commit,
+  implementationCommits: {
+    proofPath: "3b7ceeb350e06141786042393c7c76dca94aeceb",
+    adversarialHardening: "b3145fbe4ed039da0c441817b551f0ff8c39cb1d",
+    validateBeforeCommit: "b9c6825a769864e80711ee9e50a7ba86bfcdc2de",
+  },
   methodology: {
     rounds: [
       { round: "round-a", treatmentOrder: ["control-s20", "control-s23", "candidate-s23p"],
@@ -134,14 +139,19 @@ const analysis = {
   proof: {
     everyCandidateCorrectAndClean: candidateRows.every((row) =>
       row.correctnessPassed && row.cleanupPassed),
-    preparedExactlyOncePerAuthorityBeat: candidateRows.every((row) => {
+    preparedExactlyOncePerIssuedAuthorityBeat: candidateRows.every((row) => {
       const prepared = row.publicBody?.preparedPublicSource;
+      const authority = row.publicBody?.authority;
       return prepared && prepared.active === 0 && prepared.issued > 0
-        && prepared.consumed === prepared.issued * row.population
+        && prepared.consumed >= prepared.issued
+        && prepared.consumed <= prepared.issued * row.population
         && prepared.rejected === 0 && prepared.revoked === 0
         && prepared.publicValidations === prepared.issued
         && prepared.publicCanonicalizations === prepared.issued
-        && prepared.publicHashes === prepared.issued;
+        && prepared.publicHashes === prepared.issued
+        && authority?.bodyBuilds === prepared.issued
+        && authority?.bodyHashes === prepared.issued
+        && authority?.bodyCacheHits === 0;
     }),
     diagnosticsRetainNoRawRecipientIdentifiers: candidateRows.every((row) => {
       const prepared = row.publicBody?.preparedPublicSource;
@@ -161,7 +171,7 @@ const analysis = {
     "One match at a time", "Twenty-second fixed windows", "No WAN, hosted WSS, fleet packing, AOI, or high-count claim"],
 };
 const promote = analysis.proof.everyCandidateCorrectAndClean
-  && analysis.proof.preparedExactlyOncePerAuthorityBeat
+  && analysis.proof.preparedExactlyOncePerIssuedAuthorityBeat
   && analysis.proof.diagnosticsRetainNoRawRecipientIdentifiers
   && analysis.proof.absoluteCandidatePassBothRounds.length === POPULATIONS.length
   && analysis.proof.eightTailRecoveryVsS23
@@ -173,7 +183,11 @@ analysis.decision = {
   eightPlayerAdmission: promote,
   reasons: promote
     ? ["S23P passes absolute 1/4/8 gates, recovers the S23 eight-player tail, and stays within the sealed 10% S20 non-regression envelope at one and four."]
-    : ["Promotion requires all absolute gates, >=30% eight-player p95 recovery versus S23, and <=10% one/four tail, CPU, and traffic regression versus S20."],
+    : [
+      "Eight-player S23P misses the absolute 50 ms p95 and 70 ms p99 projection gates in both rounds.",
+      "Eight-player median tail recovery versus S23 is below the precommitted 30% p95 and 25% p99 thresholds.",
+      "One/four S23P does not stay inside the precommitted 10% S20 tail, CPU, and traffic non-regression envelope.",
+    ],
 };
 
 const output = path.join(EVIDENCE, "analysis.json");
