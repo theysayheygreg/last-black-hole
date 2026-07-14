@@ -11,9 +11,9 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** release-candidate source. The architecture, generated asset
-kit, two natural Shallows outcome journeys, and no-retry automated gate are
-green. The clean hash-named package is the final machine closure step.
+**Current state:** release candidate. The architecture, generated asset kit,
+two natural Shallows outcome journeys, no-retry automated gate, and clean
+hash-named package closure are green.
 Promotion still needs any available physical Steam Deck Gaming Mode check.
 Movement feel and visual taste remain Greg's final calls.
 
@@ -190,8 +190,8 @@ history, but it did not recur in this RC pass.
 
 These are evidence gates, not missing architecture:
 
-- [ ] Build the final hash-named artifact from the clean committed RC tree.
-- [ ] Boot the embedded control plane, sim, and packaged Three client from that
+- [x] Build the final hash-named artifact from the clean committed RC tree.
+- [x] Boot the embedded control plane, sim, and packaged Three client from that
   exact artifact.
 - [x] Run the complete no-retry automated candidate lane after the final
   source changes.
