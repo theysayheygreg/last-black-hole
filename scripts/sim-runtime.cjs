@@ -74,6 +74,7 @@ const {
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { BODY_SCHEMA_VERSION } = require("./sim/body-schema.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
+const { createS24LiveEvidenceFixture } = require("./s24-live-evidence-fixture.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 const {
   applyPlayerBrakeAndIntegrate,
@@ -252,6 +253,7 @@ const AUTHORITY_STAGE_PROFILE_CAPTURE = readStrictTestFlag("LBH_SIM_WS_STAGE_PRO
 const S23T_PUBLIC_BODY_PROFILE_CAPTURE = readStrictTestFlag("LBH_S23T_PUBLIC_BODY_PROFILE");
 const S23T_EVIDENCE_HARNESS = readStrictTestFlag("LBH_S23T_EVIDENCE_HARNESS");
 const REPLICATION_BENCH_EVENT_LOOP_CAPTURE = readStrictTestFlag("LBH_SIM_WS_BENCH_EVENT_LOOP");
+const s24LiveEvidence = createS24LiveEvidenceFixture(process.env);
 if (REPLICATION_BENCH_EVENT_LOOP_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_BENCH_EVENT_LOOP requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
@@ -272,7 +274,8 @@ if (S23T_EVIDENCE_HARNESS && process.env.NODE_ENV !== "test") {
   throw new Error("LBH_S23T_EVIDENCE_HARNESS requires NODE_ENV=test");
 }
 const authorityStageProfiler = AUTHORITY_STAGE_PROFILE_CAPTURE
-  ? createAuthorityStageProfiler({ sampleCapacity: 512, maxRecipients: 16 })
+  ? createAuthorityStageProfiler({ sampleCapacity: 512,
+    maxRecipients: s24LiveEvidence.profilerMaxRecipients })
   : null;
 const s23tPublicBodyProfiler = S23T_PUBLIC_BODY_PROFILE_CAPTURE
   ? createS23tPublicBodyProfiler() : null;
@@ -1230,6 +1233,7 @@ function publishEvent(type, payload = {}, options = {}) {
   runtime.recentEvents = runtime.eventJournal.read({
     since: Math.max(0, runtime.eventJournal.lastSeq - 128),
   }).events;
+  if (s24LiveEvidence.enabled) s24LiveEvidence.observe("eventsPublished", 1, type);
   return event;
 }
 
@@ -1518,10 +1522,12 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
+  if (s24LiveEvidence.enabled) s24LiveEvidence.prepareSession(runtime.session, config);
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
   runtime.mapState.sentries = spawnSentries(mapState);
   runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState, runtime.session);
+  if (s24LiveEvidence.enabled) s24LiveEvidence.seedRuntime(runtime);
 
   // Hydrate persisted echo wrecks for this seed. Injected as live wrecks
   // so they participate in tickPlayerPickups/tickWrecks like any other
@@ -1614,7 +1620,7 @@ function startSession(config = {}) {
   });
   applyOverloadProfile({ rebuildField: false });
   // Spawn AI players
-  spawnAIPlayers(runtime.mapState, runtime.session);
+  if (!s24LiveEvidence.suppressAmbientAiPlayers) spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
   runtime._wreckWaveIndex = 0;
@@ -5973,18 +5979,36 @@ function tickSim() {
     tickStars(stepDt, relevance.stars);
     tickWrecks(stepDt, relevance.wrecks);
     tickPlanetoids(stepDt, relevance.planetoids);
+    if (s24LiveEvidence.enabled) {
+      s24LiveEvidence.observe("worldSteps");
+      s24LiveEvidence.observe("worldEntityUpdates", runtime.mapState.wells.length
+        + relevance.stars.length + relevance.wrecks.length + relevance.planetoids.length);
+    }
   });
   runSystemAtRate("growth", runtime.session.growthTickHz || runtime.session.tickHz, dt, tickGrowth);
   runSystemAtRate("portals", runtime.session.portalTickHz || runtime.session.tickHz, dt, tickPortals);
   tickWreckWaves(dt);
-  runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, (stepDt) =>
-    tickScavengers(stepDt, relevance.scavengers)
-  );
+  runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, (stepDt) => {
+    const scheduled = s24LiveEvidence.enabled ? runtime.mapState.scavengers : relevance.scavengers;
+    tickScavengers(stepDt, scheduled);
+    if (s24LiveEvidence.enabled) {
+      s24LiveEvidence.observe("scavengerSteps");
+      s24LiveEvidence.observe("expensiveAiEntityUpdates", scheduled.length);
+    }
+  });
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
-  runSystemAtRate("field", runtime.session.fieldTickHz || runtime.session.worldTickHz || runtime.session.tickHz, dt, rebuildAuthoritativeField);
+  runSystemAtRate("field", runtime.session.fieldTickHz || runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
+    rebuildAuthoritativeField(stepDt);
+    if (s24LiveEvidence.enabled) s24LiveEvidence.observe("fieldSteps");
+  });
   tickAIPlayers(dt);
   tickSentries(dt);
   tickFauna(dt);
+  if (s24LiveEvidence.enabled) {
+    s24LiveEvidence.observe("faunaSteps");
+    s24LiveEvidence.observe("evidenceFaunaEntityUpdates", runtime.mapState.fauna
+      .filter((entry) => entry.s24EvidenceBody && entry.alive !== false).length);
+  }
   tickInhibitor(dt);
   maybeCollapseRun();
   if (runtime.session.status !== "running") return;
@@ -6079,6 +6103,10 @@ function tickSim() {
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
   scheduleMultiplayerProjection();
+  if (s24LiveEvidence.enabled) {
+    s24LiveEvidence.observe("projectionSchedules");
+    s24LiveEvidence.observe("simTicks");
+  }
 
   const activeHumanPlayerCount = relevance.alivePlayers.filter((player) => !player.isAI).length;
   const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
@@ -7170,6 +7198,7 @@ const server = http.createServer(async (req, res) => {
         multiplayer: multiplayerDiagnostics({ includeReplication: !compactReplicationHealth }),
       };
       if (soakRuntimeDiagnostics) health.soakDiagnostics = soakRuntimeDiagnostics.status();
+      if (s24LiveEvidence.enabled) health.s24LiveEvidence = s24LiveEvidence.snapshot(runtime);
       const authoredCollapseTest = authoredCollapseTestLifecycle.health();
       if (authoredCollapseTest) health.authoredCollapseTest = authoredCollapseTest;
       sendJson(res, 200, health);
@@ -7187,6 +7216,7 @@ const server = http.createServer(async (req, res) => {
       authorityStageProfiler?.reset();
       s23tPublicBodyProfiler?.reset();
       replicationBenchEventLoop?.reset();
+      s24LiveEvidence.reset();
       sendJson(res, 200, { ok: true,
         generation: runtime.multiplayerProjection.generation,
         scope: "bounded multiplayer cost percentile rings" });
@@ -7862,10 +7892,11 @@ if (MULTIPLAYER_WS_ENABLED) {
     server,
     path: "/stream",
     heartbeatIntervalMs: MULTIPLAYER_HEARTBEAT_INTERVAL_MS,
-    // Eight live players plus one bounded overlapping resume attempt per
-    // membership. Stable-key replacement immediately fences the old epoch.
-    maxConnections: 16,
-    maxPendingHello: 8,
+    // Product default: eight live players plus one bounded overlapping resume
+    // attempt per membership. The guarded S24 evidence fixture admits exactly
+    // 24 and is unavailable through client/session negotiation.
+    maxConnections: s24LiveEvidence.adapterMaxConnections,
+    maxPendingHello: s24LiveEvidence.adapterMaxPendingHello,
     runId: null,
     replicationAccounting: REPLICATION_ACCOUNTING_CAPTURE,
     stageProfiler: authorityStageProfiler,
