@@ -1,621 +1,301 @@
 # v0.4 Multiplayer Architecture
 
-> Status: integrated research recommendation for
-> `codex/v0.4-multiplayer-architecture`. This is the target design and
-> falsification plan, not a claim that public multiplayer is implemented.
-
-## Implementation Checkpoint
-
-Phase 0 trust closure is now partially implemented on this branch. Current
-HTTP diagnostics prove 1/4/8 shared-run truth, server-issued membership and
-connection epochs, reconnect fencing, owner-private projection, public-only
-history, and authenticated idempotent settlement. At eight humans, the latest
-local run measured a 42,474-byte public snapshot p95 and 43,761-byte owner
-snapshot p95; that full-state shape would still fan out roughly 5.25 MB/s at
-15 snapshots/s. This is why Phase 1 keeps JSON for truth but Phase 4 must earn
-compact deltas before production. See
-[`research/phase0-multiplayer-baseline.md`](research/phase0-multiplayer-baseline.md).
+> Final architecture recommendation for
+> `codex/v0.4-multiplayer-architecture`. This is a target design backed by
+> local evidence, not a claim that public hosted multiplayer ships today.
 
 ## Decision
 
-Last Singularity v0.4 should use **one logical single-writer authority instance
-per live 4–8-player match**.
+Last Singularity v0.4 uses **one dedicated logical single-writer gameplay
+authority per live match/group**. Concurrent matches multiply that unit: `M`
+live matches mean `M` independently fenced match authorities. Measured
+placement may pack several authority instances on one host; this does not mean
+one VM per match, and it never means one global authority for the game.
 
-This is a horizontally multiplied unit, not one global server. If `M` matches
-are live, `M` independent match authorities are live. A regional fleet
-scheduler packs those authorities onto `H` compute hosts according to measured
-run density, where roughly `H = ceil(M / safeAuthoritiesPerHost)` plus warm and
-failure headroom. One authority may be an isolated process, worker, actor, or
-Durable Object. Many authorities may share a VM/container/node, but no two
-authorities may write the same match and no match is split across authorities.
+The admitted v0.4 product envelope is one through four humans. Four is the
+multiplayer target. Eight is closed after S23, S23P, and the final
+split-fragment terminal negative missed their gates. S20 negotiated
+Brotli-q1 state-pair compression remains the admitted replication path.
 
-- The control plane authenticates players, proves entitlement, creates party
-  and run membership, places the run, and owns durable progression.
-- The run authority owns movement, coarse current, Ballpark bodies, contacts,
-  loot, signal, abilities, death, extraction, events, and result facts.
-- The client samples input, predicts only its own movement, interpolates remote
-  bodies, and reconstructs the high-resolution ASCII fluid locally.
-- The first multiplayer transport is JSON WebSocket/WSS at the existing map
-  clocks. The message model stays transport-neutral. Binary encoding,
-  recipient deltas, AOI, prediction, higher clocks, or WebTransport/QUIC must
-  each earn adoption through packet/feel evidence.
-- Verified/public play uses dedicated authority. Trusted private play may use
-  relay-assisted player-hosted authority, but it is explicitly unverified and
-  is not called true P2P.
-- True no-authority P2P, deterministic lockstep, full-world rollback, and
-  per-object distributed authority are rejected for the production path.
+Verified/public play uses hosted dedicated authority. Relay-assisted
+player-hosted authority is retained as a trusted private or long-tail fallback
+with local/unverified progression. True no-authority public P2P, deterministic
+lockstep, full-world rollback mesh, and per-object distributed authority are
+rejected for v0.4 production.
 
-This is not an MMO shared world. The EVE-inspired part is the authority and
-operations discipline: one run is one coarse causal unit; derived player state
-is boxed; events invalidate state; overload is explicit and fair; durable data
-is separate from the hot simulation.
+## Why This Fits LBH
 
-## Why This Wins
+The v0.3 Ballpark and EVE-inspired split already establishes the important
+boundary: the sim owns causal gameplay truth and presentation consumes it.
+The match authority owns movement, coarse current, Ballpark lifecycles,
+contacts, AI, loot, signal, abilities, death, extraction, events, and result
+facts. Clients sample input, predict only local movement, interpolate remote
+bodies, and reconstruct high-resolution ASCII fluid and presentation locally.
 
-The current v0.3 architecture already paid for the hard boundary:
+The EVE inspiration is operational rather than a shared-world promise: one run
+is one coarse causal unit, derived player state is boxed, events invalidate
+state, overload is explicit and fair, and durable data is outside the hot sim.
 
-- persistent Ballpark ids and lifecycle;
-- sim-owned movement, contacts, outcomes, and coarse flow;
-- protocol-v2 run/player identity, command credentials, independent command
-  and input sequences, event privacy, gap recovery, and snapshot rebase;
-- separate control-plane, sim, and presentation processes;
-- bounded histories and explicit overload/time scale;
-- measured authority tick, snapshot, heap, and Ballpark costs.
+Authority-free P2P would replace these assets with cross-target determinism,
+all-pairs route quality, peer-visible secrets, partition consensus, adversarial
+conflict resolution, and a new settlement trust problem. The detailed historic
+comparison is in
+[`research/p2p-history-network-budgets.md`](research/p2p-history-network-budgets.md).
 
-Central authority therefore extends current truth. Authority-free P2P would
-replace it with cross-target deterministic simulation, all-pairs networking,
-membership consensus, adversarial conflict resolution, peer-visible secrets,
-and a new durable-settlement trust problem. At four to eight players, the
-hosting savings are too small to buy that risk.
-
-## Product Envelope
-
-- Supported human seats: minimum 4, maximum 8 for the v0.4 multiplayer mode.
-- One session/party may survive between runs; every reset creates a new
-  `run_id` and authority epoch.
-- AI may fill empty seats only if the game mode explicitly permits it. AI does
-  not change the human seat or identity model.
-- First public surface: invite/join-code party sessions, not anonymous global
-  matchmaking.
-- Local/offline single-player remains functional and keeps a separate local
-  progression lineage.
-- Public verified progression is Steam-authenticated for MVP.
-
-## Target Topology
+## Topology
 
 ```mermaid
 flowchart LR
-    C["4-8 clients\ninput + prediction + presentation"]
-    E["Edge/run router\nTLS + admission + rate limits"]
-    S["Match authority instances x M\none single writer per live match"]
-    P["Control plane\nidentity + party + placement + settlement"]
-    D[("Relational ledger\nprofiles + inventory + results")]
-    O["Object/telemetry store\nreplays + evidence"]
-    V["Optional voice/relay\nseparate media path"]
+    C["1-4 clients\ninput + prediction + presentation"]
+    E["Edge/router\nTLS + admission + rate limits"]
+    CP["Control plane\nidentity + entitlement + party + placement + settlement"]
+    A["Match authorities x M\none writer per live match"]
+    DB[("Postgres\nprofiles + ledger + leases")]
+    O["Object/audit store\nresult outbox + evidence"]
 
-    C <-->|"JSON WSS first; measured compaction later"| E
-    E <--> S
-    P -->|"signed run admission"| E
-    S -->|"heartbeat + immutable result"| P
-    P <--> D
-    P --> O
-    C -.-> V
+    C <--> E
+    E <--> A
+    CP -->|"single-use admission/resume tickets"| E
+    CP <--> DB
+    A -->|"lease-bound immutable results"| CP
+    A --> O
 ```
 
-The edge/gateway may initially be a module inside each sim worker. Socket reads
-enqueue bounded validated intents; only the fixed-step sim mutates gameplay.
+The first edge/control-plane deployment uses Cloudflare edge services and
+Postgres. The first authority benchmark uses a regional Node-compatible Fly
+Machine with performance CPU. Hetzner CCX is the operational fallback.
+Cloudflare Containers, one Durable Object per match, and an ordinary container
+such as DigitalOcean are measured comparator lanes. Vercel remains suitable
+for web/control surfaces, not live match truth.
 
 ## Fleet Scaling And Isolation
 
-The production control plane allocates one `authority_instance_id` and lease
-for each `run_id`. A fleet supervisor starts or assigns an isolated match
-worker in the chosen region. The routing layer maps every member of that run to
-that worker for the run epoch.
+The control plane creates one `authority_instance_id` assignment and one
+monotonic writer lease for each `run_id`. Routing sends all members of that run
+to the current authority lease.
 
 ```text
-concurrent match authorities = live matches
-live matches ~= player CCU / average occupied human seats
-compute hosts = ceil(live matches / measured safe authorities per host)
-               + warm/failure reserve
+live authorities = live matches
+live matches ~= player CCU / measured average occupied seats
+safeAuthoritiesPerHost = floor(measuredAuthoritiesPerHost * safetyFactor)
+hosts = ceil(live matches / safeAuthoritiesPerHost) + warm/failure reserve
 ```
 
-Example: 2,000 concurrent four-to-eight-player groups mean 2,000 logical
-authorities. If soak tests prove 40 authorities fit safely on one host, the
-steady fleet is about 50 hosts before regional fragmentation and reserve—not
-2,000 hosts and not one shared simulation.
+`safeAuthoritiesPerHost` is a Phase 6 measurement, not a rate-card assumption.
+Until counterbalanced noisy-neighbor soaks prove packing, cost forecasts take
+no density credit.
 
-Isolation requirements:
-
-- unique run, authority-instance, lease, epoch, inbox, event journal, snapshot
-  history, resource budget, and result outbox per match;
-- per-match CPU/time/heap/queue ceilings so one hot match cannot starve peers;
-- fencing tokens so a restarted or duplicated worker cannot settle the same
-  match epoch;
-- placement and drain controls that move future matches without sharding a
-  live causal chain;
-- fleet metrics reported both per match and per physical host.
+Every match has a unique run, placement, active lease, epoch, inbox, event
+journal, snapshot/ACK history, queue budget, result outbox, and resource
+budget. Stale heartbeat, route, ticket, checkpoint, and result work is fenced
+by the lease epoch. Drain moves future matches; it does not shard a live run.
 
 ## Authority And Presentation
 
 ### Authority owns
 
-- run/session clock and overload mode;
-- public Ballpark body ids, private generation handles, lifecycle, relevance,
-  transforms, and contacts;
-- player brains, hull/rig/effect coefficients, input acceptance, movement,
-  slingshot, and abilities;
-- analytic sources and versioned coarse current field;
-- stamped wave/disturbance descriptors and gameplay affordance zones;
-- loot, inventory, signal, threats, death, portal residence, extraction, and
-  result facts;
-- global and recipient-private events and snapshot/delta watermarks.
+- run clock, overload mode, and input/action ordering;
+- Ballpark ids, generations, lifecycles, transforms, contacts, and relevance;
+- player brains, movement, slingshot, abilities, AI, and coarse current;
+- loot, inventory-in-run, signal, threats, death, portal residence,
+  extraction, events, and immutable result facts;
+- recipient-private projection, public projection, baselines, ACK/rebase,
+  event watermarks, and retransmit records.
 
 ### Client owns
 
 - 60 Hz input sampling and immediate local control presentation;
-- local-player movement prediction against the exact authority field revision;
+- local-player prediction against the exact authority field revision;
 - remote interpolation and bounded short extrapolation;
-- high-resolution fluid texture, turbulence, glyphs, shimmer, camera, Three,
-  UI, VFX, and audio;
-- correction presentation and diagnostics.
+- high-resolution fluid texture, turbulence, glyphs, camera, Three, UI, VFX,
+  audio, correction presentation, and diagnostics.
 
-The client never predicts an irreversible consequence. Pickup, death,
-extraction, portal confirmation, signal thresholds, inventory, and progression
-remain authority events.
+The client never finalizes pickup, inventory, signal threshold, death,
+extraction, portal confirmation, or durable progression.
 
-## Clocks And Network Contract
+## Transport, Clocks, And Budgets
 
-The first transport slice keeps the current v0.3 map clocks: Shallows 15 Hz,
-Expanse 12 Hz, and Deep Field 10 Hz before overload adjustment. Swept contact,
-immediate local input presentation, and interpolation get measured first.
-Only then does a blind 15/20/30 Hz experiment decide whether one higher shared
-movement/contact clock is worth its new multi-rate physics cost. Thirty hertz
-is a candidate, not the baseline architecture.
+S20 sends JSON state-pair messages with negotiated Brotli quality 1. Sessions
+without the capability use the exact uncompressed positional fallback. Binary,
+AOI, higher clocks, WebTransport/QUIC, or another representation requires new
+packet and feel evidence.
 
-| Contract | Target |
+Message classes remain independently bounded:
+
+1. latest intent, where newer movement state supersedes older state;
+2. reliable idempotent action and cached original result;
+3. authoritative state baseline/delta with ACK/base lineage;
+4. reliable, recipient-filtered semantic events.
+
+Start with existing 15/12/10 Hz Shallows/Expanse/Deep Field clocks. Immediate
+local input presentation and interpolation protect feel. A blind 15/20/30 Hz
+WAN comparison may occur only after the selected hosted path passes its
+baseline; 30 Hz is not the architecture default.
+
+### Admitted and target budgets
+
+| Measure | Gate or current evidence |
 |---|---:|
-| input sample | 60 Hz |
-| latest input transmit | current authority cadence initially; compare 20/30 Hz later |
-| player/contact authority | existing 15/12/10 Hz first; falsify 15/20/30 only after WAN evidence |
-| coarse field/waves | 10–15 Hz |
-| AI steering | 10 Hz |
-| macro AI/spawn/growth | 1–5 Hz |
-| recipient state delta | 15 Hz |
-| projected full keyframe | about 1 Hz and on recovery |
-| remote interpolation | adaptive 80–150 ms |
-| extrapolation ceiling | 250 ms, then freeze/fade uncertainty |
+| S20 four-player cadence | 9.80–9.85 Hz, `NORMAL` |
+| S20 four-player application downlink | 30,203–31,018 B/s/client measured mean; 32,361–32,766 B/s p95 |
+| S20 four-player projection p95 | 54.65–55.04 ms in its evidence profile |
+| S20 four-player authority CPU | 0.585–0.589 core |
+| future compact product average | <=64 KiB/s/client across state, events, and reconnect amortization |
+| projected keyframe | <=32 KiB p95 after any future compaction |
+| application queue | <=512 KiB/client, including <=256 KiB reliable subset |
+| transport pressure | 256 KiB/64 KiB high/low hysteresis |
+| persistent high pressure | disconnect affected recipient after 2 s without delaying writer/healthy peers |
+| representative writer utilization | p95 <50% and p99 <70% of the selected authority frame budget |
 
-### Message classes
-
-1. **Latest intent:** movement, thrust, brake, held slingshot. Newest
-   `input_seq` replaces older state.
-2. **Reliable action:** slingshot edge, pulse, extract confirm, consume,
-   inventory. Idempotent action id and cached original result.
-3. **Authoritative state:** projected baseline, dependent deltas, despawns,
-   field revision, input/action acknowledgements.
-4. **Semantic event:** loot, death, extraction, signal crossing, overload;
-   reliable and recipient-filtered.
-
-Never serialize all mutations behind one promise/request tail. Continuous
-input, reliable actions, state, and events need independent bounded queues.
-
-### Recipient projection
-
-Owner/public separation is mandatory before untrusted play. The first slice may
-send the complete public world to all four/eight clients; spatial AOI is not a
-security requirement and adds lifecycle semantics. Every client receives:
-
-- global static manifest/hash and globally observable run facts;
-- relevant neighborhood transforms/lifecycles selected through Ballpark;
-- exact private state only for its own membership;
-- explicitly observable rival state;
-- create, leave-interest, re-enter, and true-despawn semantics;
-- baseline, event watermark, field revision, overload mode, and acknowledged
-  input/action ids.
-
-Other players' exact cargo, loadout, consumables, delta-v, hidden cooldowns,
-private signal, and portal confirmation do not enter a shared snapshot.
-
-## Network Budgets
-
-The production target is compact recipient deltas, but the first playable
-slice deliberately uses JSON and measures the complete public world. The table
-below is a falsification envelope, not an implemented codec claim.
-
-| Direction/class | Expected budget |
-|---|---:|
-| input on wire | 3.5 KB/s/client |
-| state delta | 3 KiB at 15 Hz |
-| projected keyframe | 16 KiB at 1 Hz |
-| events/control | 2 KB/s/client average |
-| total downlink | 64 KiB/s/client average product target |
-| eight-client authority egress | about 4.2 Mbit/s payload |
-| 45-minute eight-player run | about 1.32 GiB payload |
-
-Prototype gates:
-
-- after compaction, expected delta <=3 KiB p50 and <=6 KiB p95;
-- after compaction, projected keyframe <=32 KiB p95;
-- gameplay downlink <=64 KiB/s/client average in the hosted spike;
-- no owner-private field outside its schema lane;
-- no unbounded socket or reliable-event queue.
-
-The accepted per-recipient queue contract is a 512 KiB application cap,
-including a 256 KiB reliable-event subset. Transport backpressure uses
-256 KiB/64 KiB high/low hysteresis: high-water pauses sends and coalesces
-replaceable state until low-water. Rebase remains a separate application
-enqueue decision. Two seconds continuously transport-backpressured disconnects
-that recipient without delaying the writer or another socket. The general
-runtime timer also applies while the bounded application queue remains at its
-limit; T2 isolates and proves the transport-high cause specifically.
-
-The canonical product target is 64 KiB/s average/player across deltas,
-keyframes, events, and reconnect amortization. The 144 KiB/s representative
-row is sensitivity analysis and 288 KiB/s is a heavy rejection envelope;
-neither is an achieved codec rate or supported product budget.
-
-The v0.3 107.88 KiB p95 full snapshot remains a recovery/debug baseline. At
-nominal Deep Field 6 Hz it is about 0.663 MB/s for one recipient, and at 10 Hz
-about 1.105 MB/s. The historical 0.33 MB/s observation ran below nominal
-cadence. None may become the public hot-loop protocol.
+These are application-layer bytes. Hosted evidence must separately report
+WebSocket/TLS/IP framing, ACKs, loss/retransmit, reconnect bursts, on-wire PPS,
+and regional egress.
 
 ## Identity And Durable Data
 
-### MVP identity
+The complete contract is
+[`HOSTED-IDENTITY-PLACEMENT-DECISION.md`](HOSTED-IDENTITY-PLACEMENT-DECISION.md).
 
-- Steam ticket proves the platform subject; the backend separately records
-  entitlement.
-- The backend maps provider identity to an internal `account_id` and issues a
-  short access session plus rotating refresh family.
-- `profile_id` owns hosted pilot progression.
-- `session_id` is the party/lobby container.
-- `run_id` is one simulation epoch.
-- `membership_id` binds an account/profile to one run seat.
-- `player_id` is a random run-scoped public alias.
-- `connection_id` rotates per transport connection.
-- `authority_epoch` and a short-lived grant rotate on reconnect or lobby-role
-  change.
-- `incarnation_id` prevents a retired body generation from becoming live
-  again through stale traffic.
-
-An id locates a record; it never grants permission. The streaming endpoint
-derives membership/player/run from the verified authority grant rather than
-trusting body ids.
-
-### Local and cloud lineages
-
-Offline profiles remain fully playable and explicitly `LOCAL`. Linking to
-Steam creates/selects a `CLOUD` profile. Name, settings, and accessibility may
-copy; currency, vault, upgrades, competitive stats, and settlements do not
-silently merge from a client-controlled save.
+- Platform proof authenticates a provider subject; entitlement is separate.
+  The backend maps both to internal account and cloud profile ids.
+- Local `LOCAL` save lineages and hosted `CLOUD` pilot lineages remain
+  economically separate. Safe import copies only name/settings/accessibility
+  and safe cosmetics.
+- Session membership is the lobby role. Every rematch creates a fresh run,
+  immutable run membership, seat, public player alias, placement, lease epoch,
+  event lineage, and result scope.
+- Process, client incarnation, connection, connection epoch, command grant,
+  body incarnation, authority instance, lease, result, and settlement ids are
+  distinct fences. An id locates a record; it never authorizes access.
+- Admission/resume tickets are opaque, single-use, short-lived, and bound to
+  audience, account/profile/session/run membership, public player, seat,
+  authority lease, client incarnation, wire capability, and manifest.
+- Public state and replay use run-scoped aliases. Provider/account/device/cloud
+  profile ids, lease/workload ids, tickets, grants, raw IP, and moderation
+  records stay outside the gameplay/public privacy boundary.
 
 ### Settlement
 
-The sim submits one immutable versioned result authenticated as the authority
-assigned to that run. A relational transaction:
+The current-lease workload submits one immutable versioned result. One
+relational transaction validates the lease and result hash, inserts one unique
+run/member result, creates one settlement, posts ledger/inventory provenance,
+updates profile/Chronicle, and commits. Identical retries return the existing
+settlement. A conflicting hash quarantines. A bounded encrypted authority
+outbox retries storage failure; the client never receives speculative cloud
+credit.
 
-1. validates sim lease, run, membership, schema, and result hash;
-2. inserts one unique `(run_id, membership_id)` result;
-3. creates one settlement;
-4. posts ledger and inventory entries referencing that settlement;
-5. updates materialized profile state and Chronicle;
-6. commits once and returns the existing result on retry.
+## Reconnect And Failure
 
-If storage is unavailable, the result remains pending in a bounded durable
-outbox. The client never temporarily mints cloud currency.
-
-## Reconnect, Host Roles, And Failure
-
-- A disconnected body remains sim-owned for a recommended 60–120 seconds.
-  Thrust and one-shots release; inertia, current, hazards, and consequences
-  continue under a declared rule.
-- Reconnect authenticates normally, consumes a single-use resume ticket,
-  rotates connection/grant/epoch, and receives a fresh recipient baseline.
-- “Host” is renamed conceptually to lobby leader. It can choose lobby/run
-  controls, not physics, inventory, or settlement.
-- Lobby-leader migration is a versioned membership-role update. Gameplay
-  authority does not migrate to a client.
-- If the dedicated sim dies in v0.4 MVP, the run fails closed. Already-final
-  results settle once; incomplete outcomes are interrupted/void under explicit
-  product rules. Live transparent failover waits for signed checkpoints and
-  replay evidence.
+- Reconnect authenticates normally, consumes one resume ticket, rotates
+  connection/grant/epoch, fences old control, and sends a fresh recipient
+  baseline.
+- The recommended disconnected-body policy is 90 seconds: release thrust and
+  one-shots; preserve inertia, flow, hazards, and consequences.
+- “Host” is lobby leader. Leader changes are session-role CAS operations and
+  never move gameplay authority.
+- v0.4 dedicated-authority loss fails closed. Already final results settle
+  once; incomplete outcomes become interrupted under the chosen product rule.
+  Client snapshots are never canonical recovery.
+- Transparent restore waits for signed checkpoints, event/input watermarks,
+  deterministic replay/parity, a new fenced lease, and route-switch proof.
 
 ## Overload Ladder
 
-One run-wide state machine preserves fairness:
+All players share one fair run state machine:
 
 1. `NORMAL`
-2. `SHED_VISUAL` — coalesce presentation/debug/telemetry
-3. `SHED_BACKGROUND` — lower distant AI/spawn/growth/field work
-4. `REDUCE_REPLICATION` — 15 to 10 Hz deltas and tighter AOI
-5. `DILATED` — reduce one shared `timeScale`
-6. `ABORT` — interrupt cleanly instead of corrupting causality
+2. `SHED_VISUAL`
+3. `SHED_BACKGROUND`
+4. `REDUCE_REPLICATION`
+5. `DILATED`
+6. `ABORT`
 
-No overload mode changes movement/contact rules asymmetrically by player.
+Normal product admission does not rely on TiDi. No mode changes movement or
+contact rules asymmetrically by player.
 
-## Vertical Match Scaling: 24, 48, And 96 Clients
+## Eight-Player Closure
 
-The logical authority boundary survives higher participant counts. Its
-physical implementation gets heavier:
+- S20 admits one through four and rejects eight at 5.00/4.90 Hz `DILATED`.
+- S23 public body reaches eight at 9.00/9.10 Hz `NORMAL`, but 88.58/88.33 ms
+  p95 and 95.05/94.63 ms p99 fail its gates; one-player cost also regresses.
+- S23P reaches 9.75/9.70 Hz `NORMAL` and improves median S23 p95 18.1%, but
+  71.05/69.76 ms p95 and 75.04/72.69 ms p99 still fail; one and four violate
+  the S20 non-regression envelope.
+- The final split-fragment screen reaches 9.6667 Hz, 0.510 core, and about
+  49.4 KB/s/client, but 55.9045 ms projection/publish p95 crosses the
+  pre-screen `>55 ms` abort. Red-team also found unresolved prototype risks in
+  retention, mutable buffers, schema/privacy validation, and recovery. The
+  implementation was fully reverted.
 
-| Match size | Authority implementation | Mandatory shape |
-|---:|---|---|
-| 4–8 | one process, one writer thread | owner/public projection and bounded queues |
-| 24 | one isolated process, one writer | static manifest, deltas, multirate sim, spatial-query cleanup, AOI-ready lanes |
-| 48 | one isolated match service, one writer; optional projection/job workers | AOI, dirty state, replication priorities, explicit CPU quota, overload ladder |
-| 96 | one isolated multi-threaded service, one canonical writer plus fixed deterministic workers | AOI/LOD, multi-rate binary replication, worker barriers/fencing, dedicated CPU allocation |
+S23 and S23P remain executable default-off research paths. Split-fragment is
+historical only and absent from live source. No further v0.4 eight-player
+optimization is selected.
 
-At 96, “multi-threaded” does not mean multiple authorities. The writer alone
-orders inputs and commits movement, contacts, loot, death, extraction, events,
-and results. Workers consume immutable tick inputs and may return field tiles,
-AI sensing, broad-phase candidates, recipient projections, or encoded packets
-tagged with tick/revision. Late or wrong-revision results are discarded.
+## High-Count Single-Match Architecture
 
-### Measured current baseline
+The logical authority boundary does not change at 24/48/96. One canonical
+writer alone orders inputs and commits movement, contacts, loot, death,
+extraction, events, and results. From 48/96, internal workers may compute pure
+AI sensing, field tiles, broad-phase candidates, projections, or encoding from
+immutable tick inputs behind deterministic barriers. Late or wrong-revision
+results are discarded; workers are not gameplay authorities.
 
-A short current-code Deep Field diagnostic joined 4/8/24/48/96 humans, retained
-the three existing AI pilots, sent about 10 Hz HTTP input rounds, and fired one
-simultaneous pulse round. It is not a production benchmark, but it anchors the
-forecast:
+| Vector | Evidence class | writer | B/s/client | match traffic | Status |
+|---|---|---:|---:|---:|---|
+| H24 representative | measured synthetic | 0.828/1.417 ms p95/p99 | 13,468 | 2.586 Mbit/s | component screen only |
+| H24 dense | measured synthetic sensitivity | 3.417/4.333 ms p95/p99 | same schema assumption | same schema assumption | pileup sensitivity |
+| H48 base | far extrapolation | 1.207 ms | 26,354 | 10.120 Mbit/s | not capacity |
+| H96 base | far extrapolation | 2.646 ms | 50,150 | 38.515 Mbit/s | not capacity |
+| X96 base | modeled rejection | 86.769 ms | 118,219 | 90.792 Mbit/s | writer/network fail |
 
-| Humans | Effective tick target | Input-loaded observed | Full snapshot | Process heap sample |
-|---:|---:|---:|---:|---:|
-| 4 | 8 Hz | 7.97 Hz | 116.80 KiB | 11.64 MiB |
-| 8 | 8 Hz | 8.74 Hz | 125.82 KiB | 9.74 MiB |
-| 24 | 8 Hz | 8.32 Hz | 158.32 KiB | 11.34 MiB |
-| 48 | 8 Hz | 8.09 Hz | 194.23 KiB | 13.16 MiB |
-| 96 | 8 Hz | 8.10 Hz | 265.62 KiB | 17.10 MiB |
+The synthetic S24 fixture uses production Ballpark indexing and Brotli but not
+the paced live sim, real sockets, actual CPU scheduling, queues, TLS, or WAN.
+The live 24-client cohort never admitted; two guarded eligibility attempts
+failed at first-client state-pair admission and the raw command never started.
+H48/H96 extend 2.25x/4.5x beyond measured bodies and 2x/4x beyond measured
+recipients. They are sensitivity models, not capacity claims.
 
-All cases were `DILATED`. Current overload input counts AI pilots inside alive
-players but divides by the human admission cap, so the effective 8 Hz is partly
-a pressure-model artifact. The test also kept the same capped world and did
-not encode/send distinct recipient payloads, run a long soak, or scale ecology.
+Do not reopen multi-writer spatial sharding from these results. First prove a
+live H24 workload. Only consider sharding after an optimized one-writer H96
+fails, traces show stable spatial partitionability, handoff correctness is
+proved, and a prototype beats the single-writer design materially.
 
-### Current full-snapshot fan-out ceiling
+## Provider Position And Economics
 
-If the measured full body were sent uncompressed at six snapshots/second to
-every human, fan-out would be:
+Official-source pricing and runtime constraints are dated 2026-07-14 in
+[`research/2026-07-14-hosted-provider-source-ledger.md`](research/2026-07-14-hosted-provider-source-ledger.md).
+The primary four-player Fly envelope is $0.0590/$0.0693/$0.0903 per
+authority-hour best/base/worst, or $0.014750/$0.017325/$0.022575 per occupied
+player-hour. Central cohort break-even is 614/11,598/none. The worst case is
+structurally loss-making because $2.816 receipts/copy are below $3.646
+variable operations/copy before its 84-month fixed service tail.
 
-| Humans | Authority egress | Egress/hour | 45-minute match |
-|---:|---:|---:|---:|
-| 4 | 2.87 MB/s | 10.33 GB | 7.75 GB |
-| 8 | 6.18 MB/s | 22.26 GB | 16.70 GB |
-| 24 | 23.35 MB/s | 84.04 GB | 63.03 GB |
-| 48 | 57.28 MB/s | 206.21 GB | 154.66 GB |
-| 96 | 156.67 MB/s / 1.253 Gbit/s | 564.01 GB | 423.01 GB |
-
-This is a deliberately naïve ceiling. It exposes a player-squared replication
-term: the full body grows with players and is then copied to every player.
-
-The compact design target keeps average downlink at 64 KiB/s/client:
-
-| Humans | Compact authority egress | 45-minute match |
-|---:|---:|---:|
-| 24 | 1.57 MB/s | 3.96 GiB |
-| 48 | 3.15 MB/s | 7.91 GiB |
-| 96 | 6.29 MB/s | 15.82 GiB |
-
-At 24, deltas and shared public encoding are mandatory. At 48, spatial AOI and
-multi-rate far lanes are mandatory. At 96, AOI, dirty-component masks, binary
-quantization, priority accumulation, shared encoded public fragments, and
-owner-private overlays are mandatory. A full-rate all-player detail lane is
-rejected; global facts become low-rate summaries/events.
-
-Normal-mode egress at every population must meet the canonical <=64 KiB/s per
-client average target. At 96 this is about 6 MiB/s match average; 8 MB/s
-sustained remains a rejection threshold until economics explicitly approve
-more. Short-window percentiles are reported separately rather than substituted
-for the average product budget.
-
-Heavier simulations need separate delta envelopes rather than pretending
-player count alone determines traffic:
-
-| Envelope | Meaning | Per-client | Match payload at 24 / 48 / 96 |
-|---|---|---:|---:|
-| product average | acceptance target to prove | 64 KiB/s | 12.6 / 25.2 / 50.3 Mbit/s |
-| representative sensitivity | planning stress, not achieved | 144 KiB/s | 28.3 / 56.6 / 113.2 Mbit/s |
-| heavy rejection | adverse normal-operation failure | 288 KiB/s | 56.6 / 113.2 / 226.5 Mbit/s |
-
-These are application-payload models. TLS/WebSocket/IP framing, ACKs, loss,
-retransmission, voice, and reconnect bursts remain separately measured terms.
-
-### Server CPU forecast and writer feasibility
-
-Simulation-size forecasts must expose the work that actually ran instead of
-using player count as a proxy:
-
-```text
-writer_p95 = base + f(players) + f(bodies_updated) + f(candidates)
-             + f(contacts) + f(events) + f(AI_due) + f(field_tiles_due)
-             + f(world_jobs_due) + GC_pause_p95
-
-mean_billable_cores = sum(mean_lane_cpu_ms * lane_hz) / 1000
-```
-
-Writer p95/p99 is the serial feasibility gate. Mean billable CPU sizes the
-reservation, host packing, and invoice. A low mean cannot rescue an over-budget
-writer, and p95 wall time must never be divided into host cores. No factorial
-fixture has fitted the factorized coefficients, so this architecture assigns
-no invented replacement milliseconds.
-
-The legacy player-only sensitivity
-`Heavy(P) = 8.0 + 0.350P + 0.0045P^2` ms at 20 Hz yields 83.07 ms at 96. It is
-superseded and is retained only as a warning: it is not a measurement or a
-current Heavy96 forecast. Heavy 96 cannot be made feasible merely by assigning
-8 or 12 vCPU; writer work must fall or pure work must move behind deterministic
-barriers while one writer retains commit ownership. The honest seat verdicts
-remain 24 plausible, 48 engineered, and 96 R&D.
-
-Projection/packing is also factorized: shared dirty packing, per-recipient
-selection/private merge/delta encoding, changed-byte compression, and keyframe
-compression are separate CPU and allocation terms. Report mean CPU for billing
-and p95/p99 barrier completion for latency.
-
-### Heavier simulation envelopes
-
-Player count and simulation weight are separate axes:
-
-| Envelope | Humans | Dynamic/interactive bodies | Expensive AI | Field |
-|---|---:|---:|---:|---|
-| `H24` | 24 | 400 | 48 | coarse <=4 Hz |
-| `H48` | 48 | 900 | 96 | tiled coarse <=6 Hz |
-| `H96` | 96 | 1,800 | 192 | tiled coarse <=6 Hz |
-| `X96` | 96 | 3,000 | 384 | disturbance-heavy overload probe |
-
-These are benchmark envelopes, not content promises. Every run reports
-inbox, Ballpark/index, movement/flow, broad phase, consequence resolution, AI,
-field, projection, encoding, socket queues, GC, tick debt, and total p50/p95/
-p99. `H24/H48/H96` must pass normal mode without TiDi. `X96` proves fair,
-visible, bounded degradation.
-
-Do not shard a 96-player match across independently writable servers merely to
-gain cores. Reopen sharding only if the optimized worker-backed `H96` still
-misses, traces show gameplay work is stably spatially partitionable, >=95% of
-interactions remain within a region for ten seconds, handoff correctness is
-proven, and a prototype beats the single-authority service by at least 2x.
-
-### Safe host starting envelopes
-
-These are capacity-test starting points, not vendor SKU forecasts:
-
-| Humans | Representative start | Heavy start |
-|---:|---|---|
-| 4 | 1 vCPU / 512 MiB / 100 Mbit/s | 1 vCPU / 1 GiB / 100 Mbit/s |
-| 8 | 1 vCPU / 512 MiB / 100 Mbit/s | 2 vCPU / 1 GiB / 250 Mbit/s |
-| 24 | 2 vCPU / 1 GiB / 250 Mbit/s | 2 vCPU / 2 GiB / 500 Mbit/s |
-| 48 | 2 vCPU / 1 GiB / 500 Mbit/s | 4 vCPU / 2 GiB / 1 Gbit/s |
-| 96 | 4 vCPU / 2 GiB / 1 Gbit/s | 8 vCPU / 4 GiB / 2.5 Gbit/s after optimization |
-
-At 48/96, reserve one physical/core-equivalent lane for the writer. Other
-cores serve I/O, projection, encoding, field/AI jobs, telemetry, and result
-outbox work. Fleet packing uses the measured match profile: a host that safely
-packs forty light 4-player authorities may pack only one heavy 96-player
-authority.
-
-Memory placement is auditable rather than a per-player guess:
-
-```text
-M_match = M_world_runtime + M_shared_canonical_history
-        + sum_clients(M_socket + M_baseline + M_private
-                    + M_app_queue + M_transport_observed + M_inbound)
-```
-
-At 96, the 512 KiB application cap contributes at most 48 MiB; its 256 KiB
-reliable subset is included, not additive. Observing every transport at the
-256 KiB high-water threshold contributes another 24 MiB, but high-water is not
-a hard transport cap. Socket/runtime overhead, baselines, private recovery,
-inbound buffers, shared history, peaks above high-water, and GC/RSS margin all
-remain measured terms. The prior 192 MiB representative envelope remains a
-modeled placement envelope pending measurement.
-
-Host density is the minimum of isolated writer lanes, reserved mean-billable
-CPU, RAM, egress, encode throughput, packet rate, process caps, and
-failure-domain policy. At 64 KiB/s and an illustrative 1,200-byte payload,
-modeled aggregate traffic is roughly 2.5k/5.1k/10.2k PPS at 24/48/96 after
-inputs and 25% control/ACK margin. Capture production TLS/gateway traffic
-before treating those PPS values or any packing density as achieved.
-
-### High-count hosting cost forecast
-
-At the 64 KiB/s target, state egress alone is 5.66/11.32/22.65 GB per
-match-hour for 24/48/96 players. The named-stack S1 forecast below includes
-illustrative compute, 30% reserve where modeled, and marginal egress, but not
-database/auth/logs/support/voice:
-
-| Vendor scenario | 24 total $/match-h | 48 | 96 | 96 $/player-h |
-|---|---:|---:|---:|---:|
-| Fly performance fleet, NA/EU, forecast packing | $0.2206 | $0.4412 | $0.8824 | $0.0092 |
-| Railway resource-rate forecast | $0.3370 | $0.6691 | $1.3284 | $0.0138 |
-| Render listed instances + marginal bandwidth | $0.8836 | $1.8151 | $3.6371 | $0.0379 |
-
-The population-specific measured-shape full-snapshot sensitivity changes the
-96-player cost to about $0.1220/player-hour on Fly, $0.2958 on Railway, and
-$0.8838 on Render. Its payload alone is modeled at 564.009 GB/match-hour and
-1.253 Gbit/s before framing, events, recovery, or retransmission.
-
-Heavier-sim compute before reserve and network:
-
-| Match/tier | Forecast vCPU/GiB | Railway $/match-h | Cloud Run compute $/match-h | CF Container marginal $/match-h |
-|---|---:|---:|---:|---:|
-| 24 S1 / S2 / S3 | 0.75/1.25; 1.5/2.25; 3/4 | $0.0377 / $0.0719 / $0.1370 | $0.0576 / $0.1134 / $0.2232 | ~$0.0663 / $0.1293 / $0.2530 |
-| 48 S1 / S2 / S3 | 1.5/2.25; 3/4; 6/8 | $0.0719 / $0.1370 / $0.2740 | $0.1134 / $0.2232 / $0.4464 | ~$0.1293 / $0.2530 / $0.5050 |
-| 96 S1 / S2 / S3 | 3/4; 6/8; 12/16 | $0.1370 / $0.2740 / $0.5479 | $0.2232 / $0.4464 / $0.8928 | ~$0.2530 / $0.5050 / $1.0090 |
-
-These mean-billable compute sensitivities size invoices; they do not pass the
-writer p95/p99 gate. In particular, 96 S3/Heavy96 is infeasible until serial
-writer work falls or deterministic worker offload lands. Add 1.25–1.67x
-capacity factor, regional fragmentation, egress, gateway/DO/Worker charges,
-fixed services, and support.
-
-Cloudflare Durable Object billing arithmetic is much lower—about
-$0.0155/$0.0252/$0.0446 per active match-hour at 24/48/96 for duration plus
-15 Hz input requests after allowances—but runtime fit is entirely unproven.
-Durable Objects remain a 4–8-player experiment. A 128 MiB object is a 96-player
-non-fit only under the pending 192 MiB representative envelope; the auditable
-memory formula has not derived that total.
-
-## Hosting Position
-
-- **First benchmark:** regional Node-compatible container/process host. Pack
-  multiple isolated match workers per host and measure safe density. Fly
-  Machines is the lead spike because its lifecycle resembles today's runtime
-  and NA/EU egress is inexpensive.
-- **High-upside experiment:** one Cloudflare Durable Object per run. Its
-  single-writer and WebSocket model fits conceptually, but it is a runtime port
-  that must prove 15/30 Hz scheduling, CPU, restart, and recovery.
-- **Comparisons:** Cloudflare Containers, Railway, Render, Cloud Run, later AWS
-  GameLift/fleet hosting.
-- **Not recommended for live authority:** Vercel's current official docs
-  conflict on WebSocket support. Its newer guidance describes bounded-duration
-  pinned WebSockets, while its limits page still says Functions cannot be
-  WebSocket servers. Either way, bounded lifetime, non-sticky reconnect, and
-  externalized room state are a poor fit pending vendor confirmation and a
-  stateful-run proof. Vercel remains usable for web/control surfaces.
-
-The base compact-delta 4–8 experiment target is now $0.0143/player-hour, or about
-$0.172 for a 12-hour buyer. That is a variable-service target, not the whole
-business and must not be blended with high-count event economics. High-count
-costs use their own mode hours, observed occupancy, authority shapes, and
-vector packing; the flat modeled S1 $0.0092/player-hour at full 24/48/96
-occupancy is an artifact of proportional forecast resources, not a scaling
-result. The calendar stack floors are modeled separately at $162/month for
-an owner-operated service, $803/month for a recommended production posture,
-and $20,300/month for a contracted scale posture. With explicit 3/12/40-hour
-cohorts, 12/36/84-month service terms, loaded operations labor, and a 45-day
-payout lag, the $4.99 price can fund compact authoritative hosting but does not
-automatically fund an indefinite live-service organization. The viable product
-needs a deliberately lean support tail, a finite online-service promise,
-additional revenue, or an offline/player-hosted continuity plan.
+See [`MULTIPLAYER-UNIT-ECONOMICS.md`](MULTIPLAYER-UNIT-ECONOMICS.md) for every
+1K/10K/100K/1M central/hybrid/local contribution row and assumptions. The
+model excludes unmeasured packing and high-count modes.
 
 ## Private Player-Hosted Fallback
 
-Private fallback keeps one player-hosted authority and uses Steam Datagram
-Relay or a transport-equivalent relay to hide addresses and cross NAT. It must
-state:
-
-- the host is trusted and has latency advantage;
-- host loss may pause/end the run until checkpoint migration is proven;
-- progression is local or visibly unverified;
-- a host-signed result is not proof that the host was honest;
-- browser clients are not preferred authority candidates because background
-  lifecycle and suspension are hostile to stable hosting.
-
-This preserves long-tail/private play without weakening verified sessions.
+Private fallback runs one visible player-hosted authority through Steam
+Datagram Relay or a transport-equivalent relay. It must disclose host trust and
+latency advantage; keep progression local/unverified; hide player addresses;
+measure host CPU/uplink/suspend risk; and treat host loss as run-ending until
+canonical checkpoint migration is proved. A host-signed result does not prove
+an honest host. Browser clients are poor host candidates because lifecycle and
+background suspension are hostile to stable authority.
 
 ## Research Basis
 
-- [Ballpark multiplayer architecture](research/ballpark-multiplayer-architecture.md)
-- [Identity and data model](research/multiplayer-identity-data-model.md)
+- [Decision packet](MULTIPLAYER-DECISION-PACKET.md)
+- [Identity and placement decision](HOSTED-IDENTITY-PLACEMENT-DECISION.md)
 - [P2P history and network budgets](research/p2p-history-network-budgets.md)
-- [Hosted costs and unit economics](research/hosted-costs-unit-economics.md)
-- [Hosted cost audit](research/hosted-costs-unit-economics-audit.md)
-- [Fixed stack and cohort unit economics](research/fixed-stack-cohort-unit-economics.md)
-- [Architecture red team](research/architecture-red-team.md)
-- [High-count synthetic baseline](research/2026-07-10-high-player-count-synthetic-baseline.md)
-- [High-count performance model](research/high-player-count-performance-model.md)
-- [High-count architecture review](research/high-player-count-architecture-review.md)
-- [High-count hosting cost model](research/high-player-count-hosting-cost-model.md)
-- [Phase 0 multiplayer authority baseline](research/phase0-multiplayer-baseline.md)
-- [Phase 1 same-process JSON WSS adapter plan](phase1-json-wss-adapter-plan.md)
-- `docs/project/EVE-ARCHITECTURE-RESEARCH.md`
-- `docs/project/LOCAL-PROTOCOL.md`
+- [Identity data model](research/multiplayer-identity-data-model.md)
+- [Hosted provider ledger](research/2026-07-14-hosted-provider-source-ledger.md)
+- [Hosted authority provider fit](research/hosted-costs-unit-economics.md)
+- [Unit economics](MULTIPLAYER-UNIT-ECONOMICS.md)
+- [S20 compression](MULTIPLAYER-STATE-PAIR-S20-COMPRESSION.md)
+- [S23 public body](MULTIPLAYER-STATE-PAIR-S23-PUBLIC-BODY.md)
+- [S23P prepared source](MULTIPLAYER-STATE-PAIR-S23P-PREPARED-PUBLIC-SOURCE.md)
+- [Split-fragment terminal negative](MULTIPLAYER-STATE-PAIR-SPLIT-PUBLIC-FRAGMENT.md)
+- [S24 synthetic preflight](evidence/s24-factorial-preflight/README.md)
+- [S24 live terminal negative](evidence/s24-live-loopback/README.md)

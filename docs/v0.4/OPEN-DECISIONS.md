@@ -1,161 +1,193 @@
 # v0.4 Multiplayer Open Decisions
 
-> Architecture defaults are recommendations until Greg ratifies the product
-> choices. Technical experiments should not silently decide them through
-> implementation convenience.
+> These are Greg's product calls. They are intentionally separate from the
+> engineering acceptance gates in [`ROADMAP.md`](ROADMAP.md). An experiment
+> may inform a choice; implementation convenience may not silently make it.
 
-## Recommended Defaults
+## Closed Architecture Decisions
 
-### Verified Authority
+- v0.4 is a one-through-four-player product architecture. Four is admitted;
+  eight is closed for this version.
+- verified play has one dedicated logical gameplay authority per live
+  match/group. Concurrent matches multiply independent authorities.
+- S20 is the admitted replication path. S23/S23P remain default-off research;
+  split-fragment is reverted/history only.
+- true authority-free public P2P is rejected. Relay-assisted player-hosted
+  authority is a private/local fallback, not true P2P.
+- hosted identity/entitlement/placement/settlement is control-plane truth;
+  live run facts belong to the current-lease match authority.
+- local and cloud economic lineages are separate by default; client snapshots
+  never recover hosted authority or mint temporary cloud value.
+- Fly performance CPU is the first authority benchmark; Cloudflare edge plus
+  Postgres is the control-plane reference; Hetzner CCX is the operational
+  fallback. Cloudflare Container/Durable Object and an ordinary container are
+  comparator experiments. Vercel is web/control-plane only.
+- no provider receives unmeasured packing credit. High-count modeled values
+  are not capacity claims.
 
-Dedicated one-run authority is the only source of verified public progression.
-Private player-hosted sessions remain local or visibly unverified.
+## Product Decisions Greg Owns
 
-### Hosted Identity
+### 1. First multiplayer service posture
 
-Use a narrow platform-ticket adapter and avoid LBH passwords. Steam ticket
-authentication is the recommended implementation only if Greg chooses a
-Steam-only, every-seat-entitled MVP; storefront/friend-pass scope remains a
-product decision.
+**Recommendation:** hybrid—verified central authority while economically
+supported, plus relay-assisted private-host continuity with local/unverified
+progression.
 
-### Save Lineages
+Choose central verified only, hybrid, or local/private-only first release. The
+choice determines service promise, outage UX, long-tail continuity, support,
+and whether Phase 5/6 blocks release.
 
-Keep `LOCAL` and `CLOUD` progression separate. Linking may copy name,
-accessibility, controls, and safe cosmetic choices, not currency, vault,
-upgrades, or competitive history.
+### 2. Hosted identity and entitlement scope
 
-### Transport
+**Recommendation:** Steam-only every-seat entitlement for MVP; no LBH password
+database and no anonymous hosted guest.
 
-Start with JSON WSS at existing map clocks and keep messages transport-neutral.
-Add binary encoding, AOI, or WebTransport/QUIC only after packet evidence shows
-the simpler shape is materially insufficient.
+If invited non-owners must play, define a provider-bound friend-pass grant,
+expiry, seat limits, and abuse policy. An install/device id is not entitlement.
 
-### Authority Loss
+### 3. Private-host progression
 
-Fail closed for dedicated sim loss until signed checkpoint restore is proven.
-Never accept a client snapshot as canonical recovery.
+**Recommendation:** local or visibly unverified only.
 
-### Public Session Shape
+A player host can forge the run. A host-signed result proves origin, not
+honesty. Decide whether private runs write local progression, a separate
+unverified cloud lineage, or no durable progression.
 
-Start with invite/join-code parties of 4–8 humans, not global anonymous
-matchmaking. AI fill is a separate game-mode choice.
+### 4. Local-to-cloud import
 
-## Decisions Greg Owns
+**Recommendation:** safe fields only—display name, accessibility, controls,
+and safe cosmetic preferences.
 
-### 1. Private-Host Progression
+Decide whether a one-time capped and tagged legacy economic grant is worth
+contaminating leaderboards/economy/support. Never silently field-merge currency,
+vault, upgrades, or competitive history.
 
-**Recommendation:** local/unverified progression only.
+### 5. Human seats and AI fill
 
-Should a trusted player-hosted run write normal cloud progression, a visibly
-unverified lane, or no durable progression? A host can forge outcomes; signing
-its result does not make it honest.
+**Recommendation:** allow one-to-three humans plus explicitly server-owned AI
+in private/co-op mode; label human count honestly.
 
-### 2. Local-To-Cloud Import
+Does “minimum four” require four humans, or may an undersized party launch with
+AI fill? Verified tests and public claims must distinguish the two.
 
-**Recommendation:** copy safe non-economic fields only.
+### 6. Disconnected-body policy
 
-Is a one-time capped `legacy_import` worth the economy/leaderboard contamination
-risk for existing players?
+**Recommendation:** reserve the seat/body for 90 seconds; release thrust and
+one-shot inputs while inertia, current, hazards, and consequences continue.
 
-### 3. Reconnect Body Policy
+Alternative choices are cautious server AI, immediate abandon, or shelter.
+Invulnerability is not the default.
 
-**Recommendation:** 90 seconds; release thrust/one-shots, preserve inertia,
-current, hazards, and consequences.
+### 7. Late join
 
-Should a disconnected pilot drift, receive a cautious AI takeover, become
-temporarily sheltered, or abandon immediately? Invulnerability is not the
-default.
+**Recommendation:** protocol permits it, but competitive admission closes at a
+declared run phase.
 
-### 4. Late Join
+Choose run-start only, before first salvage/signal threshold, or any time.
 
-**Recommendation:** protocol supports it; competitive mode closes admission at
-a declared run phase.
+### 8. Lobby-leader powers
 
-Can a new player join any live run, only before first salvage/signal threshold,
-or only at run start?
+**Recommendation:** start/reset/map/invite plus kick proposal or future-rematch
+block; never gameplay, placement, profile, or settlement power.
 
-### 5. Lobby Leader Powers
+Choose direct kick, vote/proposal, or rematch-only exclusion.
 
-**Recommendation:** start/reset/map/invite and kick proposal only; never
-gameplay or durable-state power.
+### 9. Voice
 
-Should the leader kick directly, require a vote, or only block future rematch
-membership? Abuse handling needs a player-legible rule.
+**Recommendation:** out of v0.4; use platform party voice first.
 
-### 6. Voice
+Built-in voice adds relay, privacy, recording, report/block, moderation,
+retention, and cost obligations. Full-mesh voice also dominates P2P input
+traffic in the research model.
 
-**Recommendation:** out of v0.4 gameplay scope; prefer Steam/platform party
-voice first.
+### 10. Movement/WAN threshold
 
-Built-in voice adds relay, privacy, moderation, reporting, blocking, and cost.
-Is it necessary for the first four-to-eight-player release?
-
-### 7. Movement Rate
-
-**Recommendation:** start at existing 15/12/10 Hz map clocks. Run a blind
-15/20/30 Hz WAN-emulated comparison only if prediction/sweep/interpolation do
-not preserve feel.
+**Recommendation:** retain 15/12/10 Hz map clocks initially. Run blind
+15/20/30 Hz comparisons only after prediction/interpolation at the existing
+clock has real WAN evidence.
 
 Greg owns the feel verdict at 80/120/160 ms. Automated correctness cannot
 decide whether surf timing and correction feel honest.
 
-### 8. Chronicle Visibility
+### 11. Chronicle visibility
 
-**Recommendation:** private-by-default in hosted MVP.
+**Recommendation:** private by default.
 
-Should echoes be private to the owner, shared only with the party/run, or
-published by seed? Broader sharing creates moderation and deletion work.
+Lobby/seed/public sharing creates moderation, deletion, youth/privacy, and
+retention work. Choose private, party/run, or seed-public scope.
 
-### 9. AI Fill
+### 12. Account concurrency
 
-**Recommendation:** allow an explicit private/co-op mode to fill to four; keep
-verified competitive tests honest about human count.
+**Recommendation:** one hosted run per account for MVP, regardless of how many
+cloud pilots exist.
 
-Does “minimum four” mean four human players are always required, or can one to
-three humans launch with server-owned AI seats?
+Allowing two pilots concurrently expands entitlement sharing, duplicate-body,
+moderation, and support semantics.
 
-### 10. Vendor Commitment
+### 13. Supported regions, ages, and social scope
 
-**Recommendation:** no commitment before Phase 6.
+**Recommendation:** invite-only, private profile/history, no stored birth date
+by default; define supported region/age policy before shared social content.
 
-Benchmark a Node-compatible regional host first and a Durable Object authority
-second. Choose from observed tick/bytes/cost/ops, not provider branding.
+Decide whether any youth-account policy class is required and which features
+are disabled or guardian-controlled. Do not collect data without a shipped
+purpose and policy.
 
-### 11. High-Count Product Modes
+### 14. Vendor and service-tail commitment
 
-**Recommendation:** 24 is the first optional large-crew target; keep 48 and 96
-as benchmark/event tiers until their normal workloads pass without TiDi.
+**Recommendation:** choose only after Phase 6 runs the same four-player
+90-minute scenario in two regions and measures invoices, failure, and packing.
 
-Are 24/48/96 intended shipped modes, private experiments, rare fleet events,
-or only capacity probes? The answer determines whether their content density,
-UI, moderation, matchmaking, and infrastructure deserve product work.
+Rate cards currently favor Fly as first process proof, Cloudflare at the edge,
+Postgres for durable truth, and Hetzner CCX as fallback. Greg must choose the
+operating burden and finite online-service promise after evidence.
 
-### 12. High-Count Visibility
+### 15. High-count product intent
 
-**Recommendation:** keep a tiny low-rate global roster/objective lane; use
-near/mid/far AOI for detailed transforms and world bodies by 48/96.
+**Recommendation:** treat 24 as a future experiment and 48/96 as event/R&D
+tiers until live representative workloads pass without TiDi.
 
-Which rival, signal, death, portal, route, and Chronicle facts must remain
-globally visible in a 96-player match? Networking cannot decide the game-design
-meaning of an off-screen fleet.
+Decide whether 24/48/96 are shipped modes, rare fleet events, private labs, or
+capacity probes. That choice controls UI, content density, moderation,
+matchmaking, visibility, clocks, and infrastructure work.
 
-### 13. High-Count Clock And TiDi
+### 16. High-count visibility and TiDi
 
-**Recommendation:** do not promise 30 Hz at 48/96. Choose the highest clock
-whose representative/heavy workload and Greg feel gate pass; reserve TiDi for
-exceptional overload, not normal capacity.
+**Recommendation:** low-rate global roster/objective facts plus near/mid/far
+AOI; no promise of 30 Hz at 48/96; TiDi only for exceptional overload.
 
-Is a large fleet-event mode allowed to advertise a lower base clock or visible
-shared time dilation as part of its identity? If not, cap participant or sim
-density when the writer misses its budget.
+Decide which rival/signal/death/portal/route/Chronicle facts remain globally
+visible and whether a large-event mode may advertise a lower base clock or
+visible shared time dilation.
 
-## Rejected Unless New Evidence Reopens Them
+## Engineering Gates, Not Product Decisions
 
-- true no-authority public P2P;
-- current full snapshots as the production wire protocol;
-- Vercel Functions as the live run server;
+These do not require taste or business preference. Failure blocks the relevant
+claim:
+
+- one current writer lease and one settlement per match/member result;
+- one-through-four admit, fifth/eight reject at every trust boundary;
+- no BOLA/IDOR, cross-recipient private leak, secret/PII log/replay leak,
+  duplicate consequence, or unbounded queue;
+- four-player hosted path holds `NORMAL`, every recipient >=9 Hz, writer p95
+  <50% and p99 <70% of frame budget, and <=64 KiB/s/client application average;
+- two-region 90-minute soak plus startup/drain/crash/reconnect/lease-fence proof;
+- `safeAuthoritiesPerHost` comes only from passing noisy-neighbor density
+  evidence and a declared safety factor;
+- prices are refreshed and the economics model regenerated before commitment;
+- H24 must admit an exact live cohort and produce a paced raw capture before
+  H48/H96 work or any high-count capacity statement;
+- no P1/P2/P3 remains before hosted alpha.
+
+## Rejected Unless New Version Evidence Reopens Them
+
+- another v0.4 eight-player replication optimization;
+- true no-authority public P2P or peer-authored verified progression;
+- current full snapshots as production hot-loop protocol;
+- multiple gameplay writers for one match or one global gameplay authority;
+- Vercel Functions as the live run authority;
 - client-chosen ids as authorization;
 - client-authored or temporarily client-credited hosted outcomes;
-- sharding one four-to-eight-player run;
+- sharding a one-through-four-player match;
 - moving gameplay truth into Three, UI, VFX, audio, or GPU fluid;
-- calling a listen server “true P2P.”
+- treating S24 synthetic H24 or modeled H48/H96 as live capacity.
