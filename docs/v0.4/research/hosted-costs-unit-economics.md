@@ -1,295 +1,342 @@
-# Hosted Authority Costs And $4.99 Unit Economics
+# Hosted Authority Provider Fit And Unit Costs
 
-> This is the first-pass variable hosting model. The later
-> [`fixed-stack-cohort-unit-economics.md`](fixed-stack-cohort-unit-economics.md)
-> adds named monthly stacks, launch CCU, service-tail duration, payout timing,
-> and loaded labor. Use the later memo for business conclusions; retain this
-> one for vendor/runtime and variable-cost derivation.
+> Research snapshot: 2026-07-14. This is a provider/runtime and marginal
+> authority-cost model, not a vendor quote or a company-margin forecast. The
+> companion [`../MULTIPLAYER-UNIT-ECONOMICS.md`](../MULTIPLAYER-UNIT-ECONOMICS.md)
+> owns copies-sold, $4.99 receipts, cohort behavior, fixed services, and
+> business-scale conclusions.
 
-> Research snapshot: 2026-07-10. Prices and limits are current-source inputs,
-> not vendor quotes. Re-run this model before any production commitment.
-
-## Recommendation
-
-Use a **hybrid hosted-authority stack**:
-
-1. Keep one LBH run as one authoritative process.
-2. Put static web/download surfaces and the low-duty control edge on
-   Cloudflare Workers/Pages or an equivalent CDN edge.
-3. Put the first public sim prototype in small regional containers or VMs so
-   the existing Node authority can move with minimal semantic change. Fly
-   Machines is the strongest first benchmark candidate; Cloudflare Containers,
-   Railway, Render, and Cloud Run are comparison lanes.
-4. Use Postgres for account/profile/entitlement/run settlement and object
-   storage for replay/evidence blobs. The live sim is disposable; durable
-   progression never depends on its local disk.
-5. Prototype a **Cloudflare Durable Object per run** separately. Its economics
-   are unusually attractive, but it is a runtime/architecture port, not a
-   deployment target for the existing Node child process.
-6. Do not use Vercel Functions as the live authority without direct vendor
-   confirmation and a stateful-run proof. Current official Vercel pages
-   conflict on WebSocket support; the newer guidance still describes bounded
-   function duration and no guarantee that later connections reach the same
-   function, which is the wrong default lifecycle for a single-writer run.
-
-The business conclusion is encouraging but conditional: $4.99 can support
-hosted 4–8-player sessions if LBH ships interest-managed deltas. It is much
-less comfortable if it sends today's full JSON snapshots to every player for
-the lifetime of the game.
-
-Here “one run as one authority” is logical isolation. Every concurrent match
-has its own single-writer authority instance, while a regional fleet may pack
-many isolated match workers into one VM/container/node. Cost depends on
-measured concurrent authorities per host, not on buying one host per match.
-
-## Current LBH Baseline
-
-The v0.3 Deep Field probe observed:
-
-- 7.74 authority ticks/s against an 8 Hz target;
-- 107.88 KiB p95 full snapshot;
-- 0.33 MB/s estimated one-client snapshot stream at Deep Field's cadence;
-- 4.12 MiB short-soak heap growth;
-- 1.555 ms p95 Ballpark sync.
-
-The byte calculation in `tests/authority-budget.cjs` is uncompressed JSON body
-size multiplied by `snapshotHz`. It is a useful ceiling, not a public network
-protocol. Shallows at 10 snapshots/s would be roughly 1.08 MB/s per player at
-the same payload size. Eight Shallows clients would therefore consume roughly
-31 GB of server egress per run-hour before transport compression and before
-events, inputs, reconnects, or voice. That is the first cost problem to solve.
-
-### Required Public-Network Targets
-
-| Measure | Prototype ceiling | Production target |
-|---|---:|---:|
-| authority tick | 15 Hz Shallows | 15 Hz stable, explicit overload ladder |
-| client input | 15–30 msg/s | batched/deduped; edges separately reliable |
-| state delivery | 10–15 updates/s | baseline + interest delta, periodic rebase |
-| average state downlink/player | 256 KiB/s | 32–96 KiB/s |
-| p95 state downlink/player | 512 KiB/s | under 192 KiB/s |
-| full rebase | current full snapshot | infrequent, compressed, run-stamped |
-| voice | optional/separate | relay/SFU budget independent of sim |
-
-At 64 KiB/s, one player-hour is about 0.236 GB. At eight players, the run
-egresses about 1.89 GB/hour. At Fly's North America/Europe $0.02/GB rate that
-is about $0.038/run-hour in state egress; at Render's $0.15/GB overage it is
-about $0.284/run-hour. Vendor egress policy matters more than small VM price.
-
-## Vendor Fit
-
-All linked claims were checked 2026-07-10.
-
-| Platform | Live run fit | Relevant current facts | Position |
-|---|---|---|---|
-| Cloudflare Durable Objects | Strong experimental fit after port | One globally addressable, single-threaded object can coordinate a game room over long-lived WebSockets. Paid pricing includes 1M requests and 400K GB-s, then $0.15/M requests and $12.50/M GB-s; incoming WS messages receive a 20:1 billing ratio and outgoing WS messages are not request-billed. Each object has a soft 1,000 requests/s limit. ([pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), [limits](https://developers.cloudflare.com/durable-objects/platform/limits/), [WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/)) | Best cost/scale experiment. Requires adapting the sim to isolate lifecycle, timers, persistence, and Worker runtime limits. Benchmark determinism and sustained 15 Hz scheduling before choosing it. |
-| Cloudflare Containers | Strong emerging container candidate | Workers pricing lists per-use container CPU, memory, disk, scale-to-sleep, 1 TB NA/EU egress included, then $0.025/GB. ([pricing](https://developers.cloudflare.com/workers/platform/pricing/)) | Put on the benchmark list; confirm maturity, regions, startup time, process supervision, WebSocket routing, and production limits before depending on it. |
-| Fly Machines | Strong first prototype fit | A shared 1x/1 GB Machine is listed around $0.0082/hour; Machines offer regional VM lifecycle control. NA/EU internet egress is $0.02/GB. ([pricing](https://fly.io/docs/about/pricing/), [Machines](https://fly.io/docs/machines/overview/)) | Recommended first internet-hosted authority spike because it resembles today's Node process and prices network sanely. Prove packing multiple isolated runs per Machine before one-VM-per-run. |
-| Railway | Good small-production/prototype fit | Hobby is $5/month, Pro $20/month; resource rates are $20/vCPU-month, $10/GB RAM-month, and $0.05/GB egress, billed by minute. ([pricing](https://docs.railway.com/pricing/)) | Excellent developer-speed comparison. Validate regional placement, autoscaling control, websocket routing, and noisy-neighbor behavior. |
-| Render | Good process fit, weaker traffic economics | Web services support WebSockets. Starter is $7/month/0.5 CPU/512 MB and Standard is $25/month/1 CPU/2 GB; bandwidth overage is $0.15/GB on listed plans. ([pricing](https://render.com/pricing), [WebSockets](https://render.com/docs/websocket)) | Viable control plane or early low-traffic host. Expensive for snapshot-heavy authority unless higher plans/quotes alter egress. |
-| Google Cloud Run | Conditional fit | WebSockets are supported, but connections are HTTP requests capped at 60 minutes, clients must reconnect, affinity is best-effort, and an open WebSocket makes the instance active/billable. Listed default prices include $0.000018/vCPU-s and $0.000002/GiB-s. ([WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets), [pricing](https://cloud.google.com/run/pricing)) | Useful autoscaled container/control service, but run ownership must survive forced reconnect and non-sticky replacement. A run router and external state are mandatory. |
-| AWS GameLift Servers | Strong later dedicated-host fit | GameLift provides managed dedicated game server fleets, Spot/on-demand instances, matchmaking/session features, and usage-based instance pricing. ([pricing](https://aws.amazon.com/gamelift/servers/pricing/instance-pricing/), [cost planning](https://docs.aws.amazon.com/gameliftservers/latest/developerguide/gamelift-intro-pricing.html)) | Revisit when concurrency, regions, fleet placement, and operations justify its integration weight. It is not the cheapest learning environment. |
-| Vercel Functions | Not recommended for live authority | Vercel's limits page says Functions cannot act as WebSocket servers, while a newer official knowledge-base article says WebSockets are supported but pinned only for bounded function duration and later connections may reach another function. ([limits](https://vercel.com/docs/limits), [WebSocket guidance](https://vercel.com/kb/guide/do-vercel-serverless-functions-support-websocket-connections), [function limits](https://vercel.com/docs/functions/limitations)) | The official contradiction needs vendor confirmation. Bounded lifetime, non-sticky reconnect, and external room state remain poor defaults for one match authority. Fine for website and control surfaces. |
-
-### P2P Relay/Voice Cost Reference
-
-Cloudflare Realtime TURN/SFU lists 1,000 GB/month free and $0.05/GB egress
-afterward; client-to-Cloudflare traffic is free. ([pricing](https://developers.cloudflare.com/realtime/sfu/pricing/), [TURN](https://developers.cloudflare.com/realtime/turn/))
-This makes it a credible NAT/voice benchmark, but it does not create gameplay
-authority or solve cheat/save settlement.
-
-## Topology Options
-
-### A. Minimal Private/Public Alpha
-
-- Cloudflare edge for TLS, static client, rate limits, and run-router API.
-- One regional Fly/Railway/Render process hosts several isolated run workers.
-- Small managed Postgres stores accounts, entitlements, profiles, and settled
-  outcomes.
-- WebSocket state transport; HTTPS for bootstrap/recovery/admin.
-- No public matchmaking beyond invite/join code.
-
-This maximizes reuse of v0.3 and is the recommended first real test.
-
-### B. Cloudflare-Native Run Objects
-
-- One Durable Object per run.
-- Worker handles auth/bootstrap/routing.
-- D1 or external Postgres owns durable account/profile data.
-- R2 holds larger replay/evidence blobs.
-- Realtime TURN/SFU handles voice or relay needs.
-
-This may be the best eventual low-ops economics. It must earn that position by
-running the real fixed-step Ballpark workload, not a chat-room surrogate.
-
-### C. Managed Fleet
-
-- GameLift or Kubernetes/Agones-style fleet packs multiple run processes onto
-  regional nodes.
-- Separate matchmaking/control plane and durable data services.
-- Reserved/Spot blend plus warm capacity.
-
-This is appropriate after real demand proves the need for regional fleet
-placement, explicit session allocation, and mature operations.
-
-## Cost Per Active Hour
-
-These are design envelopes, not quotes or forecasts. Only egress arithmetic is
-directly reproducible today. Compute density, fixed control/database/observability
-cost, regional mix, warm capacity, operations, support, salaries, and taxes are
-unmeasured and must be added after the hosted benchmark.
-
-| State shape | State downlink/player | Approx variable cost/player-hour | 12-hour lifetime cost/copy | Meaning |
-|---|---:|---:|---:|---|
-| optimized low | 32 KiB/s | $0.008 | $0.10 | efficient deltas, low-cost egress, well-packed authorities |
-| low-egress design target | 64–96 KiB/s | $0.015 | $0.18 | falsification target used illustratively in the sales table |
-| stressed production | 192–256 KiB/s | $0.040 | $0.48 | excess churn/rebases/telemetry or costly regions |
-| current full-snapshot shape | 0.33–1.08 MB/s | $0.08–$0.60+ | $0.96–$7.20+ | depends heavily on map cadence and $/GB; unacceptable as the shipped default |
-
-The Durable Object implementation could undercut the low band because
-Cloudflare Workers have no separate egress charge and DO request/duration
-pricing is small at 4–8 players. That upside should not be booked until the
-real sim passes CPU, scheduling, restart, and recovery tests in the runtime.
-
-## Sales And Unit Economics
-
-Copies sold does not determine concurrency. The model therefore separates
-receipts from play cost.
-
-### Illustrative Cohort Assumptions
-
-- list price: $4.99;
-- refunds: 8% of gross units/receipts;
-- storefront share: 30% after refunds;
-- sales tax/FX/payment leakage allowance: 3% of the remainder;
-- developer receipts before corporate income tax:
-  `copies * 4.99 * 0.92 * 0.70 * 0.97 = copies * $3.117`;
-- expected lifetime hosted play: 12 player-hours/copy;
-- low-egress service target: $0.015/player-hour = $0.18/copy;
-- illustrative per-copy support reserve: $0.50/copy. This is explicitly not a
-  salary, fixed-service, or ongoing support model.
-
-| Copies | Gross at $4.99 | Modeled developer receipts | Illustrative hosted service target | Contribution before fixed/labor | After $0.50/copy support reserve |
-|---:|---:|---:|---:|---:|---:|
-| 1,000 | $4,990 | $3,117 | $180 | $2,937 | $2,437 |
-| 10,000 | $49,900 | $31,172 | $1,800 | $29,372 | $24,372 |
-| 100,000 | $499,000 | $311,715 | $18,000 | $293,715 | $243,715 |
-| 1,000,000 | $4,990,000 | $3,117,153 | $180,000 | $2,937,153 | $2,437,153 |
-
-These figures are not a production margin forecast. They exclude fixed hosting
-and service months, loaded labor/on-call/support, corporate income tax,
-development recoupment, publisher
-share, regional price mix, discounts, chargeback spikes, platform-specific
-minimums, and ongoing content development. They also treat the sales cohort's
-lifetime play as if it can be funded from its receipts; cash-flow timing needs
-a monthly cohort model before launch.
-
-### Sensitivity Per Copy
-
-| Case | Lifetime hours | Cost/player-hour | Hosted service/copy | Receipts less service |
-|---|---:|---:|---:|---:|
-| low engagement/optimized | 3 | $0.008 | $0.024 | $3.093 |
-| expected | 12 | $0.015 | $0.180 | $2.937 |
-| high engagement/stressed | 40 | $0.040 | $1.600 | $1.517 |
-
-At $3.117 modeled receipts/copy, the hosting-only break-even is roughly 208
-player-hours at $0.015/hour, 78 hours at $0.04/hour, or just 5.2 hours at
-$0.60/hour. That is why current full-snapshot transport can turn a successful,
-high-retention game into an infrastructure liability while compact deltas leave
-ample room.
-
-## Concurrency Scenarios
-
-Use CCU rather than copies sold to size live capacity:
-
-`run CCU = player CCU / average occupied seats`
-
-`authority instance CCU = run CCU`
-
-`compute host CCU = ceil(authority instance CCU / safe authorities per host)`
-
-`monthly player-hours = average CCU * 730`
-
-`monthly variable service = monthly player-hours * cost/player-hour`
-
-At the $0.015 low-egress design target:
-
-| Average player CCU | Approx runs at 4.5 players | Monthly player-hours | Variable service/month |
-|---:|---:|---:|---:|
-| 25 | 6 | 18,250 | $274 |
-| 250 | 56 | 182,500 | $2,738 |
-| 2,500 | 556 | 1,825,000 | $27,375 |
-| 25,000 | 5,556 | 18,250,000 | $273,750 |
-
-Peak capacity, idle/warm headroom, database, support, and incident response sit
-on top. A 20–40% peak/warm reserve is reasonable for planning until real hourly
-curves exist.
-
-### Reproducible Cost Formula Required After Benchmark
-
-```text
-transport GB/player-hour = KiB/s * 1024 * 3600 / 1,000,000,000
-egress/player-hour = transport GB/player-hour * regional $/GB
-compute/player-hour = host $/hour * warm factor
-                      / safe concurrent authorities per host
-                      / occupied seats per authority
-shared/player-hour = monthly control + auth + database + backups
-                     + storage + logs/metrics + support plan
-                     divided by conservative monthly player-hours
-total/player-hour = egress + compute + shared + relay/voice
-                    + incident/abuse reserve
-```
-
-Measured run density remains open. The companion fixed-stack/cohort memo now
-supplies explicit monthly stack, service-duration, labor, and cash-timing
-assumptions. `$0.18/copy` remains only the earlier variable-service benchmark;
-its refined base target is $0.172/copy at $0.0143/player-hour.
-
-## Required Spikes Before Vendor Choice
-
-1. Replace polling with WebSocket transport without changing protocol-v2
-   authority semantics.
-2. Add per-player interest deltas plus compressed periodic full rebase; record
-   actual bytes at 4, 6, and 8 clients.
-3. Run 90-minute 8-player synthetic sessions under 50/100/180 ms RTT, jitter,
-   1/3/5% loss, reorder, disconnect, and reconnect.
-4. Pack multiple isolated runs into one 1-vCPU/1-GB host and measure the point
-   where tick fairness fails.
-5. Port the same fixed scenario to one Durable Object and compare tick
-   stability, event-loop pressure, restart/recovery, and cost.
-6. Benchmark at least two regions and one cross-ocean party.
-7. Exercise transactional run settlement so a crash/retry cannot duplicate or
-   erase rewards.
-8. Build a monthly cohort/CCU calculator from real playtest retention before
-   committing to a service budget.
+Official-source detail and change notes live in
+[`2026-07-14-hosted-provider-source-ledger.md`](2026-07-14-hosted-provider-source-ledger.md).
+Recheck that ledger before spending money.
 
 ## Decision
 
-For v0.4 planning, choose **central authoritative hosted sessions as the
-primary production model**, with player-hosted/private authority as a fallback
-and Durable Objects as the high-upside experimental authority runtime.
+Use a **hybrid control plane plus regional process authorities** for the first
+public implementation.
 
-Do not choose true authority-free P2P to save hosting cost until its cheat,
-determinism, host-loss, progression-settlement, and movement-feel costs are
-compared against the compact-delta hosted-service target. At those traffic
-rates, central authority is cheap enough that correctness is worth buying;
-calendar-time operations and service-tail labor, not match compute alone, are
-the commercial constraint.
+1. **Primary live authority benchmark:** Fly Machines using a performance CPU,
+   with one logical authority process per match. A larger Machine may host
+   several isolated processes only after measured packing proves that one
+   match cannot steal another match's tick budget.
+2. **Control plane:** Cloudflare Workers/Pages at the edge, backed by managed
+   Postgres for identities, entitlements, match leases, and idempotent run
+   settlement. Object storage owns replay/evidence blobs. The control plane
+   allocates authorities but never becomes a second gameplay writer.
+3. **Low-cost fallback:** the same authority container on Hetzner Cloud, using
+   CCX dedicated CPU for a production benchmark and CX shared CPU only as a
+   price-floor experiment. Cloudflare remains the public edge. This saves
+   compute money by accepting substantially more fleet, patching, failover,
+   and incident-response work.
+4. **High-upside experiments:** one Cloudflare Durable Object per match and one
+   Cloudflare Container per match. Durable Objects have the cleanest logical
+   single-writer mapping and striking rate-card economics, but require a real
+   sim port. Containers preserve the process model but currently price a
+   1-vCPU shape with much more memory than LBH has proved it needs.
+5. **Later managed-fleet option:** AWS GameLift Servers after regional demand,
+   fleet placement, session allocation, and included-bandwidth economics
+   justify its integration weight. AWS Fargate is the transparent container
+   comparator before that point.
 
-## High-Count Extension
+Do not use Vercel, Railway, or Cloud Run as the first live match authority.
+They now support WebSockets, but their documented 30-minute beta, 15-minute,
+and 60-minute request boundaries respectively force authority-continuity work
+that a stable process host does not. They remain useful control-plane and web
+service candidates.
 
-The detailed 24/48/96 model now lives in
-`docs/v0.4/research/high-player-count-hosting-cost-model.md`. Its key 96-seat
-comparison is:
+## What “One Dedicated Authority” Means
 
-- 64 KiB/s/player: 22.65 GB/match-hour and about 50.3 Mbit/s payload;
-- current 1.08 MB/s full-JSON ceiling: 373.25 GB/match-hour and about
-  829 Mbit/s payload;
-- illustrative S1 total at 64 KiB/s: about $0.882/match-hour on the modeled
-  Fly NA/EU packed fleet, $1.328 on Railway, and $3.637 on Render;
-- modeled heavy compute rises from 6 vCPU/8 GiB at S2 to 12 vCPU/16 GiB at S3,
-  but those cores help only after deterministic worker offload around the one
-  canonical writer.
+“Dedicated” means **one canonical single writer per live match**, not one
+physical server purchased for every match.
 
-Those numbers exclude shared fixed services and remain forecasts until the
-high-count benchmark proves CPU, packing, bytes, and regional behavior.
+- `M` concurrent matches produce `M` independent authority identities and
+  `M` active authority epochs.
+- Each match has one process, actor, or isolated runtime that alone may commit
+  movement, collision, death, pickup, extraction, abilities, signal, and run
+  outcome.
+- Several authority processes may share a VM/node/container host. They do not
+  share mutable match state or elect multiple writers.
+- A host slot is an allocation unit, not an authority identity. If a host
+  dies, the allocator may restore a match into a new slot only with a new
+  fenced epoch and an accepted recovery point.
+- A reconnecting client presents a short-lived join ticket bound to
+  `(match_id, authority_epoch, player_id)`. It cannot choose a writer.
+- Durable account and progression state is outside the live process. Settlement
+  is idempotent and accepts only the current authority epoch.
+
+This is compatible with the Ballpark/sim-client split: the authority runs the
+canonical fixed-step Ballpark world; clients send intents and render predicted
+or interpolated presentation. It is also compatible with an EVE-like control
+plane: identities, allocation, leases, and durable settlement are global
+services while each match simulation remains an isolated single-writer unit.
+
+## Evidence Boundary
+
+S20 is the only admitted transport/capacity input for this memo. Its paired
+four-client candidate rounds measured:
+
+| Measure | Round A | Round B |
+|---|---:|---:|
+| clients | 4 | 4 |
+| candidate cadence | 9.80 Hz | 9.85 Hz |
+| mean application payload/client | 31,018 B/s | 30,203 B/s |
+| p95 application payload/client | 32,766 B/s | 32,361 B/s |
+| projection p95 | 55.04 ms | 54.65 ms |
+| authority core | 0.585 | 0.589 |
+
+The cost model deliberately uses the higher measured mean, 31,018 B/s/client.
+That is 0.1116648 decimal GB/player-hour and 0.4466592 GB/four-player
+match-hour before unmeasured transport overhead.
+
+These measurements are application payload only. They exclude WebSocket,
+TCP/IP, TLS, WAN loss/retransmission, reconnect/rebase bursts, authentication,
+telemetry, logs, and voice. They were not measured on any provider.
+
+The admitted product surface is one to four players. Eight-player S20 is
+closed. S24 did not run a 24-client live authority and therefore proves no
+24/48/96-client provider capacity. The high-count section below is scenario
+forecasting, not an admission decision.
+
+## Authority Topology
+
+### Control plane
+
+The Cloudflare edge and durable store own:
+
+- account authentication and stable player identifiers;
+- entitlement verification and invite/join-code exchange;
+- regional match allocation and capacity inventory;
+- a fenced match lease containing `match_id`, `authority_epoch`, region,
+  address, build/protocol versions, and expiry;
+- short-lived join/rejoin tickets;
+- authority heartbeats, draining, and crash classification;
+- idempotent settlement of the final signed run outcome;
+- abuse throttles, ban state, audit records, and operator controls.
+
+The control plane does **not** calculate ship movement or accept gameplay
+outcomes from clients.
+
+### Match data plane
+
+Each allocated match slot starts one authority process. Clients connect
+directly to that slot through WSS, send sequenced intents, and receive compact
+state updates plus periodic recovery rebases. The process periodically writes
+an opaque recovery checkpoint and emits one settlement command. Its local disk
+is disposable.
+
+### Failure boundary
+
+For v0.4, prefer a clear reconnect-or-abort contract over pretending seamless
+failover exists. A later recovery path must prove:
+
+1. the old writer is fenced before the new epoch accepts commands;
+2. a checkpoint is recent and deterministic enough to resume;
+3. each player input sequence is deduplicated across the epoch boundary;
+4. settlement cannot be duplicated, reordered, or accepted from the old epoch.
+
+## Cost Method
+
+### Common four-player scenarios
+
+| Input | Best | Base | Worst | Status |
+|---|---:|---:|---:|---|
+| transport multiplier over S20 payload | 1.10x | 1.25x | 1.75x | unmeasured |
+| resulting traffic/match-hour | 0.4913 GB | 0.5583 GB | 0.7817 GB | arithmetic |
+| fleet/warm multiplier | 1.10x | 1.30x | 1.67x | unmeasured |
+| authority density on a 1-vCPU shape | 1 | 1 | 1 | conservative forecast |
+| authority density on a 2-vCPU Hetzner shape | 2 | 1 | 1 | best case unproved |
+| occupied seats | 4 | 4 | 4 | terminal product case |
+
+The measured 0.585–0.589 core makes two four-player authorities on one vCPU an
+invalid current assumption. Packing two onto a two-vCPU host is only a best
+case; the hosted benchmark must prove that scheduler jitter and a simultaneous
+heavy tick do not break either match.
+
+The fleet multiplier represents spare/warm capacity and imperfect bin packing.
+It is not the provider's billing multiplier.
+
+```text
+payload GB/player-hour = 31,018 * 3,600 / 1,000,000,000
+
+network $/authority-hour = payload GB/player-hour
+                             * 4 occupied seats
+                             * transport multiplier
+                             * regional egress $/GB
+
+compute $/authority-hour = host $/hour
+                             * fleet/warm multiplier
+                             / safe authorities per host
+
+total $/authority-hour = compute + network
+total $/player-hour = total $/authority-hour / 4
+```
+
+Fixed Workers, database, storage, observability, support, labor, taxes, DDoS
+upgrades, public IPv4, and unused minimum commitments are excluded. For
+Cloudflare Container and Render rows, the model applies the published overage
+rate even when a monthly included allowance may temporarily make marginal
+egress zero. Hetzner rows treat egress as zero only while the selected server's
+large included transfer pool is not exhausted.
+
+## Current Provider Comparison
+
+| Platform | Process/socket continuity | Current rate-card anchor | Network/abuse boundary | LBH position |
+|---|---|---|---|---|
+| **Fly Machines** | Explicit regional VM lifecycle; long-lived TCP/HTTP/WSS process | performance-1x/2-GB examples $0.0447–$0.0546/h by region | NA/EU egress $0.02/GB; application WAF/rate controls remain ours | **Primary authority benchmark.** Closest match to today's Node process and sane egress. Use performance CPU for the decision run. |
+| **Cloudflare Durable Objects** | One globally addressed, single-threaded object with WebSockets | active duration $12.50/M GB-s after allowance; incoming WS messages billed 20:1 | Cloudflare edge; application auth/input throttles still ours | **Port experiment.** Best logical mapping and possible cost floor, but no proof the real sim fits timers/CPU/recovery. |
+| **Cloudflare Containers** | Explicit container routing and WSS forwarding; live socket prevents sleep | 1-vCPU/6-GiB/12-GB `standard-2`: $0.129024 for a fully active hour before allowance | NA/EU 1 TB included then $0.025/GB; Worker/DO routing is separately billed | **Second benchmark.** Strong topology; current shape overprovisions memory and active CPU behavior is unmeasured. |
+| **Vercel Services/Functions** | Native WSS now documented, but Pro/Enterprise max 30 minutes is beta and reconnect is mandatory | low-cost US Fluid: $0.128/active-vCPU-h + $0.0106/GB-h provisioned memory; Pro $20/user/mo | 1 TB Pro transfer then starts $0.15/GB; WAF/DDoS included | **Web/control plane only.** Official pages still conflict, and a bounded function is not one uninterrupted authority-hour. |
+| **Google Cloud Run** | WSS request capped at 60 minutes; reconnect mandatory; affinity best-effort | Tier-1 instance-based 1 vCPU/1 GiB = $0.072 active hour | network transfer separate; app abuse controls and continuity are ours | **Control plane/conditional experiment.** Requires external lease and restore proof before authority use. |
+| **AWS Fargate** | Long-lived container task with explicit service/task lifecycle | US East example 1 vCPU/2 GB = $0.0493704/h | AWS transfer, IPv4, logs, load balancer, and selected security controls extra | **Transparent AWS comparator.** Good process fit; total rate needs a selected-region stack. |
+| **AWS GameLift Servers** | Managed game-server fleets and session placement | regional instance/Spot rate; per-second, one-minute minimum | eligible gen-6+ GameLift bandwidth included in supported commercial regions | **Later fleet option.** Get a region/instance quote and prove integration when scale warrants it. |
+| **Render** | No fixed WSS duration; deploy/maintenance replacement requires drain/reconnect | Standard 1 CPU/2 GB $25/mo plus workspace plan | included bandwidth varies; overage $0.15/GB; DDoS/firewall included | **Compatible but bandwidth-expensive.** Useful low-traffic comparison or control service. |
+| **Railway** | WSS supported, but official Socket.IO guide documents a 15-minute request maximum | 1 vCPU/2 GB about $0.0555/h; Hobby $5, Pro $20 | egress $0.05/GB; L4-and-below DDoS only, no app WAF | **Do not use for first authority.** Fifteen-minute churn needs continuity work and defeats the simple-host advantage. |
+| **Hetzner Cloud** | Ordinary long-lived VM; we own placement and process supervision | EU CX23 shared 2 vCPU/4 GB $0.0104/h; CCX13 dedicated $0.0809/h | at least 20 TB included EU transfer; network DDoS filtering, but patching/WAF/firewall/backups are ours | **Low-cost fallback.** CX is the price floor, CCX the credible production benchmark; both carry the highest operations burden here. |
+
+## Four-Player Authority Cost
+
+Each cell is `$/authority-hour / $/player-hour` at four occupied seats. Values
+are marginal planning estimates under the common scenario table, not invoices.
+
+| Runtime | Best | Base | Worst | Important exclusion or invalidator |
+|---|---:|---:|---:|---|
+| **Fly performance-1x, low-cost region** | $0.0590 / $0.0147 | **$0.0693 / $0.0173** | $0.0903 / $0.0226 | fixed services, observability, regional rate mix |
+| **Cloudflare Container standard-2** | $0.1213 / $0.0303 | $0.1583 / $0.0396 | $0.2350 / $0.0588 | Workers/DO requests; assumes 0.585/0.75/1.0 active vCPU by scenario |
+| **Railway 1 vCPU/2 GB** | $0.0856 / $0.0214 | $0.1001 / $0.0250 | $0.1318 / $0.0329 | **15-minute WSS boundary makes this hypothetical** |
+| **Render Standard** | $0.1114 / $0.0278 | $0.1283 / $0.0321 | $0.1744 / $0.0436 | uses $0.15/GB overage even if allowance remains |
+| **Hetzner CX23 shared 2 vCPU** | $0.0057 / $0.0014 | $0.0135 / $0.0034 | $0.0174 / $0.0043 | best packs two; shared-CPU stability and operations unpriced |
+| **Hetzner CCX13 dedicated 2 vCPU** | $0.0445 / $0.0111 | $0.1052 / $0.0263 | $0.1351 / $0.0338 | best packs two; transfer assumed inside allowance; operations unpriced |
+| **Cloud Run 1 vCPU/1 GiB, compute only** | $0.0792 / $0.0198 | $0.0936 / $0.0234 | $0.1202 / $0.0301 | **add network; 60-minute WSS boundary** |
+| **Fargate 1 vCPU/2 GB, compute only** | $0.0543 / $0.0136 | $0.0642 / $0.0160 | $0.0824 / $0.0206 | add transfer, IPv4, load balancer, logs, security services |
+
+The primary planning anchor is therefore **$0.0693 per occupied four-player
+authority-hour, or $0.0173/player-hour**, before fixed/shared services. The
+range to carry into a cohort model is $0.0590–$0.0903/authority-hour for the
+first Fly implementation. A fleet running `M` simultaneous matches spends
+approximately `M * authority-hour rate`; it does not collapse those matches
+into one authority.
+
+Hetzner CX's tiny number is not the recommendation. It exposes how little raw
+VM compute can cost when bandwidth is bundled, while hiding the real price of
+shared-CPU jitter, regional fleet engineering, patching, failover, and on-call
+work. CCX is the honest dedicated-CPU comparison.
+
+### Durable Object rate-card experiment
+
+One active 128-MB Durable Object costs about `$0.00576/object-hour` after the
+included duration allowance:
+
+```text
+0.128 GB * 3,600 seconds * $12.50 / 1,000,000 GB-seconds = $0.00576
+```
+
+If four clients each send 15 inputs/s, the 20:1 incoming-WebSocket billing
+ratio produces 10,800 billed requests/hour, or about $0.00162 after the
+request allowance. The resulting **$0.00738/authority-hour,
+$0.00185/player-hour** is a rate-card curiosity, not an LBH forecast. It omits
+Workers, storage, logs, control services, and—most importantly—whether the
+real 0.585-core fixed-step sim can run correctly inside the Durable Object CPU
+and scheduling model.
+
+### Vercel rate-card experiment
+
+A hypothetical fully active 1-vCPU/2-GB Fluid hour in a listed low-cost US
+region is `$0.128 + 2*$0.0106 = $0.1492` before transfer and invocations. It
+does not buy one uninterrupted authority-hour: the current maximum is a
+30-minute Pro/Enterprise beta boundary. At least two function epochs and a
+proved writer handoff would be required, so Vercel is excluded from the
+authority-cost comparison.
+
+## Heavy Match Forecast: 24 / 48 / 96 Clients
+
+The detailed scenario model remains
+[`high-player-count-hosting-cost-model.md`](high-player-count-hosting-cost-model.md).
+Its S1/S2/S3 resource envelopes are forecasts for increasingly dense ecology,
+contacts, fields, and event churn. They are not evidence that the current
+single-threaded writer can consume those cores.
+
+| Seats/tier | Forecast vCPU / GiB | Railway resource-rate compute/h | Cloud Run compute/h | CF Container active CPU+memory/h | Feasibility warning |
+|---|---:|---:|---:|---:|---|
+| 24 S1 | 0.75 / 1.25 | $0.0382 | $0.0576 | $0.0652 | ordinary small compute; live 24-client proof absent |
+| 24 S2 | 1.5 / 2.25 | $0.0729 | $0.1134 | $0.1282 | performance/dedicated CPU preferred |
+| 24 S3 | 3 / 4 | $0.1388 | $0.2232 | $0.2520 | internal deterministic worker path required |
+| 48 S1 | 1.5 / 2.25 | $0.0729 | $0.1134 | $0.1282 | performance/dedicated CPU preferred |
+| 48 S2 | 3 / 4 | $0.1388 | $0.2232 | $0.2520 | internal deterministic worker path required |
+| 48 S3 | 6 / 8 | $0.2776 | $0.4464 | $0.5040 | exceeds current CF Container max vCPU shape |
+| 96 S1 | 3 / 4 | $0.1388 | $0.2232 | $0.2520 | canonical writer and fanout both need proof |
+| 96 S2 | 6 / 8 | $0.2776 | $0.4464 | $0.5040 | exceeds current CF Container max vCPU shape |
+| 96 S3 | 12 / 16 | $0.5551 | $0.8928 | $1.0080 | **currently infeasible: more vCPU does not fix a serial writer** |
+
+Those rows are compute-only and do not include reserve. At the high-count
+model's 64 KiB/s/player transport target, network alone is:
+
+| Seats | GB/match-hour | Fly at $0.02/GB | CF Container at $0.025/GB | Railway at $0.05/GB | Render at $0.15/GB |
+|---:|---:|---:|---:|---:|---:|
+| 24 | 5.662 | $0.113 | $0.142 | $0.283 | $0.849 |
+| 48 | 11.325 | $0.226 | $0.283 | $0.566 | $1.699 |
+| 96 | 22.649 | $0.453 | $0.566 | $1.132 | $3.397 |
+
+One 96-player match is still **one** canonical authority, not 24 four-player
+authorities. It may need deterministic internal job workers for broadphase,
+AI, projection, compression, and fanout, but those workers cannot independently
+commit world truth. Before any 24/48/96 offering, run a 90-minute live-client
+matrix at S1/S2/S3 with actual compression, regional WAN, reconnects, and
+neighboring-match contention.
+
+## Operational And Abuse Costs Missing From The Tables
+
+The hosted bill is not the service cost. Budget and test these separately:
+
+- at least two authority regions, plus capacity unavailable during placement
+  failure or provider incident;
+- Postgres high availability, backups, point-in-time recovery, connection
+  pooling, migrations, and restore drills;
+- replay/evidence object storage and retention policy;
+- metrics, logs, traces, crash dumps, synthetic probes, and paging;
+- TLS/WSS edge, application WAF/rate limits, credential stuffing, join-code
+  guessing, malicious input floods, and entitlement abuse;
+- operator tools for draining a host, fencing an epoch, aborting/refunding a
+  match, banning an identity, and replaying settlement;
+- DDoS escalation beyond each provider's included network protection;
+- player support, incident response, and the calendar-length service tail.
+
+Cloudflare and Vercel package more edge protection. Hetzner packages cheap
+compute and network filtering but leaves the largest operational surface to
+us. Fly is the middle ground. That labor difference will dominate fractions of
+a cent of compute at small scale and belongs in the companion unit-economics
+model.
+
+## Benchmark And Decision Gates
+
+1. Package the current S20 authority as one immutable container/process with
+   graceful drain, health/readiness, epoch fencing, and no local durable truth.
+2. Run the same four-player 90-minute scenario on Fly performance CPU, Hetzner
+   CCX, and Cloudflare Container in at least two regions. Record tick p50/p95/
+   max, event-loop delay, CPU, RSS, bytes, retransmits, reconnects, and cost.
+3. On 2-vCPU hosts, run one then two independent authorities. Reject packing
+   if either match loses its gate when both enter their heaviest scenario.
+4. Port the identical deterministic scenario—not a chat-room surrogate—to one
+   Durable Object. Compare state hashes, scheduling, restart/recovery, and the
+   actual request/duration bill.
+5. Kill one live authority and prove the v0.4 abort contract. Only then attempt
+   checkpoint recovery with a fenced new epoch.
+6. Exercise expired/replayed join tickets, duplicate inputs, old-epoch
+   settlement, join floods, and a malicious high-rate client.
+7. Measure real transport bytes including TLS and reconnect rebases. Replace
+   the 1.10x/1.25x/1.75x overhead factors with evidence.
+8. Feed measured authority density, regional mix, real play hours, and fixed
+   service quotes into the companion unit-economics artifact before choosing a
+   production vendor.
+
+## Final Position
+
+Central hosted authority is still the right production direction for LBH. At
+the admitted four-player S20 shape, the first credible process-host forecast
+is cents per match-hour, not dollars. That makes correctness, cheat resistance,
+stable movement truth, and durable settlement worth buying.
+
+Choose Fly for the first public authority proof, Cloudflare for the edge and
+control plane, Postgres for durable identity/settlement, and Hetzner CCX as the
+low-cost operational fallback. Keep Durable Objects and Cloudflare Containers
+as measured alternatives. Do not mistake cheap rate cards, WebSocket support,
+or high socket limits for a proved simulation lifecycle.
