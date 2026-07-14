@@ -1,0 +1,40 @@
+FROM node:22.22.0-bookworm-slim
+
+ARG LBH_GIT_COMMIT
+ARG LBH_S20_SOURCE_SHA256
+
+LABEL org.opencontainers.image.revision="${LBH_GIT_COMMIT}" \
+      dev.lastsingularity.benchmark="regional-four-player-v1" \
+      dev.lastsingularity.protocol="s20-v1+brotli-q1" \
+      dev.lastsingularity.s20-source-sha256="${LBH_S20_SOURCE_SHA256}"
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    ca-certificates iproute2 libcap2-bin procps tcpdump tini \
+  && setcap cap_net_admin,cap_net_raw=eip /usr/bin/tcpdump \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY scripts ./scripts
+COPY src ./src
+
+RUN test "$(node -p 'process.versions.node.split(`.`)[0]')" = "22" \
+  && test "${#LBH_GIT_COMMIT}" = "40" \
+  && test "${#LBH_S20_SOURCE_SHA256}" = "64" \
+  && command -v ss >/dev/null \
+  && command -v tcpdump >/dev/null \
+  && test -r /proc/self/stat \
+  && test -r /proc/self/cgroup
+
+ENV HOST=0.0.0.0 \
+    PORT=8080 \
+    LBH_BENCH_PROTOCOL=s20-v1+brotli-q1 \
+    LBH_BENCH_AUTHORITY_PROCESSES=1 \
+    LBH_BENCH_MAX_SEATS=4 \
+    LBH_BENCH_RETRIES=0
+
+EXPOSE 8080
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "scripts/v04-authority-benchmark-entrypoint.cjs"]
