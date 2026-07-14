@@ -62,7 +62,7 @@ function createS24LiveEvidenceFixture(env = process.env) {
       const row = Math.floor(index / columns);
       const column = index % columns;
       const angle = ((index * 2654435761) >>> 0) / 0xffffffff * Math.PI * 2;
-      return { id: `s24-evidence-fauna-${index + 1}`, type: "jelly",
+      return { id: `s24-evidence-fauna-${index + 1}`, type: "s24-load",
         wx: ((column + 0.5) / columns) * worldScale,
         wy: ((row + 0.5) / Math.ceil(TARGETS.evidenceFauna / columns)) * worldScale,
         vx: Math.cos(angle) * 0.002, vy: Math.sin(angle) * 0.002,
