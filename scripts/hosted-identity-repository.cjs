@@ -100,6 +100,21 @@ class InMemoryHostedIdentityRepository {
         this.refreshTokens.set(hash, { ...token, state: "revoked", revokedAt });
       }
     }
+    for (const [hash, session] of this.accessSessions) {
+      if (session.familyId === familyId && !session.revokedAt) {
+        this.accessSessions.set(hash, { ...session, revokedAt, revokeReason: reason });
+      }
+    }
+  }
+
+  revokeFamiliesForEntitlement(accountId, scope, revokedAt, reason) {
+    for (const family of this.refreshFamilies.values()) {
+      if (family.accountId === accountId && family.state === "active" &&
+          family.scope.provider === scope.provider && family.scope.appId === scope.appId &&
+          family.scope.grantType === scope.grantType) {
+        this.revokeFamily(family.familyId, revokedAt, reason);
+      }
+    }
   }
 }
 

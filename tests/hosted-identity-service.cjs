@@ -37,7 +37,7 @@ function harness() {
     clock: { now: () => now },
     crypto,
     diagnostics: (event) => diagnostics.push(event),
-    diagnosticKey: "test-diagnostic-key",
+    diagnosticKey: "test-diagnostic-key-at-least-32-bytes",
     accessTtlMs: 10_000,
     refreshTtlMs: 100_000,
   });
@@ -143,6 +143,41 @@ test("revoked and refunded entitlement immediately fail authorization", () => {
   }
 });
 
+test("provider reconciliation persists revoke/refund and fences every scoped family", () => {
+  for (const state of ["revoked", "refunded"]) {
+    const h = harness();
+    h.addProof("proof-a", "subject-a");
+    const first = h.exchange("proof-a", "sign-in-a");
+    const second = h.exchange("proof-a", "sign-in-b");
+    h.proofs.get("proof-a").state = state;
+    const observation = {
+      provider: "test", proof: "proof-a", audience: "lbh-client", appId: "lbh", grantType: "base_game",
+      callbackId: `provider-${state}`,
+    };
+    assert.deepEqual(h.service.reconcileEntitlement(observation), { reconciled: true, state });
+    assert.deepEqual(h.service.reconcileEntitlement(observation), { reconciled: true, state });
+    assert.equal(h.repository.getEntitlement(first.accountId, "test", "lbh", "base_game").state, state);
+    assert.equal([...h.repository.refreshFamilies.values()].every((family) => family.state === "revoked"), true);
+    assert.equal([...h.repository.accessSessions.values()].every((session) => session.revokedAt), true);
+    rejected(() => h.service.createProfile({ accessToken: first.accessToken, displayName: "Revoked" }));
+    rejected(() => h.service.createProfile({ accessToken: second.accessToken, displayName: "Refunded" }));
+    rejected(() => h.service.refresh({ refreshToken: first.refreshToken }));
+    rejected(() => h.service.refresh({ refreshToken: second.refreshToken }));
+  }
+});
+
+test("provider reconciliation never creates an account for an unknown identity", () => {
+  const h = harness();
+  h.addProof("unknown-proof", "never-linked-subject", "refunded");
+  rejected(() => h.service.reconcileEntitlement({
+    provider: "test", proof: "unknown-proof", audience: "lbh-client", appId: "lbh", grantType: "base_game",
+    callbackId: "unknown-callback",
+  }));
+  assert.equal(h.repository.accounts.size, 0);
+  assert.equal(h.repository.identities.size, 0);
+  assert.equal(h.repository.entitlements.size, 0);
+});
+
 test("entitlement absence and non-active provider observation fail closed", () => {
   const h = harness();
   h.addProof("revoked-proof", "subject-r", "revoked");
@@ -221,6 +256,21 @@ test("diagnostics are pseudonymous and contain no provider subjects or secrets",
 test("identity service never models seat counts or eight-player admission", () => {
   const source = require("node:fs").readFileSync(require.resolve("../scripts/hosted-identity-service.cjs"), "utf8");
   assert.equal(/seatCount|maxPlayers|eightPlayer|playerCap/.test(source), false);
+});
+
+test("diagnostics require a strong key or an injected aliaser", () => {
+  const repository = new InMemoryHostedIdentityRepository();
+  const base = { repository, providers: {} };
+  assert.throws(() => new HostedIdentityService(base), /diagnostic key required/);
+  assert.throws(() => new HostedIdentityService({ ...base, diagnosticKey: "short" }), /diagnostic key required/);
+  assert.throws(() => new HostedIdentityService({
+    ...base, diagnosticKey: "x".repeat(32), diagnosticsAliaser: "not-a-function",
+  }), /aliaser invalid/);
+  const service = new HostedIdentityService({
+    ...base,
+    diagnosticsAliaser: (kind, value) => `${kind}_${value.length}`,
+  });
+  assert(service instanceof HostedIdentityService);
 });
 
 let passed = 0;

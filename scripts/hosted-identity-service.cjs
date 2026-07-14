@@ -70,7 +70,8 @@ class HostedIdentityService {
     clock = { now: () => Date.now() },
     crypto = defaultCryptoAdapter(),
     diagnostics = () => {},
-    diagnosticKey = "replace-in-production",
+    diagnosticKey,
+    diagnosticsAliaser,
     accessTtlMs = DEFAULT_ACCESS_TTL_MS,
     refreshTtlMs = DEFAULT_REFRESH_TTL_MS,
   }) {
@@ -88,7 +89,15 @@ class HostedIdentityService {
     this.clock = clock;
     this.crypto = crypto;
     this.diagnostics = diagnostics;
-    this.diagnosticKey = boundedString(diagnosticKey, "diagnosticKey", { max: 512 });
+    if (diagnosticsAliaser !== undefined && typeof diagnosticsAliaser !== "function") {
+      throw new TypeError("identity diagnostics aliaser invalid");
+    }
+    if (!diagnosticsAliaser && (typeof diagnosticKey !== "string" ||
+        Buffer.byteLength(diagnosticKey, "utf8") < 32 || Buffer.byteLength(diagnosticKey, "utf8") > 512)) {
+      throw new TypeError("identity diagnostic key required");
+    }
+    this.diagnosticKey = diagnosticKey;
+    this.diagnosticsAliaser = diagnosticsAliaser;
     this.accessTtlMs = accessTtlMs;
     this.refreshTtlMs = refreshTtlMs;
   }
@@ -145,6 +154,52 @@ class HostedIdentityService {
         });
         this._recordVerifiedEntitlement(repo, principal.accountId, input.provider, appId, grantType, verified.entitlement);
         return { accountId: principal.accountId, linked: true };
+      });
+    });
+  }
+
+  reconcileEntitlement(input) {
+    return this._public("entitlement_reconcile", () => {
+      strictRecord(input, ["provider", "proof", "audience", "appId", "grantType", "callbackId"]);
+      const provider = this._provider(input.provider);
+      const proof = boundedString(input.proof, "proof", { max: 4096 });
+      const audience = boundedString(input.audience, "audience", { max: 160 });
+      const appId = boundedString(input.appId, "appId", { max: 160 });
+      const grantType = boundedString(input.grantType, "grantType", { max: 80 });
+      const callbackId = boundedString(input.callbackId, "callbackId", { max: 256 });
+      const verified = this._verifyProvider(provider, { proof, audience, appId, grantType }, { requireActive: false });
+      return this.repository.transaction((repo) => {
+        const identity = repo.getIdentity(input.provider, verified.subject);
+        if (!identity) fail("identity_unknown");
+        const subjectHash = this.crypto.hash(verified.subject);
+        const observationHash = this.crypto.hash([
+          input.provider, appId, grantType, verified.entitlement.state, verified.entitlement.providerGrantId,
+        ].join("\u0000"));
+        const callback = repo.getCallback(input.provider, callbackId);
+        if (callback && (callback.accountId !== identity.accountId || callback.subjectHash !== subjectHash ||
+            callback.observationHash !== observationHash)) {
+          fail("callback_collision", { accountId: identity.accountId });
+        }
+        if (!callback) repo.putCallback({
+          provider: input.provider,
+          callbackId,
+          accountId: identity.accountId,
+          subjectHash,
+          observationHash,
+          createdAt: this.clock.now(),
+        });
+        this._recordVerifiedEntitlement(
+          repo, identity.accountId, input.provider, appId, grantType, verified.entitlement,
+        );
+        if (verified.entitlement.state !== "active") {
+          repo.revokeFamiliesForEntitlement(
+            identity.accountId,
+            { provider: input.provider, appId, grantType },
+            this.clock.now(),
+            `entitlement_${verified.entitlement.state}`,
+          );
+        }
+        return { reconciled: true, state: verified.entitlement.state };
       });
     });
   }
@@ -215,7 +270,7 @@ class HostedIdentityService {
     return adapter;
   }
 
-  _verifyProvider(adapter, request) {
+  _verifyProvider(adapter, request, { requireActive = true } = {}) {
     let identity;
     let entitlement;
     try {
@@ -231,7 +286,8 @@ class HostedIdentityService {
       fail("provider_ambiguous");
     }
     const subject = boundedString(identity.subject, "subject", { max: 512 });
-    if (!ENTITLEMENT_STATES.includes(entitlement.state) || entitlement.state !== "active") fail("entitlement_absent");
+    if (!ENTITLEMENT_STATES.includes(entitlement.state)) fail("entitlement_absent");
+    if (requireActive && entitlement.state !== "active") fail("entitlement_absent");
     boundedString(entitlement.providerGrantId, "providerGrantId", { max: 512 });
     return { subject, entitlement };
   }
@@ -300,7 +356,7 @@ class HostedIdentityService {
     const token = boundedString(rawToken, "accessToken", { min: 32, max: 512 });
     const session = this.repository.getAccessSession(this.crypto.hash(token));
     const now = this.clock.now();
-    if (!session || session.expiresAt <= now) fail("access_invalid", { accountId: session?.accountId });
+    if (!session || session.revokedAt || session.expiresAt <= now) fail("access_invalid", { accountId: session?.accountId });
     const family = this.repository.getRefreshFamily(session.familyId);
     if (!family || family.state !== "active") fail("access_invalid", { accountId: session.accountId });
     const account = this.repository.getAccount(session.accountId);
@@ -321,7 +377,12 @@ class HostedIdentityService {
       const internal = error instanceof InternalIdentityError ? error : new InternalIdentityError("internal_failure");
       const diagnostic = { event, outcome: "rejected", reason: internal.reason };
       if (internal.context.accountId) {
-        diagnostic.accountAlias = diagnosticAlias("account", internal.context.accountId, this.diagnosticKey);
+        try {
+          const alias = this.diagnosticsAliaser
+            ? this.diagnosticsAliaser("account", internal.context.accountId)
+            : diagnosticAlias("account", internal.context.accountId, this.diagnosticKey);
+          if (typeof alias === "string" && alias.length >= 1 && alias.length <= 160) diagnostic.accountAlias = alias;
+        } catch {}
       }
       try { this.diagnostics(Object.freeze(diagnostic)); } catch {}
       throw new HostedIdentityPublicError();
