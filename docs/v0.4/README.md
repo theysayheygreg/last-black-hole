@@ -79,6 +79,9 @@ coordinator owns the integrated documents.
 - `MULTIPLAYER-STATE-PAIR-S22-RUNTIME-PUBLIC-WORKERS.md` — default-off live
   worker seam, exact authority boundary, product-path rejection, and the next
   shared-public-body representation lane.
+- `MULTIPLAYER-STATE-PAIR-S23P-PREPARED-PUBLIC-SOURCE.md` — exact prepared
+  public proof lifecycle, adversarial closure, sealed 1/4/8 evidence, and the
+  decision to retain S20 and keep eight closed.
 
 ## Evidence Standard
 

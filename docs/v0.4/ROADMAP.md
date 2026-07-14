@@ -803,6 +803,35 @@ future 24-player scale track. Evidence is under
 `docs/v0.4/evidence/state-pair-s23t/` and the method/decision is in
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S23T-TAIL-ATTRIBUTION.md`.
 
+**S23P prepared public-source proof — complete and not admitted:** The
+default-off `state-pair-public-body-prepared-v1` capability validates,
+canonicalizes, and hashes one exact recursively frozen public source per issued
+authority beat, then binds an opaque single-use proof to the exact ticketed
+recipients and scheduler ordinals. The first valid consumer builds one public
+core/body; later recipients reuse it. Owner validation, lineage, ACK/base,
+retransmit, recovery, compression, queue, send, and commit remain local to the
+one dedicated logical authority for that match.
+
+Red-team closed accessor execution, equal-clone/duplicate issuance, lookalike
+bindings, stale cohorts, mixed S23/S23P duplicate work, unused proof history,
+and validation-before-commit ordering. Focused runtime proof is 17/17 and the
+final review has no P1/P2/P3.
+
+Two profiler-off rounds reverse three treatments and population order. One and
+four pass absolute tails at 28.50/28.20 ms and 45.11/45.48 ms p95. Eight
+improves S23 p95 by a median 18.1% and CPU by 10.3%, reaching 9.75/9.70 Hz in
+NORMAL, but still records 71.05/69.76 ms p95 and 75.04/72.69 ms p99. It fails
+both 50/70 ms gates. One materially regresses S20 tails, CPU, and traffic;
+four improves CPU/tails but retains about 52% more traffic. The sealed 10% S20
+non-regression envelope fails.
+
+Do not promote S23P. S20 remains the one-through-four product path, eight
+remains closed, and S23/S23P remain default-off research scaffolding. No next
+implementation lane is selected; `S24` remains reserved for future 24-player
+scale work. Evidence is under `docs/v0.4/evidence/state-pair-s23p/`; design and
+decision are in
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S23P-PREPARED-PUBLIC-SOURCE.md`.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

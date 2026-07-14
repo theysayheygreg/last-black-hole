@@ -3089,3 +3089,19 @@ remains closed, and S24 remains reserved for future 24-player scale work.
 parity/privacy/adversarial proof and unchanged 50/70 ms gates. Closed for S23
 promotion, workers, cadence/gate changes, hosted/fleet/heavier-sim work, and
 24/48/96.
+
+### Q: Does S23P prepared public-source proof admit eight without regressing S20?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Preserve one dedicated logical gameplay authority per match/group; concurrent matches multiply independent authorities. S23P shares only one exact immutable public source/body inside that authority. |
+| Jul 14 | Accept the proof contract after red-team closure: getter-free descriptor validation, full ticket/admission HMAC binding, exact ordinal/single-use proof, monotonic beat fence, post-projection freshness recheck, owner/size validation before commit, and no tracker/body advance for unused or invalid proofs. Final review has no P1/P2/P3. |
+| Jul 14 | Preserve exact S23 semantics. Focused proof covers byte-identical keyframe/delta, divergent ACK cohort, retransmit, recovery, owner privacy, malformed/forged/stale/duplicate inputs, mixed S23/S23P reuse, and default-off fallback. |
+| Jul 14 | Reject S23P product promotion. Eight reaches 9.75/9.70 Hz in NORMAL and improves median S23 p95 by 18.1%, but 71.05/69.76 ms p95 and 75.04/72.69 ms p99 fail the absolute gates and the precommitted recovery threshold. |
+| Jul 14 | Keep S20 for one through four. S23P one-player p95/CPU/traffic materially regress S20; four-player CPU/tails improve but traffic remains about 52% higher. The sealed 10% non-regression envelope fails. |
+| Jul 14 | Keep S23/S23P default-off research scaffolding, keep eight closed, select no next implementation lane, and reserve S24 for future 24-player scale work. Do not infer hosted/fleet/heavier-sim/AOI/24–96 capacity. |
+
+**Door status:** Closed for S23P promotion, eight-player admission, cadence or
+gate relaxation, hosted/fleet/heavier-sim implementation, and 24/48/96. S20
+remains the one-through-four product path; S24 remains only a reserved future
+scale-track name.

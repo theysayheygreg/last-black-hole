@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-07-14 — v0.4 S23P prepared public-source proof retained default-off
+
+- Added negotiated, default-off `state-pair-public-body-prepared-v1` atop S23,
+  preparing one exact frozen public source/body per issued authority beat while
+  leaving owner, lineage, ACK/base, recovery, compression, queue, and send
+  authority recipient-local.
+- Bound opaque single-use proofs to full ticket/admission identity and exact
+  scheduler ordinals; diagnostics retain counts without raw recipient ids or
+  tokens.
+- Closed independent red-team findings covering accessors, lookalike bindings,
+  stale cohorts, duplicate/equal-clone issuance, mixed S23/S23P work, unused
+  body-history advance, default-off hot-path HMAC work, and owner validation
+  before public body commit. Final review has no P1/P2/P3.
+- Added exact S23 wire/ACK/delta/divergent/retransmit/recovery parity and
+  adversarial lifecycle proof; focused runtime integration is 17/17.
+- Sealed two profiler-off rounds across fresh S20, S23, and S23P controls at
+  1/4/8. One and four pass absolute candidate gates. Eight improves S23 but
+  still fails at 71.05/69.76 ms p95 and 75.04/72.69 ms p99.
+- Rejected promotion because eight misses 50/70 ms tails and one/four fail the
+  sealed 10% S20 non-regression envelope. S20 remains the one-through-four
+  product path; eight stays closed; S23/S23P stay default-off.
+- Ran the registered 41-suite `multiplayer-network` lane exactly once with
+  retries disabled; all selected suites passed.
+
 ## 2026-07-13 — v0.4 S23T public-body tail attribution
 
 - Added a test/evidence-only S23T profiler with a 512-source-beat numeric ring,
