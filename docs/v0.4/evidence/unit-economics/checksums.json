@@ -1,9 +1,12 @@
 {
   "schema": "lbh-v04-multiplayer-unit-economics-checksums-v1",
-  "sourceCommit": "00f91f14fe0281bfc643b2c239763a9ecd55314c",
+  "sourceCommit": "5758ccf36f1de5640bb9edb496989a25cd9aa8c0",
+  "providerSourceCommit": "963c4427b78d60e9fd4cd481debd5920ea39002f",
   "sha256": {
-    "config.json": "fa745eb7e05b82c6a3f7e6a81bff3dbce6e20746385599ec813f7c17fe5295cc",
-    "model.json": "859d24bd4d3b560d6ca6598fd81692d04fffc92ea31fd8e7f1f2a407505a0bae",
-    "scripts/v04-multiplayer-unit-economics.cjs": "0365d806b831d81aa346945cf20ac9d85a4ce5b10171246640b593c25fcf1e7c"
+    "config.json": "e3aa3adf4651c869c06aa115d8594661fc5a19f9f8a44fde03de55de88ce6f7b",
+    "model.json": "e0158f406d33bc2c2aaf65c716590712be6e91bcdb8de4abb5034597930e3792",
+    "scripts/v04-multiplayer-unit-economics.cjs": "89155957368610e878d33f82d71b3d8c3daa04c5d1f22bc50ea613803f5ae643",
+    "docs/v0.4/research/hosted-costs-unit-economics.md": "060fc43df711de5cf040031d19a74225da8c9a941af6f9b4ae84c355bcaf46a2",
+    "docs/v0.4/research/2026-07-14-hosted-provider-source-ledger.md": "86aa1e5da5e48bfcb46b423a176ef1e458018f9d08e65017514eb30bf1993f77"
   }
 }

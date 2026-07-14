@@ -30,7 +30,7 @@ node tests/v04-multiplayer-unit-economics.cjs
 node scripts/v04-multiplayer-unit-economics.cjs \
   --config docs/v0.4/evidence/unit-economics/config.json \
   --output docs/v0.4/evidence/unit-economics/model.json \
-  --source-commit 00f91f14fe0281bfc643b2c239763a9ecd55314c
+  --source-commit 5758ccf36f1de5640bb9edb496989a25cd9aa8c0
 ```
 
 The receipt ledger applies deductions in this explicit order:
@@ -65,10 +65,10 @@ peak hosts = ceil(peak matches / safe authorities per host)
 
 The model exposes `costPerAuthorityHour`, `costPerHostedPlayerHour`,
 `safeAuthoritiesPerHost`, egress per client, `averagePlayersPerMatch`, and
-match duration in every row. Central scenarios currently use three average
-players per match and a 45-minute match. The one- or two-authority host-density
-inputs are explicitly `planningAssumptionPendingMeasurement`; they are not
-capacity evidence.
+match duration in every row. The primary central scenario uses the refreshed
+four-occupied-seat Fly envelope and a 45-minute match. Every central case fixes
+safe density at one authority per host: no packing credit is taken. Tests reject
+packed density unless its evidence status is an explicit measured benchmark.
 
 ## Case assumptions
 
@@ -113,33 +113,42 @@ support allowance plus optional packaging/update-manifest costs.
 
 | Case | Copies | Net receipts | Operations | Contribution | Hosted player-h | Authority-h | Peak matches |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Best | 1,000 | $4,065 | $2,502 | $1,563 | 2,430 | 810 | 0.37 |
-| Best | 10,000 | $40,650 | $3,024 | $37,626 | 24,300 | 8,100 | 3.70 |
-| Best | 100,000 | $406,497 | $8,240 | $398,257 | 243,000 | 81,000 | 36.99 |
-| Best | 1,000,000 | $4,064,966 | $60,402 | $4,004,564 | 2,430,000 | 810,000 | 369.86 |
-| Base | 1,000 | $3,545 | $34,416 | -$30,871 | 14,040 | 4,680 | 0.80 |
-| Base | 10,000 | $35,446 | $38,984 | -$3,537 | 140,400 | 46,800 | 8.01 |
-| Base | 100,000 | $354,465 | $84,664 | $269,801 | 1,404,000 | 468,000 | 80.14 |
-| Base | 1,000,000 | $3,544,649 | $541,471 | $3,003,178 | 14,040,000 | 4,680,000 | 801.37 |
-| Worst | 1,000 | $2,816 | $1,758,594 | -$1,755,778 | 72,000 | 24,000 | 1.96 |
-| Worst | 10,000 | $28,158 | $1,789,143 | -$1,760,985 | 720,000 | 240,000 | 19.57 |
-| Worst | 100,000 | $281,579 | $2,094,626 | -$1,813,046 | 7,200,000 | 2,400,000 | 195.69 |
-| Worst | 1,000,000 | $2,815,791 | $5,149,456 | -$2,333,665 | 72,000,000 | 24,000,000 | 1,956.95 |
+| Best | 1,000 | $4,065 | $2,528 | $1,537 | 2,430 | 608 | 0.28 |
+| Best | 10,000 | $40,650 | $3,285 | $37,365 | 24,300 | 6,075 | 2.77 |
+| Best | 100,000 | $406,497 | $10,852 | $395,644 | 243,000 | 60,750 | 27.74 |
+| Best | 1,000,000 | $4,064,966 | $86,527 | $3,978,440 | 2,430,000 | 607,500 | 277.40 |
+| Base | 1,000 | $3,545 | $34,529 | -$30,984 | 14,040 | 3,510 | 0.60 |
+| Base | 10,000 | $35,446 | $40,117 | -$4,670 | 140,400 | 35,100 | 6.01 |
+| Base | 100,000 | $354,465 | $95,997 | $258,468 | 1,404,000 | 351,000 | 60.10 |
+| Base | 1,000,000 | $3,544,649 | $654,801 | $2,889,848 | 14,040,000 | 3,510,000 | 601.03 |
+| Worst | 1,000 | $2,816 | $1,758,846 | -$1,756,030 | 72,000 | 18,000 | 1.47 |
+| Worst | 10,000 | $28,158 | $1,791,662 | -$1,763,504 | 720,000 | 180,000 | 14.68 |
+| Worst | 100,000 | $281,579 | $2,119,820 | -$1,838,241 | 7,200,000 | 1,800,000 | 146.77 |
+| Worst | 1,000,000 | $2,815,791 | $5,401,400 | -$2,585,609 | 72,000,000 | 18,000,000 | 1,467.71 |
 
 Central unit-cost and break-even results:
 
 | Case | $/authority-h | $/hosted player-h | Hosted player-h/$ | Egress/client | Safe authorities/host | Cohort break-even copies |
 |---|---:|---:|---:|---:|---:|---:|
-| Best | $0.00492 | $0.003999 | 250.04 | 32 KiB/s | 2 | 610 |
-| Base | $0.01148 | $0.009253 | 108.07 | 64 KiB/s | 1 | 11,165 |
-| Worst | $0.01476 | $0.019076 | 52.42 | 96 KiB/s | 1 | none in modeled envelope |
+| Best | $0.0590 | $0.014750 | 67.80 | 33.32 KiB/s | 1 | 614 |
+| Base | $0.0693 | **$0.017325** | 57.72 | 37.86 KiB/s | 1 | 11,598 |
+| Worst | $0.0903 | $0.022575 | 44.30 | 53.01 KiB/s | 1 | none in modeled envelope |
 
 `breakEvenHostedPlayerHours` is calculated at every sales scale after fixed,
 one-time, support, and storage costs. It is zero where those costs already
 exceed receipts. At one million copies the central best/base maximums are
-approximately 1.004 billion and 343.2 million hosted player-hours; the worst
+approximately 272.3 million and 183.3 million hosted player-hours; the worst
 case remains zero because the service stack and non-hosting variable costs
 consume the available receipts.
+
+The worst case is structurally loss-making, not merely too small at 1K. Its
+$2.816 net receipt/copy is below $3.646 variable operations/copy: $1.625 of
+Fly gameplay, $0.720 variable control, $1.200 support, and about $0.101 storage.
+On top, the 84-month service tail contributes $1,705,200 of fixed stack and
+$50,000 one-time work. At one million copies those terms produce $5,401,400
+operations against $2,815,791 receipts. Shortening the service tail cannot by
+itself cure the negative per-copy margin; lifetime/support/control assumptions
+must also change.
 
 ## Hybrid control plane plus player-hosted private matches
 
@@ -176,13 +185,29 @@ delta for every topology, case, and sales scale. The dominant inputs are:
 3. active lifetime and multiplayer hours, because they multiply transport,
    compute, and variable control costs;
 4. egress price and bytes/client in central service;
-5. host price, warm factor, and measured safe authority density.
+5. authority compute, warm-fleet, and measured safe-density inputs.
 
 At one million central/base copies, a 10% list-price increase changes modeled
 contribution by +$354,465; a 10% relative storefront-fee increase changes it
-by -$88,616; 10% more active lifetime changes it by -$17,203; and 10% higher
-egress price changes it by -$7,619. These are mechanical sensitivities, not
+by -$88,616; 10% more active lifetime changes it by -$28,536; 10% higher
+authority compute changes it by -$20,405; and 10% higher egress changes it by
+-$3,919. These are mechanical sensitivities, not
 pricing recommendations.
+
+Provider authority-rate sensitivity at four occupied seats:
+
+| Provider/runtime | Best authority-h / player-h | Base authority-h / player-h | Worst authority-h / player-h | Position |
+|---|---:|---:|---:|---|
+| Fly performance | $0.0590 / $0.014750 | $0.0693 / $0.017325 | $0.0903 / $0.022575 | primary benchmark; application egress included, shared fixed costs separate |
+| Hetzner CX23 | $0.0057 / $0.001425 | $0.0135 / $0.003375 | $0.0174 / $0.004350 | price floor; shared-CPU stability and operations unpriced |
+| Hetzner CCX13 | $0.0445 / $0.011125 | $0.1052 / $0.026300 | $0.1351 / $0.033775 | dedicated comparison; transfer allowance and operations caveats |
+| Cloudflare Durable Object | $0.00738 / $0.001845 experimental only | — | — | rate-card curiosity; unproven port, never a capacity forecast |
+
+These alternatives replace only variable gameplay authority cost; the same
+explicit fixed control-plane/database/observability/support stack must still be
+added. Vercel is intentionally absent: the refreshed research keeps it
+control-plane-only because bounded function epochs are not an uninterrupted
+single-writer authority-hour.
 
 Red-team constraints preserved in the implementation and tests:
 
@@ -200,10 +225,13 @@ Red-team constraints preserved in the implementation and tests:
 
 ## Limitations and refresh contract
 
-All nonzero provider prices are imported from the July 10 research snapshot
-and marked `pendingRefresh`. Update values and source/status fields in
-`config.json`; no code rewrite is required. Re-run the same command and commit
-the changed config, output, and checksums.
+Fly/Hetzner/Cloudflare-DO authority inputs are bound to official-source refresh
+commit `963c4427b78d60e9fd4cd481debd5920ea39002f` and marked
+`verifiedOfficialDerived`; Fly egress is marked `verifiedOfficial`. The older
+R2 storage allowance remains `pendingRefresh` because it was not refreshed in
+that provider ledger. Update values and source/status fields in `config.json`;
+no code rewrite is required. Re-run the same command and commit the changed
+config, output, and checksums.
 
 The model excludes corporate income tax, publisher share/recoupment,
 development, marketing, actual regional price/discount mix, payout timing,
