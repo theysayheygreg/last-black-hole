@@ -31,6 +31,23 @@ class InMemoryPlacementRepository {
 
   getRun(runId) { return clone(this.runs.get(runId) || null); }
 
+  listExpiredCandidates(now, limit = 256) {
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 256) {
+      throw new Error("invalid expiry query");
+    }
+    const selected = [];
+    for (const run of this.runs.values()) {
+      const deadlineAt = run.state === "ALLOCATING" ? run.readinessDeadlineAt : run.leaseDeadlineAt;
+      if (!["ALLOCATING", "READY", "ACTIVE", "DRAINING"].includes(run.state)
+        || run.leaseStatus !== "ACTIVE" || run.resultAcceptanceState === "ACCEPTED" || now < deadlineAt) continue;
+      selected.push({ runId: run.runId, state: run.state, leaseStatus: run.leaseStatus,
+        authorityLeaseId: run.authorityLeaseId, leaseEpoch: run.leaseEpoch, deadlineAt });
+      selected.sort((left, right) => left.deadlineAt - right.deadlineAt || left.runId.localeCompare(right.runId));
+      if (selected.length > limit) selected.pop();
+    }
+    return selected.map(clone);
+  }
+
   claimPlacement({ requestId, runId, candidates, isEligible, create }) {
     const indexed = this.requestIndex.get(requestId);
     if (indexed) return { won: false, conflict: indexed !== runId, record: clone(this.runs.get(indexed)) };

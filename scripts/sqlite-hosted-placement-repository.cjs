@@ -87,6 +87,7 @@ class SqliteHostedPlacementRepository {
         admitted_count INTEGER NOT NULL CHECK (admitted_count BETWEEN 0 AND seat_count),
         terminal_at INTEGER,
         updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
+        expiry_deadline_at INTEGER NOT NULL CHECK (expiry_deadline_at >= 0),
         row_version INTEGER NOT NULL CHECK (row_version >= 1),
         result_acceptance_state TEXT NOT NULL DEFAULT 'OPEN'
           CHECK (result_acceptance_state IN ('OPEN','ACCEPTED')),
@@ -131,11 +132,16 @@ class SqliteHostedPlacementRepository {
         run_id TEXT PRIMARY KEY REFERENCES hosted_placement_run_lineages(run_id) ON DELETE CASCADE,
         state TEXT NOT NULL CHECK (state IN ('ENDED','FAILED')),
         lease_epoch INTEGER NOT NULL CHECK (lease_epoch >= 1),
-        terminal_at INTEGER NOT NULL CHECK (terminal_at >= 0)
+        terminal_at INTEGER NOT NULL CHECK (terminal_at >= 0),
+        authority_lease_id TEXT,
+        authority_incarnation TEXT,
+        accepted_result_hash TEXT,
+        accepted_at INTEGER
       ) STRICT;
     `);
     this.#migrateWorkloadColumns();
     this.#migrateCurrentAllocationColumns();
+    this.#migrateTombstoneColumns();
   }
 
   #migrateWorkloadColumns() {
@@ -168,13 +174,25 @@ class SqliteHostedPlacementRepository {
     if (!columns.has("accepted_at")) {
       this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN accepted_at INTEGER");
     }
+    if (!columns.has("expiry_deadline_at")) {
+      this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN expiry_deadline_at INTEGER");
+      this.db.exec(`UPDATE hosted_placement_current_allocations SET expiry_deadline_at =
+        CASE WHEN state = 'ALLOCATING' THEN CAST(json_extract(payload_json, '$.readinessDeadlineAt') AS INTEGER)
+          ELSE CAST(json_extract(payload_json, '$.leaseDeadlineAt') AS INTEGER) END
+        WHERE expiry_deadline_at IS NULL`);
+    }
+    this.db.exec(`CREATE INDEX IF NOT EXISTS hosted_placement_expiry_candidates
+      ON hosted_placement_current_allocations(result_acceptance_state, lease_status, state, expiry_deadline_at, run_id)`);
+    this.db.exec("DROP TRIGGER IF EXISTS hosted_placement_result_acceptance_shape_insert");
+    this.db.exec("DROP TRIGGER IF EXISTS hosted_placement_result_acceptance_shape_update");
     this.db.exec(`
       CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_shape_insert
       BEFORE INSERT ON hosted_placement_current_allocations
       WHEN NOT (
         (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_hash IS NULL AND NEW.accepted_at IS NULL)
         OR (NEW.result_acceptance_state = 'ACCEPTED' AND NEW.accepted_result_hash IS NOT NULL
-          AND NEW.accepted_at IS NOT NULL AND NEW.state = 'DRAINING' AND NEW.lease_status = 'ACTIVE')
+          AND NEW.accepted_at IS NOT NULL AND NEW.state = 'ENDED' AND NEW.lease_status = 'ENDED'
+          AND NEW.terminal_at IS NOT NULL)
       )
       BEGIN SELECT RAISE(ABORT, 'invalid hosted placement result acceptance'); END;
 
@@ -183,7 +201,8 @@ class SqliteHostedPlacementRepository {
       WHEN NOT (
         (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_hash IS NULL AND NEW.accepted_at IS NULL)
         OR (NEW.result_acceptance_state = 'ACCEPTED' AND NEW.accepted_result_hash IS NOT NULL
-          AND NEW.accepted_at IS NOT NULL AND NEW.state = 'DRAINING' AND NEW.lease_status = 'ACTIVE')
+          AND NEW.accepted_at IS NOT NULL AND NEW.state = 'ENDED' AND NEW.lease_status = 'ENDED'
+          AND NEW.terminal_at IS NOT NULL)
       )
       BEGIN SELECT RAISE(ABORT, 'invalid hosted placement result acceptance'); END;
 
@@ -192,10 +211,34 @@ class SqliteHostedPlacementRepository {
       WHEN OLD.result_acceptance_state = 'ACCEPTED'
       BEGIN SELECT RAISE(ABORT, 'accepted hosted placement result is immutable'); END;
 
-      CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_immutable_delete
+    `);
+  }
+
+  #migrateTombstoneColumns() {
+    const columns = new Set(this.db.prepare(`
+      SELECT name FROM pragma_table_info('hosted_placement_terminal_tombstones')
+    `).all().map((row) => row.name));
+    for (const [name, type] of [["authority_lease_id", "TEXT"], ["authority_incarnation", "TEXT"],
+      ["accepted_result_hash", "TEXT"], ["accepted_at", "INTEGER"]]) {
+      if (!columns.has(name)) this.db.exec(`ALTER TABLE hosted_placement_terminal_tombstones ADD COLUMN ${name} ${type}`);
+    }
+    this.db.exec("DROP TRIGGER IF EXISTS hosted_placement_result_acceptance_immutable_delete");
+    this.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS hosted_placement_preserve_accepted_result_delete
       BEFORE DELETE ON hosted_placement_current_allocations
       WHEN OLD.result_acceptance_state = 'ACCEPTED'
-      BEGIN SELECT RAISE(ABORT, 'accepted hosted placement result is immutable'); END;
+      BEGIN
+        INSERT INTO hosted_placement_terminal_tombstones(
+          run_id,state,lease_epoch,terminal_at,authority_lease_id,authority_incarnation,
+          accepted_result_hash,accepted_at
+        ) VALUES (OLD.run_id,'ENDED',OLD.lease_epoch,OLD.terminal_at,
+          json_extract(OLD.payload_json, '$.authorityLeaseId'),OLD.authority_incarnation,
+          OLD.accepted_result_hash,OLD.accepted_at)
+        ON CONFLICT(run_id) DO UPDATE SET
+          state='ENDED',lease_epoch=excluded.lease_epoch,terminal_at=excluded.terminal_at,
+          authority_lease_id=excluded.authority_lease_id,authority_incarnation=excluded.authority_incarnation,
+          accepted_result_hash=excluded.accepted_result_hash,accepted_at=excluded.accepted_at;
+      END;
     `);
   }
 
@@ -222,6 +265,8 @@ class SqliteHostedPlacementRepository {
     const record = parseJson(row.payload_json);
     record.state = row.state;
     record.leaseStatus = row.lease_status;
+    record.terminalAt = row.terminal_at;
+    record.updatedAt = row.updated_at;
     record.authorityIncarnation = row.authority_incarnation;
     record.resultAcceptanceState = row.result_acceptance_state;
     record.acceptedResultHash = row.accepted_result_hash;
@@ -232,7 +277,8 @@ class SqliteHostedPlacementRepository {
 
   #getRunRow(runId) {
     return this.db.prepare(`
-      SELECT payload_json, row_version, state, lease_status, authority_incarnation, result_acceptance_state,
+      SELECT payload_json, row_version, state, lease_status, terminal_at, updated_at,
+        authority_incarnation, result_acceptance_state,
         accepted_result_hash, accepted_at
       FROM hosted_placement_current_allocations WHERE run_id = ?
     `).get(runId);
@@ -308,6 +354,25 @@ class SqliteHostedPlacementRepository {
     return this.#rowToRun(this.#getRunRow(runId));
   }
 
+  listExpiredCandidates(now, limit = 256) {
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 256) {
+      throw new Error("invalid expiry query");
+    }
+    return this.db.prepare(`
+      SELECT run_id, state, lease_status, lease_epoch,
+        json_extract(payload_json, '$.authorityLeaseId') AS authority_lease_id,
+        expiry_deadline_at AS deadline_at
+      FROM hosted_placement_current_allocations
+      WHERE state IN ('ALLOCATING','READY','ACTIVE','DRAINING')
+        AND lease_status = 'ACTIVE' AND result_acceptance_state = 'OPEN'
+        AND expiry_deadline_at <= ?
+      ORDER BY deadline_at, run_id
+      LIMIT ?
+    `).all(now, limit).map((row) => ({ runId: row.run_id, state: row.state,
+      leaseStatus: row.lease_status, authorityLeaseId: row.authority_lease_id,
+      leaseEpoch: Number(row.lease_epoch), deadlineAt: Number(row.deadline_at) }));
+  }
+
   claimPlacement({ requestId, runId, candidates, isEligible, create }) {
     return this.#transaction(() => {
       const binding = this.db.prepare(`
@@ -374,8 +439,8 @@ class SqliteHostedPlacementRepository {
         this.db.prepare(`
           INSERT INTO hosted_placement_current_allocations (
             run_id, authority_instance_id, authority_incarnation, request_id, state, lease_status, lease_epoch,
-            seat_count, admitted_count, terminal_at, updated_at, row_version, payload_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            seat_count, admitted_count, terminal_at, updated_at, expiry_deadline_at, row_version, payload_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(run_id) DO UPDATE SET
             authority_instance_id = excluded.authority_instance_id,
             authority_incarnation = excluded.authority_incarnation,
@@ -387,11 +452,13 @@ class SqliteHostedPlacementRepository {
             admitted_count = excluded.admitted_count,
             terminal_at = excluded.terminal_at,
             updated_at = excluded.updated_at,
+            expiry_deadline_at = excluded.expiry_deadline_at,
             row_version = excluded.row_version,
             payload_json = excluded.payload_json
         `).run(runId, candidateId, record.authorityIncarnation, requestId,
           record.state, record.leaseStatus, record.leaseEpoch,
           record.seatCount, record.admittedCount, record.terminalAt ?? null, record.updatedAt,
+          record.state === "ALLOCATING" ? record.readinessDeadlineAt : record.leaseDeadlineAt,
           nextVersion, encodeRecord(record));
         this.db.prepare(`
           INSERT INTO hosted_placement_request_bindings(request_id, run_id, bound_at) VALUES (?, ?, ?)
@@ -414,10 +481,11 @@ class SqliteHostedPlacementRepository {
         UPDATE hosted_placement_current_allocations SET
           authority_instance_id = ?, request_id = ?, state = ?, lease_status = ?, lease_epoch = ?,
           seat_count = ?, admitted_count = ?, terminal_at = ?, updated_at = ?,
-          row_version = row_version + 1, payload_json = ?
+          expiry_deadline_at = ?, row_version = row_version + 1, payload_json = ?
         WHERE run_id = ? AND row_version = ?
       `).run(next.authorityInstanceId, next.requestId, next.state, next.leaseStatus, next.leaseEpoch,
         next.seatCount, next.admittedCount, next.terminalAt ?? null, next.updatedAt,
+        next.state === "ALLOCATING" ? next.readinessDeadlineAt : next.leaseDeadlineAt,
         encodeRecord(next), runId, row.row_version);
       return Number(result.changes) === 1 ? this.getRun(runId) : null;
     });
@@ -443,6 +511,23 @@ class SqliteHostedPlacementRepository {
     return this.#transaction(() => {
       const row = this.#getRunRow(identity.run_id);
       const current = this.#rowToRun(row);
+      if (!current) {
+        const tombstone = this.db.prepare(`SELECT * FROM hosted_placement_terminal_tombstones
+          WHERE run_id = ?`).get(identity.run_id);
+        const exactTombstone = tombstone && tombstone.authority_lease_id === identity.lease_id
+          && Number(tombstone.lease_epoch) === identity.lease_epoch
+          && tombstone.authority_incarnation === identity.authority_incarnation
+          && tombstone.accepted_result_hash !== null;
+        if (!exactTombstone) return null;
+        if (tombstone.accepted_result_hash !== resultHash) {
+          const error = new Error("authority result conflicts with accepted hash");
+          error.code = "HOSTED_RESULT_CONFLICT";
+          throw error;
+        }
+        return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
+          lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
+          result_hash: resultHash, accepted_at: Number(tombstone.accepted_at) });
+      }
       const exactLineage = current
         && current.authorityLeaseId === identity.lease_id
         && current.leaseEpoch === identity.lease_epoch
@@ -464,11 +549,13 @@ class SqliteHostedPlacementRepository {
       const result = this.db.prepare(`
         UPDATE hosted_placement_current_allocations SET
           result_acceptance_state = 'ACCEPTED', accepted_result_hash = ?, accepted_at = ?,
-          row_version = row_version + 1
+          state = 'ENDED', lease_status = 'ENDED', terminal_at = ?, updated_at = ?,
+          expiry_deadline_at = ?, row_version = row_version + 1
         WHERE run_id = ? AND row_version = ? AND state = 'DRAINING' AND lease_status = 'ACTIVE'
           AND result_acceptance_state = 'OPEN' AND accepted_result_hash IS NULL
           AND authority_incarnation = ?
-      `).run(resultHash, acceptedAt, identity.run_id, row.row_version, identity.authority_incarnation);
+      `).run(resultHash, acceptedAt, acceptedAt, acceptedAt, acceptedAt,
+        identity.run_id, row.row_version, identity.authority_incarnation);
       if (Number(result.changes) !== 1) return null;
       return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
         lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
@@ -493,10 +580,12 @@ class SqliteHostedPlacementRepository {
       const result = this.db.prepare(`
         UPDATE hosted_placement_current_allocations SET
           state = ?, lease_status = ?, seat_count = ?, admitted_count = ?, terminal_at = ?, updated_at = ?,
-          row_version = row_version + 1, payload_json = ?
+          expiry_deadline_at = ?, row_version = row_version + 1, payload_json = ?
         WHERE run_id = ? AND row_version = ?
       `).run(next.state, next.leaseStatus, next.seatCount, next.admittedCount,
-        next.terminalAt ?? null, next.updatedAt, encodeRecord(next), runId, row.row_version);
+        next.terminalAt ?? null, next.updatedAt,
+        next.state === "ALLOCATING" ? next.readinessDeadlineAt : next.leaseDeadlineAt,
+        encodeRecord(next), runId, row.row_version);
       if (Number(result.changes) !== 1) throw new Error("run compare-and-set lost");
       return this.getRun(runId);
     });
@@ -542,7 +631,8 @@ class SqliteHostedPlacementRepository {
   snapshot() {
     const capacities = this.listCapacities();
     const runs = this.db.prepare(`
-      SELECT payload_json, row_version, state, lease_status, authority_incarnation, result_acceptance_state,
+      SELECT payload_json, row_version, state, lease_status, terminal_at, updated_at,
+        authority_incarnation, result_acceptance_state,
         accepted_result_hash, accepted_at
       FROM hosted_placement_current_allocations ORDER BY run_id
     `).all().map((row) => this.#rowToRun(row));

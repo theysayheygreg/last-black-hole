@@ -1,7 +1,6 @@
 const crypto = require("crypto");
 const { createOpaqueTokenCodec } = require("./hosted-placement-token.cjs");
 
-const ACTIVE_STATES = new Set(["ALLOCATING", "READY", "ACTIVE", "DRAINING"]);
 const LIVE_STATES = new Set(["READY", "ACTIVE", "DRAINING"]);
 const MAX_SEATS = 4;
 
@@ -57,15 +56,18 @@ function createHostedPlacementService({
   readinessTtlMs = 20_000,
   leaseTtlMs = 10_000,
   measuredPackingLimit = 1,
+  expirySweepLimit = 256,
 } = {}) {
   if (!repository || typeof repository.claimPlacement !== "function"
     || typeof repository.consumeTokenAndUpdateRun !== "function"
-    || typeof repository.isTokenConsumed !== "function") reject("INVALID_CONFIG");
+    || typeof repository.isTokenConsumed !== "function"
+    || typeof repository.listExpiredCandidates !== "function") reject("INVALID_CONFIG");
   if (typeof now !== "function" || typeof randomBytes !== "function") reject("INVALID_CONFIG");
   if (typeof authenticateWorkload !== "function" || typeof authenticateControlPlane !== "function") reject("INVALID_CONFIG");
   if (!Buffer.isBuffer(diagnosticKey) || diagnosticKey.length < 32) reject("INVALID_CONFIG");
   for (const ttl of [bootstrapTtlMs, ticketTtlMs, readinessTtlMs, leaseTtlMs]) integer(ttl, 1, 300_000);
   integer(measuredPackingLimit, 1, 1_024);
+  integer(expirySweepLimit, 1, 256);
   const codec = createOpaqueTokenCodec({ key: tokenKey, randomBytes });
 
   function time() {
@@ -420,15 +422,13 @@ function createHostedPlacementService({
   function fenceExpired() {
     const at = time();
     let fenced = 0;
-    for (const candidate of repository.snapshot().runs) {
-      if (!ACTIVE_STATES.has(candidate.state)) continue;
-      const expired = candidate.state === "ALLOCATING"
-        ? at >= candidate.readinessDeadlineAt
-        : at >= candidate.leaseDeadlineAt;
-      if (!expired) continue;
+    for (const candidate of repository.listExpiredCandidates(at, expirySweepLimit)) {
       const updated = repository.compareAndSetRun(candidate.runId,
-        (run) => ACTIVE_STATES.has(run.state) && run.leaseStatus === "ACTIVE"
-          && (run.state === "ALLOCATING" ? at >= run.readinessDeadlineAt : at >= run.leaseDeadlineAt),
+        (run) => run.state === candidate.state && run.leaseStatus === candidate.leaseStatus
+          && run.authorityLeaseId === candidate.authorityLeaseId && run.leaseEpoch === candidate.leaseEpoch
+          && run.resultAcceptanceState !== "ACCEPTED"
+          && (run.state === "ALLOCATING" ? run.readinessDeadlineAt : run.leaseDeadlineAt) === candidate.deadlineAt
+          && at >= candidate.deadlineAt,
         (run) => ({ ...run, state: "FAILED", leaseStatus: "FENCED", routeId: null, terminalAt: at, updatedAt: at }));
       if (updated) fenced += 1;
     }

@@ -14,7 +14,7 @@ function rejection(fn, code) {
   assert.throws(fn, (error) => error?.code === code, code);
 }
 
-function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
+function harness({ capacity = 24, tombstoneLimit = 4, expirySweepLimit = 256 } = {}) {
   let clock = 1_000_000;
   let sequence = 0;
   const logs = [];
@@ -43,6 +43,7 @@ function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
     authenticateControlPlane: (credential) => credential === "control-plane" ? { role: "CONTROL_PLANE" } : null,
     logger: (entry) => logs.push(entry), bootstrapTtlMs: 100, ticketTtlMs: 1_000,
     readinessTtlMs: 150, leaseTtlMs: 200, measuredPackingLimit: 1,
+    expirySweepLimit,
   };
   const service = createHostedPlacementService(options);
 
@@ -386,6 +387,33 @@ function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
     h.advance(1_001);
     const summary = h.service.cleanup({ terminalBefore: h.now(), keepTerminal: 4 });
     assert.deepStrictEqual(summary, { activeRuns: 0, consumedTokens: 0, tombstones: 4 });
+  });
+
+  await test("expiry sweep is bounded and repeated batches eventually fence every candidate", () => {
+    const h = harness({ capacity: 25, expirySweepLimit: 7 });
+    for (let index = 0; index < 25; index++) h.register(index);
+    for (let index = 0; index < 25; index++) h.place(`bounded-expiry-${index}`);
+    h.advance(151);
+    assert.deepStrictEqual([h.service.fenceExpired().fenced, h.service.fenceExpired().fenced,
+      h.service.fenceExpired().fenced, h.service.fenceExpired().fenced,
+      h.service.fenceExpired().fenced], [7, 7, 7, 4, 0]);
+    assert.strictEqual(h.repository.snapshot().runs.filter((run) => run.leaseStatus === "FENCED").length, 25);
+  });
+
+  await test("expiry sweep exact CAS ignores a candidate renewed after selection", () => {
+    const h = harness({ capacity: 1, expirySweepLimit: 1 });
+    h.register(0);
+    h.place("renewed-during-sweep");
+    h.advance(151);
+    const originalList = h.repository.listExpiredCandidates.bind(h.repository);
+    h.repository.listExpiredCandidates = (now, limit) => {
+      const candidates = originalList(now, limit);
+      h.repository.compareAndSetRun("renewed-during-sweep", () => true,
+        (run) => ({ ...run, readinessDeadlineAt: now + 500, leaseDeadlineAt: now + 500, updatedAt: now }));
+      return candidates;
+    };
+    assert.deepStrictEqual(h.service.fenceExpired(), { fenced: 0 });
+    assert.strictEqual(h.repository.getRun("renewed-during-sweep").leaseStatus, "ACTIVE");
   });
 
   await test("structured diagnostics contain aliases counts and states only", () => {

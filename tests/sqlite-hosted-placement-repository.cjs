@@ -19,7 +19,7 @@ function rejection(fn, code) {
   assert.throws(fn, (error) => error?.code === code, code);
 }
 
-function fixture({ measuredPackingLimit = 1 } = {}) {
+function fixture({ measuredPackingLimit = 1, expirySweepLimit = 256 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-placement-sqlite-"));
   const filename = path.join(directory, "placement.sqlite");
   let clock = 1_000_000;
@@ -63,7 +63,7 @@ function fixture({ measuredPackingLimit = 1 } = {}) {
       authenticateWorkload: (credential) => descriptors.get(credential) || null,
       authenticateControlPlane: (credential) => credential === "control" ? { role: "CONTROL_PLANE" } : null,
       bootstrapTtlMs: 1_000, ticketTtlMs: 2_000, readinessTtlMs: 1_500,
-      leaseTtlMs: 2_000, measuredPackingLimit,
+      leaseTtlMs: 2_000, measuredPackingLimit, expirySweepLimit,
     });
   }
 
@@ -358,6 +358,20 @@ function drainRun(h, repository, service, runId) {
     } finally { h.closeAll(); }
   });
 
+  await test("SQLite expiry selection stays bounded and repeated sweeps drain the backlog", () => {
+    const h = fixture({ measuredPackingLimit: 8, expirySweepLimit: 3 });
+    try {
+      const repository = h.openRepository();
+      const service = h.service(repository);
+      register(service, h);
+      for (let index = 0; index < 8; index++) assert.strictEqual(place(service, h, `expiry-${index}`).won, true);
+      h.advance(1_501);
+      assert.strictEqual(repository.listExpiredCandidates(1_001_501, 3).length, 3);
+      assert.deepStrictEqual([service.fenceExpired().fenced, service.fenceExpired().fenced,
+        service.fenceExpired().fenced, service.fenceExpired().fenced], [3, 3, 2, 0]);
+    } finally { h.closeAll(); }
+  });
+
   await test("cleanup retains bounded tombstones and preserves foreign-key integrity", () => {
     const h = fixture();
     try {
@@ -400,6 +414,12 @@ function drainRun(h, repository, service, runId) {
       const accepted = repository.acceptAuthorityResult(identity, "sha256:one");
       assert.strictEqual(accepted.accepted, true);
       assert.strictEqual(repository.getRun("accepted").resultAcceptanceState, "ACCEPTED");
+      assert.strictEqual(repository.getRun("accepted").state, "ENDED");
+      assert.strictEqual(repository.getRun("accepted").leaseStatus, "ENDED");
+      h.advance(10_000);
+      assert.deepStrictEqual(service.fenceExpired(), { fenced: 0 });
+      register(service, h);
+      assert.strictEqual(place(service, h, "capacity-released").won, true);
       assert.strictEqual(repository.compareAndSetRun("accepted", () => true,
         (run) => ({ ...run, updatedAt: 1_000_001 })), null);
       assert.throws(() => repository.db.prepare(`UPDATE hosted_placement_current_allocations
@@ -414,9 +434,13 @@ function drainRun(h, repository, service, runId) {
 
       repository = h.openRepository();
       assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
+      repository.cleanup({ now: 1_010_000, terminalBefore: 1_010_000, keepTerminal: 4 });
+      assert.strictEqual(repository.getRun("accepted"), null);
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
       assert.throws(() => repository.acceptAuthorityResult(identity, "sha256:other"),
         (error) => error.code === "HOSTED_RESULT_CONFLICT");
-      assert.strictEqual(repository.getRun("accepted").acceptedResultHash, "sha256:one");
+      assert.strictEqual(repository.db.prepare(`SELECT accepted_result_hash FROM hosted_placement_terminal_tombstones
+        WHERE run_id = 'accepted'`).get().accepted_result_hash, "sha256:one");
     } finally { h.closeAll(); }
   });
 
