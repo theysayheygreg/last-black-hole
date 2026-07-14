@@ -15,7 +15,9 @@ const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
 const { CAPABILITY: BINARY_CODEC_CAPABILITY, codecContext: binaryCodecContext,
   BINARY_CODEC_MANIFEST, BINARY_CODEC_MANIFEST_HASH } =
   require("../../scripts/state-pair-binary-codec.cjs");
-const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY } =
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY,
+  PUBLIC_BODY_MANIFEST: PUBLIC_BODY_COMPRESSION_MANIFEST,
+  PUBLIC_BODY_MANIFEST_HASH: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH } =
   require("../../scripts/state-pair-compression-codec.cjs");
 const { CAPABILITY: PUBLIC_BODY_CAPABILITY, CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
   CODEC_MANIFEST_HASH: PUBLIC_BODY_CODEC_MANIFEST_HASH } =
@@ -28,7 +30,7 @@ function requestedCapabilities(binary, compression, publicBody) {
   return ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
     RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY,
     ...(binary ? [BINARY_CODEC_CAPABILITY] : []), ...(compression ? [COMPRESSION_CODEC_CAPABILITY] : []),
-    ...(publicBody ? [PUBLIC_BODY_CAPABILITY] : [])];
+    ...(publicBody ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY] : [])];
 }
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
@@ -329,6 +331,16 @@ async function initialize(config) {
         || bodyHash !== PUBLIC_BODY_CODEC_MANIFEST_HASH
         || !canonicalJsonBytes(bodyCodec.manifest).equals(canonicalJsonBytes(PUBLIC_BODY_CODEC_MANIFEST))) {
       throw new Error("content-addressed public body codec manifest verification failed");
+    }
+    const compression = sessionManifest.publicContent?.statePairPublicBodyCompressionCodec;
+    const compressionHash = compression?.manifest
+      ? `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(compression.manifest)).digest("hex")}` : null;
+    if (compression?.capability !== PUBLIC_BODY_COMPRESSION_CAPABILITY
+        || compression?.codecManifestHash !== PUBLIC_BODY_COMPRESSION_MANIFEST_HASH
+        || compressionHash !== PUBLIC_BODY_COMPRESSION_MANIFEST_HASH
+        || !canonicalJsonBytes(compression.manifest)
+          .equals(canonicalJsonBytes(PUBLIC_BODY_COMPRESSION_MANIFEST))) {
+      throw new Error("content-addressed public-body compression manifest verification failed");
     }
   }
   send({ type: "manifestAck", manifestSchema: issued.body.manifestSchema,

@@ -7,6 +7,8 @@ const zlib = require("zlib");
 const {
   HEADER_BYTES, MAX_ORIGINAL_BYTES, MANIFEST_HASH, CompressionCodecError,
   encodeCompressedStatePair, decodeCompressedStatePair,
+  PUBLIC_BODY_MANIFEST_HASH, encodeCompressedPublicBodyStatePair,
+  decodeCompressedPublicBodyStatePair,
 } = require("../scripts/state-pair-compression-codec.cjs");
 const { createClientDeltaReceiver, selectClientReplicationMode, MODES } =
   require("../scripts/client-delta-receiver.cjs");
@@ -70,6 +72,14 @@ function main() {
   samples[0].fill(0);
   assert(retained.equals(stable));
   assert(cases.every(([, code]) => code), JSON.stringify(cases));
+  const bodyBytes = Buffer.from('{"pairSchema":"lbh-authority-state-pair-body-v1"}');
+  const bodyWire = encodeCompressedPublicBodyStatePair(bodyBytes);
+  assert(decodeCompressedPublicBodyStatePair(bodyWire).equals(bodyBytes));
+  assert.strictEqual(errorCode(() => decodeCompressedPublicBodyStatePair(wire)), "wrong-magic");
+  assert.strictEqual(errorCode(() => decodeCompressedStatePair(bodyWire)), "wrong-magic");
+  const bodyCorrupt = Buffer.from(bodyWire);
+  bodyCorrupt[48] ^= 1;
+  assert.strictEqual(errorCode(() => decodeCompressedPublicBodyStatePair(bodyCorrupt)), "integrity");
   const capabilities = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
     "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1"];
   assert.strictEqual(selectClientReplicationMode({ wireVersion: "lbh-multiplayer-json-v2", capabilities }),
@@ -87,7 +97,8 @@ function main() {
     compressionContext, positionalContext: {}, binaryContext: {} }),
   (error) => error.code === "cross-codec-framing");
   console.log(JSON.stringify({ schema: "lbh-s20-compression-codec-adversarial-v1", manifestHash: MANIFEST_HASH,
-    exactComparisons, malformedCases: cases.length, malformedResults: Object.fromEntries(cases),
+    exactComparisons, publicBodyManifestHash: PUBLIC_BODY_MANIFEST_HASH,
+    publicBodyProfileAssertions: 4, malformedCases: cases.length, malformedResults: Object.fromEntries(cases),
     maxAndMaxMinusOneCases: 2, mutableRetentionComparisons: 1, pinnedFramingRejects: 1,
     clientModeAssertions: 2, crossCodecRejects: 2, mismatches: 0 }, null, 2));
 }

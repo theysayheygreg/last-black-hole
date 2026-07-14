@@ -17,7 +17,7 @@ const {
   BODY_SCHEMA,
   BODY_DELTA_SCHEMA,
   codecContext,
-  scanPublicBodyPrivacy,
+  assertPublicBody,
   encodePublicBodyFrame,
 } = require("./state-pair-public-body-codec.cjs");
 
@@ -116,15 +116,17 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
   const bodies = new Map();
   const sourceBodies = new Map();
   const keyframes = new Map();
+  const encodedBodies = new Map();
   const recipients = new Map();
   let bodyBytes = 0;
   let nextBodyRevision = 1;
   let cohortTargetId = null;
   let cohorts = new Map();
+  let cohortBytes = 0;
   const counters = {
     bodyBuilds: 0, bodyHashes: 0, bodyCacheHits: 0, bodyEvictions: 0,
     cohortHits: 0, cohortMisses: 0, cohortBuilds: 0, cohortCapFallbacks: 0,
-    bodyKeyframes: 0, bodyDeltas: 0, acknowledgements: 0, ackRejected: 0,
+    bodyKeyframes: 0, bodyDeltas: 0, bodySerializations: 0, acknowledgements: 0, ackRejected: 0,
     retransmits: 0, recoveryResets: 0, disconnects: 0,
   };
 
@@ -156,6 +158,7 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       const record = bodies.get(oldestId);
       bodies.delete(oldestId);
       keyframes.delete(oldestId);
+      encodedBodies.delete(oldestId);
       sourceBodies.delete(record.sourceKey);
       bodyBytes -= record.bytes;
       counters.bodyEvictions += 1;
@@ -191,7 +194,7 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     // semantics instead of depending on source traversal order.
     const body = deepFreeze({ ...provisionalBody, world: internalView.world,
       entities: internalView.entities });
-    scanPublicBodyPrivacy(body);
+    assertPublicBody(body);
     const bodyHash = sha256(canonicalJsonBytes(body));
     const structuralHash = projectionHash(internalView);
     const bytes = canonicalJsonBytes(body).length;
@@ -206,6 +209,7 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     if (cohortTargetId !== bodyId) {
       cohortTargetId = bodyId;
       cohorts = new Map();
+      cohortBytes = 0;
     }
     evictBodies();
     return record;
@@ -218,6 +222,15 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       bodyRevision: target.body.bodyRevision, resultHash: target.bodyHash, body: target.body });
     keyframes.set(target.body.bodyId, payload);
     return payload;
+  }
+
+  function encodedBody(target) {
+    const cached = encodedBodies.get(target.body.bodyId);
+    if (cached) return cached;
+    const wire = canonicalJson(target.body);
+    encodedBodies.set(target.body.bodyId, wire);
+    counters.bodySerializations += 1;
+    return wire;
   }
 
   function deltaPayload(base, target) {
@@ -249,7 +262,13 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       baseHash: base.bodyHash, bodyId: target.body.bodyId, bodyRevision: target.body.bodyRevision,
       resultHash: target.bodyHash, structuralBaseHash: base.structuralHash,
       structuralResultHash: target.structuralHash, delta: built.delta });
+    const bytes = canonicalJsonBytes(payload).length;
+    if (bodyBytes + cohortBytes + bytes > limits.maxBodyBytes) {
+      counters.cohortCapFallbacks += 1;
+      return null;
+    }
     cohorts.set(key, payload);
+    cohortBytes += bytes;
     counters.cohortBuilds += 1;
     return payload;
   }
@@ -283,7 +302,9 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     const frame = deepFreeze({ ...legacy.frame, pairSchema: PAIR_SCHEMA,
       bodyId: target.body.bodyId, bodyRevision: target.body.bodyRevision, bodyHash: target.bodyHash,
       public: publicPayload, owner: legacy.frame.owner });
-    const wire = encodePublicBodyFrame(frame, codecContext({ ...identity, manifestHash: fixed.manifestHash }));
+    const wire = encodePublicBodyFrame(frame,
+      codecContext({ ...identity, manifestHash: fixed.manifestHash }),
+      publicPayload.kind === "keyframe" ? { encodedBody: encodedBody(target) } : undefined);
     const bytes = Buffer.byteLength(wire, "utf8");
     const encodedDigest = sha256(wire);
     const publication = registerExactEncodedPublication(Object.freeze({ frame, bytes,
@@ -405,7 +426,8 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       retainedBytes += state.retainedBytes;
       retiredAckProofs += state.retired.size;
     }
-    return deepFreeze({ schema: PAIR_SCHEMA, ...counters, bodies: bodies.size, bodyBytes,
+    return deepFreeze({ schema: PAIR_SCHEMA, ...counters, bodies: bodies.size, bodyBytes, cohortBytes,
+      retainedPublicMaterialBytes: bodyBytes + cohortBytes,
       recipients: recipients.size, pendingPairs, retainedBytes, retiredAckProofs,
       activeTargetCohorts: cohorts.size, cohortTargetId, limits, ownerPublisher: ownerPublisher.diagnostics() });
   }

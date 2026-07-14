@@ -28,7 +28,8 @@ const {
   CAPABILITY: PUBLIC_BODY_CAPABILITY,
 } = require("./state-pair-public-body-codec.cjs");
 const { createSharedPublicBodyAuthority } = require("./shared-public-body-authority.cjs");
-const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY } = require("./state-pair-compression-codec.cjs");
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY } =
+  require("./state-pair-compression-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -328,6 +329,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     if (ticketClaims.capabilities.includes(PUBLIC_BODY_CAPABILITY)
         && (!ticketClaims.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
           || !ticketClaims.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+          || !ticketClaims.capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)
           || !ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
           || !ticketClaims.capabilities.includes(MIXED_CAPABILITY)
           || ticketClaims.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
@@ -419,6 +421,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     });
     const cachedBody = sharedPublicBody && publicBodySource?.snapshot === snapshot
       ? publicBodySource.body : null;
+    if (cachedBody && publicBodySource.publicFrame !== publicFrame) {
+      fail("non-shared-public-source",
+        "one public-body source tick must be the same authority-projected object for every recipient");
+    }
     const publicCore = cachedBody ? null : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
           ...profile,
@@ -433,7 +439,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           sourceKey: String(snapshot), world: publicCore.world, entities: publicCore.entities,
         })
       : null;
-    if (sharedPublicBody && !cachedBody) publicBodySource = Object.freeze({ snapshot, body });
+    if (sharedPublicBody && !cachedBody) {
+      publicBodySource = Object.freeze({ snapshot, body, publicFrame });
+    }
     const publicView = sharedPublicBody ? null : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_PROJECTION, (value) => ({
           ...profile,

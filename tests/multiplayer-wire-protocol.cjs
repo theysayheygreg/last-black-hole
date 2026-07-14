@@ -148,7 +148,7 @@ async function run() {
     }), "invalid-field");
     const bodyCapabilities = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
       "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1",
-      "state-pair-public-body-v1"];
+      "state-pair-public-body-v1", "state-pair-public-body-brotli-v1"];
     validateWireFrame({ ...hello, capabilities: bodyCapabilities }, { direction: CLIENT_TO_SERVER });
     expectProtocolError(() => validateWireFrame({ ...hello,
       capabilities: bodyCapabilities.filter((value) => value !== "state-pair-brotli-v1") },

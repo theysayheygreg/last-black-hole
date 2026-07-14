@@ -5,6 +5,7 @@ const zlib = require("zlib");
 const { canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 
 const CAPABILITY = "state-pair-brotli-v1";
+const PUBLIC_BODY_COMPRESSION_CAPABILITY = "state-pair-public-body-brotli-v1";
 const CODEC_SCHEMA = "lbh-state-pair-compression-envelope-v1";
 const CODEC_VERSION = 1;
 const CODEC_ID = 1;
@@ -39,6 +40,24 @@ const MANIFEST = Object.freeze({
 });
 const MANIFEST_DIGEST = crypto.createHash("sha256").update(canonicalJsonBytes(MANIFEST)).digest();
 const MANIFEST_HASH = `sha256:${MANIFEST_DIGEST.toString("hex")}`;
+const PUBLIC_BODY_MAGIC = Buffer.from("LBHP", "ascii");
+const PUBLIC_BODY_CODEC_ID = 2;
+const PUBLIC_BODY_MANIFEST = Object.freeze({
+  schema: "lbh-public-body-compression-envelope-v1",
+  version: CODEC_VERSION,
+  capability: PUBLIC_BODY_COMPRESSION_CAPABILITY,
+  envelope: Object.freeze({ magic: "LBHP", headerBytes: HEADER_BYTES,
+    fields: MANIFEST.envelope.fields }),
+  codec: Object.freeze({ id: PUBLIC_BODY_CODEC_ID, name: CODEC_NAME, algorithm: "brotli", quality: 1,
+    contextTakeover: false, dictionary: false }),
+  integrity: Object.freeze({ algorithm: "sha256", digestBytes: 16,
+    binding: "publicBodyCompressionManifestHash || original public-body bytes" }),
+  limits: MANIFEST.limits,
+  inner: "canonical lbh-authority-state-pair-body-v1 bytes",
+});
+const PUBLIC_BODY_MANIFEST_DIGEST = crypto.createHash("sha256")
+  .update(canonicalJsonBytes(PUBLIC_BODY_MANIFEST)).digest();
+const PUBLIC_BODY_MANIFEST_HASH = `sha256:${PUBLIC_BODY_MANIFEST_DIGEST.toString("hex")}`;
 
 class CompressionCodecError extends Error {
   constructor(code, message) {
@@ -126,8 +145,73 @@ function decodeCompressedStatePair(raw) {
   return original;
 }
 
+function publicBodyOriginalDigest(bytes) {
+  return crypto.createHash("sha256").update(PUBLIC_BODY_MANIFEST_DIGEST).update(bytes).digest().subarray(0, 16);
+}
+
+function encodeCompressedPublicBodyStatePair(publicBodyWire) {
+  const original = asBytes(publicBodyWire, "public-body wire");
+  if (original.length < 1 || original.length > MAX_ORIGINAL_BYTES) {
+    fail("original-length", "original public-body wire is outside the bounded envelope");
+  }
+  const compressed = zlib.brotliCompressSync(original, { params: {
+    [zlib.constants.BROTLI_PARAM_QUALITY]: 1,
+  } });
+  if (compressed.length < 1 || compressed.length > MAX_COMPRESSED_BYTES) {
+    fail("compressed-length", "compressed public-body wire is outside the bounded envelope");
+  }
+  const envelope = Buffer.allocUnsafe(HEADER_BYTES + compressed.length);
+  PUBLIC_BODY_MAGIC.copy(envelope, 0);
+  envelope[4] = CODEC_VERSION;
+  envelope[5] = PUBLIC_BODY_CODEC_ID;
+  envelope[6] = 0;
+  envelope[7] = 0;
+  PUBLIC_BODY_MANIFEST_DIGEST.copy(envelope, 8);
+  envelope.writeUInt32BE(compressed.length, 40);
+  envelope.writeUInt32BE(original.length, 44);
+  publicBodyOriginalDigest(original).copy(envelope, 48);
+  compressed.copy(envelope, HEADER_BYTES);
+  return envelope;
+}
+
+function decodeCompressedPublicBodyStatePair(raw) {
+  const envelope = asBytes(raw, "public-body compressed envelope");
+  if (envelope.length < HEADER_BYTES + 1) fail("truncated-envelope", "public-body compression envelope is truncated");
+  if (!envelope.subarray(0, 4).equals(PUBLIC_BODY_MAGIC)) fail("wrong-magic", "public-body compression envelope magic is invalid");
+  if (envelope[4] !== CODEC_VERSION || envelope[5] !== PUBLIC_BODY_CODEC_ID
+      || envelope[6] !== 0 || envelope[7] !== 0) {
+    fail("wrong-version", "public-body compression envelope profile is unsupported");
+  }
+  if (!envelope.subarray(8, 40).equals(PUBLIC_BODY_MANIFEST_DIGEST)) {
+    fail("wrong-manifest", "public-body compression manifest binding failed");
+  }
+  const compressedLength = envelope.readUInt32BE(40);
+  const originalLength = envelope.readUInt32BE(44);
+  if (compressedLength < 1 || compressedLength > MAX_COMPRESSED_BYTES
+      || originalLength < 1 || originalLength > MAX_ORIGINAL_BYTES
+      || envelope.length !== HEADER_BYTES + compressedLength) {
+    fail("envelope-length", "public-body compression envelope lengths are invalid");
+  }
+  let inflated;
+  try {
+    inflated = zlib.brotliDecompressSync(envelope.subarray(HEADER_BYTES), {
+      maxOutputLength: originalLength, info: true,
+    });
+  } catch {
+    fail("invalid-stream", "public-body compressed stream is invalid or exceeds its declared bound");
+  }
+  if (inflated.engine.bytesWritten !== compressedLength) fail("trailing-stream", "public-body compressed stream has trailing data");
+  const original = Buffer.from(inflated.buffer);
+  if (original.length !== originalLength
+      || !crypto.timingSafeEqual(publicBodyOriginalDigest(original), envelope.subarray(48, 64))) {
+    fail("integrity", "inflated public-body wire failed length or integrity binding");
+  }
+  return original;
+}
+
 module.exports = {
   CAPABILITY,
+  PUBLIC_BODY_COMPRESSION_CAPABILITY,
   CODEC_SCHEMA,
   CODEC_VERSION,
   CODEC_ID,
@@ -139,7 +223,11 @@ module.exports = {
   MAX_ORIGINAL_BYTES,
   MANIFEST,
   MANIFEST_HASH,
+  PUBLIC_BODY_MANIFEST,
+  PUBLIC_BODY_MANIFEST_HASH,
   CompressionCodecError,
   encodeCompressedStatePair,
   decodeCompressedStatePair,
+  encodeCompressedPublicBodyStatePair,
+  decodeCompressedPublicBodyStatePair,
 };

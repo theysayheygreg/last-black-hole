@@ -204,7 +204,8 @@ async function run() {
   await runner.run("public body capability is ticket-bound to the complete compressed fallback chain", async () => {
     const registry = createMultiplayerTicketRegistry({ runId: "run-a" });
     const dependencies = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
-      "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1"];
+      "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1",
+      "state-pair-public-body-brotli-v1"];
     expectTicketError(() => registry.issueAdmission({
       membershipId: "membership-body-bad", playerId: "player-body-bad", profileId: "profile-body-bad",
       wireVersion: "lbh-multiplayer-json-v2",

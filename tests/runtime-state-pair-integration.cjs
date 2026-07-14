@@ -4,7 +4,7 @@
 const assert = require("assert");
 const { performance } = require("perf_hooks");
 const { TestRunner } = require("./helpers.cjs");
-const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
+const { canonicalJson, canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
 const { createMultiplayerTicketRegistry } = require("../scripts/multiplayer-ticket-registry.cjs");
 const { createMultiplayerSendQueue } = require("../scripts/multiplayer-send-queue.cjs");
 const { createClientDeltaReceiver } = require("../scripts/client-delta-receiver.cjs");
@@ -19,7 +19,8 @@ const {
   RuntimeStatePairError,
   createRuntimeStatePairAuthority,
 } = require("../scripts/runtime-state-pair-integration.cjs");
-const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, encodeCompressedStatePair } =
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY,
+  encodeCompressedStatePair, encodeCompressedPublicBodyStatePair } =
   require("../scripts/state-pair-compression-codec.cjs");
 
 const MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
@@ -143,6 +144,7 @@ async function run() {
   await runner.run("S23 shares one immutable public body while recipient envelopes and owners stay local", async () => {
     const caps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
       POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY,
       "static-manifest-v1"].sort();
     const a = binding("body-a", { capabilities: caps });
     const b = binding("body-b", { capabilities: caps });
@@ -157,25 +159,32 @@ async function run() {
       }
     }
     const firstA = server.publish(a, sourceA.publicFrame, sourceA.ownerFrame);
-    const firstB = server.publish(b, sourceB.publicFrame, sourceB.ownerFrame);
+    const firstB = server.publish(b, sourceA.publicFrame, sourceB.ownerFrame);
     assert.strictEqual(firstA.frame.bodyHash, firstB.frame.bodyHash);
     assert.strictEqual(firstA.frame.public.body, firstB.frame.public.body);
     assert.notStrictEqual(firstA.frame.sessionId, firstB.frame.sessionId);
     assert(!JSON.stringify(firstA.frame.public.body).includes("private-player"));
+    const divergentSourceObject = sourceFrames(b, 1);
+    assert.throws(() => server.publish(b, divergentSourceObject.publicFrame, divergentSourceObject.ownerFrame),
+      (error) => error.code === "non-shared-public-source");
     const clientA = receiver(a);
-    const acceptedA = clientA.receive(encodeCompressedStatePair(firstA.encodedWire));
+    const firstCompressed = encodeCompressedPublicBodyStatePair(firstA.encodedWire);
+    const acceptedA = clientA.receive(firstCompressed);
     assert(acceptedA.accepted, acceptedA.reason);
     assert.deepStrictEqual(acceptedA.state.legacyPublicState.players, sourceA.publicFrame.state.players);
     assert.strictEqual(acceptedA.state.owner.entities[0].components.ownerState.value.profileId,
       "private-player-body-a");
     assert(server.acknowledge(a, acceptedA.ack).accepted);
-    assert.strictEqual(server.retransmit(b, firstB.frame.frameId).encodedWire, firstB.encodedWire);
+    const retransmit = server.retransmit(b, firstB.frame.frameId);
+    assert.strictEqual(retransmit.encodedWire, firstB.encodedWire);
+    assert(encodeCompressedPublicBodyStatePair(retransmit.encodedWire)
+      .equals(encodeCompressedPublicBodyStatePair(firstB.encodedWire)));
     const secondSource = sourceFrames(a, 2);
     for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
       secondSource.publicFrame.state.world[lane] = [];
     }
     const second = server.publish(a, secondSource.publicFrame, secondSource.ownerFrame);
-    const acceptedSecond = clientA.receive(encodeCompressedStatePair(second.encodedWire));
+    const acceptedSecond = clientA.receive(encodeCompressedPublicBodyStatePair(second.encodedWire));
     assert(acceptedSecond.accepted, acceptedSecond.reason);
     assert.strictEqual(acceptedSecond.state.publicBodyHash, second.frame.bodyHash);
     assert(server.acknowledge(a, acceptedSecond.ack).accepted);
@@ -183,6 +192,86 @@ async function run() {
     assert.strictEqual(diagnostics.bodyBuilds, 2);
     assert.strictEqual(diagnostics.bodyCacheHits, 0);
     assert.strictEqual(diagnostics.recipients, 2);
+  });
+
+  await runner.run("S20 fallback and S23 preserve visible semantics owner privacy and ACK consequences", async () => {
+    const bodyCaps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY, "static-manifest-v1"].sort();
+    const legacyCaps = bodyCaps.filter((value) => ![PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY].includes(value));
+    const bodyId = binding("body-migration", { capabilities: bodyCaps });
+    const legacyId = binding("legacy-migration", { capabilities: legacyCaps });
+    const bodyServer = authority();
+    const legacyServer = authority();
+    bodyServer.admit(bodyId, claims(bodyId));
+    legacyServer.admit(legacyId, claims(legacyId));
+    const bodySource = sourceFrames(bodyId, 1);
+    const legacySource = sourceFrames(legacyId, 1);
+    for (const source of [bodySource, legacySource]) {
+      for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
+        source.publicFrame.state.world[lane] = [];
+      }
+    }
+    const bodyPublication = bodyServer.publish(bodyId, bodySource.publicFrame, bodySource.ownerFrame);
+    const legacyPublication = legacyServer.publish(legacyId, legacySource.publicFrame,
+      legacySource.ownerFrame);
+    const bodyAccepted = receiver(bodyId)
+      .receive(encodeCompressedPublicBodyStatePair(bodyPublication.encodedWire));
+    const legacyAccepted = receiver(legacyId)
+      .receive(encodeCompressedStatePair(legacyPublication.encodedWire));
+    assert(bodyAccepted.accepted, bodyAccepted.reason);
+    assert(legacyAccepted.accepted, legacyAccepted.reason);
+    assert.deepStrictEqual(bodyAccepted.state.legacyPublicState, legacyAccepted.state.legacyPublicState);
+    assert.deepStrictEqual(bodyAccepted.state.owner.entities[0].components.ownerState.value.cargo,
+      legacyAccepted.state.owner.entities[0].components.ownerState.value.cargo);
+    assert.strictEqual(bodyAccepted.state.owner.entities[0].components.ownerState.value.profileId,
+      "private-player-body-migration");
+    assert.strictEqual(legacyAccepted.state.owner.entities[0].components.ownerState.value.profileId,
+      "private-player-legacy-migration");
+    assert(!JSON.stringify(bodyPublication.frame.public).includes(bodyId.membershipId));
+    assert(bodyServer.acknowledge(bodyId, bodyAccepted.ack).accepted);
+    assert(legacyServer.acknowledge(legacyId, legacyAccepted.ack).accepted);
+  });
+
+  await runner.run("S23 client rejects changed body content and unknown delta lineage", async () => {
+    const caps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY, "static-manifest-v1"].sort();
+    const id = binding("body-adversarial", { capabilities: caps });
+    const server = authority();
+    server.admit(id, claims(id));
+    const firstSource = sourceFrames(id, 1);
+    for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
+      firstSource.publicFrame.state.world[lane] = [];
+    }
+    const first = server.publish(id, firstSource.publicFrame, firstSource.ownerFrame);
+    const changedBodyFrame = JSON.parse(first.encodedWire);
+    const movingEntity = changedBodyFrame.public.body.entities
+      .find((entity) => entity.components.runtimeMotion);
+    assert(movingEntity, "fixture must contain a public motion component");
+    movingEntity.components.runtimeMotion.value.wx += 0.25;
+    const changedBodyResult = receiver(id).receive(encodeCompressedPublicBodyStatePair(
+      canonicalJson(changedBodyFrame)));
+    assert(!changedBodyResult.accepted);
+    assert.strictEqual(changedBodyResult.reason, "hash-mismatch");
+
+    const lineageClient = receiver(id);
+    const acceptedFirst = lineageClient.receive(encodeCompressedPublicBodyStatePair(first.encodedWire));
+    assert(acceptedFirst.accepted, acceptedFirst.reason);
+    assert(server.acknowledge(id, acceptedFirst.ack).accepted);
+    const secondSource = sourceFrames(id, 2);
+    for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
+      secondSource.publicFrame.state.world[lane] = [];
+    }
+    const second = server.publish(id, secondSource.publicFrame, secondSource.ownerFrame);
+    assert.strictEqual(second.frame.public.kind, "delta");
+    const unknownBaseFrame = JSON.parse(second.encodedWire);
+    unknownBaseFrame.public.baseBodyId = "body-7-999999";
+    const unknownBaseResult = lineageClient.receive(encodeCompressedPublicBodyStatePair(
+      canonicalJson(unknownBaseFrame)));
+    assert(!unknownBaseResult.accepted);
+    assert.strictEqual(unknownBaseResult.reason, "missing-base");
   });
 
   await runner.run("ticket-bound admission drives keyframe ACK delta and exact materialization", async () => {

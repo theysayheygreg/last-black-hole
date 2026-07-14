@@ -11,6 +11,7 @@ const POSITIONAL_CODEC_CAPABILITY = "state-pair-positional-json-v1";
 const BINARY_CODEC_CAPABILITY = "state-pair-binary-v1";
 const COMPRESSION_CODEC_CAPABILITY = "state-pair-brotli-v1";
 const PUBLIC_BODY_CAPABILITY = "state-pair-public-body-v1";
+const PUBLIC_BODY_COMPRESSION_CAPABILITY = "state-pair-public-body-brotli-v1";
 
 class MultiplayerTicketError extends Error {
   constructor(code, message) {
@@ -139,11 +140,18 @@ function createMultiplayerTicketRegistry({
         }
         if (selected.capabilities.includes(PUBLIC_BODY_CAPABILITY)
             && (!selected.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+              || !selected.capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)
               || !selected.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
               || !selected.capabilities.includes("runtime-public-components-v1")
               || !selected.capabilities.includes("state-pair-mixed-v1")
               || selected.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
           fail("invalid-claim", `${PUBLIC_BODY_CAPABILITY} requires compressed positional sparse mixed state-pair and excludes binary`);
+        }
+        if (selected.capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)
+            && (!selected.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+              || !selected.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+              || selected.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+          fail("invalid-claim", `${PUBLIC_BODY_COMPRESSION_CAPABILITY} requires public-body v1 plus its positional fallback and excludes binary`);
         }
         selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
         selected.manifestHash = identifier(claims.manifestHash, "manifestHash");

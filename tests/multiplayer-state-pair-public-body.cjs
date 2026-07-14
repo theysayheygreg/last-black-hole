@@ -6,6 +6,7 @@ const { normalizeView } = require("../scripts/canonical-structural-delta.cjs");
 const { createSharedPublicBodyAuthority } = require("../scripts/shared-public-body-authority.cjs");
 const {
   PAIR_SCHEMA,
+  assertPublicBody,
   decodePublicBodyFrame,
   scanPublicBodyPrivacy,
 } = require("../scripts/state-pair-public-body-codec.cjs");
@@ -96,12 +97,14 @@ async function main() {
     assert.strictEqual(diagnostics.cohortHits, 7);
     assert.strictEqual(diagnostics.cohortMisses, 1);
     assert.strictEqual(diagnostics.activeTargetCohorts, 1);
+    assert.strictEqual(diagnostics.bodySerializations, 1,
+      "One shared keyframe body must be serialized once across all recipients");
     const decoded = decodePublicBodyFrame(second[0].encodedWire, { ...ids[0], manifestHash: MANIFEST_HASH });
     assert.strictEqual(decoded.bodyHash, secondBody.bodyHash);
     assert.strictEqual(decoded.public.baseBodyId, firstBody.body.bodyId);
     assert.strictEqual(authority.retransmit(ids[0], second[0].frame.frameId).encodedDigest,
       second[0].encodedDigest, "Retransmit must retain exact source bytes/digest");
-    assertions += 16;
+    assertions += 17;
   }
 
   {
@@ -139,6 +142,34 @@ async function main() {
   }
 
   {
+    const calibration = createAuthority();
+    const id = identity(0);
+    const calibrationOne = calibration.prepareBody(bodySource(1));
+    const calibrationFirst = calibration.publish({ identity: id, body: calibrationOne,
+      ownerView: ownerView(id, 1) });
+    assert(calibration.acknowledge(id, ackFor(calibrationFirst.frame)).accepted);
+    const calibrationTwo = calibration.prepareBody(bodySource(2));
+    const calibrationSecond = calibration.publish({ identity: id, body: calibrationTwo,
+      ownerView: ownerView(id, 2) });
+    assert.strictEqual(calibrationSecond.frame.public.kind, "delta");
+    const calibrated = calibration.diagnostics();
+    assert(calibrated.cohortBytes > 0);
+
+    const combinedCap = calibrated.bodyBytes + calibrated.cohortBytes - 1;
+    const bounded = createAuthority({ maxBodyBytes: combinedCap });
+    const boundedOne = bounded.prepareBody(bodySource(1));
+    const boundedFirst = bounded.publish({ identity: id, body: boundedOne, ownerView: ownerView(id, 1) });
+    assert(bounded.acknowledge(id, ackFor(boundedFirst.frame)).accepted);
+    const boundedTwo = bounded.prepareBody(bodySource(2));
+    const boundedSecond = bounded.publish({ identity: id, body: boundedTwo, ownerView: ownerView(id, 2) });
+    assert.strictEqual(boundedSecond.frame.public.kind, "keyframe",
+      "Combined body plus cohort bytes must fail closed to a keyframe when the cap is exhausted");
+    assert.strictEqual(bounded.diagnostics().cohortCapFallbacks, 1);
+    assert(bounded.diagnostics().retainedPublicMaterialBytes <= combinedCap);
+    assertions += 8;
+  }
+
+  {
     assert.throws(() => scanPublicBodyPrivacy({ schema: "lbh-public-body-v1",
       membershipId: "secret-membership" }), (error) => error.code === "privacy-boundary");
     const authority = createAuthority();
@@ -147,7 +178,18 @@ async function main() {
       body, ownerView: ownerView(identity(0), 1) }), (error) => error.code === "identity-mismatch");
     assert.throws(() => authority.prepareBody({ ...bodySource(1), world: { changed: true } }),
       (error) => error.code === "source-reuse");
-    assertions += 3;
+    const extraWorldField = JSON.parse(JSON.stringify(body.body));
+    extraWorldField.world.transportMetadata = { recipientId: "membership-0" };
+    assert.throws(() => assertPublicBody(extraWorldField),
+      (error) => error.code === "invalid-layout");
+    const privateComponent = JSON.parse(JSON.stringify(body.body));
+    privateComponent.entities[0].components.ownerState = { revision: 1, value: { cargo: [] } };
+    assert.throws(() => assertPublicBody(privateComponent),
+      (error) => error.code === "privacy-boundary");
+    authority.publish({ identity: identity(0), body, ownerView: ownerView(identity(0), 1) });
+    authority.disconnect(identity(0));
+    assert.strictEqual(authority.diagnostics().recipients, 0);
+    assertions += 6;
   }
 
   console.log(JSON.stringify({ schema: "lbh-s23-public-body-proof-v1", assertions,

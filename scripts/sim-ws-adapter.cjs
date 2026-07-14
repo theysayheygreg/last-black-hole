@@ -41,7 +41,10 @@ const {
 const {
   CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
   MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+  PUBLIC_BODY_COMPRESSION_CAPABILITY,
+  PUBLIC_BODY_MANIFEST_HASH: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH,
   encodeCompressedStatePair,
+  encodeCompressedPublicBodyStatePair,
 } = require("./state-pair-compression-codec.cjs");
 
 const MAX_PENDING_REPLAY_EVENTS = 32;
@@ -820,14 +823,19 @@ function createSimWebSocketAdapter(options = {}) {
   }
 
   function compressionContextFor(state) {
+    if (state?.capabilities?.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)) {
+      return Object.freeze({ compressionManifestHash: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH,
+        publicBody: true });
+    }
     if (!state?.capabilities?.includes(COMPRESSION_CODEC_CAPABILITY)) return null;
-    return Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH });
+    return Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH, publicBody: false });
   }
 
   function compressForState(state, wire, frame, sourceDigest = null) {
     if (!compressionContextFor(state) || frame?.type !== "statePair") return wire;
     const started = performance.now();
-    const compress = () => encodeCompressedStatePair(wire);
+    const compress = () => compressionContextFor(state).publicBody
+      ? encodeCompressedPublicBodyStatePair(wire) : encodeCompressedStatePair(wire);
     const compressed = stageProfiler
       ? stageProfiler.measureSync(STAGES.COMPRESSION, (value) => ({
           recipientKey: profileRecipientKey(state),
@@ -1678,6 +1686,8 @@ function createSimWebSocketAdapter(options = {}) {
         failConnection(state, error, { fatal: error?.fatal === true });
       }
     }
+    let sharedBodyPublicFrame = null;
+    let sharedBodyManifestHash = null;
     for (const state of statePairCandidates) {
       try {
         if (!(await isBindingCurrent(state, "private-state-pair-project"))) {
@@ -1695,13 +1705,25 @@ function createSimWebSocketAdapter(options = {}) {
               callbackContext(state, "state-pair-public-recipient-project"),
             )
           : publicFrame;
-        const recipientPublicFrame = stageProfiler
+        const wantsSharedBody = state.capabilities?.includes("state-pair-public-body-v1");
+        if (wantsSharedBody && sharedBodyPublicFrame
+            && sharedBodyManifestHash !== state.binding?.manifestHash) {
+          throw new WireProtocolError("manifest-mismatch",
+            "one public body cannot span different session manifests", 4403);
+        }
+        const recipientPublicFrame = wantsSharedBody && sharedBodyPublicFrame
+          ? sharedBodyPublicFrame
+          : stageProfiler
           ? await stageProfiler.measureAsync(STAGES.STATIC_MANIFEST_PREP, (projectedFrame) => ({
               recipientKey: profileRecipientKey(state),
               inputBytes: Buffer.byteLength(JSON.stringify(publicFrame), "utf8"),
               outputBytes: Buffer.byteLength(JSON.stringify(projectedFrame), "utf8"),
             }), projectStaticManifest)
           : await projectStaticManifest();
+        if (wantsSharedBody && !sharedBodyPublicFrame) {
+          sharedBodyPublicFrame = recipientPublicFrame;
+          sharedBodyManifestHash = state.binding?.manifestHash;
+        }
         const buildOwner = () => buildOwnerState(
           state.binding,
           recipientPublicFrame,

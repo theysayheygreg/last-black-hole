@@ -2,6 +2,8 @@
 
 const crypto = require("crypto");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
+const { PUBLIC_BODY_COMPRESSION_CAPABILITY, PUBLIC_BODY_MANIFEST_HASH } =
+  require("./state-pair-compression-codec.cjs");
 
 const CAPABILITY = "state-pair-public-body-v1";
 const PAIR_SCHEMA = "lbh-authority-state-pair-body-v1";
@@ -18,7 +20,8 @@ const CODEC_MANIFEST = Object.freeze({
   bodySchema: BODY_SCHEMA,
   deltaSchema: BODY_DELTA_SCHEMA,
   canonicalization: "RFC-8785-compatible canonical JSON subset",
-  compressionEnvelope: "state-pair-brotli-v1",
+  compressionEnvelope: Object.freeze({ capability: PUBLIC_BODY_COMPRESSION_CAPABILITY,
+    manifestHash: PUBLIC_BODY_MANIFEST_HASH }),
   semantics: "immutable match-global public body plus recipient-local state-pair lineage envelope",
   limits: Object.freeze({ maxCodecBytes: MAX_CODEC_BYTES, maxDepth: MAX_DEPTH, maxNodes: MAX_NODES }),
 });
@@ -32,6 +35,10 @@ const PRIVATE_BODY_KEYS = new Set([
   "lastInputSeq", "lastActionSeq", "rigLevels", "cargo", "equipped", "consumables",
   "privateProgression", "ownerState", "transient",
 ]);
+const PUBLIC_ENTITY_CATEGORIES = new Set(["player", "well", "star", "wreck", "planetoid",
+  "portal", "scavenger", "fauna", "sentry", "inhibitor"]);
+const PUBLIC_COMPONENTS = new Set(["runtimeMotion", "runtimeGameplay", "runtimeIdentity",
+  "runtimePresentation", "runtimeOrder"]);
 
 class PublicBodyCodecError extends Error {
   constructor(code, message) {
@@ -118,7 +125,28 @@ function assertBodyBinding(body, frame) {
   if (!plainObject(body.world) || !Array.isArray(body.entities)) {
     fail("invalid-layout", "public body world/entities are invalid");
   }
+  exactKeys(body.world, ["publicFacts"], "public body world");
+  if (!plainObject(body.world.publicFacts)) fail("invalid-layout", "public facts must be an object");
+  for (const entity of body.entities) {
+    exactKeys(entity, ["publicEntityId", "category", "sourceId", "incarnation",
+      "lifecycleRevision", "components"], "public body entity");
+    if (!PUBLIC_ENTITY_CATEGORIES.has(entity.category)) fail("invalid-layout", "public body entity category is unsupported");
+    requiredString(entity.publicEntityId, "entity.publicEntityId");
+    requiredString(entity.sourceId, "entity.sourceId");
+    integer(entity.incarnation, "entity.incarnation", 1);
+    integer(entity.lifecycleRevision, "entity.lifecycleRevision", 1);
+    if (!plainObject(entity.components)) fail("invalid-layout", "public body components must be an object");
+    for (const [name, component] of Object.entries(entity.components)) {
+      if (!PUBLIC_COMPONENTS.has(name)) fail("privacy-boundary", `public body component ${name} is not public`);
+      exactKeys(component, ["revision", "value"], `public body component ${name}`);
+      integer(component.revision, `${name}.revision`, 1);
+    }
+  }
   scanSafeJson(body, 0, { nodes: 0 }, { privacy: true });
+}
+
+function assertPublicBody(body) {
+  return assertBodyBinding(body, body);
 }
 
 function assertPublicPayload(payload, frame) {
@@ -182,9 +210,22 @@ function assertFrame(frame, context = {}) {
   return true;
 }
 
-function encodePublicBodyFrame(frame, context) {
+function encodePublicBodyFrame(frame, context, { encodedBody = null } = {}) {
   assertFrame(frame, context);
-  const wire = canonicalJson(frame);
+  let wire;
+  if (encodedBody !== null && frame.public.kind === "keyframe") {
+    if (typeof encodedBody !== "string" || Buffer.byteLength(encodedBody, "utf8") > MAX_CODEC_BYTES) {
+      fail("body-byte-mismatch", "shared public body bytes are invalid");
+    }
+    const marker = "__LBH_S23_IMMUTABLE_BODY_SENTINEL_7D90708B__";
+    const markerWire = JSON.stringify(marker);
+    const template = canonicalJson({ ...frame, public: { ...frame.public, body: marker } });
+    const first = template.indexOf(markerWire);
+    if (first < 0 || template.indexOf(markerWire, first + markerWire.length) >= 0) {
+      fail("invalid-layout", "public body byte template is ambiguous");
+    }
+    wire = `${template.slice(0, first)}${encodedBody}${template.slice(first + markerWire.length)}`;
+  } else wire = canonicalJson(frame);
   if (Buffer.byteLength(wire, "utf8") > MAX_CODEC_BYTES) {
     fail("frame-too-large", "public-body statePair exceeds codec limit");
   }
@@ -222,6 +263,7 @@ module.exports = {
   PublicBodyCodecError,
   codecContext,
   assertFrame,
+  assertPublicBody,
   scanPublicBodyPrivacy: (body) => scanSafeJson(body, 0, { nodes: 0 }, { privacy: true }),
   encodePublicBodyFrame,
   decodePublicBodyFrame,

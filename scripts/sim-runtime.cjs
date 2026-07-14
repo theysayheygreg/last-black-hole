@@ -122,6 +122,9 @@ const {
   CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
   MANIFEST: COMPRESSION_CODEC_MANIFEST,
   MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+  PUBLIC_BODY_COMPRESSION_CAPABILITY,
+  PUBLIC_BODY_MANIFEST: PUBLIC_BODY_COMPRESSION_MANIFEST,
+  PUBLIC_BODY_MANIFEST_HASH: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH,
 } = require("./state-pair-compression-codec.cjs");
 const {
   CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
@@ -6249,6 +6252,11 @@ function currentSessionReplicationManifest() {
               codecManifestHash: PUBLIC_BODY_CODEC_MANIFEST_HASH,
               manifest: PUBLIC_BODY_CODEC_MANIFEST,
             },
+            statePairPublicBodyCompressionCodec: {
+              capability: PUBLIC_BODY_COMPRESSION_CAPABILITY,
+              codecManifestHash: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH,
+              manifest: PUBLIC_BODY_COMPRESSION_MANIFEST,
+            },
           } : {}),
         } : {}),
       } : {}),
@@ -7423,7 +7431,9 @@ const server = http.createServer(async (req, res) => {
                         ? [COMPRESSION_CODEC_CAPABILITY,
                           ...(MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED
                             && body.capabilities.includes(PUBLIC_BODY_CAPABILITY)
-                            ? [PUBLIC_BODY_CAPABILITY] : [])] : [])] : [])] : [])]
+                            && body.capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)
+                            ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY] : [])]
+                        : [])] : [])] : [])]
             : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2

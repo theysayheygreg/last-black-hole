@@ -38,7 +38,10 @@ const {
 const {
   CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
   MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+  PUBLIC_BODY_COMPRESSION_CAPABILITY,
+  PUBLIC_BODY_MANIFEST_HASH: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH,
   decodeCompressedStatePair,
+  decodeCompressedPublicBodyStatePair,
 } = require("./state-pair-compression-codec.cjs");
 const {
   CAPABILITY: PUBLIC_BODY_CAPABILITY,
@@ -295,13 +298,14 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   const positional = materializeRuntimeComponents && capabilities.includes(POSITIONAL_CODEC_CAPABILITY);
   const binary = positional && capabilities.includes(BINARY_CODEC_CAPABILITY);
   const compressed = positional && !binary && capabilities.includes(COMPRESSION_CODEC_CAPABILITY);
-  const publicBody = compressed && capabilities.includes(PUBLIC_BODY_CAPABILITY);
+  const publicBody = compressed && capabilities.includes(PUBLIC_BODY_CAPABILITY)
+    && capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY);
   let codecContext = positional ? positionalCodecContext({ ...context,
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH }) : null;
   let binaryContext = binary ? binaryCodecContext({ ...context,
     codecManifestHash: BINARY_CODEC_MANIFEST_HASH }) : null;
-  let compressionContext = compressed
-    ? Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH }) : null;
+  let compressionContext = compressed ? Object.freeze({ compressionManifestHash: publicBody
+    ? PUBLIC_BODY_COMPRESSION_MANIFEST_HASH : COMPRESSION_CODEC_MANIFEST_HASH }) : null;
   let bodyCodecContext = publicBody ? publicBodyCodecContext(context) : null;
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
@@ -629,7 +633,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         fail("compression-frame-required", "negotiated compressed state-pair must use its pinned binary envelope");
       }
       frame = publicBody
-        ? decodePublicBodyFrame(decodeCompressedStatePair(raw), bodyCodecContext)
+        ? decodePublicBodyFrame(decodeCompressedPublicBodyStatePair(raw), bodyCodecContext)
         : parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
         ...(compressed ? { compressed: true, compressionContext, positionalContext: codecContext }
           : binary ? (typeof raw !== "string"
@@ -953,6 +957,7 @@ module.exports = {
   BINARY_CODEC_CAPABILITY,
   COMPRESSION_CODEC_CAPABILITY,
   PUBLIC_BODY_CAPABILITY,
+  PUBLIC_BODY_COMPRESSION_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   DEFAULT_BASE_LEDGER_LIMITS,
