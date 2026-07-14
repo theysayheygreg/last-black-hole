@@ -17,9 +17,10 @@ does not erase newer committed work.
 
 ## v0.4 Multiplayer Program
 
-**Branch status (2026-07-14):** research and architecture are complete and
-decision-ready. Public hosted multiplayer is not implemented. The final packet
-is `docs/v0.4/MULTIPLAYER-DECISION-PACKET.md`.
+**Branch status (2026-07-14):** research, architecture, and costing are closed.
+The active milestone is the coherent four-human product journey in
+`docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md`. Public hosted multiplayer is not
+implemented.
 
 **Playable status:** local loopback authority and browser journeys are
 automation-green. S20 negotiated compression is the admitted product
@@ -41,8 +42,10 @@ gameplay authority and no unmeasured density claim.
 
 **Hosted status:** identity, entitlement, local/cloud lineage, match placement,
 one fenced writer lease per run, opaque admission/resume tickets, immutable
-result outbox, and exactly-once relational settlement are designed but not
-implemented. Fly performance CPU is the first authority benchmark; Cloudflare
+result outbox, exactly-once relational settlement, and the fail-closed HTTP
+runtime are implemented and tested as a local provider-neutral reference over
+durable SQLite. Production provider/storage composition, public deployment,
+and operational custody/policy are not implemented. Fly performance CPU is the first authority benchmark; Cloudflare
 edge plus Postgres is the control-plane reference; Hetzner CCX is the fallback.
 Cloudflare Container/Durable Object and ordinary containers are measured
 comparators. Vercel is web/control-plane only.
@@ -63,9 +66,10 @@ cohort and the raw capture never started. H48/H96 are far extrapolations
 10.120/38.515 Mbit/s); X96 is a modeled rejection at 86.769 ms and
 118,219 B/s/client. None is a live capacity claim.
 
-**Next gates:** finish the four-player product journey and Greg feel/art review;
-Greg selects central/hybrid/local service posture; implement Phase 5 identity,
-settlement, and placement; run Phase 6 same-scenario two-region 90-minute
+**Next gates:** ship Crew Muster and the complete four-player product journey;
+pass Greg's four-human feel/art review; then select central/hybrid/local service
+posture and compose the local reference with production provider boundaries.
+Only after that should Phase 6 run same-scenario two-region 90-minute
 four-player authority soaks; then derive `safeAuthoritiesPerHost` from measured
 packing. Only after those gates may a production-valid exact H24 live fixture be
 revisited.

@@ -9,7 +9,12 @@
 
 ---
 
-## Current Status (2026-07-09)
+## Current Status (2026-07-14)
+
+**Active next-version goal:** turn the admitted v0.4 S20 one-through-four path
+into a coherent human multiplayer game. The immediate slice is Crew Muster: a
+frozen pre-run lobby, synchronized host launch, visible crew state, and
+fail-closed admission. See `docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md`.
 
 **Version:** v0.2 - Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set. The next structural line is v0.3, tracked in `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md`.
 
@@ -57,7 +62,7 @@ reading stale health records or reconstructing status from `git log`.
 - [x] Lightweight structured stack telemetry
 - [x] Desktop-visible stack status / logs
 - [x] First extracted content manifest (hulls + personality assignment)
-- [ ] Human playtest packs for host/join/extract/death loops
+- [ ] Four-human product journey and named host/join/extract/death/rematch pack
 
 | Feature | Design Doc | Status |
 |---------|-----------|--------|
@@ -71,7 +76,7 @@ reading stale health records or reconstructing status from `git log`.
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
 | Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
 | v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Active on `codex/v0.3-ballpark-roadmap`; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. Mirror, read-only relevance, wreck pickup + portal extraction adapters, remote slingshot edge delivery, event journal, movement fixtures, bounded-growth soak, and S0/S1 review fixes are live on the v0.3 branch. |
-| v0.4 multiplayer architecture plan | `docs/v0.4/ROADMAP.md` | Active on `codex/v0.4-multiplayer-architecture`; S20 negotiated compression remains the 1–4 product path and eight remains rejected. S23P safely prepares one exact public source/body per issued match-authority beat and improves eight-player S23 p95 by 18.1%, but 71.05/69.76 ms p95 and 75.04/72.69 ms p99 still fail the 50/70 ms gates. One/four also fail the sealed S20 cost/traffic non-regression envelope. Keep S23/S23P default-off, do not merge backward, and do not infer hosted/heavy-sim/24–96 capacity. |
+| v0.4 four-human multiplayer product | `docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md` | Active on `codex/v0.4-multiplayer-architecture`; architecture and costing are closed, S20 is the admitted 1–4 path, eight remains rejected, and Crew Muster is the first synchronized human-product slice. Do not infer public hosted or 24–96 capacity. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist, and ledger credit is now separated from salvage value; chronicle and UI clarity still need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, ledger credit, and salvage values exist; balance/playtest remains |
@@ -85,28 +90,31 @@ Use reviewable slices for day-shift/night-shift planning. The detailed system
 backlog still matters, but each session should land something Greg can play,
 capture, or compare.
 
-1. **Attract Mode + UI/VFX Identity** — title layout, corruption behavior, UI
+1. **v0.4 Four-Human Multiplayer Product** — Crew Muster, invitations and
+   readiness, shared-run readability, reconnect clarity, result/rematch, and a
+   four-human Greg gate on the admitted S20 path.
+2. **Attract Mode + UI/VFX Identity** — title layout, corruption behavior, UI
    motion language, and first event-driven Three VFX. Current slice: pooled
    `VfxManager`, `screen-vfx-layer`, `titleGlyphFault` events, title VFX
    fixtures, `src/ui/motion.js`, first-pass title/menu/result motion, Home
    instrument-console composition, and Map Select drop-briefing composition.
    Next: HUD/pause/profile polish plus richer route/objective language before
    another motion-only pass.
-2. **Feel + Route Pass** — slingshot/speed tuning, map route redesign, spawn
+3. **Feel + Route Pass** — slingshot/speed tuning, map route redesign, spawn
    safety, and remote/local movement parity checks.
-3. **Entity Visual Language** — replace bridge primitives for ships, stars,
+4. **Entity Visual Language** — replace bridge primitives for ships, stars,
    planetoids/comets, wrecks, portals, rivals, fauna, and sentries with
    high-contrast first-class Three objects. See
    `docs/design/THREE-ENTITY-VISUALS.md`,
    `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
    `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
-4. **Loop + Meta Clarity** — results, vault/rig/loadout, profile/home,
+5. **Loop + Meta Clarity** — results, vault/rig/loadout, profile/home,
    chronicle, upgrade write-back, EM balance, and "what changed after this
    run?" readability.
-5. **Playable Build Targets** — local source build, Steam Deck desktop/gaming
+6. **Playable Build Targets** — local source build, Steam Deck desktop/gaming
    mode, itch package shape, public play instructions, release artifacts, and
    current build-status truth.
-6. **Process + Harness** — fresh browser/sim rules, visual fixtures, UI
+7. **Process + Harness** — fresh browser/sim rules, visual fixtures, UI
    couch-test captures, forge pass cadence, version/build checkpoints, and
    nightly handoff discipline.
 

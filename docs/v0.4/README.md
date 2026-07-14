@@ -82,26 +82,29 @@ it is not the next implementation task.
   live cohort never admitted and the raw capture never started. H48/H96 are
   far extrapolations and X96 fails its modeled writer and network screens.
 
-Start with [`MULTIPLAYER-DECISION-PACKET.md`](MULTIPLAYER-DECISION-PACKET.md)
-for the executive decision, costs, scale evidence, gates, and next milestones.
+Start with [`FOUR-HUMAN-PRODUCT-PLAN.md`](FOUR-HUMAN-PRODUCT-PLAN.md) for the
+active delivery goal. The decision packet remains the evidence-backed closeout
+of the architecture and costing program.
 
 ## Read Order
 
-1. [`MULTIPLAYER-DECISION-PACKET.md`](MULTIPLAYER-DECISION-PACKET.md) — final
-   executive answer to the original request.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — authority, transport, network,
+1. [`FOUR-HUMAN-PRODUCT-PLAN.md`](FOUR-HUMAN-PRODUCT-PLAN.md) — active human
+   product contract from crew muster through rematch.
+2. [`ROADMAP.md`](ROADMAP.md) — staged product, service, and measurement plan.
+3. [`MULTIPLAYER-DECISION-PACKET.md`](MULTIPLAYER-DECISION-PACKET.md) — final
+   executive answer to the original architecture and costing request.
+4. [`ARCHITECTURE.md`](ARCHITECTURE.md) — authority, transport, network,
    identity, recovery, hosting, and private fallback contracts.
-3. [`ROADMAP.md`](ROADMAP.md) — staged implementation and measurement plan.
-4. [`OPEN-DECISIONS.md`](OPEN-DECISIONS.md) — Greg's product calls, separated
+5. [`OPEN-DECISIONS.md`](OPEN-DECISIONS.md) — Greg's product calls, separated
    from engineering gates.
-5. [`COMPLETION-AUDIT.md`](COMPLETION-AUDIT.md) — requirement-by-requirement
+6. [`COMPLETION-AUDIT.md`](COMPLETION-AUDIT.md) — requirement-by-requirement
    coverage and evidence status.
-6. [`HOSTED-IDENTITY-PLACEMENT-DECISION.md`](HOSTED-IDENTITY-PLACEMENT-DECISION.md)
+7. [`HOSTED-IDENTITY-PLACEMENT-DECISION.md`](HOSTED-IDENTITY-PLACEMENT-DECISION.md)
    — identifier lifetimes, trust boundaries, leases, tickets, settlement, and
    privacy.
-7. [`MULTIPLAYER-UNIT-ECONOMICS.md`](MULTIPLAYER-UNIT-ECONOMICS.md) —
+8. [`MULTIPLAYER-UNIT-ECONOMICS.md`](MULTIPLAYER-UNIT-ECONOMICS.md) —
    reproducible $4.99 economics at 1K/10K/100K/1M copies.
-8. [`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md) —
+9. [`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md) —
    optional friends-only GregBot host behind identity-gated outbound ingress;
    not a verified hosted-product or public-matchmaking claim.
 

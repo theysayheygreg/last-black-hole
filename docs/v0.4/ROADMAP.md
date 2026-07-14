@@ -50,16 +50,28 @@ Goal: make the admitted S20 one-through-four path the only normal multiplayer
 replication contract and turn the existing local proof into a coherent private
 product journey.
 
-Work:
+The active execution contract is
+[`FOUR-HUMAN-PRODUCT-PLAN.md`](FOUR-HUMAN-PRODUCT-PLAN.md). Work proceeds in
+this order:
 
-- freeze S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
-  reconnect fencing, and bounded queues;
-- drive one, two, three, and four clients through invite/join, movement,
-  salvage, signal, reconnect, extraction/death, result, leave, and rematch;
-- reject a fifth seat at session schema, control plane, ticket issuance,
-  router, and authority admission—not only in UI;
-- preserve local/offline play and the existing embedded authority;
-- keep Three, VFX, UI, audio, and high-resolution fluid presentation-only.
+1. **Crew Muster:** stage one authority with frozen world time, admit one
+   through four humans, expose host/crew role and seat count, launch once under
+   host authority, and remove silent local fallback on multiplayer failure.
+2. **Invitations and readiness:** distinct host/join choices, bounded join-code
+   surface, four player-readable seats, and clear full/expired/version errors.
+3. **Shared-run readability:** identity, teammate state, salvage/signal
+   consequence, extraction, and death cues that preserve the ASCII-fluid view.
+4. **Failure continuity:** persistent connecting/reconnecting/recovered states,
+   reserved seat/body policy, old-epoch fencing, leave, and host departure.
+5. **Result and rematch:** one canonical outcome, private reward details, new
+   run lineage, and clean leave-to-home.
+6. **Evidence and Greg gate:** coherent 1/2/3/4-browser journeys, a real fifth
+   browser rejection, four-human playtest pack, and 80/120/160 ms feel passes.
+
+S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
+reconnect fencing, and bounded queues remain frozen guardrails. Local/offline
+play and the embedded authority remain independent. Three, VFX, UI, audio, and
+high-resolution fluid remain presentation-only.
 
 Acceptance:
 
@@ -74,6 +86,8 @@ Acceptance:
   profile/loadout/inventory truth;
 - local launch and run completion work with platform/cloud unavailable;
 - Greg completes movement honesty/art/readability review at four humans.
+- no human requires terminal commands, test APIs, or operator intervention to
+  create, join, launch, finish, reconnect, leave, or rematch.
 
 Abort:
 

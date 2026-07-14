@@ -3244,3 +3244,15 @@ semantics. None of this is Fly or public deployment evidence.
 **Door status:** Closed for more costing and deployment-benchmark work under
 this goal. Open only as a separately authorized validation task. The modeled
 costs remain planning inputs, not observed invoices or measured host density.
+
+### Q: What is the next v0.4 product goal?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Make the four-human S20 product journey the active v0.4 goal. Start with Crew Muster so one through four humans stage on a frozen authority and launch together. |
+| Jul 14 | Treat silent fallback from failed multiplayer admission into a separate local run as a product-truth violation. Multiplayer admission must fail closed and remain visible. |
+| Jul 14 | Keep invitations/readiness, shared-run readability, reconnect UX, result/rematch, and the Greg four-human gate in one ordered product plan. Do not reopen eight-player, costing, packing, or high-count work. |
+
+**Door status:** Open for the human product slices in
+`docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md`. Closed for changing the S20 authority
+contract as a substitute for finishing the player journey.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-14 — v0.4 human multiplayer product goal opened
+
+### docs/v0.4/ — Added
+- **FOUR-HUMAN-PRODUCT-PLAN.md** — Defines the active front-door through
+  rematch delivery contract, beginning with synchronized Crew Muster.
+
+### Planning truth
+- Architecture and costing remain closed. The v0.4 roadmap now prioritizes a
+  good one-through-four-human S20 game and moves hosted/high-count validation
+  behind that product gate.
+- Corrected stale hosted wording: the provider-neutral SQLite/HTTP reference
+  is implemented locally; production composition and public deployment remain
+  open.
+
 ## 2026-07-14 — v0.4 multiplayer architecture and costing closeout
 
 - Closed the architecture-and-costing goal with the admitted one-through-four

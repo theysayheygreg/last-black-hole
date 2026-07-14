@@ -41,7 +41,7 @@ the small hosting savings at this population.
 |---|---|---|
 | One through four clients share truthful authority | **Admitted locally** | S20 is NORMAL at four, 9.80–9.85 Hz, 30,203–31,018 B/s/client mean, 32,361–32,766 B/s p95, 54.65–55.04 ms projection p95, and 0.585–0.589 authority core |
 | Eight-player product | **Rejected for v0.4** | S23/S23P remain default-off; final split screen crossed its 55 ms abort at 55.9045 ms and was fully reverted |
-| Hosted internet product | **Designed, not implemented** | identity/placement/settlement contract and provider costs are decision-ready; regional authority, TLS/WAN, soak, packing, and human-feel proof remain |
+| Hosted internet product | **Local reference implemented; production open** | provider-neutral identity/placement/settlement, durable SQLite, and fail-closed HTTP runtime are tested locally; provider composition, public deployment, regional authority, TLS/WAN, soak, packing, and human-feel proof remain |
 | H24 heavy live match | **Not proven** | synthetic component fixture exists; 24-client live cohort never admitted and raw capture never started |
 | H48/H96 capacity | **Not proven** | coefficient extrapolations only, outside measured body/recipient domain |
 | X96 capacity | **Modeled rejection** | fitted base writer and traffic both fail the screens |
@@ -271,18 +271,20 @@ before any heavy-sim budget is approved.
 
 ## Implementation And Measurement Roadmap
 
-1. **Four-player product completion.** Freeze S20 as the product replication
-   path; make one-through-four invite/join/reconnect/result flows natural;
+1. **Four-player product completion.** Execute
+   [`FOUR-HUMAN-PRODUCT-PLAN.md`](FOUR-HUMAN-PRODUCT-PLAN.md): freeze S20 as
+   the product replication path; make one-through-four crew muster,
+   invite/join/reconnect/result/rematch flows natural;
    reject a fifth seat at schema, control-plane, ticket, and authority layers;
    keep local/offline independent. Abort on any privacy leak, duplicate
    consequence, unbounded queue, or non-`NORMAL` four-player baseline.
 2. **Greg chooses hosted progression.** Decide central verified progression,
    hybrid control plane plus private-host fallback, or local/private-only
    release. This is a product decision, not an engineering gate.
-3. **Phase 5 identity, settlement, and placement.** Implement relational local
-   parity, provider adapter, local/cloud lineage, lease CAS/fencing, opaque
-   single-use tickets, workload identity, immutable result outbox, and
-   exactly-once settlement. Abort if two claimants can write/settle, any caller
+3. **Production provider composition.** Preserve the implemented relational
+   local reference, then compose provider adapters, production storage and key
+   custody, authorization policy, retention/dead-letter operations, and
+   distributed/cross-region semantics. Abort if two claimants can write/settle, any caller
    id authorizes access, a fifth seat admits, or local play needs cloud.
 4. **Phase 6 regional authority proof.** Run the same representative
    four-player scenario on Fly performance CPU first, then Hetzner CCX and

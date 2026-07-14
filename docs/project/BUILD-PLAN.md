@@ -7,7 +7,15 @@
 
 ---
 
-## Current Build Phase: L5/L6 Bridge — Productized Authority + Renderer Hardening
+## Current Build Phase: v0.4 Human Multiplayer Product
+
+On `codex/v0.4-multiplayer-architecture`, the active goal is
+`docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md`. Crew Muster and a synchronized
+one-through-four-player journey take precedence over more costing, eight-player
+protocol work, hosted packing, or high-count forecasting. The v0.2 `main` line
+remains the public/demo build.
+
+### Earlier L5/L6 Bridge — Productized Authority + Renderer Hardening
 
 All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work complete.
 

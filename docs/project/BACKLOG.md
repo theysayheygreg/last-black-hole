@@ -60,7 +60,10 @@
 
 ### Human Playtest Packs
 - **What:** Named manual playtest flows layered on top of the deterministic harness (first boot, host/join, controller-only traversal, extract/death/writeback, large-map perf drift).
-- **Why backlogged:** The current harness is strong for architecture truth, but product feel still needs human passes. These should come after the launch contract and stack status are clearer.
+- **Current state:** Activated for v0.4. The four-human host/join/extract/death/
+  reconnect/rematch pack is now P6 of `docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md`.
+- **Why this entry remains:** Controller-only and large-map single-player packs
+  still belong to the broader backlog after the multiplayer acceptance gate.
 - **Value if revisited:** Better playtest discipline without weakening the automated harness.
 - **Added:** 2026-04-12
 
