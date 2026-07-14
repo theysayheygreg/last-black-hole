@@ -338,6 +338,18 @@
       font-weight: 600;
       line-height: 1.05;
     }
+    #hud-inhibitor-pressure {
+      height: 4px;
+      margin-top: 8px;
+      border: 1px solid rgba(255, 120, 205, 0.28);
+      overflow: hidden;
+    }
+    #hud-inhibitor-pressure-fill {
+      height: 100%;
+      width: 0;
+      background: rgba(255, 62, 181, 0.82);
+      transition: width 0.2s linear;
+    }
     #hud-inhibitor.form-vessel {
       color: rgba(255, 70, 150, 1.0);
       text-shadow: 0 0 12px rgba(255, 70, 150, 0.7);
@@ -399,7 +411,7 @@
       text-transform: uppercase;
     }
     .hud-crew-row[data-local="true"] .hud-crew-identity { color: var(--lbh-portal); }
-    .hud-crew-row[data-state="link-lost"] .hud-crew-state,
+    .hud-crew-row[data-state="link-lost"] .hud-crew-state { color: var(--lbh-salvage); }
     .hud-crew-row[data-state="dead"] .hud-crew-state { color: var(--lbh-danger); }
     .hud-crew-row[data-state="extracted"] .hud-crew-state { color: var(--lbh-ecology); }
     .hud-crew-state { color: rgba(120, 220, 180, 0.82); }
@@ -742,8 +754,9 @@
       </div>
     </div>
     <div id="hud-inhibitor" class="hud-panel" style="display: none;">
-      <div class="hud-label">inhibitor</div>
+      <div class="hud-label">world pressure</div>
       <div id="hud-inhibitor-form">dormant</div>
+      <div id="hud-inhibitor-pressure" role="progressbar" aria-label="world pressure" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="hud-inhibitor-pressure-fill"></div></div>
     </div>
     <div id="hud-portals" class="hud-panel">
       <div class="hud-label">route objective</div>

@@ -62,6 +62,40 @@ async function run() {
     { seatLabel: 'P4', isLocal: false, state: 'extracted' },
   ]);
 
+  assert.strictEqual(hud.getCrewPresentationState([
+    { clientId: 'local', name: 'Alpha', seatNo: 0, connected: true, status: 'alive' },
+  ], 'local', 'reconnecting')[0].state, 'link lost');
+
+  const consequenceCrew = [
+    { clientId: 'local', name: 'Alpha', seatNo: 0, status: 'alive' },
+    { clientId: 'remote', name: 'Bravo', seatNo: 1, status: 'dead' },
+  ];
+  assert.deepStrictEqual(
+    hud.getCrewConsequencePresentation({ type: 'player.died', payload: { clientId: 'remote' } }, consequenceCrew, 'local'),
+    { text: 'P2 Bravo LOST', tone: 'danger', state: 'dead' },
+  );
+  assert.deepStrictEqual(
+    hud.getCrewConsequencePresentation({ type: 'player.escaped', payload: { clientId: 'remote' } }, consequenceCrew, 'local'),
+    { text: 'P2 Bravo EXTRACTED', tone: 'success', state: 'extracted' },
+  );
+  assert.deepStrictEqual(
+    hud.getCrewConsequencePresentation({ type: 'player.left', payload: { clientId: 'remote', name: 'Bravo', seatNo: 1 } }, [], 'local'),
+    { text: 'P2 Bravo LEFT THE CREW', tone: 'warning', state: 'left' },
+  );
+  assert.strictEqual(
+    hud.getCrewConsequencePresentation({ type: 'player.disconnected', payload: { clientId: 'local' } }, consequenceCrew, 'local'),
+    null,
+  );
+  assert.deepStrictEqual(hud.getWorldPressurePresentationState({ form: 0, pressureFrac: 0.64 }), {
+    visible: true, form: 0, formLabel: 'dormant', pressureFrac: 0.64, percent: 64, label: 'building // 64%',
+  });
+  assert.strictEqual(hud.getWorldPressurePresentationState({ form: 0, pressureFrac: 0.01 }).visible, false);
+  assert.strictEqual(hud.getRouteObjectiveState(
+    { wx: 1, wy: 1 },
+    { activeCount: 1, portals: [{ alive: true, wx: undefined, wy: 1 }] },
+    null,
+  ).label, 'route closed');
+
   await startServer();
   let browser;
   try {

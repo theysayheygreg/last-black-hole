@@ -6532,6 +6532,7 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     manifestHash: claims.manifestHash || null,
     manifestSchema: claims.manifestSchema || null,
     authorityIncarnation: claims.authorityIncarnation || null,
+    connectionKind: kind,
   };
   if (claims.capabilities?.includes(STATE_PAIR_CAPABILITY)) {
     runtimeStatePairAuthority?.admit(binding, claims);
@@ -6869,8 +6870,16 @@ function closeMultiplayerBinding(binding) {
       && authority.connectionEpoch === binding?.connectionEpoch) {
     const player = runtime.players.get(binding.playerId);
     if (player) {
+      const wasConnected = player.connected !== false;
       player.connected = false;
       player.ready = false;
+      if (wasConnected && (runtime.session.status === "running" || runtime.session.status === "lobby")) {
+        publishEvent("player.disconnected", {
+          clientId: player.clientId,
+          name: player.name,
+          seatNo: player.seatNo,
+        });
+      }
     }
   }
 }
@@ -6908,7 +6917,15 @@ function recoverRuntimeStatePair(binding) {
 function openSessionManifestAdmission(binding) {
   const player = runtime.players.get(binding?.playerId);
   if (player) {
+    const wasConnected = player.connected !== false;
     player.connected = true;
+    if (!wasConnected && binding?.connectionKind === "resume") {
+      publishEvent("player.reconnected", {
+        clientId: player.clientId,
+        name: player.name,
+        seatNo: player.seatNo,
+      });
+    }
   }
   if (!binding?.manifestHash) return;
   for (const key of manifestAdmissions) {
@@ -8140,6 +8157,7 @@ const server = http.createServer(async (req, res) => {
       publishEvent("player.left", {
         clientId,
         name: player.name,
+        seatNo: player.seatNo,
       });
       promoteHostIfNeeded();
       persistSessionRegistry();

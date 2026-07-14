@@ -73,11 +73,14 @@ path; authority tests prove retired invitations and protocol mismatch rejection.
 
 ### P3 — Shared-Run Readability
 
-**Implementation status:** in progress. The first slice preserves public seat
-and link identity after launch and adds an edge-mounted P1–P4 crew rail.
-Automated four-browser proof verifies that every client sees the same ordered
-crew while clearly identifying itself. Spatial labels in the ASCII fluid still
-need a visually proven treatment that does not obscure movement or the fabric.
+**Implementation status:** engineering-complete; Greg visual gate pending.
+Public seat/link/outcome identity survives launch in an edge-mounted P1–P4
+crew rail. Authority events produce brief observer-safe death, extraction,
+link-loss/recovery, and leave callouts. Public Inhibitor pressure has a compact
+edge meter explicitly labeled world pressure. Four-browser evidence proves the
+states without exposing teammate cargo or individual signal. Spatial labels in
+the ASCII fluid remain a visual-gate option only if the rail proves
+insufficient; they must not obscure movement or the fabric.
 
 - make local identity and remote crew identity readable in the ASCII fluid;
 - present teammate alive/dead/disconnected state without cluttering the center;
@@ -115,11 +118,12 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Continue P3 from the live identity rail into authoritative death, extraction,
-leave, and recovered-state callouts. Present public Inhibitor pressure as world
-pressure, not “crew signal”; teammate cargo and individual signal remain
-private and must not be inferred. The green browser proof does not yet claim
-completed consequence readability, result, or rematch.
+Begin P4 continuity hardening from the now-proven consequence surface. Preserve
+the disconnected body/seat for the ratified window, make failed recovery and
+host departure understandable, and prove the old connection epoch remains
+fenced throughout recovery. The green browser proof now covers shared-run
+consequences and ordinary reconnect, but does not yet claim host-loss
+continuity, canonical result, or rematch.
 
 Engineering guardrails remain:
 

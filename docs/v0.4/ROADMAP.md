@@ -90,9 +90,11 @@ Current execution checkpoint:
 - The first shared-run readability slice is live: stable P1–P4 public seats,
   public link state, a compact edge crew rail, and four-browser agreement on
   ordered identity.
-- Next: add death, extraction, leave, and recovered-state callouts plus honest
-  public world-pressure treatment. Do not expose or infer teammate cargo or
-  individual signal.
+- Observer-visible death, extraction, link-loss/recovery, and explicit leave
+  callouts are live beside persistent crew states. Public Inhibitor pressure is
+  labeled world pressure; teammate cargo and individual signal stay private.
+- Next: P4 failure continuity—seat/body reservation, failed recovery, host
+  departure, and explicit old-epoch fencing at the human surface.
 
 S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
 reconnect fencing, and bounded queues remain frozen guardrails. Local/offline

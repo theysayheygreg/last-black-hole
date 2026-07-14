@@ -504,7 +504,7 @@ export function initTestAPI(getState) {
       });
     },
 
-    interruptMultiplayerStreamForTest(message = null) {
+    interruptMultiplayerStreamForTest(message = null, options = {}) {
       const { simClient } = getState();
       if (!simClient || simClient.transport !== 'stream' || !simClient._socket) return false;
       if (message) void simClient.sendInput(message).catch(() => null);
@@ -516,6 +516,14 @@ export function initTestAPI(getState) {
         connectionId: simClient.connectionId || null,
         connectionEpoch: simClient.connectionEpoch || 0,
       };
+      const holdReconnectMs = Math.max(0, Math.min(5000, Number(options?.holdReconnectMs) || 0));
+      if (holdReconnectMs > 0) {
+        simClient._closeDirective = {
+          reconnectable: true,
+          reason: 'multiplayer journey reconnect',
+          retryAfterMs: holdReconnectMs,
+        };
+      }
       simClient._socket.close(4012, 'multiplayer journey reconnect');
       return clone(beforeClose);
     },

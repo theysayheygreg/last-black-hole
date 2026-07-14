@@ -229,6 +229,17 @@ async function capture(pilot, label) {
   return file;
 }
 
+async function debugState(route, body) {
+  const response = await fetch(`${SIM_URL}${route}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  assert(response.ok, `${route} failed (${response.status}): ${payload.error || "unknown"}`);
+  return payload;
+}
+
 async function closePilot(pilot) {
   if (!pilot?.browser) return;
   await pilot.browser.close().catch(() => null);
@@ -406,13 +417,87 @@ async function run() {
       report.crewRails = crewRails;
       report.screenshots.sharedRun = await capture(pilots[0], "shared-run");
 
+      report.stage = "shared-consequences";
+      await debugState("/debug/inhibitor-state", { form: 0, pressure: 0.6, intensity: 0 });
+      await waitFor(pilots[0].page, () => {
+        const panel = document.querySelector('#hud-inhibitor');
+        const value = document.querySelector('#hud-inhibitor-form')?.textContent || '';
+        return panel && getComputedStyle(panel).display !== 'none'
+          && value.toLowerCase().includes('building')
+          && value.includes('%');
+      }, { timeout: 10000 });
+
+      const deathPilot = pilots[3];
+      const deathState = await journeyState(deathPilot);
+      await debugState("/debug/player-state", {
+        clientId: deathState.clientId,
+        status: "dead",
+        cause: "consequence-proof",
+      });
+      await waitFor(pilots[0].page, (name) => {
+        const row = document.querySelector('#hud-crew .hud-crew-row:nth-child(5)');
+        const warnings = [...document.querySelectorAll('#hud-warnings .hud-warning')]
+          .map((entry) => entry.textContent.toLowerCase());
+        return row?.dataset.state === 'dead'
+          && warnings.some((entry) => entry.includes(name) && entry.includes('lost'));
+      }, { timeout: 10000 }, deathPilot.name.toLowerCase());
+
+      const extractPilot = pilots[1];
+      const extractState = await journeyState(extractPilot);
+      const extractPoint = { wx: 2.65, wy: 2.65 };
+      await debugState("/debug/player-state", {
+        clientId: extractState.clientId,
+        ...extractPoint,
+        vx: 0,
+        vy: 0,
+      });
+      await debugState("/debug/portal-state", {
+        id: "private-room-consequence-portal",
+        ...extractPoint,
+        type: "stable",
+        alive: true,
+        lifespan: 60,
+      });
+      await waitFor(extractPilot.page, () =>
+        window.__TEST_API?.getMultiplayerJourneyState?.()?.owner?.portalInteraction?.ready === true,
+      { timeout: 10000 });
+      await tap(extractPilot.page, "Enter", "Enter", 250);
+      await waitFor(extractPilot.page, () =>
+        window.__TEST_API?.getMultiplayerJourneyState?.()?.owner?.status === 'escaped',
+      { timeout: 10000 });
+      await waitFor(pilots[0].page, (name) => {
+        const row = document.querySelector('#hud-crew .hud-crew-row:nth-child(3)');
+        const warnings = [...document.querySelectorAll('#hud-warnings .hud-warning')]
+          .map((entry) => entry.textContent.toLowerCase());
+        return row?.dataset.state === 'extracted'
+          && warnings.some((entry) => entry.includes(name) && entry.includes('extracted'));
+      }, { timeout: 10000 }, extractPilot.name.toLowerCase());
+      report.screenshots.sharedConsequences = await capture(pilots[0], "shared-consequences");
+      await debugState("/debug/inhibitor-state", { form: 0, pressure: 0, intensity: 0 });
+
       report.stage = "reconnect-guest";
       const reconnectPilot = pilots[2];
       const beforeReconnect = await journeyState(reconnectPilot);
       const interrupted = await reconnectPilot.page.evaluate(() =>
-        window.__TEST_API?.interruptMultiplayerStreamForTest?.());
+        window.__TEST_API?.interruptMultiplayerStreamForTest?.(null, { holdReconnectMs: 900 }));
       assert(interrupted?.connectionEpoch === beforeReconnect.connectionEpoch,
         "Reconnect hook did not close the current connection epoch");
+      await waitFor(reconnectPilot.page, () => {
+        const local = document.querySelector('#hud-crew .hud-crew-row[data-local="true"]');
+        const warnings = [...document.querySelectorAll('#hud-warnings .hud-warning')]
+          .map((entry) => entry.textContent.toLowerCase());
+        return local?.dataset.state === 'link-lost'
+          && warnings.some((entry) => entry.includes('reconnecting'));
+      }, { timeout: 5000 });
+      await waitFor(pilots[0].page, (name) => {
+        const rows = [...document.querySelectorAll('#hud-crew .hud-crew-row')];
+        const row = rows.find((entry) => entry.textContent.toLowerCase().includes(name));
+        const warnings = [...document.querySelectorAll('#hud-warnings .hud-warning')]
+          .map((entry) => entry.textContent.toLowerCase());
+        return row?.dataset.state === 'link-lost'
+          && warnings.some((entry) => entry.includes(name) && entry.includes('link lost'));
+      }, { timeout: 5000 }, reconnectPilot.name.toLowerCase());
+      report.screenshots.linkLost = await capture(pilots[0], "link-lost");
       await waitFor(reconnectPilot.page, (before) => {
         const state = window.__TEST_API?.getMultiplayerJourneyState?.();
         return state?.clientId === before.clientId
@@ -430,6 +515,14 @@ async function run() {
         reconnectCount: beforeReconnect.transport.reconnectCount,
       });
       const afterReconnect = await journeyState(reconnectPilot);
+      await waitFor(pilots[0].page, (name) => {
+        const rows = [...document.querySelectorAll('#hud-crew .hud-crew-row')];
+        const row = rows.find((entry) => entry.textContent.toLowerCase().includes(name));
+        const warnings = [...document.querySelectorAll('#hud-warnings .hud-warning')]
+          .map((entry) => entry.textContent.toLowerCase());
+        return row?.dataset.state === 'alive'
+          && warnings.some((entry) => entry.includes(name) && entry.includes('recovered'));
+      }, { timeout: 10000 }, reconnectPilot.name.toLowerCase());
       report.reconnect = {
         clientId: afterReconnect.clientId,
         membershipId: afterReconnect.membershipId,
@@ -439,6 +532,21 @@ async function run() {
       };
       report.room = { roomCodeLength: roomCode.length, roster: rosters[0], runId: afterReconnect.runId };
       report.screenshots.reconnected = await capture(reconnectPilot, "reconnected");
+
+      report.stage = "leave-crew";
+      await tap(reconnectPilot.page, "Escape", "Escape", 100);
+      await waitForPhase(reconnectPilot.page, "paused");
+      await tap(reconnectPilot.page, "ArrowDown", "ArrowDown", 120);
+      await tap(reconnectPilot.page, "Enter", "Enter", 250);
+      await waitForPhase(reconnectPilot.page, "title", 15000);
+      await waitFor(pilots[0].page, (name) => {
+        const rows = [...document.querySelectorAll('#hud-crew .hud-crew-row')];
+        const warnings = [...document.querySelectorAll('#hud-warnings .hud-warning')]
+          .map((entry) => entry.textContent.toLowerCase());
+        return rows.length === 3
+          && warnings.some((entry) => entry.includes(name) && entry.includes('left the crew'));
+      }, { timeout: 10000 }, reconnectPilot.name.toLowerCase());
+      report.screenshots.crewLeft = await capture(pilots[0], "crew-left");
 
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(health.session?.status === "running" && health.session?.maxPlayers === 4,

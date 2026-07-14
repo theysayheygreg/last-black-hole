@@ -62,6 +62,16 @@
   state coverage for alive, link-lost, dead, and extracted presentation.
 - Removed cargo count from the public extraction event; teammate cargo and
   individual signal remain owner-private and are not inferred by presentation.
+- Added public authority lifecycle events for link loss and successful resume,
+  including stable seat/name context for observers and explicit leave events.
+- Added low-clutter crew callouts for death, extraction, link loss/recovery,
+  and leave while keeping persistent outcome truth in the P1–P4 crew rail.
+- Added an honest public world-pressure meter from Inhibitor pressure rather
+  than presenting private pilot signal as shared crew state.
+- Extended the four-browser journey through observer-visible death, real portal
+  extraction, delayed disconnect/recovery, and explicit UI leave, with captured
+  evidence for each transition.
+- Prevented malformed portal coordinates from leaking `NaN` into the route HUD.
 
 ### External playtest
 

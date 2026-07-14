@@ -37,7 +37,8 @@ import { ScanlinesPass } from './render/passes/scanlines-pass.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
-         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
+         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
+         getCrewConsequencePresentation } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -266,6 +267,8 @@ let remotePlayers = [];
 let fixtureShipCandidates = [];
 let remoteLastAckSeq = 0;
 let remoteLastEventSeq = 0;
+let remoteLastStreamState = null;
+let remoteLastReconnectCount = 0;
 let remoteInputRequestInFlight = false;
 let remoteNextStreamInputAt = 0;
 let remoteActionSettlementInFlight = false;
@@ -2607,6 +2610,18 @@ function applyRemoteEvents(events) {
       canvasH: overlayCanvas.height,
     });
 
+    const crewConsequence = getCrewConsequencePresentation(
+      event,
+      remoteSnapshot?.players || [],
+      simClient?.clientId || null,
+    );
+    if (crewConsequence) {
+      const color = crewConsequence.tone === 'danger' ? 'rgba(255, 100, 80, 0.95)'
+        : crewConsequence.tone === 'success' ? 'rgba(100, 255, 180, 0.9)'
+          : 'rgba(255, 190, 90, 0.9)';
+      showWarning(crewConsequence.text, color, event.type === 'session.ended' ? 7000 : 3600);
+    }
+
     switch (event.type) {
       case 'player.pulse':
         if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
@@ -2750,6 +2765,31 @@ function applyRemoteEvents(events) {
         break;
     }
   }
+}
+
+function updateRemoteConnectionPresentation() {
+  if (!remoteAuthorityActive || !simClient?.getMetrics) {
+    remoteLastStreamState = null;
+    remoteLastReconnectCount = 0;
+    return;
+  }
+  const metrics = simClient.getMetrics();
+  const streamState = metrics?.streamState || null;
+  const reconnectCount = Number(metrics?.reconnectCount) || 0;
+  if (remoteLastStreamState === null) {
+    remoteLastStreamState = streamState;
+    remoteLastReconnectCount = reconnectCount;
+    return;
+  }
+  if (remoteLastStreamState && remoteLastStreamState === 'open'
+      && (streamState === 'disconnected' || streamState === 'reconnecting')) {
+    showWarning('CREW LINK // RECONNECTING', 'rgba(255, 190, 90, 0.9)', 5000);
+  }
+  if (reconnectCount > remoteLastReconnectCount && streamState === 'open') {
+    showWarning('CREW LINK // RECOVERED', 'rgba(100, 255, 180, 0.9)', 3600);
+  }
+  remoteLastStreamState = streamState;
+  remoteLastReconnectCount = reconnectCount;
 }
 
 function applyRemoteInventoryAction(action) {
@@ -5887,6 +5927,7 @@ function gameLoop(now) {
     }
 
     // Update HUD during gameplay
+    updateRemoteConnectionPresentation();
     const cargoItems = inventorySystem.getCargoItems();
     const authoritativePlayer = remoteAuthorityActive
       ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
@@ -5912,6 +5953,7 @@ function gameLoop(now) {
       } : { status: ship.status || 'alive', ratio: ship.status === 'dead' ? 0 : 1 },
       crewPlayers: remoteAuthorityActive ? remoteSnapshot?.players || [] : [],
       localClientId: remoteAuthorityActive ? simClient?.clientId || null : null,
+      localStreamState: remoteAuthorityActive ? simClient?.getMetrics?.()?.streamState || 'open' : 'open',
       interaction: portalInteraction?.ready ? {
         action: 'extract',
         label: 'confirm extraction',

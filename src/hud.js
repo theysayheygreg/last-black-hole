@@ -32,7 +32,7 @@ let _hullFillEl, _hullReadoutEl;
 let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCaptionEl;
 let _abilitiesEl;
 let _ability1El, _ability2El;
-let _inhibitorEl, _inhibitorFormEl;
+let _inhibitorEl, _inhibitorFormEl, _inhibitorPressureFillEl;
 let _crewEl;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastCollapseStr = '';
@@ -74,6 +74,7 @@ export function initHUD() {
   _ability2El = document.getElementById('hud-ability2');
   _inhibitorEl = document.getElementById('hud-inhibitor');
   _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
+  _inhibitorPressureFillEl = document.getElementById('hud-inhibitor-pressure-fill');
   _crewEl = document.getElementById('hud-crew');
   renderAbilitySlot(_ability1El, abilitySlot('Q', '---', { status: '', ready: false }));
   renderAbilitySlot(_ability2El, abilitySlot('R', '---', { status: '', ready: false }));
@@ -82,10 +83,6 @@ export function initHUD() {
 
 function textCorruptionConfig() {
   return CONFIG.inhibitor?.textCorruption || {};
-}
-
-function inhibitorFormName(form) {
-  return INHIBITOR_FORM_NAMES[form] || 'dormant';
 }
 
 function getInhibitorHUDState(opts = {}) {
@@ -100,10 +97,27 @@ function getInhibitorHUDState(opts = {}) {
   return {
     form,
     intensity,
+    pressureFrac: clamp01(state?.pressureFrac),
     reach,
     dist,
     proximity,
     corruption: proximity * intensity,
+  };
+}
+
+export function getWorldPressurePresentationState(state = null) {
+  const form = Math.max(0, Math.min(3, Math.floor(Number(state?.form) || 0)));
+  const pressureFrac = clamp01(state?.pressureFrac);
+  const visible = form > 0 || pressureFrac >= 0.05;
+  const formLabel = INHIBITOR_FORM_NAMES[form] || 'dormant';
+  return {
+    visible,
+    form,
+    formLabel,
+    pressureFrac,
+    percent: Math.round(pressureFrac * 100),
+    label: form > 0 ? `${formLabel} // ${Math.round(pressureFrac * 100)}%`
+      : `building // ${Math.round(pressureFrac * 100)}%`,
   };
 }
 
@@ -194,7 +208,7 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, Number.isFinite(numeric) ? numeric : 0));
 }
 
-export function getCrewPresentationState(players = [], localClientId = null) {
+export function getCrewPresentationState(players = [], localClientId = null, localStreamState = 'open') {
   return players
     .filter((player) => player && !player.isAI && Number.isInteger(player.seatNo))
     .sort((left, right) => left.seatNo - right.seatNo)
@@ -203,7 +217,7 @@ export function getCrewPresentationState(players = [], localClientId = null) {
       const isLocal = player.clientId === localClientId;
       const state = player.status === 'dead' ? 'dead'
         : player.status === 'escaped' ? 'extracted'
-          : player.connected === false ? 'link lost'
+          : player.connected === false || (isLocal && localStreamState !== 'open') ? 'link lost'
             : 'alive';
       return {
         seatNo: player.seatNo,
@@ -217,9 +231,49 @@ export function getCrewPresentationState(players = [], localClientId = null) {
     });
 }
 
-function renderCrewRail(players, localClientId) {
+function crewEventMember(event, players) {
+  const payload = event?.payload || {};
+  const player = (players || []).find((entry) => entry?.clientId === payload.clientId) || null;
+  const seatNo = Number.isInteger(player?.seatNo) ? player.seatNo
+    : Number.isInteger(payload.seatNo) ? payload.seatNo : null;
+  return {
+    clientId: payload.clientId || null,
+    name: String(player?.name || payload.name || 'pilot'),
+    seatLabel: Number.isInteger(seatNo) ? `P${seatNo + 1}` : null,
+  };
+}
+
+export function getCrewConsequencePresentation(event, players = [], localClientId = null) {
+  if (!event?.type) return null;
+  const member = crewEventMember(event, players);
+  const isLocal = member.clientId && member.clientId === localClientId;
+  const identity = [member.seatLabel, member.name].filter(Boolean).join(' ');
+  switch (event.type) {
+    case 'player.died':
+      if (isLocal) return null;
+      return { text: `${identity} LOST`, tone: 'danger', state: 'dead' };
+    case 'player.escaped':
+      if (isLocal) return null;
+      return { text: `${identity} EXTRACTED`, tone: 'success', state: 'extracted' };
+    case 'player.disconnected':
+      if (isLocal) return null;
+      return { text: `${identity} LINK LOST`, tone: 'warning', state: 'link-lost' };
+    case 'player.reconnected':
+      if (isLocal) return null;
+      return { text: `${identity} LINK RECOVERED`, tone: 'success', state: 'recovered' };
+    case 'player.left':
+      if (isLocal) return null;
+      return { text: `${identity} LEFT THE CREW`, tone: 'warning', state: 'left' };
+    case 'session.ended':
+      return { text: `CYCLE ENDED // ${String(event.payload?.reason || 'complete').replaceAll('_', ' ')}`, tone: 'warning', state: 'ended' };
+    default:
+      return null;
+  }
+}
+
+function renderCrewRail(players, localClientId, localStreamState) {
   if (!_crewEl) return;
-  const crew = getCrewPresentationState(players, localClientId);
+  const crew = getCrewPresentationState(players, localClientId, localStreamState);
   _crewEl.style.display = crew.length > 0 ? '' : 'none';
   const signature = JSON.stringify(crew);
   if (signature === _lastCrewSignature) return;
@@ -421,7 +475,9 @@ function nearestActivePortal(ship, portalSystem) {
   let nearest = null;
   for (const portal of portalSystem.portals) {
     if (!portal?.alive || portal.blockedByInhibitor) continue;
+    if (![ship.wx, ship.wy, portal.wx, portal.wy].every(Number.isFinite)) continue;
     const distance = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
+    if (!Number.isFinite(distance)) continue;
     if (!nearest || distance < nearest.distance) nearest = { portal, distance };
   }
   return nearest;
@@ -495,7 +551,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   const motion = resolveMotionSettings(CONFIG.ui?.motion || {});
   const reducedMotion = opts.reducedMotion ?? motion.reducedMotion;
   _hudEl.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
-  renderCrewRail(opts.crewPlayers || [], opts.localClientId || null);
+  renderCrewRail(opts.crewPlayers || [], opts.localClientId || null, opts.localStreamState || 'open');
 
   const runDuration = CONFIG.universe.runDuration;
   const remaining = Math.max(0, runDuration - runElapsedTime);
@@ -680,10 +736,11 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   }
 
   const inhibitorHud = getInhibitorHUDState(opts);
+  const worldPressure = getWorldPressurePresentationState(opts.inhibitorState);
 
   // === INHIBITOR FORM ===
   if (_inhibitorEl && opts.inhibitorState) {
-    if (inhibitorHud.form <= 0) {
+    if (!worldPressure.visible) {
       _inhibitorEl.style.display = 'none';
       _inhibitorEl.classList.remove('form-vessel');
       setMaybeCorruptedText(_inhibitorFormEl, 'dormant', 0, 'inhibitor-dormant');
@@ -695,11 +752,15 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
       const textSeed = `form-${inhibitorHud.form}-${Math.floor(stateTime * refreshHz)}`;
       setMaybeCorruptedText(
         _inhibitorFormEl,
-        inhibitorFormName(inhibitorHud.form),
+        worldPressure.label,
         inhibitorTextAmount(inhibitorHud),
         textSeed,
         { maxChars: 24 }
       );
+      if (_inhibitorPressureFillEl) {
+        _inhibitorPressureFillEl.style.width = `${worldPressure.percent}%`;
+        _inhibitorPressureFillEl.parentElement?.setAttribute('aria-valuenow', String(worldPressure.percent));
+      }
       // Swap the CSS class so the vessel form pulses harder
       if (inhibitorHud.form === 3) {
         _inhibitorEl.classList.add('form-vessel');

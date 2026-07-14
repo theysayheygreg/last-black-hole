@@ -26,6 +26,7 @@ Statuses:
 | readiness belongs to the current connection epoch | ACTIVE | entry below |
 | configured multiplayer defaults to stream with explicit offline recovery | ACTIVE | entry below |
 | public run identity exposes seat and link state, not private loadout truth | ACTIVE | entry below |
+| connection lifecycle is public match coordination state | ACTIVE | entry below |
 | external test uses a disposable Tailscale shared node | ACTIVE | `OPTIONAL-LOCAL-INTERNET-HOST.md` |
 | hybrid verified authority plus private continuity | PROVISIONAL | `OPEN-DECISIONS.md` |
 
@@ -82,6 +83,23 @@ count.
 
 **Why:** humans need to know who is present and what happened to the crew, but
 readability is not permission to widen private progression or inventory truth.
+
+## 2026-07-14 — Connection lifecycle is public match coordination state
+
+**Status:** ACTIVE
+
+The current match authority publishes `player.disconnected` only when the
+active fenced stream epoch closes, and `player.reconnected` only after a resume
+admission restores that player. Both carry stable public seat/name identity.
+The current player also derives a local reconnecting state directly from its
+transport while snapshots are unavailable. Ordinary leave remains a distinct
+authority event and removes the seat immediately.
+
+These events authorize connection presentation only. They do not transfer
+gameplay authority, reveal private player state, or relax old-epoch fencing.
+
+**Why:** humans need to distinguish a dead pilot, a temporarily broken link,
+and someone who intentionally left without guessing from a disappearing ship.
 
 ## 2026-07-14 — Crew Muster is the synchronized multiplayer start boundary
 
