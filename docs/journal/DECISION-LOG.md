@@ -3039,3 +3039,19 @@ remain closed.
 **Door status:** Open only for the feature-flagged public-only runtime worker
 pilot. Closed for owner/private worker input, worker-side compression or commit,
 cadence changes, hosted/fleet work, heavier-sim forecasts, and 24/48/96.
+
+### Q: Did the S22 runtime public-only worker seam admit eight?
+
+| Date | Decision |
+|------|----------|
+| Jul 13 | Preserve one dedicated logical authority per match. Internal workers receive only clone-isolated normalized public current/base views and immutable opaque fences; owner data, semantic validation, ACK/base and retained-wire ledgers, epochs, ordering, pair selection, compression, queue/send, and commit remain authority-owned. |
+| Jul 13 | The measured pilot's worker flag defaults off. Deterministic 1/4/8 parity and lifecycle tests pass, including mutation isolation, ACK/base lease fencing, timeout, backpressure, disconnect, crash, and shutdown. |
+| Jul 13 | Reject two and four runtime workers. The short eight-player screen drops from inline 5.00 Hz / 120.60 ms / 0.645 core to 3.67 Hz / 200.84 ms / 1.240 cores with two and 3.67 Hz / 195.49 ms / 1.270 cores with four; timeout fallbacks are 102/232 and 109/239. |
+| Jul 13 | Stop after one normal-window two-worker confirmation rather than run a second counterbalanced admission round: it produces 3.65 Hz, 206.83 ms, 1.234 cores, and 408/851 timeout fallbacks. The candidate fails too broadly for more admission spend. |
+| Jul 13 | Revert production integration after preserving its commits and evidence. Red-team found no P0/state-corruption issue, but disabled mode still changed adapter send scheduling, result ownership was not bound to the assigned worker row, and crashed rows were not replaced. The standalone S21 feasibility harness is sufficient research scaffolding. |
+| Jul 13 | Select a shared immutable public body plus recipient-local lineage-envelope representation as the next bounded lane. It must eliminate repeated main-thread traversal while retaining independent materialization, privacy, ACK bases, retransmission, and exactly one gameplay writer. |
+
+**Door status:** Closed for eight-player admission and production worker
+enablement. Open only for the bounded shared-public-body representation lane.
+Hosted/fleet, heavier-sim forecasts,
+cadence changes, and 24/48/96 remain closed.

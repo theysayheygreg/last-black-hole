@@ -730,6 +730,32 @@ Hosted economics, heavier-sim work, cadence changes, and 24/48/96 remain closed.
 Evidence is under `docs/v0.4/evidence/state-pair-s21/`; design and limits are in
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S21-AUTHORITY-CLOCK.md`.
 
+**S22 runtime public-projection workers — implemented, rejected, and reverted:** The live
+feature-flagged pool preserves one dedicated logical authority per match and
+keeps owner data, semantic validation, ACK/ledgers, epochs, ordering,
+compression, queues, send, and commit on that authority. Registered parity and
+lifecycle suites cover exact 1/4/8 output, public-only input, mutation
+isolation, ACK/base fencing, timeout, backpressure, disconnect, crash, and
+shutdown. Red-team then found that disabled mode still changed adapter send
+scheduling, worker responses were not bound to their assigned pool row, and a
+crashed row was not replaced. Production integration was reverted; the exact
+implementation remains in commits and the standalone S21 harness remains.
+
+The profiler-off product screen rejects both topologies. At eight, inline is
+5.00 Hz / 120.60 ms projection p95 / 0.645 authority core; two workers are
+3.67 Hz / 200.84 ms / 1.240 with 102/232 timeout fallbacks; four workers are
+3.67 Hz / 195.49 ms / 1.270 with 109/239 fallbacks. A normal-window two-worker
+repeat confirms 3.65 Hz, 206.83 ms, 1.234 cores, and 408/851 fallbacks. The
+synthetic S21 gain is consumed by clone/transfer, worker contention, scheduling,
+and mandatory authority validation in the real path.
+
+Eight remains closed. The next bounded lane is a shared immutable public body
+plus recipient-local lineage envelope that eliminates repeated authority
+traversal without sharing mutable authority or owner state. Hosted economics,
+heavier-sim work, cadence changes, and 24/48/96 remain closed. Evidence is in
+`docs/v0.4/evidence/state-pair-s22/`; the decision is in
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S22-RUNTIME-PUBLIC-WORKERS.md`.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

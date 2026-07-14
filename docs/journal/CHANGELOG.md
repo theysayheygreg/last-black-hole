@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-07-13 — v0.4 S22 runtime public-projection worker rejection
+
+- Added a default-off two/four-thread public-projection pool inside one
+  dedicated logical authority per match. Workers are pure candidate compute;
+  owner/private data, validation, ACK/ledgers, epochs, ordering, selection,
+  compression, queues, send, and commit stay on the authority.
+- Added generation/token/match/authority/ballpark/manifest/recipient fences,
+  bounded pending work, hard elapsed deadlines, crash/backpressure/timeout
+  fallback, disconnect/rebase/shutdown cleanup, and per-recipient ACK lease
+  serialization.
+- Registered deterministic exact-parity/privacy and lifecycle suites. The
+  worker and inline paths are byte/semantic identical for 1/4/8, and mutation,
+  timeout, backpressure, disconnect, crash, and shutdown cases fail safely.
+- Rejected the seam on the real product clock. At eight, inline reaches 5.00
+  Hz; two and four workers each reach only 3.67 Hz with roughly 196–201 ms
+  projection p95 and 102/232 or 109/239 timeout fallbacks.
+- Confirmed the rejection with a normal-window two-worker run: 3.65 Hz,
+  206.83 ms projection p95, 1.234 authority cores, and 408/851 fallbacks.
+- Red-team found no P0/state-corruption issue, but disabled mode still altered
+  adapter send scheduling, results were not assigned-row-bound, and crashed
+  rows were not replaced. Reverted production integration while preserving
+  implementation commits and evidence.
+- Kept eight closed and selected a shared immutable public body plus
+  recipient-local lineage envelope as the next bounded lane.
+
 ## 2026-07-13 — v0.4 S21 eight-player authority clock attribution
 
 - Added a normally-off bounded authority stage profiler and repeated a clean

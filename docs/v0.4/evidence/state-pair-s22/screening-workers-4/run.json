@@ -1,0 +1,33 @@
+{
+  "schema": "lbh-s22-runtime-public-workers-run-v1",
+  "commit": "a0fc1d4fb7a4353473adbf18d0cfb1bb07a3933b",
+  "dirty": false,
+  "seed": 1403105358,
+  "command": "LBH_S20_COMPRESSION=1 LBH_S22_PUBLIC_WORKERS=4 node tests/multiplayer-state-pair-clock-attribution.cjs",
+  "config": {
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "warmupMs": 1000,
+    "windowMs": 3000,
+    "binary": false,
+    "compression": true,
+    "stageProfile": false,
+    "publicProjectionWorkers": 4
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "node": "v22.22.3"
+  },
+  "s12Binding": {
+    "path": "docs/v0.4/evidence/state-pair-s12/pre-gate",
+    "compositeSha256": "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845"
+  }
+}

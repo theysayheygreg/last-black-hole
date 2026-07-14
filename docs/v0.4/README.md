@@ -76,6 +76,9 @@ coordinator owns the integrated documents.
 - `MULTIPLAYER-STATE-PAIR-S21-AUTHORITY-CLOCK.md` — eight-player critical-path
   attribution, public-only worker feasibility, authority fences, and the
   bounded runtime pilot gate.
+- `MULTIPLAYER-STATE-PAIR-S22-RUNTIME-PUBLIC-WORKERS.md` — default-off live
+  worker seam, exact authority boundary, product-path rejection, and the next
+  shared-public-body representation lane.
 
 ## Evidence Standard
 
