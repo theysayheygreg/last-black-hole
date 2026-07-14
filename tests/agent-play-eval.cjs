@@ -84,7 +84,7 @@ async function slingshotEdgeAcks(page) {
 
 async function tapAcknowledgedSlingshotEdge(page, label) {
   const before = await slingshotEdgeAcks(page);
-  await tapGamepadButton(page, 3, 80);
+  await tapGamepadButton(page, 3, 0);
   await waitFor(page, (count) => {
     const acks = window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || [];
     return acks.length === count + 1;
@@ -234,7 +234,7 @@ async function tapGamepadButton(page, buttonIndex, settleMs = 160) {
   // Step the product loop while each edge is held so the same virtual Deck
   // input contract is deterministic under isolated and full-suite load.
   await stepGameFrames(page, 1, 0.001);
-  await sleep(90);
+  await sleep(16);
   await setGamepadButton(page, buttonIndex, false);
   await stepGameFrames(page, 1, 0.001);
   await sleep(settleMs);
