@@ -427,7 +427,7 @@ export function initTestAPI(getState) {
       const { playableMaps, transitionToRemoteGame } = getState();
       if (!playableMaps || !transitionToRemoteGame) return false;
       const entry = playableMaps[mapIndex] || playableMaps[0];
-      transitionToRemoteGame(entry);
+      transitionToRemoteGame(entry, { staged: false });
       return true;
     },
 
@@ -435,7 +435,7 @@ export function initTestAPI(getState) {
       const { playableMaps, startRemoteGame } = getState();
       if (!playableMaps || !startRemoteGame) return false;
       const entry = playableMaps[mapIndex] || playableMaps[0];
-      await startRemoteGame(entry);
+      await startRemoteGame(entry, { staged: false });
       return true;
     },
 
@@ -443,7 +443,7 @@ export function initTestAPI(getState) {
       const { playableMaps, transitionToRemoteGame } = getState();
       if (!playableMaps || !transitionToRemoteGame) return false;
       const entry = playableMaps[mapIndex] || playableMaps[0];
-      transitionToRemoteGame(entry, { forceReset: true });
+      transitionToRemoteGame(entry, { forceReset: true, staged: false });
       return true;
     },
 

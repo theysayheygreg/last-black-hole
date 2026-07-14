@@ -147,18 +147,28 @@ export class SimClient {
     return this._json('/maps');
   }
 
-  async startSession({ mapId, worldScale, maxPlayers = 4, seed = null, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
+  async startSession({ mapId, worldScale, maxPlayers = 4, seed = null, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null, staged = false }) {
     await this._awaitPendingActions();
     await this._stopStream('session-start');
     const command = this.commandCredential ? this._nextCommandEnvelope() : {};
     const request = () => this._json('/session/start', {
       method: 'POST',
-      body: JSON.stringify({ mapId, worldScale, maxPlayers, seed, requesterId, requesterName, requesterProfileId, requesterProfile, ...command }),
+      body: JSON.stringify({ mapId, worldScale, maxPlayers, seed, requesterId, requesterName, requesterProfileId, requesterProfile, startMode: staged ? 'staged' : 'immediate', ...command }),
     });
     const body = await (this.commandCredential ? this._enqueueCommand(request) : request());
     this._applySessionClocks(body?.session);
     this._clearAuthority(body?.session?.runId || null, body?.joinTicket || null);
     this._resetStreamState(body?.session?.runId || null);
+    return body.session;
+  }
+
+  async launchSession({ requesterId = this.clientId } = {}) {
+    await this._awaitPendingActions();
+    const command = this._nextCommandEnvelope();
+    const body = await this._enqueueCommand(() => this._json('/session/launch', {
+      method: 'POST', body: JSON.stringify({ requesterId, ...command }),
+    }));
+    this._applySessionClocks(body?.session);
     return body.session;
   }
 

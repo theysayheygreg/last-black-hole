@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-14 — v0.4 Crew Muster stages human multiplayer runs
+
+- Added a frozen 1–4-player authority lobby with one host-controlled launch,
+  four-seat admission, fifth-seat rejection, and no gameplay input before the
+  run begins.
+- Added the human-facing Crew Muster screen and removed split-reality fallback:
+  a failed multiplayer join now stays failed instead of silently starting a
+  separate local universe.
+- Preserved immediate-start test and offline paths, added focused authority
+  coverage, and prevented pre-launch leave/reset from recording a false
+  abandoned run.
+
 ## 2026-07-14 — v0.4 human multiplayer product goal opened
 
 ### docs/v0.4/ — Added

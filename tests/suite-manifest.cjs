@@ -839,6 +839,13 @@ const SUITES = [
     timeout: 360000,
   },
   {
+    name: "MultiplayerCrewMuster",
+    file: "multiplayer-crew-muster.cjs",
+    lanes: ["multiplayer-authority", "multiplayer-playable", "full"],
+    browser: false,
+    timeout: 30000,
+  },
+  {
     name: "MultiplayerNetworkImpairment",
     file: "multiplayer-network-impairment.cjs",
     lanes: ["multiplayer-impairment-browser"],

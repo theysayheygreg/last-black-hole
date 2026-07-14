@@ -209,6 +209,8 @@ async function enterRemoteRunWithGamepad(page, { hullType = 'breacher' } = {}) {
   await tapGamepadButton(page, 0);
   await waitForPhase(page, 'mapSelect');
   await tapGamepadButton(page, 0);
+  await waitForPhase(page, 'crewMuster', 12000);
+  await tapGamepadButton(page, 0); // host launches the synchronized crew
   await waitForPhase(page, 'playing', 12000);
   await waitForLabeled(page, 'remote authority activation', () => {
     const net = window.__TEST_API.getNetworkState();

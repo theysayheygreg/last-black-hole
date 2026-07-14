@@ -1457,13 +1457,15 @@ function getCargoCount(player) {
 }
 
 function startSession(config = {}) {
-  if (runtime.session.status === "running") {
-    for (const player of runtime.players.values()) {
-      if (!player.isAI) {
-        commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
+  if (runtime.session.status === "running" || runtime.session.status === "lobby") {
+    if (runtime.session.status === "running") {
+      for (const player of runtime.players.values()) {
+        if (!player.isAI) {
+          commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
+        }
       }
+      endSession("reset", { status: "reset" });
     }
-    endSession("reset", { status: "reset" });
   }
   clearTerminalShutdown();
   authoredCollapseTestLifecycle.reset();
@@ -1475,10 +1477,12 @@ function startSession(config = {}) {
   const rngStreams = createRNGStreams(seed);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
+  const startMode = config.startMode === "staged" ? "staged" : "immediate";
   runtime.session = {
     id: crypto.randomUUID(),
     runId: crypto.randomUUID(),
-    status: "running",
+    status: startMode === "staged" ? "lobby" : "running",
+    startMode,
     mapId: mapState.id,
     mapName: mapState.name,
     hostClientId: config.requesterId ? String(config.requesterId) : null,
@@ -1657,7 +1661,7 @@ function startSession(config = {}) {
   runtime.coarseField = null;
   rebuildAuthoritativeField({ initialize: true });
   rotateMultiplayerRun(runtime.session.runId);
-  telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
+  telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, status: runtime.session.status, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
     sessionId: runtime.session.id,
     runId: runtime.session.runId,
@@ -1665,6 +1669,7 @@ function startSession(config = {}) {
     mapName: runtime.session.mapName,
     hostClientId: runtime.session.hostClientId,
     hostName: runtime.session.hostName,
+    status: runtime.session.status,
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
@@ -7699,7 +7704,8 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/session/start") {
       const body = await readJson(req);
-      if (runtime.session.status === "running") {
+      const replaceableEmptyLobby = runtime.session.status === "lobby" && getHumanPlayerCount() === 0;
+      if ((runtime.session.status === "running" || runtime.session.status === "lobby") && !replaceableEmptyLobby) {
         const permission = ensureHostAuthority(req, {
           ...body,
           playerId: body.playerId || body.requesterId,
@@ -7713,6 +7719,42 @@ const server = http.createServer(async (req, res) => {
       startSession(body);
       const joinTicket = issueJoinClaim(body.requesterId || body.playerId);
       sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/session/launch") {
+      const body = await readJson(req);
+      if (runtime.session.status !== "lobby") {
+        sendJson(res, 409, { ok: false, code: "not-in-lobby", error: "Crew is not waiting to launch", session: runtime.session });
+        return;
+      }
+      const permission = ensureHostAuthority(req, {
+        ...body,
+        playerId: body.playerId || body.requesterId,
+      });
+      if (!permission.ok) {
+        sendAuthorityError(res, permission);
+        return;
+      }
+      if (permission.authority) acceptCommand(permission);
+      runtime.session.status = "running";
+      runtime.session.startMode = "staged";
+      telemetry.info("session.launched", {
+        sessionId: runtime.session.id,
+        runId: runtime.session.runId,
+        hostClientId: runtime.session.hostClientId,
+        humanPlayerCount: getHumanPlayerCount(),
+      });
+      publishEvent("session.launched", {
+        sessionId: runtime.session.id,
+        runId: runtime.session.runId,
+        hostClientId: runtime.session.hostClientId,
+        humanPlayerCount: getHumanPlayerCount(),
+      });
+      persistSessionRegistry();
+      refreshBallparkMirror("session-launched");
+      restartTickLoop();
+      sendJson(res, 200, { ok: true, session: runtime.session });
       return;
     }
 
@@ -7741,7 +7783,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/join") {
       const body = await readJson(req);
-      if (runtime.session.status !== "running") {
+      if (runtime.session.status !== "running" && runtime.session.status !== "lobby") {
         sendJson(res, 409, { ok: false, error: "No active session" });
         return;
       }
@@ -7893,7 +7935,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, error: "Unknown client" });
         return;
       }
-      if (!player.isAI && !player.committedOutcome) {
+      if (runtime.session.status === "running" && !player.isAI && !player.committedOutcome) {
         commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
       }
       runtime.players.delete(clientId);

@@ -242,7 +242,7 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
+let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'crewMuster' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
 let loadingStartTime = 0;
 let loadingMapName = '';
 let deathTimer = 0;
@@ -274,6 +274,8 @@ let remoteInventoryRequestInFlight = false;
 let remoteSessionHealth = null;
 let remoteSessionRequestInFlight = false;
 let remoteSessionLastFetchedAt = 0;
+let remoteJoinError = null;
+let remoteLaunchRequestInFlight = false;
 let remotePendingPulse = false;
 let remotePendingExtractConfirm = false;
 let remotePendingConsumeSlot = null;
@@ -1878,8 +1880,19 @@ function applyRemoteSnapshot(snapshot) {
   const duplicateSnapshot = remoteSnapshot &&
     snapshot.tick === remoteSnapshot.tick &&
     snapshot.simTime === remoteSnapshot.simTime;
-  // First snapshot received — transition from loading to playing
+  // A staged authority has a real snapshot but no world clock. Keep every
+  // client in Crew Muster until the host performs the single launch mutation.
   if (gamePhase === 'loading') {
+    if (snapshot.session?.status === 'lobby') {
+      gamePhase = 'crewMuster';
+      audioEngine.setContext('menu');
+      hideHUD();
+    } else {
+      gamePhase = 'playing';
+      audioEngine.setContext('gameplay');
+      showHUD();
+    }
+  } else if (gamePhase === 'crewMuster' && snapshot.session?.status === 'running') {
     gamePhase = 'playing';
     audioEngine.setContext('gameplay');
     showHUD();
@@ -2027,19 +2040,23 @@ function updateRemoteShipPresentation(dt) {
 function currentRemoteControlState() {
   const selectedEntry = PLAYABLE_MAPS[mapSelectIndex] || PLAYABLE_MAPS[0] || null;
   const session = remoteSessionHealth?.session ?? null;
-  const hasLiveSession = session?.status === 'running' && (remoteSessionHealth?.humanPlayerCount ?? 0) > 0;
+  const hasLiveSession = (session?.status === 'running' || session?.status === 'lobby')
+    && (remoteSessionHealth?.humanPlayerCount ?? 0) > 0;
   const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
   const isHost = Boolean(hasLiveSession && simClient?.clientId && session?.hostClientId === simClient.clientId);
   return {
     enabled: Boolean(simClient?.enabled),
     loading: remoteSessionRequestInFlight,
     error: remoteSessionHealth?.ok === false ? remoteSessionHealth.error || 'remote health unavailable' : null,
+    joinError: remoteJoinError,
     hasLiveSession,
     sessionStatus: session?.status ?? 'idle',
     sessionMapId: liveEntry?.id ?? session?.mapId ?? null,
     sessionMapName: liveEntry?.name ?? session?.mapId ?? null,
     sessionPlayerCount: remoteSessionHealth?.playerCount ?? 0,
     sessionHumanPlayerCount: remoteSessionHealth?.humanPlayerCount ?? 0,
+    sessionMaxPlayers: session?.maxPlayers ?? getConfiguredSimMaxPlayers(),
+    isLobby: session?.status === 'lobby',
     hostClientId: session?.hostClientId ?? null,
     hostName: session?.hostName ?? null,
     isHost,
@@ -2676,7 +2693,7 @@ function syncRemoteWorldState(world) {
   }
 }
 
-async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
+async function startRemoteGame(mapEntry, { forceReset = false, staged = true } = {}) {
   resetPhantomForNewSession();
   resetHauntForNewSession();
   if (!simClient?.enabled) {
@@ -2684,8 +2701,10 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
     return;
   }
 
+  remoteJoinError = null;
   const health = await refreshRemoteSessionHealth(true);
-  const runningSession = health?.session?.status === 'running' && (health?.humanPlayerCount ?? 0) > 0
+  const runningSession = (health?.session?.status === 'running' || health?.session?.status === 'lobby')
+    && (health?.humanPlayerCount ?? 0) > 0
     ? health.session
     : null;
   const isHost = Boolean(runningSession?.hostClientId && runningSession.hostClientId === simClient.clientId);
@@ -2749,6 +2768,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
       requesterName: profileManager.active?.name || 'Pilot',
       requesterProfileId: profileManager.active?.id || null,
       requesterProfile: profileSnapshot,
+      staged,
     });
     if (forceReset && runningSession) {
       showWarning(`host reset to ${mapEntry.name.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
@@ -2764,6 +2784,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
     consumables: inventorySystem.consumables,
   });
   const snapshot = await simClient.pollSnapshot(true);
+  remoteJoinError = null;
   applyRemoteSnapshot(snapshot);
 }
 
@@ -2771,7 +2792,8 @@ function transitionToRemoteGame(mapEntry, options = {}) {
   triggerTransition(() => {
     void startRemoteGame(mapEntry, options).catch((err) => {
       console.error('[LBH] remote start failed:', err);
-      showWarning(`remote sim failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
+      remoteJoinError = err.message || 'multiplayer admission failed';
+      showWarning(`crew link failed: ${remoteJoinError}`, 'rgba(255, 100, 80, 0.95)', 4000);
       remoteAuthorityActive = false;
       remoteMapId = null;
       remoteSnapshot = null;
@@ -2781,7 +2803,8 @@ function transitionToRemoteGame(mapEntry, options = {}) {
       remotePendingSlingshotEdges = [];
       remoteNextSlingshotEdgeId = 1;
       remoteShipPresentation = null;
-      startGame(mapEntry.map, previewSeed);
+      gamePhase = 'mapSelect';
+      hideHUD();
     });
   });
 }
@@ -2810,6 +2833,8 @@ async function leaveRemoteSessionToHome() {
   remoteSnapshot = null;
   remotePlayers = [];
   remoteSessionHealth = null;
+  remoteJoinError = null;
+  remoteLaunchRequestInFlight = false;
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -3972,7 +3997,9 @@ function gameLoop(now) {
     inhibitorWakeGlitchTimer = Math.max(0, inhibitorWakeGlitchTimer - rawDt);
   }
 
-  const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || gamePhase === 'loading' || rendererFixtureActive;
+  const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home'
+    || gamePhase === 'mapSelect' || gamePhase === 'loading' || gamePhase === 'crewMuster'
+    || rendererFixtureActive;
   // Authority ownership persists through escaped/dead/result transitions.
   // If this falls back to local gameplay stepping after a remote outcome, the
   // presentation begins advancing partially projected entities as local truth.
@@ -4227,6 +4254,45 @@ function gameLoop(now) {
     }
     if (!transitionActive && backNow && !_prevBack) {
       gamePhase = 'home';
+    }
+    applySceneCamera(dt);
+
+  } else if (gamePhase === 'crewMuster') {
+    if (simClient?.enabled) void refreshRemoteSessionHealth(false);
+    const remoteControl = currentRemoteControlState();
+    if (remoteControl.sessionStatus === 'running' && !remoteSnapshotRequestInFlight) {
+      remoteSnapshotRequestInFlight = true;
+      void simClient.pollSnapshot(true).then((snapshot) => {
+        applyRemoteSnapshot(snapshot);
+      }).catch((err) => {
+        remoteJoinError = err.message || 'launch synchronization failed';
+      }).finally(() => {
+        remoteSnapshotRequestInFlight = false;
+      });
+    }
+    if (!transitionActive && confirmNow && !_prevConfirm && remoteControl.isHost
+        && remoteControl.isLobby && !remoteLaunchRequestInFlight) {
+      remoteLaunchRequestInFlight = true;
+      remoteJoinError = null;
+      audioEngine.init();
+      audioEngine.playEvent('launch');
+      void simClient.launchSession().then((session) => {
+        remoteSessionHealth = { ...remoteSessionHealth, ok: true, session };
+        return simClient.pollSnapshot(true);
+      }).then((snapshot) => {
+        applyRemoteSnapshot(snapshot);
+      }).catch((err) => {
+        remoteJoinError = err.message || 'crew launch failed';
+        showWarning(`crew launch failed: ${remoteJoinError}`, 'rgba(255, 100, 80, 0.95)', 3200);
+      }).finally(() => {
+        remoteLaunchRequestInFlight = false;
+      });
+    }
+    if (!transitionActive && backNow && !_prevBack) {
+      void leaveRemoteSessionToHome().finally(() => {
+        gamePhase = 'mapSelect';
+        hideHUD();
+      });
     }
     applySceneCamera(dt);
 
@@ -4947,6 +5013,77 @@ function gameLoop(now) {
     const dots = '.'.repeat(1 + Math.floor(elapsed * 2) % 3);
     ctx.fillStyle = 'rgba(100, 120, 140, 0.5)';
     ctx.fillText('dropping in' + dots, cx, cy + 55);
+  }
+
+  // Crew Muster — one authority, frozen universe, synchronized human launch.
+  if (!rendererFixtureActive && gamePhase === 'crewMuster') {
+    const w = overlayCanvas.width;
+    const h = overlayCanvas.height;
+    const panelW = Math.min(620, w - 48);
+    const panelH = Math.min(430, h - 56);
+    const panel = { x: (w - panelW) / 2, y: (h - panelH) / 2, w: panelW, h: panelH };
+    const control = currentRemoteControlState();
+    const motion = currentUiMotionSettings();
+    const x = panel.x + 34;
+    let y = panel.y + 58;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.72)';
+    ctx.fillRect(0, 0, w, h);
+    drawUiScanlines(ctx, w, h, 0.026, 4);
+    drawTerminalWindow(ctx, panel, {
+      state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-left', role: 'flow', fillAlpha: 0.94, borderAlpha: 0.48, cornerLength: 46,
+    });
+
+    drawSectionLabel(ctx, 'crew muster', x, y, { role: 'flow', alpha: 0.92 });
+    y += 38;
+    ctx.font = canvasFont(24, { role: 'display', weight: '800' });
+    ctx.fillStyle = roleColor('text', 0.98);
+    ctx.fillText(fitUiText(ctx, (control.sessionMapName || loadingMapName || 'unknown route').toUpperCase(), panel.w - 68), x, y);
+    y += 42;
+
+    const humans = control.sessionHumanPlayerCount || 0;
+    const capacity = control.sessionMaxPlayers || 4;
+    drawStatusPill(ctx, { x, y: y - 18, w: 128, h: 26 }, `${humans} / ${capacity} CREW`, { role: humans >= capacity ? 'salvage' : 'flow', alpha: 0.94 });
+    drawStatusPill(ctx, { x: x + 140, y: y - 18, w: 128, h: 26 }, control.isHost ? 'CREW LEADER' : 'CREW MEMBER', { role: control.isHost ? 'anomaly' : 'muted', alpha: 0.88 });
+    drawStatusPill(ctx, { x: x + 280, y: y - 18, w: 144, h: 26 }, 'UNIVERSE FROZEN', { role: 'flow', alpha: 0.80 });
+    y += 46;
+
+    drawKeyValueRow(ctx, 'host', control.hostName || 'assigning', x, y, { labelWidth: 112, valueRole: 'anomaly' });
+    y += 24;
+    drawKeyValueRow(ctx, 'authority', 'one match // one writer', x, y, { labelWidth: 112, valueRole: 'flow' });
+    y += 24;
+    drawKeyValueRow(ctx, 'world time', 'paused until launch', x, y, { labelWidth: 112, valueRole: 'muted' });
+    y += 42;
+
+    ctx.font = canvasFont(12);
+    ctx.fillStyle = roleColor(remoteJoinError ? 'danger' : 'muted', 0.86);
+    const statusCopy = remoteJoinError
+      ? `CREW LINK ERROR // ${remoteJoinError}`
+      : control.isHost
+        ? (remoteLaunchRequestInFlight ? 'LAUNCHING SHARED AUTHORITY...' : 'Launch when your crew is assembled.')
+        : 'Waiting for the crew leader to launch.';
+    ctx.fillText(fitUiText(ctx, statusCopy, panel.w - 68), x, y);
+
+    drawCommandButtonMotion(ctx, {
+      x,
+      y: panel.y + panel.h - 92,
+      w: panel.w - 68,
+      h: 44,
+    }, control.isHost ? 'launch crew' : 'waiting for leader', {
+      hotkey: control.isHost ? promptLabel('confirm', promptOptions) : '',
+      role: control.isHost ? 'flow' : 'muted',
+      active: control.isHost && !remoteLaunchRequestInFlight,
+      alpha: control.isHost ? 0.96 : 0.64,
+      progress: 1,
+      reducedMotion: motion.reducedMotion,
+      commandPulse: motion.commandPulse,
+    });
+    ctx.font = canvasFont(10);
+    ctx.fillStyle = roleColor('muted', 0.64);
+    ctx.fillText(`${promptLabel('back', promptOptions)} leave crew`, x, panel.y + panel.h - 26);
+    ctx.restore();
   }
 
   if (!inMenu) {
@@ -6391,7 +6528,10 @@ function gameLoop(now) {
     let authorityLine = 'local run will host selected map';
     let authorityLine2 = 'selected route ready';
     if (remoteControl?.enabled) {
-      if (remoteControl.error) {
+      if (remoteControl.joinError) {
+        authorityLine = `crew link failed: ${remoteControl.joinError}`;
+        authorityLine2 = `${promptLabel('confirm', promptOptions)} retry // ${promptLabel('back', promptOptions)} back`;
+      } else if (remoteControl.error) {
         authorityLine = `remote sim unavailable: ${remoteControl.error}`;
         authorityLine2 = 'falling back to local readiness';
       } else if (remoteControl.loading && !remoteControl.hasLiveSession) {
@@ -6399,7 +6539,7 @@ function gameLoop(now) {
         authorityLine2 = 'stand by';
       } else if (remoteControl.hasLiveSession) {
         const hostLabel = remoteControl.hostName || 'unknown host';
-        authorityLine = `live ${remoteControl.sessionMapName} // ${hostLabel} // ${remoteControl.sessionPlayerCount} players`;
+        authorityLine = `${remoteControl.isLobby ? 'muster' : 'live'} ${remoteControl.sessionMapName} // ${hostLabel} // ${remoteControl.sessionHumanPlayerCount}/${remoteControl.sessionMaxPlayers}`;
         authorityLine2 = remoteControl.selectedDiffersFromLive
           ? (remoteControl.canHostReset
             ? `${promptLabel('confirm', promptOptions)} join live // ${promptLabel('delete', promptOptions)} reset host`
