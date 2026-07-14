@@ -36,3 +36,34 @@ live load-vector controls have an explicitly approved implementation and their
 correctness/admission effects have been reviewed. There is still exactly one
 logical gameplay writer per match; raising the socket cap would not create a
 second authority. Concurrent matches would each own a separate writer.
+
+## Terminal expanded-eligibility result
+
+Root later authorized one guarded, server-side-only evidence seam without
+changing product defaults. The failed direction is preserved in git history and
+then removed from the live tree.
+
+Two eligibility attempts reached the first isolated client's state-pair
+admission. The second used the production-valid public fauna type `jelly`.
+Both failed after manifest ACK with the same generic `authority-error`; neither
+bound a 24-client cohort. The default boundary check passed first: the ordinary
+runtime still exposed 16 adapter connections and 7 Deep Field scavengers.
+
+The internal exception was not observed because the adapter intentionally
+redacts it. The evidence-only `s24EvidenceBody` property or another public
+projection validation/representation/size boundary are hypotheses only—not a
+diagnosed cause. Root forbids more fixture patches, eligibility retries, and raw
+captures in this lane.
+
+No raw H24 command was started according to the orchestrator, and `raw.json` is
+absent. Repository state proves only the latter. S24 remains **not proven**.
+The sealed synthetic factor screen remains useful only for factor sensitivity;
+it does not measure live sockets, actual process CPU, or observed network bytes,
+and it does not promote H48/H96.
+
+The terminal artifact is regenerated with:
+
+```sh
+node scripts/s24-live-terminal-negative.cjs
+node tests/s24-live-terminal-negative.cjs
+```
