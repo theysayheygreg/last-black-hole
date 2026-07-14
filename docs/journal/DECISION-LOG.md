@@ -2945,3 +2945,31 @@ global gameplay writer.
 bounded authority construction/materialization profiling lane with unchanged
 authority, semantics, selected kind, JSON wire, ACK, recovery, privacy,
 cadence, and admission policy.
+
+### Q: Does S17 lazy candidate materialization admit four/eight or change wire truth?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | S17 replaces four eager outer positional frames with four exact-size descriptors and one chosen frame; 1,200 wire, selection-transcript, and semantic comparisons remain exact. |
+| Jul 13 | Both benchmark orders improve mean publish 27--28%, but profiler-off process evidence reaches only 5.60 Hz at four and 3.80 Hz at eight; both remain `DILATED`. |
+| Jul 13 | Decision: keep the byte-identical optimization, reject 4/8 admission, and next remove remaining trusted same-operation lane validation/size-proof work. |
+
+**Options:**
+1. **Keep eager four-frame composition** — rejected because the lazy path is
+   exactly equivalent and materially cheaper.
+2. **Promote the lazy selector as four/eight-ready** — rejected because neither
+   population meets cadence/clock/overload admission.
+3. **Trusted same-operation validation/size-proof cleanup** (chosen) — attack
+   the largest remaining completed synchronous stage without another codec or
+   cadence change.
+4. **Compression, cadence policy, hosted/heavy-sim, or 24/48/96 work** — remains
+   premature.
+
+**Where it landed:** Option 3. S15 positional JSON plus S17 lazy selection is
+the release path; S16 binary remains opt-in. One dedicated logical gameplay
+authority remains scoped to one match/group, multiplied horizontally across
+concurrent matches.
+
+**Door status:** Closed for 4/8 admission and any claim based on the rejected
+partial profiler. Open only for trusted same-operation validation/size-proof
+cleanup with unchanged S15 bytes and S17 one-frame materialization.

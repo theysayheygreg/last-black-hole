@@ -577,6 +577,38 @@ selection and positional wire truth. Evidence and the full decision are in
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S16-BINARY-CODEC.md`. Hosted, compression,
 cadence-policy, heavy-sim, and 24/48/96 work remain closed.
 
+**S17 lazy candidate materialization — implemented, four/eight still
+rejected:** the positional publisher now constructs one canonical header and
+four unique lane payloads, records four exact-size descriptors in the unchanged
+S15 tie order, and materializes only the chosen outer frame. Header/lane
+semantics are validated once per trusted same-operation selection, while all
+four cross-lane relations remain checked. S15 selected bytes, four-size
+transcript, limits, digest, ACK/recovery, privacy, accounting, fallback, and
+ledger behavior are unchanged. S16 binary remains opt-in.
+
+The order-counterbalanced benchmark proves 1,200 exact wire, 1,200 exact
+selection-transcript, and 1,200 semantic comparisons with zero mismatch. Mean
+publish improves 27.05--28.07%, selector p95 improves 43.37--45.91%, prepared
+hash work falls 50%, and the labeled outer reference-slot allocation proxy
+falls 75%. This is a reference-slot proxy, not measured V8 heap allocation.
+
+Against sealed S15, profiler-off 1/4/8 receiver cadence moves from
+9.85/5.35/3.25 to 9.80/5.60/3.80 Hz. Projection/publish p50 moves from
+23.74/100.56/220.53 to 18.43/89.85/171.32 ms; p95 moves from
+26.26/103.43/224.80 to 21.14/124.80/199.18 ms; authority CPU moves from
+27.18/59.24/78.19% to 22.32/57.13/72.87% of one core. Only one passes. Four
+and eight remain `DILATED`, below 9 Hz, and fail clock/admission; normalized
+10-Hz worst mean/p95 is 66,802/73,114 and 77,233/83,346 B/s. Low actual traffic
+at collapsed cadence receives no credit.
+
+The incomplete eight-player stage-profile attempt is retained but rejected as
+product evidence. Its completed 1/4 rows only focus the next bounded lane:
+remove remaining repeated trusted lane semantic validation and pair-choice
+size-proof work while preserving S15 bytes and S17 one-frame materialization.
+One dedicated logical authority process remains scoped to one match/group and
+multiplies horizontally across concurrent matches. Hosted, compression,
+cadence-policy, heavy-sim, and 24/48/96 work remain closed.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

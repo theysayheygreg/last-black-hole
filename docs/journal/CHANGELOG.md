@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-07-13 — v0.4 S17 lazy state-pair candidates
+
+- Replaced four eager positional outer frames with four exact-size descriptors
+  and one chosen-frame materialization. The publisher reuses one header and four
+  unique canonical lanes while preserving S15 wire bytes, tie order, limits,
+  digest, fallback, ACK/recovery, privacy, accounting, and ledger semantics.
+- Added exact lazy/eager oracle proof, order-counterbalanced benchmark evidence,
+  allocation/size-proof/lane-reuse diagnostics, and a sealed profiler-off
+  one-authority-per-match 1/4/8 process artifact. The benchmark reports zero
+  mismatches and 27--28% lower mean publish time.
+- Kept the optimization but rejected four/eight admission. The candidate reaches
+  9.80/5.60/3.80 Hz; four/eight remain `DILATED` and clock-failing. The partial
+  instrumented profile is retained as rejected product evidence.
+- Kept S15 positional JSON as release default and S16 binary opt-in. The next
+  bounded lane targets trusted same-operation validation/size-proof work, not
+  compression, cadence policy, hosted/heavy-sim work, or 24/48/96.
+
 ## 2026-07-13 — v0.4 S16 lossless binary state-pair bakeoff
 
 - Added an opt-in, versioned, strictly bounded WebSocket binary codec for the
