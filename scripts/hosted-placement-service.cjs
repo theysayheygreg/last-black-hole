@@ -261,6 +261,22 @@ function createHostedPlacementService({
   }
 
   function requestPlacement({ credential, request }) { return claim(credential, request, false); }
+
+  function cancelUnredeemedPlacement({ credential, requestId, runId }) {
+    control(credential);
+    const selectedRequestId = id(requestId);
+    const selectedRunId = id(runId);
+    const at = time();
+    const updated = repository.compareAndSetRun(selectedRunId,
+      (run) => run.requestId === selectedRequestId && run.state === "ALLOCATING"
+        && run.leaseStatus === "ACTIVE" && run.resultAcceptanceState !== "ACCEPTED"
+        && run.bootstrapConsumedAt == null,
+      (run) => ({ ...run, state: "FAILED", leaseStatus: "FENCED", routeId: null,
+        terminalAt: at, updatedAt: at }));
+    if (!updated) reject("CANCELLATION_FORBIDDEN");
+    emit("placement.cancelled", { runAlias: alias("run", selectedRunId) });
+    return Object.freeze({ state: updated.state });
+  }
   function requestReplacement({ credential, request }) { return claim(credential, request, true); }
 
   function redeemBootstrap({ credential, bootstrap, audience }) {
@@ -501,7 +517,7 @@ function createHostedPlacementService({
   function cleanup(options = {}) { return repository.cleanup({ now: time(), ...options }); }
 
   return Object.freeze({
-    registerCapacity, setDrain, requestPlacement, requestReplacement, redeemBootstrap, markReady,
+    registerCapacity, setDrain, requestPlacement, requestReplacement, cancelUnredeemedPlacement, redeemBootstrap, markReady,
     validateRoute, heartbeat, issueAdmissionTicket, redeemAdmissionTicket, resultEligible,
     admittedMemberships, beginRunDrain, endRun, fenceExpired, cleanup,
   });

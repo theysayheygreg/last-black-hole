@@ -62,6 +62,7 @@ function rig() {
   let now = 1_000_000;
   let sequence = 0;
   let crashAfterCommit = false;
+  let createFaultStage = null;
   const proofs = new Map();
   const diagnostics = [];
   const ids = { next(prefix) { sequence += 1; return `${prefix}_${String(sequence).padStart(7, "0")}`; } };
@@ -170,6 +171,12 @@ function rig() {
     placementPolicy: () => ({ regionPreferences: ["ord"], artifactSha: "a".repeat(64),
       protocolVersion: "lbh-multiplayer-json-v2", manifestHash: "m".repeat(64), capabilities: ["state-pair-v1"] }),
     diagnostics: (event) => diagnostics.push(event), diagnosticKey: "product-diagnostic-key-at-least-32-bytes",
+    fault(step) {
+      if (step === createFaultStage) {
+        createFaultStage = null;
+        throw Object.assign(new Error("injected create crash"), { crash: true });
+      }
+    },
   });
 
   function makeUser(name) {
@@ -195,14 +202,42 @@ function rig() {
     assert.throws(fn, (error) => error instanceof HostedProductPublicError
       && error.code === "HOSTED_PRODUCT_REJECTED" && error.message === "hosted product request rejected");
   }
-  return { service, identityRepository, placementRepository, productRepository, settlementRepository, outbox,
+  return { service, placement, identityRepository, placementRepository, productRepository, settlementRepository, outbox,
     diagnostics, descriptors, makeUser, revoke, allocation, rejected,
-    advance: (ms) => { now += ms; }, crashNext: () => { crashAfterCommit = true; } };
+    advance: (ms) => { now += ms; }, crashNext: () => { crashAfterCommit = true; },
+    faultNextCreate: () => { createFaultStage = "after-create-placement-before-product"; } };
 }
 
 function main() {
   const h = rig();
   const users = ["Ada", "Bea", "Cy", "Dee", "Eve", "Fox"].map(h.makeUser);
+
+  h.faultNextCreate();
+  h.rejected(() => h.service.clientCreateMatch({ accessToken: users[0].accessToken,
+    profileId: users[0].profileId, seatCount: 1, clientIncarnation: "client-orphan",
+    playerAlias: "Ada" }));
+  const compensated = [...h.placementRepository.runs.values()].find((run) =>
+    run.state === "FAILED" && run.requestId.startsWith("placement_request_"));
+  assert.ok(compensated, "failed product persistence is compensated by exact placement request/run");
+  assert.equal(compensated.leaseStatus, "FENCED");
+  assert.equal(h.productRepository.matches.size, 0, "failed create returns no product allocation or bootstrap handle");
+
+  const hardCrashPlacement = h.placement.requestPlacement({ credential: "internal-control", request: {
+    requestId: "hard-crash-request", runId: "hard-crash-run", sessionId: "hard-crash-session", seatCount: 1,
+    regionPreferences: ["ord"], artifactSha: "a".repeat(64), protocolVersion: "lbh-multiplayer-json-v2",
+    manifestHash: "m".repeat(64), capabilities: ["state-pair-v1"],
+  } });
+  assert.equal(hardCrashPlacement.won, true);
+  h.advance(101);
+  assert.equal(h.placement.fenceExpired().fenced, 1,
+    "uncatchable process death is bounded by the readiness deadline sweep");
+  assert.equal(h.placementRepository.getRun("hard-crash-run").leaseStatus, "FENCED");
+  assert.throws(() => h.placement.redeemBootstrap({ credential: "workload-1",
+    bootstrap: hardCrashPlacement.bootstrap, audience: hardCrashPlacement.bootstrapAudience }),
+  (error) => error.code === "BOOTSTRAP_REJECTED");
+  assert.throws(() => h.placement.redeemBootstrap({ credential: "workload-0",
+    bootstrap: hardCrashPlacement.bootstrap, audience: hardCrashPlacement.bootstrapAudience }),
+  (error) => error.code === "STALE_LEASE");
 
   const matchA = h.service.clientCreateMatch({ accessToken: users[0].accessToken, profileId: users[0].profileId,
     seatCount: 4, clientIncarnation: "client-ada", playerAlias: "Ada" });

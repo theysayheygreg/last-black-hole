@@ -144,6 +144,19 @@ try {
     observedAllocation: 0, maintenance: false, draining: false, heartbeatTtlMs: 100_000,
   } });
   const users = ["Ada", "Bea", "Cy", "Dee"].map((name) => createUser(stack, name));
+  faultStage = "after-create-placement-before-product";
+  assert.throws(() => stack.product.clientCreateMatch({ accessToken: users[0].accessToken,
+    profileId: users[0].profileId, seatCount: 1, clientIncarnation: "orphan-client", playerAlias: "Ada" }),
+  /hosted product request rejected/);
+  const compensatedRun = stack.placementRepository.snapshot().runs.find((run) =>
+    run.state === "FAILED" && run.leaseStatus === "FENCED");
+  assert.ok(compensatedRun, "SQLite retains the exact compensated placement lineage");
+  assert.equal(stack.productRepository.getMatchByJoinCode("missing"), null);
+  stack.close();
+
+  stack = openStack();
+  assert.equal(stack.placementRepository.getRun(compensatedRun.runId).leaseStatus, "FENCED",
+    "compensation survives reopen and does not consume live capacity");
   const match = stack.product.clientCreateMatch({ accessToken: users[0].accessToken,
     profileId: users[0].profileId, seatCount: 4, clientIncarnation: "client-0", playerAlias: "Ada" });
   users.slice(1).forEach((user, index) => stack.product.clientJoinMatch({ accessToken: user.accessToken,

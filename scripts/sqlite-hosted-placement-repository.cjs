@@ -37,7 +37,7 @@ function membershipDigest(values) {
 
 class SqliteHostedPlacementRepository {
   constructor({ filename = ":memory:", db = null, tombstoneLimit = 256, busyTimeoutMs = 5_000,
-    now = Date.now } = {}) {
+    now = Date.now, legacyAcceptancePolicy = "reject" } = {}) {
     this.tombstoneLimit = positiveInteger(tombstoneLimit, "tombstone limit");
     positiveInteger(busyTimeoutMs, "busy timeout");
     if (db !== null && (!db || typeof db.prepare !== "function" || typeof db.exec !== "function")) {
@@ -45,14 +45,23 @@ class SqliteHostedPlacementRepository {
     }
     if (db === null && (typeof filename !== "string" || filename.length < 1)) throw new Error("invalid filename");
     if (typeof now !== "function") throw new Error("invalid clock");
+    if (!new Set(["reject", "quarantine"]).has(legacyAcceptancePolicy)) {
+      throw new Error("invalid legacy acceptance policy");
+    }
     this.now = now;
+    this.legacyAcceptancePolicy = legacyAcceptancePolicy;
     this.db = db || new DatabaseSync(filename);
     this.ownsDatabase = db === null;
     this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA synchronous = FULL");
-    this.#initialize();
+    try { this.#initialize(); }
+    catch (error) {
+      if (this.ownsDatabase) this.db.close();
+      this.db = null;
+      throw error;
+    }
   }
 
   #initialize() {
@@ -155,10 +164,50 @@ class SqliteHostedPlacementRepository {
         accepted_membership_count INTEGER,
         accepted_at INTEGER
       ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS hosted_placement_schema_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS hosted_placement_migration_quarantine (
+        run_id TEXT NOT NULL,
+        source_table TEXT NOT NULL CHECK (source_table IN ('current','tombstone')),
+        reason TEXT NOT NULL,
+        quarantined_at INTEGER NOT NULL CHECK (quarantined_at >= 0),
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+        PRIMARY KEY (run_id, source_table)
+      ) STRICT;
     `);
     this.#migrateWorkloadColumns();
     this.#migrateCurrentAllocationColumns();
     this.#migrateTombstoneColumns();
+    this.db.prepare(`INSERT INTO hosted_placement_schema_meta(key,value) VALUES('acceptance_membership_binding','2')
+      ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run();
+  }
+
+  #legacyAcceptanceRows(table, source) {
+    const accepted = source === "current" ? "result_acceptance_state = 'ACCEPTED'" : "accepted_result_hash IS NOT NULL";
+    const rows = this.db.prepare(`SELECT * FROM ${table}
+      WHERE ${accepted} AND (accepted_result_hash IS NULL
+        OR accepted_membership_digest IS NULL OR accepted_membership_count IS NULL)`).all();
+    if (!rows.length) return;
+    if (this.legacyAcceptancePolicy !== "quarantine") {
+      const error = new Error("legacy hosted placement acceptance lacks membership binding; reopen with legacyAcceptancePolicy='quarantine' after operator review");
+      error.code = "HOSTED_PLACEMENT_LEGACY_ACCEPTANCE_REVIEW_REQUIRED";
+      error.runIds = Object.freeze(rows.map((row) => row.run_id).sort());
+      throw error;
+    }
+    const quarantinedAt = this.now();
+    if (!Number.isSafeInteger(quarantinedAt) || quarantinedAt < 0) throw new Error("invalid clock");
+    const quarantine = this.db.prepare(`INSERT INTO hosted_placement_migration_quarantine
+      (run_id,source_table,reason,quarantined_at,payload_json) VALUES(?,?,?,?,?)
+      ON CONFLICT(run_id,source_table) DO NOTHING`);
+    const remove = this.db.prepare(`DELETE FROM ${table} WHERE run_id = ?`);
+    for (const row of rows) {
+      quarantine.run(row.run_id, source, "accepted_without_membership_binding", quarantinedAt, JSON.stringify(row));
+      remove.run(row.run_id);
+    }
   }
 
   #migrateWorkloadColumns() {
@@ -204,6 +253,7 @@ class SqliteHostedPlacementRepository {
           ELSE CAST(json_extract(payload_json, '$.leaseDeadlineAt') AS INTEGER) END
         WHERE expiry_deadline_at IS NULL`);
     }
+    this.#legacyAcceptanceRows("hosted_placement_current_allocations", "current");
     this.db.exec(`CREATE INDEX IF NOT EXISTS hosted_placement_expiry_candidates
       ON hosted_placement_current_allocations(result_acceptance_state, lease_status, state, expiry_deadline_at, run_id)`);
     this.db.exec("DROP TRIGGER IF EXISTS hosted_placement_result_acceptance_shape_insert");
@@ -250,6 +300,7 @@ class SqliteHostedPlacementRepository {
       ["accepted_membership_count", "INTEGER"], ["accepted_at", "INTEGER"]]) {
       if (!columns.has(name)) this.db.exec(`ALTER TABLE hosted_placement_terminal_tombstones ADD COLUMN ${name} ${type}`);
     }
+    this.#legacyAcceptanceRows("hosted_placement_terminal_tombstones", "tombstone");
     this.db.exec("DROP TRIGGER IF EXISTS hosted_placement_result_acceptance_immutable_delete");
     this.db.exec(`
       CREATE TRIGGER IF NOT EXISTS hosted_placement_preserve_accepted_result_delete
@@ -384,6 +435,11 @@ class SqliteHostedPlacementRepository {
 
   getRun(runId) {
     return this.#rowToRun(this.#getRunRow(runId));
+  }
+
+  listMigrationQuarantine() {
+    return this.db.prepare(`SELECT run_id AS runId, source_table AS sourceTable, reason, quarantined_at AS quarantinedAt
+      FROM hosted_placement_migration_quarantine ORDER BY quarantined_at, run_id, source_table`).all().map(clone);
   }
 
   listExpiredCandidates(now, limit = 256) {

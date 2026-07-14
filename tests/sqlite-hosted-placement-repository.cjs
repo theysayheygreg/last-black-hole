@@ -588,6 +588,58 @@ function drainRun(h, repository, service, runId) {
     }
   });
 
+  await test("legacy accepted rows require review and explicit quarantine without fabricated membership binding", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-placement-legacy-accepted-"));
+    const filename = path.join(directory, "legacy.sqlite");
+    const db = new DatabaseSync(filename);
+    db.exec(`
+      CREATE TABLE hosted_placement_current_allocations (
+        run_id TEXT PRIMARY KEY, authority_instance_id TEXT NOT NULL, authority_incarnation TEXT NOT NULL,
+        request_id TEXT NOT NULL, state TEXT NOT NULL, lease_status TEXT NOT NULL, lease_epoch INTEGER NOT NULL,
+        seat_count INTEGER NOT NULL, admitted_count INTEGER NOT NULL, terminal_at INTEGER, updated_at INTEGER NOT NULL,
+        expiry_deadline_at INTEGER NOT NULL, row_version INTEGER NOT NULL,
+        result_acceptance_state TEXT NOT NULL, accepted_result_hash TEXT, accepted_at INTEGER,
+        payload_json TEXT NOT NULL
+      );
+      CREATE TABLE hosted_placement_terminal_tombstones (
+        run_id TEXT PRIMARY KEY, state TEXT NOT NULL, lease_epoch INTEGER NOT NULL, terminal_at INTEGER NOT NULL,
+        authority_lease_id TEXT, authority_incarnation TEXT, accepted_result_hash TEXT, accepted_at INTEGER
+      );
+      INSERT INTO hosted_placement_current_allocations VALUES (
+        'legacy-current','legacy-authority','legacy-incarnation','legacy-request','ENDED','ENDED',1,1,1,50,50,50,1,
+        'ACCEPTED','sha256:legacy-current',50,
+        '{"runId":"legacy-current","authorityInstanceId":"legacy-authority","authorityIncarnation":"legacy-incarnation","authorityLeaseId":"legacy-lease","requestId":"legacy-request","state":"ENDED","leaseStatus":"ENDED","leaseEpoch":1,"seatCount":1,"admittedCount":1,"admittedMemberships":["unknown-legacy-member"],"terminalAt":50,"updatedAt":50}'
+      );
+      INSERT INTO hosted_placement_terminal_tombstones VALUES (
+        'legacy-tombstone','ENDED',1,51,'legacy-lease-2','legacy-incarnation-2','sha256:legacy-tombstone',51
+      );
+    `);
+    db.close();
+    assert.throws(() => new SqliteHostedPlacementRepository({ filename, now: () => 100 }), (error) =>
+      error.code === "HOSTED_PLACEMENT_LEGACY_ACCEPTANCE_REVIEW_REQUIRED"
+        && error.runIds.includes("legacy-current"));
+    const repository = new SqliteHostedPlacementRepository({ filename, now: () => 100,
+      legacyAcceptancePolicy: "quarantine" });
+    try {
+      assert.deepStrictEqual(repository.listMigrationQuarantine(), [
+        { runId: "legacy-current", sourceTable: "current", reason: "accepted_without_membership_binding", quarantinedAt: 100 },
+        { runId: "legacy-tombstone", sourceTable: "tombstone", reason: "accepted_without_membership_binding", quarantinedAt: 100 },
+      ]);
+      assert.strictEqual(repository.getRun("legacy-current"), null);
+      assert.strictEqual(repository.acceptAuthorityResult({ run_id: "legacy-current", lease_id: "legacy-lease",
+        lease_epoch: 1, authority_incarnation: "legacy-incarnation" }, "sha256:legacy-current",
+      null, null, ["unknown-legacy-member"]), null, "quarantine never promotes payload membership into trusted binding");
+      const quarantined = repository.db.prepare(`SELECT payload_json FROM hosted_placement_migration_quarantine
+        WHERE run_id='legacy-current' AND source_table='current'`).get();
+      assert.strictEqual(JSON.parse(quarantined.payload_json).accepted_membership_digest, null);
+      assert.strictEqual(repository.db.prepare(`SELECT value FROM hosted_placement_schema_meta
+        WHERE key='acceptance_membership_binding'`).get().value, "2");
+    } finally {
+      repository.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   process.stdout.write(`\n${passed} SQLite hosted placement repository tests passed.\n`);
 })().catch((error) => {
   console.error(error);

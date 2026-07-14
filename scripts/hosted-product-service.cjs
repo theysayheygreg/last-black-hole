@@ -81,6 +81,7 @@ function createHostedProductService({
   ];
   if (!identity || typeof identity.authorizeProfile !== "function"
       || !placement || typeof placement.requestPlacement !== "function"
+      || typeof placement.cancelUnredeemedPlacement !== "function"
       || typeof placement.admittedMemberships !== "function"
       || !outbox || typeof outbox.enqueue !== "function"
       || !settlement || typeof settlement.deliverOne !== "function"
@@ -178,18 +179,30 @@ function createHostedProductService({
       };
       const selected = policy();
       const requestId = ids.next("placement_request");
-      const placementResult = placement.requestPlacement({ credential: controlCredential, request: {
-        requestId, runId, sessionId, seatCount, ...selected,
-      } });
-      if (!placementResult?.won || typeof placementResult.bootstrap !== "string") fail("placement_unavailable", { runId });
-      const allocationHandle = ids.next("allocation");
-      repository.transaction((repo) => {
-        repo.createMatch({ matchId, runId, sessionId, joinCode, seatCount, state: "ALLOCATING",
-          ownerAccountId: principal.accountId, allocationHandle, placementRequestId: requestId,
-          bootstrap: placementResult.bootstrap, bootstrapAudience: placementResult.bootstrapAudience,
-          createdAt: now });
-        repo.addMembership(membership);
-      });
+      let placementResult = null;
+      try {
+        placementResult = placement.requestPlacement({ credential: controlCredential, request: {
+          requestId, runId, sessionId, seatCount, ...selected,
+        } });
+        if (!placementResult?.won || typeof placementResult.bootstrap !== "string") fail("placement_unavailable", { runId });
+        fault("after-create-placement-before-product");
+        const allocationHandle = ids.next("allocation");
+        repository.transaction((repo) => {
+          repo.createMatch({ matchId, runId, sessionId, joinCode, seatCount, state: "ALLOCATING",
+            ownerAccountId: principal.accountId, allocationHandle, placementRequestId: requestId,
+            bootstrap: placementResult.bootstrap, bootstrapAudience: placementResult.bootstrapAudience,
+            createdAt: now });
+          repo.addMembership(membership);
+        });
+      } catch (error) {
+        if (placementResult?.won) {
+          try { placement.cancelUnredeemedPlacement({ credential: controlCredential, requestId, runId }); }
+          catch (cancelError) {
+            emit("match_create", "placement_compensation_deferred", { runId });
+          }
+        }
+        throw error;
+      }
       return Object.freeze({ matchId, joinCode, seatCount, state: "ALLOCATING" });
     });
   }
