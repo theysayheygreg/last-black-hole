@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lastsingularity.invalid/schemas/v04-regional-four-player-analysis-v1.json",
+  "title": "LBH v0.4 regional four-player deterministic analysis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "rawArtifactSha256", "signerKeyId", "runClass", "admissionEligible", "verdict", "checks", "safeAuthoritiesPerHost", "evidenceLabels"],
+  "properties": {
+    "schema": { "const": "lbh-v04-regional-four-player-analysis-v1" },
+    "rawArtifactSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "signerKeyId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "runClass": { "enum": ["external-one-shot", "local-contract-smoke"] },
+    "admissionEligible": { "type": "boolean" },
+    "verdict": { "enum": ["PASS", "FAIL", "LOCAL_NON_ADMISSION"] },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "object", "additionalProperties": false, "required": ["id", "passed", "observed", "gate"], "properties": { "id": { "type": "string" }, "passed": { "type": "boolean" }, "observed": {}, "gate": {} } }
+    },
+    "safeAuthoritiesPerHost": { "type": "object", "required": ["status", "reason"], "properties": { "status": { "const": "unavailable" }, "reason": { "type": "string" } } },
+    "evidenceLabels": { "type": "object", "required": ["localSmoke", "hostedRegional", "measuredVsDerivedPreserved"] }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lastsingularity.invalid/schemas/v04-regional-four-player-raw-v1.json",
+  "title": "LBH v0.4 regional four-player raw evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "metadata", "processes", "chronology", "admission", "metrics", "budgets", "clients", "redTeam", "outcomes", "packing", "followOn", "integrity"],
+  "properties": {
+    "schema": { "const": "lbh-v04-regional-four-player-raw-v1" },
+    "metadata": {
+      "type": "object",
+      "required": ["runClass", "admissionEligible", "retries", "runId", "scenarioId", "gitCommit", "artifactSha256", "protocolVersion", "provider", "region", "runtime", "hostClass", "seed", "invoice"],
+      "properties": {
+        "runClass": { "enum": ["external-one-shot", "local-contract-smoke"] },
+        "admissionEligible": { "type": "boolean" },
+        "retries": { "type": "integer", "minimum": 0 },
+        "runId": { "type": "string", "minLength": 1 },
+        "scenarioId": { "type": "string", "minLength": 1 },
+        "gitCommit": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "artifactSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "protocolVersion": { "type": "string", "minLength": 1 },
+        "provider": { "type": "string", "minLength": 1 },
+        "region": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 },
+        "hostClass": { "type": "string", "minLength": 1 },
+        "seed": { "type": "string", "minLength": 1 },
+        "invoice": { "type": "object", "required": ["currency", "computeRate", "egressRate", "billingSource", "invoiceObserved"] }
+      }
+    },
+    "processes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "object", "required": ["role", "pidAlias", "gitCommit", "artifactSha256"] } },
+    "chronology": {
+      "type": "object",
+      "required": ["processStartedAt", "readyAt", "warmupStartedAt", "warmupEndedAt", "captureStartedAt", "captureEndedAt", "drainStartedAt", "drainEndedAt", "processExitedAt", "startupMs", "readinessMs", "drainMs", "replacementMs"]
+    },
+    "admission": { "type": "object", "required": ["admittedSeats", "fifthSeat", "rejectionLayer"] },
+    "metrics": {
+      "type": "object",
+      "required": ["authorityCount", "overloadMode", "latencyMs", "process", "matchNetwork", "networkReconciliation"]
+    },
+    "budgets": { "type": "object", "required": ["tickDebtMsMax", "rssBytesMax", "heapUsedBytesMax", "authorityRetainedBytesMax", "clientRetainedBytesMax", "backpressureEventsMax"] },
+    "clients": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "object", "required": ["clientAlias", "completedStateHz", "network", "pressure", "reconnectMs"] } },
+    "redTeam": { "type": "object", "required": ["P1", "P2", "P3"] },
+    "outcomes": { "type": "object", "required": ["correctness", "privacy", "fallback", "cleanup"] },
+    "packing": { "type": "object", "required": ["safeAuthoritiesPerHost"] },
+    "followOn": { "type": "object", "required": ["soak90m", "noisyNeighborPacking"] },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "payloadSha256", "signerKeyId", "signatureBase64"],
+      "properties": {
+        "algorithm": { "const": "ed25519-sha256" },
+        "payloadSha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "signerKeyId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "signatureBase64": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "measurement": {
+      "oneOf": [
+        { "type": "object", "required": ["status", "unit", "value"], "properties": { "status": { "const": "measured" }, "unit": { "type": "string" }, "value": { "type": "number", "minimum": 0 } } },
+        { "type": "object", "required": ["status", "unit", "value", "formula", "inputs"], "properties": { "status": { "const": "derived" }, "unit": { "type": "string" }, "value": { "type": "number", "minimum": 0 }, "formula": { "type": "string" }, "inputs": { "type": "array", "minItems": 1 } } },
+        { "type": "object", "not": { "required": ["value"] }, "required": ["status", "unit", "reason"], "properties": { "status": { "const": "unavailable" }, "unit": { "type": "string" }, "reason": { "type": "string", "minLength": 1 } } }
+      ]
+    }
+  }
+}
