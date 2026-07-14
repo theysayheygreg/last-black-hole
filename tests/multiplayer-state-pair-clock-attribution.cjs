@@ -15,10 +15,15 @@ const ROOT = path.resolve(__dirname, "..");
 const WORKER = path.join(__dirname, "network", "state-pair-isolated-client.cjs");
 const SEED = 0x53A1B04E;
 const S23T_PROFILE = String(process.env.LBH_S23T_PUBLIC_BODY_PROFILE || "").trim() === "1";
+const S23T_CAPTURE_MODE = String(process.env.LBH_S23T_CAPTURE_MODE || "").trim();
+if (S23T_CAPTURE_MODE && !["paired", "single"].includes(S23T_CAPTURE_MODE)) {
+  throw new Error("LBH_S23T_CAPTURE_MODE must be paired or single");
+}
 const POPULATIONS = (() => {
   const values = String(process.env.LBH_S13_POPULATIONS || "1,4,8").split(",")
     .map((value) => Number(value.trim()));
-  const expectedLength = S23T_PROFILE ? 2 : 3;
+  const expectedLength = S23T_CAPTURE_MODE === "single" ? 1
+    : S23T_PROFILE || S23T_CAPTURE_MODE === "paired" ? 2 : 3;
   if (values.length !== expectedLength || new Set(values).size !== expectedLength
       || values.some((value) => ![1, 4, 8].includes(value))) {
     throw new Error(`LBH_S13_POPULATIONS must contain ${expectedLength} distinct supported populations`);
@@ -562,7 +567,8 @@ async function main() {
       + "node tests/multiplayer-state-pair-clock-attribution.cjs",
     config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS,
       binary: S16_BINARY, compression: S20_COMPRESSION, publicBody: S23_PUBLIC_BODY,
-      stageProfile: S21_STAGE_PROFILE, s23tProfile: S23T_PROFILE },
+      stageProfile: S21_STAGE_PROFILE, s23tProfile: S23T_PROFILE,
+      ...(S23T_CAPTURE_MODE ? { s23tCaptureMode: S23T_CAPTURE_MODE } : {}) },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, node: process.version },
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },
