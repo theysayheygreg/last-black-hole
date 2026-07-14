@@ -164,6 +164,7 @@ function validateMetadata(raw) {
 
 function validateMetrics(raw) {
   assertObject(raw.metrics, "metrics");
+  const external = raw.metadata.runClass === "external-one-shot";
   assertObject(raw.budgets, "budgets");
   for (const name of ["tickDebtMsMax", "rssBytesMax", "heapUsedBytesMax", "authorityRetainedBytesMax",
     "clientRetainedBytesMax", "backpressureEventsMax"]) {
@@ -183,11 +184,15 @@ function validateMetrics(raw) {
   for (const [index, client] of raw.clients.entries()) {
     if (!/^client-[1-4]$/.test(client.clientAlias)) throw new Error(`clients[${index}] alias must be public client-1..4`);
     validateMeasurement(client.completedStateHz, `clients[${index}].completedStateHz`, { allowUnavailable: false });
-    for (const name of ["applicationBytesPerSecondMean", "applicationBytesPerSecondP95", "wireBytesPerSecondMean", "wireBytesPerSecondP95", "packetsPerSecondMean", "packetsPerSecondP95"]) {
+    for (const name of ["applicationBytesPerSecondMean", "applicationBytesPerSecondP95"]) {
       validateMeasurement(client.network[name], `clients[${index}].network.${name}`, { allowUnavailable: false });
     }
-    if (client.network.applicationBytesPerSecondMean.value === client.network.wireBytesPerSecondMean.value
-      && client.network.accountingSource === "application-only") {
+    for (const name of ["socketBytesPerSecondMean", "socketBytesPerSecondP95", "onWireBytesPerSecondMean",
+      "onWireBytesPerSecondP95", "packetsPerSecondMean", "packetsPerSecondP95", "retransmittedBytes", "retransmittedPackets", "lossRate"]) {
+      validateMeasurement(client.network[name], `clients[${index}].network.${name}`, { allowUnavailable: !external });
+    }
+    if (external && client.network.applicationBytesPerSecondMean.value === client.network.onWireBytesPerSecondMean.value
+      && client.network.onWireAccountingSource === "application-only") {
       throw new Error("application bytes cannot be relabeled as real socket/on-wire bytes");
     }
     for (const name of ["applicationQueueHighWaterBytes", "reliableQueueHighWaterBytes", "transportQueueHighWaterBytes", "backpressureEvents", "retainedBytes"]) {
@@ -195,8 +200,21 @@ function validateMetrics(raw) {
     }
     validateMeasurement(client.reconnectMs, `clients[${index}].reconnectMs`);
   }
-  for (const name of ["applicationBytesPerSecondMean", "wireBytesPerSecondMean", "packetsPerSecondMean"]) {
+  for (const name of ["applicationBytesPerSecondMean"]) {
     validateMeasurement(raw.metrics.matchNetwork[name], `metrics.matchNetwork.${name}`, { allowUnavailable: false });
+  }
+  for (const name of ["socketBytesPerSecondMean", "onWireBytesPerSecondMean", "packetsPerSecondMean",
+    "retransmittedBytes", "retransmittedPackets", "lossRate"]) {
+    validateMeasurement(raw.metrics.matchNetwork[name], `metrics.matchNetwork.${name}`, { allowUnavailable: !external });
+  }
+  assertObject(raw.metrics.networkReconciliation, "metrics.networkReconciliation");
+  validateMeasurement(raw.metrics.networkReconciliation.unexplainedByteRatio,
+    "metrics.networkReconciliation.unexplainedByteRatio", { allowUnavailable: !external });
+  if (external && (raw.metrics.networkReconciliation.capturedConnections !== 4
+    || !raw.metrics.networkReconciliation.packetCaptureSource
+    || !raw.metrics.networkReconciliation.socketCounterSource
+    || !raw.metrics.networkReconciliation.applicationCounterSource)) {
+    throw new Error("external evidence requires four-connection application/socket/on-wire reconciliation sources");
   }
   if (raw.metrics.authorityCount !== 1) throw new Error("authorityCount must be exactly one");
   if (raw.metrics.overloadMode !== "NORMAL") throw new Error("benchmark must remain NORMAL");
@@ -219,6 +237,9 @@ function acceptanceChecks(raw) {
     raw.clients.map((c) => c.network.applicationBytesPerSecondMean.value), "<=64KiB/s/client");
   add("application-p95", raw.clients.every((c) => c.network.applicationBytesPerSecondP95.value <= 80 * 1024),
     raw.clients.map((c) => c.network.applicationBytesPerSecondP95.value), "<=80KiB/s/client");
+  add("network-reconciled", raw.metrics.networkReconciliation.unexplainedByteRatio.status === "measured"
+    && raw.metrics.networkReconciliation.unexplainedByteRatio.value <= 0.05,
+  raw.metrics.networkReconciliation.unexplainedByteRatio, "<=5% unexplained bytes");
   add("bounded-application-queues", raw.clients.every((c) => c.pressure.applicationQueueHighWaterBytes.value <= 512 * 1024),
     raw.clients.map((c) => c.pressure.applicationQueueHighWaterBytes.value), "<=512KiB/client");
   add("bounded-reliable-queues", raw.clients.every((c) => c.pressure.reliableQueueHighWaterBytes.value <= 256 * 1024),
@@ -281,10 +302,19 @@ function smokeFixture(publicKey) {
     clientAlias: `client-${i + 1}`,
     completedStateHz: measured("Hz", 9.8),
     network: {
-      accountingSource: "socket-and-application-counters",
+      applicationAccountingSource: "fixture-only application ledger",
+      socketAccountingSource: "not collected in local smoke",
+      onWireAccountingSource: "not collected in local smoke",
       applicationBytesPerSecondMean: measured("B/s", 31_000), applicationBytesPerSecondP95: measured("B/s", 33_000),
-      wireBytesPerSecondMean: measured("B/s", 34_000), wireBytesPerSecondP95: measured("B/s", 37_000),
-      packetsPerSecondMean: measured("packets/s", 20), packetsPerSecondP95: measured("packets/s", 24),
+      socketBytesPerSecondMean: unavailable("B/s", "local parser smoke has no socket collector"),
+      socketBytesPerSecondP95: unavailable("B/s", "local parser smoke has no socket collector"),
+      onWireBytesPerSecondMean: unavailable("B/s", "local parser smoke has no packet collector"),
+      onWireBytesPerSecondP95: unavailable("B/s", "local parser smoke has no packet collector"),
+      packetsPerSecondMean: unavailable("packets/s", "local parser smoke has no packet collector"),
+      packetsPerSecondP95: unavailable("packets/s", "local parser smoke has no packet collector"),
+      retransmittedBytes: unavailable("bytes", "local parser smoke has no TCP collector"),
+      retransmittedPackets: unavailable("packets", "local parser smoke has no TCP collector"),
+      lossRate: unavailable("ratio", "local parser smoke has no TCP collector"),
     },
     pressure: {
       applicationQueueHighWaterBytes: measured("bytes", 4_096), reliableQueueHighWaterBytes: measured("bytes", 1_024),
@@ -319,7 +349,20 @@ function smokeFixture(publicKey) {
         rssBytes: measured("bytes", 150_000_000), heapUsedBytes: measured("bytes", 80_000_000), gcPauseMs: measured("ms", 2),
         eventLoopDelayMs: measured("ms", 8), tickDebtMs: measured("ms", 0), retainedBytes: measured("bytes", 400_000),
       },
-      matchNetwork: { applicationBytesPerSecondMean: measured("B/s", 124_000), wireBytesPerSecondMean: measured("B/s", 136_000), packetsPerSecondMean: measured("packets/s", 80) },
+      matchNetwork: {
+        applicationBytesPerSecondMean: measured("B/s", 124_000),
+        socketBytesPerSecondMean: unavailable("B/s", "local parser smoke has no socket collector"),
+        onWireBytesPerSecondMean: unavailable("B/s", "local parser smoke has no packet collector"),
+        packetsPerSecondMean: unavailable("packets/s", "local parser smoke has no packet collector"),
+        retransmittedBytes: unavailable("bytes", "local parser smoke has no TCP collector"),
+        retransmittedPackets: unavailable("packets", "local parser smoke has no TCP collector"),
+        lossRate: unavailable("ratio", "local parser smoke has no TCP collector"),
+      },
+      networkReconciliation: {
+        applicationCounterSource: "fixture-only application ledger", socketCounterSource: null,
+        packetCaptureSource: null, capturedConnections: 0,
+        unexplainedByteRatio: unavailable("ratio", "local parser smoke does not capture network layers"),
+      },
     },
     budgets: {
       tickDebtMsMax: measured("ms", 100), rssBytesMax: measured("bytes", 512 * 1024 * 1024),

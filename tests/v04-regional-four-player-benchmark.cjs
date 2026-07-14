@@ -33,7 +33,27 @@ function externalFixture(pair, mutate = () => {}) {
       invoiceObserved: true,
     };
     raw.chronology.replacementMs = measured("ms", 1_200);
-    raw.clients.forEach((client) => { client.reconnectMs = measured("ms", 850); });
+    raw.clients.forEach((client) => {
+      client.reconnectMs = measured("ms", 850);
+      Object.assign(client.network, {
+        socketAccountingSource: "fixture-host-socket-counters",
+        onWireAccountingSource: "fixture-packet-capture",
+        socketBytesPerSecondMean: measured("B/s", 33_000), socketBytesPerSecondP95: measured("B/s", 36_000),
+        onWireBytesPerSecondMean: measured("B/s", 35_000), onWireBytesPerSecondP95: measured("B/s", 39_000),
+        packetsPerSecondMean: measured("packets/s", 20), packetsPerSecondP95: measured("packets/s", 24),
+        retransmittedBytes: measured("bytes", 0), retransmittedPackets: measured("packets", 0), lossRate: measured("ratio", 0),
+      });
+    });
+    Object.assign(raw.metrics.matchNetwork, {
+      socketBytesPerSecondMean: measured("B/s", 132_000), onWireBytesPerSecondMean: measured("B/s", 140_000),
+      packetsPerSecondMean: measured("packets/s", 80), retransmittedBytes: measured("bytes", 0),
+      retransmittedPackets: measured("packets", 0), lossRate: measured("ratio", 0),
+    });
+    raw.metrics.networkReconciliation = {
+      applicationCounterSource: "fixture-application-ledger", socketCounterSource: "fixture-host-socket-counters",
+      packetCaptureSource: "fixture-packet-capture", capturedConnections: 4,
+      unexplainedByteRatio: measured("ratio", 0.01),
+    };
     mutate(raw);
   });
 }
@@ -59,7 +79,8 @@ async function run() {
     const analysis = analyze(signedFixture(pair), { trustedPublicKeyPem: pair.publicKey });
     assert(analysis.verdict === "LOCAL_NON_ADMISSION" && analysis.admissionEligible === false,
       "local smoke must never produce an admission verdict");
-    assert(analysis.checks.every((entry) => entry.passed), "healthy fixture should satisfy the contract shape");
+    assert(analysis.checks.find((entry) => entry.id === "network-reconciled").passed === false,
+      "local smoke must make unavailable external network evidence explicit");
     assert(analysis.safeAuthoritiesPerHost.status === "unavailable", "packing stays unknown");
   });
 
@@ -100,9 +121,9 @@ async function run() {
     const pair = keys();
     mustReject(pair, (raw) => {
       const client = raw.clients[0];
-      client.network.accountingSource = "application-only";
-      client.network.wireBytesPerSecondMean = structuredClone(client.network.applicationBytesPerSecondMean);
-    }, /cannot be relabeled as real socket\/on-wire bytes/);
+      client.network.onWireAccountingSource = "application-only";
+      client.network.onWireBytesPerSecondMean = structuredClone(client.network.applicationBytesPerSecondMean);
+    }, /cannot be relabeled as real socket\/on-wire bytes/, { external: true });
   });
 
   await runner.run("rejects unavailable metrics masquerading as zero", async () => {
