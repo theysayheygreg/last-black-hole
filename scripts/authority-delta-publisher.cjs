@@ -15,8 +15,9 @@ const { canonicalJson, canonicalJsonBytes } = require("./session-replication-man
 const { STAGES } = require("./authority-stage-profiler.cjs");
 const { isTrustedStatePairWireEncoder, hasTrustedStatePairCandidateSelector,
   selectTrustedStatePairWireCandidate, hasTrustedStatePairLazyCandidateSelector,
-  selectTrustedStatePairWireLaneCandidate } = require("./multiplayer-wire-protocol.cjs");
-const { bindAuthorityProofIssuer } = require("./state-pair-authority-proof.cjs");
+  selectTrustedStatePairWireLaneCandidate, statePairWireEncoderContext,
+  observeStatePairWireSelection } = require("./multiplayer-wire-protocol.cjs");
+const { composeStatePairLaneCandidates } = require("./state-pair-positional-codec.cjs");
 
 const PAIR_SCHEMA = "lbh-authority-state-pair-v1";
 const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
@@ -202,25 +203,73 @@ function validateAuthorityLaneProof(header, lane, kind, payload, canonicalProof)
   return authorityCanonicalFact(`${lane}-${kind}`, payload, canonicalProof);
 }
 
-const issueAuthorityStatePairProof = bindAuthorityProofIssuer(({ header, lanes, canonicalFacts, tieOrder }) => {
+function validateAuthorityStatePairProof({ header, lanes, canonicalFacts, tieOrder }) {
   if (tieOrder !== CODEC_PAIR_TIE_ORDER && (tieOrder.length !== CODEC_PAIR_TIE_ORDER.length
-      || tieOrder.some((kind, index) => kind !== CODEC_PAIR_TIE_ORDER[index]))) return false;
+      || tieOrder.some((kind, index) => kind !== CODEC_PAIR_TIE_ORDER[index]))) {
+    fail("invalid-trusted-proof", "trusted state-pair tie order changed");
+  }
   const expected = [["public", "keyframe"], ["public", "delta"], ["owner", "keyframe"], ["owner", "delta"]];
   for (const [lane, kind] of expected) {
     const payload = lanes?.[lane]?.[kind];
     const fact = canonicalFacts.find((entry) => entry?.label === `${lane}-${kind}`);
     const origin = authorityLaneOrigins.get(payload);
     if (!origin || origin.lane !== lane || origin.kind !== kind || fact?.payload !== payload
-        || fact?.bytes !== Buffer.byteLength(fact?.text || "", "utf8")) return false;
+        || fact?.bytes !== Buffer.byteLength(fact?.text || "", "utf8")) {
+      fail("invalid-trusted-proof", `trusted ${lane}-${kind} origin changed`);
+    }
     const source = kind === "keyframe" ? payload.projection : payload.delta;
     if (origin.source !== source || source.runId !== header.matchId
         || source.authorityEpoch !== header.authorityIncarnation
         || source.connectionEpoch !== header.recipientIncarnation
         || source.ballparkEpoch !== header.ballparkEpoch || source.manifestHash !== header.manifestHash
-        || source.statePairId !== header.statePairId || source.snapshotId !== header.snapshotId) return false;
+        || source.statePairId !== header.statePairId || source.snapshotId !== header.snapshotId) {
+      fail("invalid-trusted-proof", `trusted ${lane}-${kind} lineage changed`);
+    }
   }
   return true;
-});
+}
+
+function createAuthorityProofLifecycle(originValidator, observe) {
+  const active = new WeakMap();
+  function reject(message) {
+    observe("reject");
+    fail("invalid-trusted-proof", message);
+  }
+  return Object.freeze({
+    issue(input) {
+      originValidator(input);
+      const proof = Object.freeze(Object.create(null));
+      active.set(proof, Object.freeze({ header: input.header, lanes: input.lanes,
+        canonicalFacts: input.canonicalFacts, tieOrder: input.tieOrder }));
+      observe("create");
+      return proof;
+    },
+    consume(proof, expected) {
+      const record = active.get(proof);
+      if (record) {
+        // Delete before any comparison or downstream work. Even a rejected
+        // cross-operation attempt permanently consumes the capability.
+        active.delete(proof);
+        observe("consume");
+      }
+      if (!record || record.header !== expected.header || record.lanes !== expected.lanes
+          || record.canonicalFacts !== expected.canonicalFacts || record.tieOrder !== expected.tieOrder) {
+        reject("trusted state-pair proof is forged, stale, or cross-operation");
+      }
+      return { settled: false };
+    },
+    accept(ticket) {
+      if (!ticket || ticket.settled) reject("trusted state-pair proof settlement is invalid");
+      ticket.settled = true;
+    },
+    reject(ticket) {
+      if (ticket && !ticket.settled) {
+        ticket.settled = true;
+        observe("reject");
+      }
+    },
+  });
+}
 
 function wireDigest(wire) {
   return `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`;
@@ -525,6 +574,11 @@ function createAuthorityDeltaPublisher(options = {}) {
     selectionMilliseconds: [],
     selectionSamplesDropped: 0,
   };
+  const authorityProofs = createAuthorityProofLifecycle(validateAuthorityStatePairProof, (event) => {
+    if (event === "create") codecChoice.trustedProofsCreated += 1;
+    else if (event === "consume") codecChoice.trustedProofsConsumed += 1;
+    else if (event === "reject") codecChoice.trustedProofRejects += 1;
+  });
   const operationCounters = {
     canonicalizations: 0, hashes: 0, diffs: 0, preparations: 0,
     preparedHashHits: 0, preparedDiffs: 0, suppliedPreparedHits: 0,
@@ -875,6 +929,7 @@ function createAuthorityDeltaPublisher(options = {}) {
         });
         codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, CODEC_PAIR_TIE_ORDER.length);
         const started = performance.now();
+        let authorityProofTicket = null;
         try {
           const canonicalProofs = new Map([
             [publicDecision.keyframePayload, publicDecision.keyframeCanonical],
@@ -891,8 +946,9 @@ function createAuthorityDeltaPublisher(options = {}) {
           if (lazyComposedExact && trustedAuthorityProofsEnabled) {
             // This is the first boundary after the authority has constructed
             // all four immutable canonical lanes. Validate every lane and
-            // cross-lane relation once, then issue a single-use opaque proof
-            // binding exact references plus the canonical component facts.
+            // cross-lane relation once. The proof lifecycle stays entirely in
+            // this publisher closure: no token, binder, or skip-validation
+            // selector crosses into the public wire module.
             const canonicalFacts = Object.freeze([
               validateAuthorityLaneProof(frameHeader, "public", "keyframe", lanes.public.keyframe,
                 canonicalProofs.get(lanes.public.keyframe)),
@@ -903,12 +959,27 @@ function createAuthorityDeltaPublisher(options = {}) {
               validateAuthorityLaneProof(frameHeader, "owner", "delta", lanes.owner.delta,
                 canonicalProofs.get(lanes.owner.delta)),
             ]);
-            const proof = issueAuthorityStatePairProof({ header: frameHeader, lanes,
-              canonicalFacts, tieOrder: CODEC_PAIR_TIE_ORDER });
-            selected = selectTrustedStatePairWireLaneCandidate(encodeWire, frameHeader, lanes,
-              CODEC_PAIR_TIE_ORDER, proof, limits.maxPairBytes);
-            expanded = Object.freeze({ sizes: selected.expandedSizes,
-              ...selected.expandedDiagnostics });
+            const proofInput = { header: frameHeader, lanes,
+              canonicalFacts, tieOrder: CODEC_PAIR_TIE_ORDER };
+            const proof = authorityProofs.issue(proofInput);
+            // Consume before size proof/composition so a failed operation is
+            // still one-shot and becomes visible as a rejection below. Both
+            // token and ticket remain inside this publisher closure.
+            authorityProofTicket = authorityProofs.consume(proof, proofInput);
+            codecChoice.trustedValidationsPerformed += 1;
+            codecChoice.trustedValidationsReused += CODEC_PAIR_TIE_ORDER.length;
+            expanded = exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs);
+            codecChoice.trustedCanonicalSizeOperations += expanded.sizes.size;
+            for (const bytes of expanded.sizes.values()) {
+              if (bytes > limits.maxPairBytes) fail("pair-too-large",
+                `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
+            }
+            const selectionStarted = performance.now();
+            selected = composeStatePairLaneCandidates(frameHeader, lanes,
+              statePairWireEncoderContext(encodeWire), CODEC_PAIR_TIE_ORDER);
+            codecChoice.trustedPositionalSizeOperations += selected.candidates.length;
+            observeStatePairWireSelection(encodeWire, selected.chosen.wire,
+              performance.now() - selectionStarted);
           } else {
             expanded = lazyComposedExact
               ? exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs)
@@ -934,7 +1005,9 @@ function createAuthorityDeltaPublisher(options = {}) {
             (codecChoice.combinationsChosen.get(chosen.kind) || 0) + 1);
           codecChoice.bytesSavedVsSemanticChoice += Math.max(0, semanticBytes - chosen.bytes);
           if (chosen.kind === fullKind) keyframeReason = "codec-choice:public-keyframe+owner-keyframe";
+          if (authorityProofTicket) authorityProofs.accept(authorityProofTicket);
         } catch (error) {
+          authorityProofs.reject(authorityProofTicket);
           countCodecFallback(`candidate-invalid:${String(error.code || error.name || "unknown")}`);
           keyframeReason = `codec-candidate-invalid:${String(error.code || error.name || "unknown")}`;
           chosen = measureWire(getFullKeyframe(), fullKind);
@@ -1335,6 +1408,35 @@ function testExactCanonicalLaneCandidateSizesWithReuse(header, lanes, maxPairByt
       lanePayloadReferenceReuses: exact.lanePayloadReferenceReuses }) });
 }
 
+// Test-only lifecycle oracle. It returns counters and error codes, never the
+// issuer, consumer, token, ticket, registry, or origin validator.
+function testAuthorityProofLifecycleAdversarial() {
+  const counts = { created: 0, consumed: 0, rejected: 0 };
+  const lifecycle = createAuthorityProofLifecycle(() => true, (event) => {
+    if (event === "create") counts.created += 1;
+    else if (event === "consume") counts.consumed += 1;
+    else if (event === "reject") counts.rejected += 1;
+  });
+  const code = (run) => { try { run(); return null; } catch (error) { return error.code || error.name; } };
+  const first = { header: Object.freeze({ id: "a" }), lanes: Object.freeze({ id: "a" }),
+    canonicalFacts: Object.freeze([]), tieOrder: Object.freeze([]) };
+  const proof = lifecycle.issue(first);
+  const ticket = lifecycle.consume(proof, first);
+  lifecycle.accept(ticket);
+  const consumedTwice = code(() => lifecycle.consume(proof, first));
+  const second = { header: Object.freeze({ id: "b" }), lanes: Object.freeze({ id: "b" }),
+    canonicalFacts: Object.freeze([]), tieOrder: Object.freeze([]) };
+  const crossProof = lifecycle.issue(second);
+  const crossOperation = code(() => lifecycle.consume(crossProof, { ...second, header: first.header }));
+  const third = { header: Object.freeze({ id: "c" }), lanes: Object.freeze({ id: "c" }),
+    canonicalFacts: Object.freeze([]), tieOrder: Object.freeze([]) };
+  const failedProof = lifecycle.issue(third);
+  const failedTicket = lifecycle.consume(failedProof, third);
+  lifecycle.reject(failedTicket);
+  return Object.freeze({ counts: Object.freeze({ ...counts }), consumedTwice, crossOperation,
+    capabilitiesReturned: 0 });
+}
+
 module.exports = {
   PAIR_SCHEMA,
   ACK_SCHEMA,
@@ -1347,6 +1449,7 @@ module.exports = {
   createAuthorityDeltaPublisher,
   testExactCanonicalCandidateSizesWithReuse,
   testExactCanonicalLaneCandidateSizesWithReuse,
+  testAuthorityProofLifecycleAdversarial,
   isExactEncodedPublication: (value) => Boolean(value && typeof value === "object"
     && exactEncodedPublications.has(value)),
 };

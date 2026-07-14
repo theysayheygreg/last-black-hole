@@ -20,11 +20,11 @@ const {
   decodeBinaryFrame,
   composeBinaryStatePairCandidates,
 } = require("./state-pair-binary-codec.cjs");
-const { selectAuthorityStatePairWithProof } = require("./state-pair-authority-proof.cjs");
-
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
 const trustedStatePairLazyCandidateSelectors = new WeakMap();
+const trustedStatePairWireEncoderContexts = new WeakMap();
+const trustedStatePairWireEncoderObservers = new WeakMap();
 
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
@@ -841,6 +841,8 @@ function createStatePairWireEncoder(codecContext, observe = null) {
     return wire;
   };
   trustedStatePairWireEncoders.add(encoder);
+  trustedStatePairWireEncoderContexts.set(encoder, context);
+  if (observe) trustedStatePairWireEncoderObservers.set(encoder, observe);
   trustedStatePairCandidateSelectors.set(encoder, (entries, tieOrder) => {
     const started = performance.now();
     for (const entry of entries) {
@@ -858,16 +860,11 @@ function createStatePairWireEncoder(codecContext, observe = null) {
     }
   });
   if (!binary) {
-    trustedStatePairLazyCandidateSelectors.set(encoder, (header, lanes, tieOrder, authorityProof = null,
-      maxPairBytes = null) => {
+    trustedStatePairLazyCandidateSelectors.set(encoder, (header, lanes, tieOrder) => {
       const started = performance.now();
       try {
-        const selected = authorityProof === null
-          ? (validateStatePairLaneCandidates(header, lanes, tieOrder),
-            composeStatePairLaneCandidates(header, lanes, context, tieOrder))
-          : selectAuthorityStatePairWithProof(authorityProof, {
-              header, lanes, context, tieOrder, maxPairBytes,
-            });
+        validateStatePairLaneCandidates(header, lanes, tieOrder);
+        const selected = composeStatePairLaneCandidates(header, lanes, context, tieOrder);
         observe?.(selected.chosen.wire, performance.now() - started);
         return selected;
       } catch (error) {
@@ -893,19 +890,25 @@ function hasTrustedStatePairCandidateSelector(encoder) {
   return trustedStatePairCandidateSelectors.has(encoder);
 }
 
-function selectTrustedStatePairWireLaneCandidate(encoder, header, lanes, tieOrder,
-  authorityProof = null, maxPairBytes = null) {
+function selectTrustedStatePairWireLaneCandidate(encoder, header, lanes, tieOrder) {
   const selector = trustedStatePairLazyCandidateSelectors.get(encoder);
   if (!selector) throw new TypeError("encoder does not expose trusted lazy candidate composition");
-  return selector(header, lanes, tieOrder, authorityProof, maxPairBytes);
+  return selector(header, lanes, tieOrder);
 }
 
-// Internal authority trust-boundary validator. General wire APIs still run the
-// same validator themselves; this entry point exists only so the authority can
-// validate once before issuing its synchronous opaque proof.
-function validateTrustedAuthorityStatePairLaneCandidates(header, lanes, tieOrder) {
-  validateStatePairLaneCandidates(header, lanes, tieOrder);
-  return true;
+// The authority owns its private same-operation validation proof and composes
+// directly with this immutable negotiated context. This accessor grants no
+// validation bypass in the wire module: every public wire selector above still
+// validates its inputs before composition.
+function statePairWireEncoderContext(encoder) {
+  const context = trustedStatePairWireEncoderContexts.get(encoder);
+  if (!context) throw new TypeError("encoder does not expose a negotiated state-pair context");
+  return context;
+}
+
+function observeStatePairWireSelection(encoder, wire, milliseconds) {
+  const observe = trustedStatePairWireEncoderObservers.get(encoder);
+  observe?.(wire, milliseconds);
 }
 
 function hasTrustedStatePairLazyCandidateSelector(encoder) {
@@ -933,7 +936,8 @@ module.exports = {
   selectTrustedStatePairWireCandidate,
   hasTrustedStatePairCandidateSelector,
   selectTrustedStatePairWireLaneCandidate,
-  validateTrustedAuthorityStatePairLaneCandidates,
+  statePairWireEncoderContext,
+  observeStatePairWireSelection,
   hasTrustedStatePairLazyCandidateSelector,
   isTrustedStatePairWireEncoder,
 };

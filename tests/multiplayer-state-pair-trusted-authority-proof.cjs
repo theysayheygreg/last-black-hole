@@ -8,11 +8,11 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
 const { canonicalJson, canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
-const { CODEC_PAIR_TIE_ORDER } = require("../scripts/authority-delta-publisher.cjs");
+const { CODEC_PAIR_TIE_ORDER, testAuthorityProofLifecycleAdversarial } =
+  require("../scripts/authority-delta-publisher.cjs");
 const { codecContext, POSITIONAL_CODEC_MANIFEST_HASH, encodePositionalFrame,
   decodePositionalFrame } = require("../scripts/state-pair-positional-codec.cjs");
-const { createStatePairWireEncoder, selectTrustedStatePairWireLaneCandidate,
-  validateTrustedAuthorityStatePairLaneCandidates, SERVER_TO_CLIENT } =
+const { createStatePairWireEncoder, selectTrustedStatePairWireLaneCandidate, SERVER_TO_CLIENT } =
   require("../scripts/multiplayer-wire-protocol.cjs");
 
 const MANIFEST_HASH = `sha256:${"8".repeat(64)}`;
@@ -95,16 +95,41 @@ function main() {
   assert.strictEqual(atBoundary.transcriptSha256, trusted.transcriptSha256);
   assert.strictEqual(trustedBelow.transcriptSha256, fullBelow.transcriptSha256);
   assert((trustedBelow.fallbackCounts["candidate-invalid:pair-too-large"] || 0) > 0);
+  assert(trustedBelow.operations.trustedProofRejects > 0);
+  assert.strictEqual(trustedBelow.operations.trustedProofsCreated,
+    trustedBelow.operations.trustedProofsConsumed);
+
+  const proofModule = path.join(__dirname, "..", "scripts", "state-pair-authority-proof.cjs");
+  const wireModule = path.join(__dirname, "..", "scripts", "multiplayer-wire-protocol.cjs");
+  const publisherModule = path.join(__dirname, "..", "scripts", "authority-delta-publisher.cjs");
+  const importOrder = JSON.parse(execFileSync(process.execPath, ["-e", [
+    `const wire = require(${JSON.stringify(wireModule)});`,
+    `const publisher = require(${JSON.stringify(publisherModule)});`,
+    `let removed = false; try { require(${JSON.stringify(proofModule)}); }`,
+    "catch (error) { removed = error.code === 'MODULE_NOT_FOUND'; }",
+    "const exposed = [...Object.keys(wire), ...Object.keys(publisher)]",
+    "  .filter((key) => /ProofIssuer|issueAuthorityStatePairProof|bindAuthorityProofIssuer/.test(key));",
+    "process.stdout.write(JSON.stringify({ removed, exposed }));",
+  ].join("\n")], { encoding: "utf8" }));
+  assert.deepStrictEqual(importOrder, { removed: true, exposed: [] });
+  const lifecycle = testAuthorityProofLifecycleAdversarial();
+  assert.deepStrictEqual(lifecycle.counts, { created: 3, consumed: 3, rejected: 3 });
+  assert.strictEqual(lifecycle.consumedTwice, "invalid-trusted-proof");
+  assert.strictEqual(lifecycle.crossOperation, "invalid-trusted-proof");
+  assert.strictEqual(lifecycle.capabilitiesReturned, 0);
 
   const stale = fixture(2000);
   const staleEncoder = createStatePairWireEncoder(stale.context);
   const forged = Object.freeze(Object.create(null));
-  assert.strictEqual(errorCode(() => selectTrustedStatePairWireLaneCandidate(staleEncoder,
-    stale.header, stale.lanes, CODEC_PAIR_TIE_ORDER, forged, 256 * 1024)), "invalid-trusted-proof");
   const other = fixture(2002);
-  assert.strictEqual(errorCode(() => selectTrustedStatePairWireLaneCandidate(
-    createStatePairWireEncoder(other.context), other.header, other.lanes, CODEC_PAIR_TIE_ORDER,
-    forged, 256 * 1024)), "invalid-trusted-proof");
+  const staleLanes = JSON.parse(JSON.stringify(stale.lanes));
+  staleLanes.public.delta.delta.snapshotId = "stale-snapshot";
+  assert(errorCode(() => selectTrustedStatePairWireLaneCandidate(staleEncoder,
+    stale.header, staleLanes, CODEC_PAIR_TIE_ORDER, forged, 256 * 1024)));
+  const crossLanes = JSON.parse(JSON.stringify(stale.lanes));
+  crossLanes.owner.keyframe = other.lanes.owner.keyframe;
+  assert(errorCode(() => selectTrustedStatePairWireLaneCandidate(staleEncoder,
+    stale.header, crossLanes, CODEC_PAIR_TIE_ORDER, forged, 256 * 1024)));
   assert.throws(() => { stale.lanes.public.keyframe.projection.world.publicFacts.formTimes[0] = "mutated"; }, TypeError);
 
   const hostile = [
@@ -118,15 +143,18 @@ function main() {
     const value = fixture(3000 + index);
     const mutable = JSON.parse(JSON.stringify({ header: value.header, lanes: value.lanes }));
     mutate(mutable);
-    return errorCode(() => validateTrustedAuthorityStatePairLaneCandidates(
-      mutable.header, mutable.lanes, CODEC_PAIR_TIE_ORDER));
+    return errorCode(() => selectTrustedStatePairWireLaneCandidate(
+      createStatePairWireEncoder(value.context), mutable.header, mutable.lanes, CODEC_PAIR_TIE_ORDER));
   });
   assert(hostileCodes.every(Boolean));
 
   const result = { schema: "lbh-s18-trusted-authority-proof-v1", cases: 80,
     exactWireComparisons: 160, expandedComparisons: 640, semanticComparisons: 160,
     boundaryChecks: 2, exactBoundary,
-    staleProofRejects: 1, crossOperationProofRejects: 1, forgedProofRejects: 1,
+    importOrderBoundaryChecks: 1, removedProofModuleChecks: 1, publicIssuerExports: 0,
+    maliciousBinderCaptures: 0, consumedTwiceRejects: 1,
+    lifecycleRejectCounters: lifecycle.counts,
+    staleInputRejects: 1, crossOperationInputRejects: 1, forgedExtraArgumentBypasses: 0,
     mutationRejects: 1, hostileCases: hostileCodes.length, hostileCodes,
     mismatches: 0, transcriptSha256: crypto.createHash("sha256")
       .update(trusted.transcriptSha256).digest("hex"), direction: SERVER_TO_CLIENT,
