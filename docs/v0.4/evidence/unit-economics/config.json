@@ -7,6 +7,40 @@
     "hoursPerMonth": 730
   },
   "salesScales": [1000, 10000, 100000, 1000000],
+  "providerSource": {
+    "commit": "963c4427b78d60e9fd4cd481debd5920ea39002f",
+    "hostedResearchSha256": "060fc43df711de5cf040031d19a74225da8c9a941af6f9b4ae84c355bcaf46a2",
+    "sourceLedgerSha256": "86aa1e5da5e48bfcb46b423a176ef1e458018f9d08e65017514eb30bf1993f77"
+  },
+  "providerAlternatives": {
+    "flyPerformancePrimary": {
+      "authorityHourUsd": {"best": 0.059, "base": 0.0693, "worst": 0.0903},
+      "status": "verifiedOfficialDerived",
+      "position": "primary four-seat authority benchmark",
+      "caveat": "application egress included; fixed/shared services remain separate"
+    },
+    "hetznerCx23": {
+      "authorityHourUsd": {"best": 0.0057, "base": 0.0135, "worst": 0.0174},
+      "status": "verifiedOfficialDerived",
+      "position": "price-floor sensitivity only",
+      "caveat": "shared-CPU stability, included-transfer exhaustion, patching, orchestration, and operations are unproved/unpriced"
+    },
+    "hetznerCcx13": {
+      "authorityHourUsd": {"best": 0.0445, "base": 0.1052, "worst": 0.1351},
+      "status": "verifiedOfficialDerived",
+      "position": "dedicated-CPU and high-operations sensitivity",
+      "caveat": "transfer assumed inside allowance; patching, orchestration, backups, failover, and operations are unpriced"
+    },
+    "cloudflareDurableObjectCuriosity": {
+      "authorityHourUsd": {"experimental": 0.00738},
+      "status": "verifiedOfficialDerived",
+      "position": "unproven port experiment, not a capacity forecast",
+      "caveat": "omits Workers, storage, logs, control services, and proof that the Node sim fits DO CPU/timer/recovery semantics"
+    }
+  },
+  "excludedAuthorityProviders": {
+    "vercel": "control-plane only; bounded function duration and unproved single-writer handoff exclude it from live-authority cost rows"
+  },
   "cases": {
     "best": {
       "storefrontFeeRate": 0.15,
@@ -62,7 +96,8 @@
           "storageRetentionMonths": 0,
           "fixedMonthlyUsd": {},
           "oneTimeUsd": {},
-          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "authorityComputeHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "authorityHourEnvelopeUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
           "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
           "storageUsdPerGbMonth": {"value": 0, "status": "planningAssumption", "source": "no hosted storage"},
           "densityEvidence": {"status": "notApplicable", "source": "player-owned authority; no central host-density claim", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
@@ -75,7 +110,8 @@
           "storageRetentionMonths": 0,
           "fixedMonthlyUsd": {"updateManifestAndDomain": 2},
           "oneTimeUsd": {"privateMatchPackaging": 100},
-          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "authorityComputeHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "authorityHourEnvelopeUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
           "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
           "storageUsdPerGbMonth": {"value": 0, "status": "planningAssumption", "source": "no hosted storage"},
           "densityEvidence": {"status": "notApplicable", "source": "player-owned authority; no central host-density claim", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
@@ -88,7 +124,8 @@
           "storageRetentionMonths": 0,
           "fixedMonthlyUsd": {"distributionAndManifest": 5},
           "oneTimeUsd": {"natAndPackagingHardening": 500},
-          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "authorityComputeHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "authorityHourEnvelopeUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
           "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
           "storageUsdPerGbMonth": {"value": 0, "status": "planningAssumption", "source": "no hosted storage"},
           "densityEvidence": {"status": "notApplicable", "source": "player-owned authority; no central host-density claim", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
@@ -97,45 +134,48 @@
     },
     "centralPerMatchAuthority": {
       "hostedGameplayShare": 1,
-      "averagePlayersPerMatch": 3,
+      "averagePlayersPerMatch": 4,
       "matchDurationHours": 0.75,
       "caseInfrastructure": {
         "best": {
           "warmCapacityFactor": 1.2,
-          "egressKiBPerSecondPerClient": 32,
+          "egressKiBPerSecondPerClient": 33.3201171875,
           "variableControlCostPerMultiplayerPlayerHourUsd": 0.001,
           "storageGbPerActivePlayer": 0.01,
           "storageRetentionMonths": 12,
           "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5, "observability": 19, "paging": 42, "warmFleetFloor": 18, "backupDomainReserve": 48},
           "oneTimeUsd": {"deploymentAndRecoverySetup": 500},
-          "hostHourUsd": {"value": 0.0082, "status": "pendingRefresh", "source": "docs/v0.4/research/hosted-costs-unit-economics.md snapshot 2026-07-10; Fly NA shared 1x/1GB"},
-          "egressUsdPerGb": {"value": 0.02, "status": "pendingRefresh", "source": "same research snapshot; Fly NA/EU"},
+          "authorityComputeHourUsd": {"value": 0.0491734976, "status": "verifiedOfficialDerived", "source": "provider refresh 963c442: Fly performance-1x four-seat best envelope less included application egress"},
+          "authorityHourEnvelopeUsd": {"value": 0.059, "status": "verifiedOfficialDerived", "source": "provider refresh 963c442: exact Fly four-seat best authority-hour envelope"},
+          "egressUsdPerGb": {"value": 0.02, "status": "verifiedOfficial", "source": "provider refresh 963c442 official Fly pricing: NA/EU egress"},
           "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "docs/v0.4/research/fixed-stack-cohort-unit-economics.md snapshot 2026-07-10; R2 Standard"},
-          "densityEvidence": {"status": "planningAssumptionPendingMeasurement", "source": "three hypothetical admitted four-player S20 authorities before a production packing benchmark; 0.67 safety factor derives two safe authorities", "measuredAuthoritiesPerHost": 3, "safetyFactor": 0.67}
+          "densityEvidence": {"status": "conservativeNoPacking", "source": "provider refresh 963c442 requires one four-seat authority per match with no unproven packing", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
         },
         "base": {
           "warmCapacityFactor": 1.4,
-          "egressKiBPerSecondPerClient": 64,
+          "egressKiBPerSecondPerClient": 37.86376953125,
           "variableControlCostPerMultiplayerPlayerHourUsd": 0.003,
           "storageGbPerActivePlayer": 0.03,
           "storageRetentionMonths": 36,
           "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 185, "objectStorage": 25, "observability": 119, "paging": 84, "warmFleetFloor": 58, "backupSupportDomain": 327},
           "oneTimeUsd": {"productionizationAndRecovery": 5000},
-          "hostHourUsd": {"value": 0.0082, "status": "pendingRefresh", "source": "docs/v0.4/research/hosted-costs-unit-economics.md snapshot 2026-07-10; Fly NA shared 1x/1GB"},
-          "egressUsdPerGb": {"value": 0.023, "status": "pendingRefresh", "source": "docs/v0.4/research/fixed-stack-cohort-unit-economics.md blended NA/EU/APAC planning rate"},
+          "authorityComputeHourUsd": {"value": 0.05813352, "status": "verifiedOfficialDerived", "source": "provider refresh 963c442: Fly performance-1x four-seat base envelope less included application egress"},
+          "authorityHourEnvelopeUsd": {"value": 0.0693, "status": "verifiedOfficialDerived", "source": "provider refresh 963c442: exact Fly four-seat base authority-hour envelope"},
+          "egressUsdPerGb": {"value": 0.02, "status": "verifiedOfficial", "source": "provider refresh 963c442 official Fly pricing: NA/EU egress"},
           "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
           "densityEvidence": {"status": "planningAssumptionPendingMeasurement", "source": "one admitted four-player S20 authority per host; conservative until a production packing benchmark exists", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
         },
         "worst": {
           "warmCapacityFactor": 1.8,
-          "egressKiBPerSecondPerClient": 96,
+          "egressKiBPerSecondPerClient": 53.00927734375,
           "variableControlCostPerMultiplayerPlayerHourUsd": 0.01,
           "storageGbPerActivePlayer": 0.1,
           "storageRetentionMonths": 84,
           "fixedMonthlyUsd": {"edgeWafSupport": 2500, "databaseAuthHa": 4099, "objectStorage": 500, "observabilityPaging": 4293, "warmFleetFloor": 1500, "backupSupportContracts": 4000, "incidentVarianceReserve": 3408},
           "oneTimeUsd": {"multiRegionProductionAndMigration": 50000},
-          "hostHourUsd": {"value": 0.0082, "status": "pendingRefresh", "source": "docs/v0.4/research/hosted-costs-unit-economics.md snapshot 2026-07-10; placeholder before regional fleet quote"},
-          "egressUsdPerGb": {"value": 0.04, "status": "pendingRefresh", "source": "same research snapshot; stressed regional blend assumption"},
+          "authorityComputeHourUsd": {"value": 0.074666928, "status": "verifiedOfficialDerived", "source": "provider refresh 963c442: Fly performance-1x four-seat worst envelope less included application egress"},
+          "authorityHourEnvelopeUsd": {"value": 0.0903, "status": "verifiedOfficialDerived", "source": "provider refresh 963c442: exact Fly four-seat worst authority-hour envelope"},
+          "egressUsdPerGb": {"value": 0.02, "status": "verifiedOfficial", "source": "provider refresh 963c442 official Fly pricing: NA/EU egress"},
           "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
           "densityEvidence": {"status": "planningAssumptionPendingMeasurement", "source": "one admitted four-player S20 authority per host; no eight/24 capacity assumed", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
         }
@@ -154,7 +194,8 @@
           "storageRetentionMonths": 12,
           "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5},
           "oneTimeUsd": {"identityEntitlementSetup": 200},
-          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "authorityComputeHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "authorityHourEnvelopeUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
           "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
           "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "docs/v0.4/research/fixed-stack-cohort-unit-economics.md snapshot 2026-07-10; R2 Standard"},
           "densityEvidence": {"status": "notApplicable", "source": "player-hosted match; hosted control plane has no match-authority density", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
@@ -167,7 +208,8 @@
           "storageRetentionMonths": 36,
           "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5, "observability": 19, "domainBackup": 2},
           "oneTimeUsd": {"identitySettlementAndRecovery": 1000},
-          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "authorityComputeHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "authorityHourEnvelopeUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
           "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
           "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
           "densityEvidence": {"status": "notApplicable", "source": "player-hosted match; hosted control plane has no match-authority density", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}
@@ -180,7 +222,8 @@
           "storageRetentionMonths": 84,
           "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5, "observability": 19, "paging": 42, "backupSupportDomain": 66},
           "oneTimeUsd": {"identityAbuseRecoveryHardening": 5000},
-          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "authorityComputeHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "authorityHourEnvelopeUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
           "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
           "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
           "densityEvidence": {"status": "notApplicable", "source": "player-hosted match; hosted control plane has no match-authority density", "measuredAuthoritiesPerHost": 1, "safetyFactor": 1}

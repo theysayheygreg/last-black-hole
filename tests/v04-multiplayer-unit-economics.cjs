@@ -2,6 +2,7 @@
 "use strict";
 
 const assert = require("assert");
+const path = require("path");
 const { SCHEMA, sha256, validateConfig, receiptLedger, safeAuthorityDensity, evaluate, model, money } = require("../scripts/v04-multiplayer-unit-economics.cjs");
 
 function price(value) { return { value, status: "planningAssumption", source: "test" }; }
@@ -16,11 +17,13 @@ function fixture() {
   const infrastructure = () => ({ warmCapacityFactor: 1.25,
     egressKiBPerSecondPerClient: 32, variableControlCostPerMultiplayerPlayerHourUsd: 0.001,
     storageGbPerActivePlayer: 0.01, storageRetentionMonths: 3,
-    fixedMonthlyUsd: { control: 10 }, oneTimeUsd: { setup: 100 }, hostHourUsd: price(0.01),
+    fixedMonthlyUsd: { control: 10 }, oneTimeUsd: { setup: 100 },
+    authorityComputeHourUsd: price(0.01), authorityHourEnvelopeUsd: price(0.019437184),
     egressUsdPerGb: price(0.02), storageUsdPerGbMonth: price(0.015),
-    densityEvidence: { status: "planningAssumptionPendingMeasurement", source: "test",
+    densityEvidence: { status: "measuredBenchmark", source: "test",
       measuredAuthoritiesPerHost: 3, safetyFactor: 0.8 } });
   return { schema: SCHEMA, commercial: { listPriceUsd: 4.99 }, capacity: { hoursPerMonth: 730 },
+    providerAlternatives: {}, excludedAuthorityProviders: {}, providerSource: {},
     salesScales: [1000, 10000], cases, exclusions: ["income tax"], topologies: {
       central: { hostedGameplayShare: 1, averagePlayersPerMatch: 4, matchDurationHours: 0.5,
         caseInfrastructure: { best: infrastructure(), base: infrastructure(), worst: infrastructure() } },
@@ -91,11 +94,32 @@ for (const mutation of [
   (c) => { c.cases.base.refundRate = 1.1; },
   (c) => { c.topologies.central.averagePlayersPerMatch = 8; },
   (c) => { c.topologies.central.caseInfrastructure.base.densityEvidence.measuredAuthoritiesPerHost = 0; },
-  (c) => { c.topologies.central.caseInfrastructure.base.hostHourUsd.value = -0.01; },
+  (c) => { c.topologies.central.caseInfrastructure.base.densityEvidence.status = "planningAssumptionPendingMeasurement"; },
+  (c) => { c.topologies.central.caseInfrastructure.base.authorityComputeHourUsd.value = -0.01; },
 ]) {
   const invalid = fixture(); mutation(invalid); assert.throws(() => validateConfig(invalid));
 }
 
 assert.strictEqual(money(1.005), 1.01, "money rounding must be half-up at cent precision");
 assert.strictEqual(sha256(Buffer.from("abc")), sha256("abc"), "artifact SHA must hash raw file bytes");
+
+const canonical = require(path.resolve(__dirname, "../docs/v0.4/evidence/unit-economics/config.json"));
+validateConfig(canonical);
+const flyExpected = { best: 0.059, base: 0.0693, worst: 0.0903 };
+for (const [caseName, expectedAuthorityHour] of Object.entries(flyExpected)) {
+  const row = evaluate(canonical, 1000, caseName, "centralPerMatchAuthority");
+  assert(Math.abs(row.unitCosts.costPerAuthorityHour - expectedAuthorityHour) < 1e-12,
+    `canonical Fly ${caseName} authority-hour rate drifted`);
+  assert.strictEqual(row.capacityInputs.safeAuthoritiesPerHost, 1,
+    `canonical Fly ${caseName} must not assume unproved packing`);
+  assert.strictEqual(row.capacityInputs.averagePlayersPerMatch, 4,
+    `canonical Fly ${caseName} must retain the admitted four-seat envelope`);
+}
+assert.strictEqual(evaluate(canonical, 1000, "base", "centralPerMatchAuthority")
+  .unitCosts.costPerHostedPlayerHour, 0.017325,
+"canonical Fly base variable gameplay cost must remain $0.017325/player-hour before fixed allocation");
+assert.strictEqual(canonical.providerAlternatives.cloudflareDurableObjectCuriosity.position,
+  "unproven port experiment, not a capacity forecast");
+assert(!Object.prototype.hasOwnProperty.call(canonical.providerAlternatives, "vercel"),
+  "Vercel must remain excluded from live-authority cost rows");
 console.log("v0.4 multiplayer unit-economics tests passed");

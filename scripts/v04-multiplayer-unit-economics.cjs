@@ -41,8 +41,8 @@ function money(value) { return Math.round((value + Number.EPSILON) * 100) / 100;
 function validatePrice(name, price) {
   if (!price || typeof price !== "object") throw new Error(`${name} must be a price object`);
   finite(`${name}.value`, price.value);
-  if (!['verifiedOfficial', 'pendingRefresh', 'planningAssumption'].includes(price.status)) {
-    throw new Error(`${name}.status must declare verifiedOfficial, pendingRefresh, or planningAssumption`);
+  if (!['verifiedOfficial', 'verifiedOfficialDerived', 'pendingRefresh', 'planningAssumption'].includes(price.status)) {
+    throw new Error(`${name}.status must declare verifiedOfficial, verifiedOfficialDerived, pendingRefresh, or planningAssumption`);
   }
   if (!price.source || typeof price.source !== "string") throw new Error(`${name}.source is required`);
 }
@@ -78,6 +78,10 @@ function validateConfig(config) {
       finite(`${topologyName}.${caseName}.densityEvidence.measuredAuthoritiesPerHost`,
         infrastructure.densityEvidence.measuredAuthoritiesPerHost, { min: 1 });
       rate(`${topologyName}.${caseName}.densityEvidence.safetyFactor`, infrastructure.densityEvidence.safetyFactor);
+      if (safeAuthorityDensity(infrastructure) > 1
+          && infrastructure.densityEvidence.status !== "measuredBenchmark") {
+        throw new Error(`${topologyName}.${caseName} cannot assume packed authorities without measuredBenchmark density evidence`);
+      }
       finite(`${topologyName}.${caseName}.warmCapacityFactor`, infrastructure.warmCapacityFactor, { min: 1 });
       finite(`${topologyName}.${caseName}.egressKiBPerSecondPerClient`, infrastructure.egressKiBPerSecondPerClient);
       finite(`${topologyName}.${caseName}.variableControlCostPerMultiplayerPlayerHourUsd`, infrastructure.variableControlCostPerMultiplayerPlayerHourUsd);
@@ -85,7 +89,8 @@ function validateConfig(config) {
       finite(`${topologyName}.${caseName}.storageRetentionMonths`, infrastructure.storageRetentionMonths);
       for (const [key, value] of Object.entries(infrastructure.fixedMonthlyUsd || {})) finite(`${topologyName}.${caseName}.fixedMonthlyUsd.${key}`, value);
       for (const [key, value] of Object.entries(infrastructure.oneTimeUsd || {})) finite(`${topologyName}.${caseName}.oneTimeUsd.${key}`, value);
-      validatePrice(`${topologyName}.${caseName}.hostHourUsd`, infrastructure.hostHourUsd);
+      validatePrice(`${topologyName}.${caseName}.authorityComputeHourUsd`, infrastructure.authorityComputeHourUsd);
+      validatePrice(`${topologyName}.${caseName}.authorityHourEnvelopeUsd`, infrastructure.authorityHourEnvelopeUsd);
       validatePrice(`${topologyName}.${caseName}.egressUsdPerGb`, infrastructure.egressUsdPerGb);
       validatePrice(`${topologyName}.${caseName}.storageUsdPerGbMonth`, infrastructure.storageUsdPerGbMonth);
     }
@@ -133,12 +138,16 @@ function evaluate(config, copies, caseName, topologyName) {
   const peakConcurrentMatches = peakHostedPlayerCcu / topology.averagePlayersPerMatch;
   const peakHosts = peakConcurrentMatches === 0 ? 0 : Math.ceil(peakConcurrentMatches / safeAuthoritiesPerHost);
 
-  const costPerAuthorityHour = infra.hostHourUsd.value * infra.warmCapacityFactor / safeAuthoritiesPerHost;
   const transportGbPerPlayerHour = infra.egressKiBPerSecondPerClient * 1024 * 3600 / DECIMAL_GB;
   const egressCostPerHostedPlayerHour = transportGbPerPlayerHour * infra.egressUsdPerGb.value;
-  const computeCostPerHostedPlayerHour = costPerAuthorityHour / topology.averagePlayersPerMatch;
-  const costPerHostedPlayerHour = computeCostPerHostedPlayerHour + egressCostPerHostedPlayerHour;
-  const computeCost = authorityHours * costPerAuthorityHour;
+  const egressCostPerAuthorityHour = egressCostPerHostedPlayerHour * topology.averagePlayersPerMatch;
+  const costPerAuthorityHour = infra.authorityComputeHourUsd.value + egressCostPerAuthorityHour;
+  if (Math.abs(costPerAuthorityHour - infra.authorityHourEnvelopeUsd.value) > 1e-9) {
+    throw new Error(`${topologyName}/${caseName} authority-hour envelope drift: derived ${costPerAuthorityHour}, expected ${infra.authorityHourEnvelopeUsd.value}`);
+  }
+  const computeCostPerHostedPlayerHour = infra.authorityComputeHourUsd.value / topology.averagePlayersPerMatch;
+  const costPerHostedPlayerHour = costPerAuthorityHour / topology.averagePlayersPerMatch;
+  const computeCost = authorityHours * infra.authorityComputeHourUsd.value;
   const egressCost = hostedMultiplayerPlayerHours * egressCostPerHostedPlayerHour;
   const controlPlaneVariableCost = multiplayerPlayerHours * infra.variableControlCostPerMultiplayerPlayerHourUsd;
   const storageCost = activePlayers * infra.storageGbPerActivePlayer * infra.storageRetentionMonths * infra.storageUsdPerGbMonth.value;
@@ -181,7 +190,7 @@ function evaluate(config, copies, caseName, topologyName) {
     audit: {
       receipts: "gross * (1-refund) * (1-storefront) * (1-chargeback) * (1-taxVatFx)",
       authorityHours: "hostedMultiplayerPlayerHours / averagePlayersPerMatch",
-      hostDensity: "costPerAuthorityHour = hostHourUsd * warmCapacityFactor / safeAuthoritiesPerHost",
+      hostDensity: "safeAuthoritiesPerHost = max(1, floor(measuredAuthoritiesPerHost * safetyFactor)); never copies-derived",
       egress: "KiB/s/client * 1024 * 3600 / 1e9 * egressUsdPerGb * hostedPlayerHours",
       totalOperations: "compute + egress + variableControl + storage + support + recurringBackend + oneTimeBackend",
       explicitExclusions: config.exclusions,
@@ -200,11 +209,29 @@ function sensitivity(config, row) {
     ["listPriceUsd +10%", (c) => { c.commercial.listPriceUsd *= 1.1; }],
     ["storefrontFeeRate +10%", (c) => { c.cases[row.case].storefrontFeeRate = Math.min(1, c.cases[row.case].storefrontFeeRate * 1.1); }],
     ["lifetimeMonths +10%", (c) => { c.cases[row.case].activeLifetimeMonths *= 1.1; }],
-    ["hostHourUsd +10%", (c) => { c.topologies[row.topology].caseInfrastructure[row.case].hostHourUsd.value *= 1.1; }],
-    ["egressUsdPerGb +10%", (c) => { c.topologies[row.topology].caseInfrastructure[row.case].egressUsdPerGb.value *= 1.1; }],
-    ["egressKiBPerSecond +10%", (c) => { c.topologies[row.topology].caseInfrastructure[row.case].egressKiBPerSecondPerClient *= 1.1; }],
+    ["authorityComputeHourUsd +10%", (c) => {
+      const item = c.topologies[row.topology].caseInfrastructure[row.case];
+      item.authorityComputeHourUsd.value *= 1.1;
+      item.authorityHourEnvelopeUsd.value = item.authorityComputeHourUsd.value
+        + item.egressKiBPerSecondPerClient * 1024 * 3600 / DECIMAL_GB
+        * item.egressUsdPerGb.value * c.topologies[row.topology].averagePlayersPerMatch;
+    }],
+    ["egressUsdPerGb +10%", (c) => {
+      const item = c.topologies[row.topology].caseInfrastructure[row.case]; item.egressUsdPerGb.value *= 1.1;
+      item.authorityHourEnvelopeUsd.value = item.authorityComputeHourUsd.value
+        + item.egressKiBPerSecondPerClient * 1024 * 3600 / DECIMAL_GB
+        * item.egressUsdPerGb.value * c.topologies[row.topology].averagePlayersPerMatch;
+    }],
+    ["egressKiBPerSecond +10%", (c) => {
+      const item = c.topologies[row.topology].caseInfrastructure[row.case]; item.egressKiBPerSecondPerClient *= 1.1;
+      item.authorityHourEnvelopeUsd.value = item.authorityComputeHourUsd.value
+        + item.egressKiBPerSecondPerClient * 1024 * 3600 / DECIMAL_GB
+        * item.egressUsdPerGb.value * c.topologies[row.topology].averagePlayersPerMatch;
+    }],
     ["fixedMonthly +10%", (c) => { const fixed = c.topologies[row.topology].caseInfrastructure[row.case].fixedMonthlyUsd; for (const key of Object.keys(fixed)) fixed[key] *= 1.1; }],
-    ["safeAuthoritiesPerHost -10%", (c) => { c.topologies[row.topology].caseInfrastructure[row.case].safeAuthoritiesPerHost *= 0.9; }],
+    ["densitySafetyFactor -10%", (c) => {
+      c.topologies[row.topology].caseInfrastructure[row.case].densityEvidence.safetyFactor *= 0.9;
+    }],
   ];
   return probes.map(([input, mutate]) => {
     const clone = JSON.parse(JSON.stringify(config));
@@ -242,9 +269,13 @@ function model(config, source = {}) {
     }])),
     providerInputs: Object.fromEntries(Object.entries(config.topologies).map(([topologyName, topology]) => [topologyName,
       Object.fromEntries(Object.entries(topology.caseInfrastructure).map(([caseName, item]) => [caseName, {
-        hostHourUsd: item.hostHourUsd, egressUsdPerGb: item.egressUsdPerGb,
+        authorityComputeHourUsd: item.authorityComputeHourUsd,
+        authorityHourEnvelopeUsd: item.authorityHourEnvelopeUsd, egressUsdPerGb: item.egressUsdPerGb,
         storageUsdPerGbMonth: item.storageUsdPerGbMonth, densityEvidence: item.densityEvidence,
       }]))])),
+    providerAlternatives: config.providerAlternatives,
+    excludedAuthorityProviders: config.excludedAuthorityProviders,
+    providerSource: config.providerSource,
     rows: roundedRows,
   };
 }
