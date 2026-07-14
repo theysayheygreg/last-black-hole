@@ -949,34 +949,53 @@ function createAuthorityDeltaPublisher(options = {}) {
             // cross-lane relation once. The proof lifecycle stays entirely in
             // this publisher closure: no token, binder, or skip-validation
             // selector crosses into the public wire module.
-            const canonicalFacts = Object.freeze([
-              validateAuthorityLaneProof(frameHeader, "public", "keyframe", lanes.public.keyframe,
-                canonicalProofs.get(lanes.public.keyframe)),
-              validateAuthorityLaneProof(frameHeader, "public", "delta", lanes.public.delta,
-                canonicalProofs.get(lanes.public.delta)),
-              validateAuthorityLaneProof(frameHeader, "owner", "keyframe", lanes.owner.keyframe,
-                canonicalProofs.get(lanes.owner.keyframe)),
-              validateAuthorityLaneProof(frameHeader, "owner", "delta", lanes.owner.delta,
-                canonicalProofs.get(lanes.owner.delta)),
-            ]);
-            const proofInput = { header: frameHeader, lanes,
-              canonicalFacts, tieOrder: CODEC_PAIR_TIE_ORDER };
-            const proof = authorityProofs.issue(proofInput);
-            // Consume before size proof/composition so a failed operation is
-            // still one-shot and becomes visible as a rejection below. Both
-            // token and ticket remain inside this publisher closure.
-            authorityProofTicket = authorityProofs.consume(proof, proofInput);
+            let canonicalFacts;
+            const validateAndConsume = () => {
+              canonicalFacts = Object.freeze([
+                validateAuthorityLaneProof(frameHeader, "public", "keyframe", lanes.public.keyframe,
+                  canonicalProofs.get(lanes.public.keyframe)),
+                validateAuthorityLaneProof(frameHeader, "public", "delta", lanes.public.delta,
+                  canonicalProofs.get(lanes.public.delta)),
+                validateAuthorityLaneProof(frameHeader, "owner", "keyframe", lanes.owner.keyframe,
+                  canonicalProofs.get(lanes.owner.keyframe)),
+                validateAuthorityLaneProof(frameHeader, "owner", "delta", lanes.owner.delta,
+                  canonicalProofs.get(lanes.owner.delta)),
+              ]);
+              const proofInput = { header: frameHeader, lanes,
+                canonicalFacts, tieOrder: CODEC_PAIR_TIE_ORDER };
+              const proof = authorityProofs.issue(proofInput);
+              // Consume before size proof/composition so a failed operation is
+              // still one-shot and becomes visible as a rejection below. Both
+              // token and ticket remain inside this publisher closure.
+              authorityProofTicket = authorityProofs.consume(proof, proofInput);
+            };
+            if (stageProfiler) stageProfiler.measureSync(STAGES.TRUSTED_PROOF, {
+              recipientKey: identity.recipientId,
+            }, validateAndConsume);
+            else validateAndConsume();
             codecChoice.trustedValidationsPerformed += 1;
             codecChoice.trustedValidationsReused += CODEC_PAIR_TIE_ORDER.length;
-            expanded = exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs);
+            const sizeCandidates = () => exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs);
+            expanded = stageProfiler
+              ? stageProfiler.measureSync(STAGES.CANDIDATE_SIZE_PROOF, {
+                  recipientKey: identity.recipientId,
+                }, sizeCandidates)
+              : sizeCandidates();
             codecChoice.trustedCanonicalSizeOperations += expanded.sizes.size;
             for (const bytes of expanded.sizes.values()) {
               if (bytes > limits.maxPairBytes) fail("pair-too-large",
                 `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
             }
             const selectionStarted = performance.now();
-            selected = composeStatePairLaneCandidates(frameHeader, lanes,
+            const composeCandidates = () => composeStatePairLaneCandidates(frameHeader, lanes,
               statePairWireEncoderContext(encodeWire), CODEC_PAIR_TIE_ORDER);
+            selected = stageProfiler
+              ? stageProfiler.measureSync(STAGES.CANDIDATE_COMPOSITION, (result) => ({
+                  recipientKey: identity.recipientId,
+                  outputBytes: result?.chosen?.bytes || 0,
+                  serializedAllocationProxyBytes: result?.chosen?.bytes || 0,
+                }), composeCandidates)
+              : composeCandidates();
             codecChoice.trustedPositionalSizeOperations += selected.candidates.length;
             observeStatePairWireSelection(encodeWire, selected.chosen.wire,
               performance.now() - selectionStarted);

@@ -827,7 +827,15 @@ function createSimWebSocketAdapter(options = {}) {
   function compressForState(state, wire, frame, sourceDigest = null) {
     if (!compressionContextFor(state) || frame?.type !== "statePair") return wire;
     const started = performance.now();
-    const compressed = encodeCompressedStatePair(wire);
+    const compress = () => encodeCompressedStatePair(wire);
+    const compressed = stageProfiler
+      ? stageProfiler.measureSync(STAGES.COMPRESSION, (value) => ({
+          recipientKey: profileRecipientKey(state),
+          inputBytes: Buffer.byteLength(wire),
+          outputBytes: value?.length || 0,
+          serializedAllocationProxyBytes: value?.length || 0,
+        }), compress)
+      : compress();
     compressionCodecStats.compressedFrames += 1;
     compressionCodecStats.sourceBytes += Buffer.byteLength(wire);
     compressionCodecStats.encodedBytes += compressed.length;
@@ -1377,7 +1385,13 @@ function createSimWebSocketAdapter(options = {}) {
       }
       samplePressure(state);
       if (!stateIsLive(state, expectedGeneration)) return;
-      const ackResult = await onAck(state.binding, frame, callbackContext(state, "ack"));
+      const ingestAck = () => onAck(state.binding, frame, callbackContext(state, "ack"));
+      const ackResult = stageProfiler && frame.ackKind === "statePair"
+        ? await stageProfiler.measureAsync(STAGES.ACK_INGESTION, {
+            recipientKey: profileRecipientKey(state),
+            inputBytes: Buffer.byteLength(JSON.stringify(frame), "utf8"),
+          }, ingestAck)
+        : await ingestAck();
       if (frame.ackKind === "statePair" && ackResult?.accepted === false) {
         observeAckReject(ackResult.reason, ackResult.diagnostic?.relation);
         throw new WireProtocolError("state-pair-ack-rejected", "statePair ACK was rejected", 4401);

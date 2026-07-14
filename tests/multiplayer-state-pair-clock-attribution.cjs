@@ -23,6 +23,7 @@ const S15_ARTIFACT = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s15
 const S15_SHA256 = "66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec23bf8";
 const S16_BINARY = String(process.env.LBH_S16_BINARY || "").trim() === "1";
 const S20_COMPRESSION = String(process.env.LBH_S20_COMPRESSION || "").trim() === "1";
+const S21_STAGE_PROFILE = String(process.env.LBH_S21_STAGE_PROFILE || "").trim() === "1";
 if (S16_BINARY && S20_COMPRESSION) throw new Error("S20 compression cannot be combined with S16 binary");
 const PROFILE = S20_COMPRESSION ? "s20" : S16_BINARY ? "s16" : "s13";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -185,7 +186,7 @@ async function runScenario(population, runDir, commit) {
       LBH_SIM_WS_STATE_PAIR_COMPRESSION_V1: S20_COMPRESSION ? "true" : "false",
       LBH_SIM_WS_PREPARED_PROJECTIONS: "true", LBH_SIM_WS_BENCH_EVENT_LOOP: "1",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
-      LBH_SIM_WS_STAGE_PROFILE: "0",
+      LBH_SIM_WS_STAGE_PROFILE: S21_STAGE_PROFILE ? "1" : "0",
     } });
     authorityPid = Number(fs.readFileSync(path.join(ROOT, "tmp", `sim-server-${port}.pid`), "utf8"));
     setup = await setupPopulation(port, population);
@@ -309,7 +310,10 @@ async function runScenario(population, runDir, commit) {
           cpuBoundary: "Exact cumulative authority process CPU delta divided by the same two health-sample timestamps; includes health polling and test-only replication accounting overhead.",
           eventLoopDelay: endHealth.multiplayer.projection.benchmarkEventLoopDelay,
           simTickMs: endHealth.multiplayer.projection.accounting.costDistributions.simTickMs,
-          projectionAndPublishMs: endHealth.multiplayer.projection.accounting.costDistributions.projectionReplicationMs },
+          projectionAndPublishMs: endHealth.multiplayer.projection.accounting.costDistributions.projectionReplicationMs,
+          ...(S21_STAGE_PROFILE ? {
+            stageProfile: endHealth.multiplayer.adapter.authorityStageProfile,
+          } : {}) },
         clients: clients.map((client) => ({ label: client.label, pid: client.pid,
           cpuUsage: client.cpuUsage, eventLoopDelay: client.eventLoopDelay,
           decodeApplyMs: client.decodeApplyMs,
@@ -513,7 +517,7 @@ async function main() {
       : S16_BINARY ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1", commit, dirty, seed: SEED,
     command: `${S20_COMPRESSION ? "LBH_S20_COMPRESSION=1 " : S16_BINARY ? "LBH_S16_BINARY=1 " : ""}node tests/multiplayer-state-pair-clock-attribution.cjs`,
     config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS,
-      binary: S16_BINARY, compression: S20_COMPRESSION },
+      binary: S16_BINARY, compression: S20_COMPRESSION, stageProfile: S21_STAGE_PROFILE },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, node: process.version },
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },

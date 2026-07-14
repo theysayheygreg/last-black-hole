@@ -15,13 +15,18 @@ const STAGES = Object.freeze({
   OWNER_PROJECTION: "recipient.ownerProjectionConstruction",
   OWNER_CANONICAL_HASH: "recipient.ownerCanonicalHash",
   OWNER_DELTA_CANDIDATE: "recipient.ownerDeltaCandidate",
+  TRUSTED_PROOF: "recipient.trustedAuthorityProof",
+  CANDIDATE_SIZE_PROOF: "recipient.candidateSizeProof",
+  CANDIDATE_COMPOSITION: "recipient.candidateComposition",
   PAIR_CHOICE: "recipient.pairChoiceFallback",
   PAIR_ENVELOPE: "recipient.pairEnvelopeConstruction",
+  COMPRESSION: "recipient.chosenWireCompression",
   JSON_SERIALIZATION: "recipient.jsonSerialization",
   ACCOUNTING: "recipient.replicationAccounting",
   ADAPTER_ENQUEUE: "recipient.adapterQueueEnqueue",
   SOCKET_SEND_CALL: "recipient.socketSendCall",
   SOCKET_SEND_CALLBACK: "recipient.socketSendCallback",
+  ACK_INGESTION: "recipient.ackIngestion",
 });
 const ALLOWED_STAGES = new Set(Object.values(STAGES));
 const METRIC_NAMES = Object.freeze([
