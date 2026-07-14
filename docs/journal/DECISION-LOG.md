@@ -3166,3 +3166,19 @@ Local JSON stays default and SQLite is opt-in.
 Closed for caller-chosen durable identity, reusable provider proof, terminal
 entitlement resurrection, stale process authority, competing terminal results,
 or cleanup that discards accepted lineage before settlement acknowledgement.
+
+### Q: What does the hosted HTTP and crash-window closure prove?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Accept the fail-closed local HTTP runtime as reference proof for separate client/control/workload auth planes, bounded envelopes, four-seat admission, incarnation fencing, terminal result/settlement, and restart replay. Do not call it a public deployment or production provider composition. |
+| Jul 14 | Repair bootstrap, ready, admission, and drain response-loss/crash windows by replaying only the exact durable operation. Placement owns the exact admitted-membership digest/count used by terminal acceptance. |
+| Jul 14 | Bridge placement acceptance to outbox publication with durable prepared canonical result bytes and bounded settlement-worker recovery. Recovery cannot substitute caller-selected payload or lineage. |
+| Jul 14 | Accept independent final review's no-P0/P1 verdict only for the demonstrated co-located single-SQLite/direct-callback composition. Keep capacity compensation, old-row migration/reset, key rotation, retention/privacy, and distributed-boundary work open as P2. |
+| Jul 14 | Treat local source-bound container build and `tcpdump -D` fail-closed behavior as packaging evidence only. Require an authenticated Fly capability probe before any runtime capture claim. |
+
+**Door status:** Open for production provider/storage composition, P2 closure,
+authenticated Fly capture probing, and the real four-client regional run.
+Closed for calling local HTTP proof public deployment, treating a prepared
+container as performance evidence, or claiming host density, invoice, packing,
+regional cost, or 24/48/96 live capacity.

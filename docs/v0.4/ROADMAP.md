@@ -8,8 +8,9 @@
 
 ## Current Checkpoint
 
-The research/planning program and durable hosted reference path are complete.
-Public product implementation and deployment proof are not.
+The research/planning program, durable hosted reference path, and fail-closed
+local HTTP reference runtime are complete. Public product implementation,
+production provider composition, and deployment proof are not.
 
 - S20 is admitted for one through four players.
 - Eight is closed for v0.4. S23/S23P remain default-off research paths; the
@@ -22,10 +23,14 @@ Public product implementation and deployment proof are not.
   encrypted product state, immutable result outbox, and exact multi-member
   settlement are implemented as pure services with durable SQLite adapters.
   Local JSON remains the default and relational SQLite is explicit opt-in.
-- The full core harness is green. Fly benchmark packaging and preflight pass
-  13/13, but the actual regional run has not started: provider authentication,
-  external client origins/signing inputs, and a running Docker daemon remain
-  external prerequisites. The public HTTP runtime is still in progress.
+- The local hosted HTTP reference runtime is tested across separate client,
+  control, and workload auth planes, four seats, strict envelopes, workload
+  reincarnation rejection, result/settlement, and restart replay. It is
+  fail-closed but not publicly deployed or production-provider composed.
+- The full core harness is green. The source-bound benchmark container builds
+  locally; startup executes `tcpdump -D` and correctly fails without local
+  `NET_ADMIN`/`NET_RAW`. Fly packet-capture capability, provider auth, four
+  external origins, and signer/evidence inputs remain unproved/blocking.
 - S24 measured a synthetic H24 component fixture only. The live 24-client
   cohort never admitted and raw capture never started. H48/H96 are far
   extrapolations; X96 fails its model screens.
@@ -97,8 +102,23 @@ instance plus process incarnation, product state is encrypted at rest, and
 placement-owned terminal-result acceptance feeds an immutable outbox and
 exactly-once multi-member settlement. Accepted authority lineage is retained
 through settlement replay until a future explicit settlement-ack/archive
-protocol. This is reference implementation evidence, not a public HTTP or
+protocol. At that checkpoint this was service/repository evidence only; the
+later fail-closed local HTTP reference still does not constitute a public or
 regional deployment claim.
+
+Durability closure checkpoint (2026-07-14): the co-located single-SQLite
+reference now repairs exact bootstrap, ready, admission, and drain response-
+loss/crash windows; placement owns the exact admitted-membership digest/count;
+and a prepared-result journal plus bounded settlement-worker recovery closes
+the terminal placement-to-outbox gap. Independent final review found no P0/P1
+in this demonstrated local composition.
+
+Remaining P2 work is explicit: create-time placement capacity is reclaimed by
+sweep rather than inline compensation; databases containing pre-repair
+accepted rows need a declared migration/reset policy; encryption/signing key
+rotation and retention/privacy operations are not production-complete; and the
+proof is co-located single-SQLite with direct in-process callbacks, not a
+distributed production transaction.
 
 Stage A boundary checkpoint (2026-07-14): default local/offline behavior is
 unchanged, while explicit hosted mode now requires service authentication,
@@ -122,8 +142,9 @@ SQLite is explicit opt-in and preserves import/export/delete/reopen boundaries.
 
 ### 3B. Hosted identity and privacy
 
-**Pure service plus durable SQLite reference complete.** Public HTTP exposure
-and production provider integration remain open.
+**Pure service plus durable SQLite reference complete.** A fail-closed local
+HTTP reference is tested; public deployment and production provider integration
+remain open.
 
 - exchange a verified provider ticket for an internal account session; check
   entitlement separately; store no LBH password and no hardware fingerprint;
@@ -168,7 +189,8 @@ Acceptance:
 - one-through-four admit and fifth/eight reject at every trust boundary;
 - local mode remains network-independent; safe import cannot mint cloud
   economics; secrets/PII pass structured-log and replay scans;
-- no P1/P2/P3 remains in identity/placement/settlement red-team.
+- no P0/P1 remains in the demonstrated local identity/placement/settlement
+  composition; listed P2 production/migration/operations gaps stay explicit.
 
 Abort:
 
@@ -181,10 +203,12 @@ Abort:
 Goal: select authority runtime from measured LBH evidence.
 
 Current checkpoint: the Fly artifact, entrypoint, config, and fail-closed
-preflight are committed and the preflight suite passes 13/13. No Machine has
-been deployed and no regional capture exists. Authentication, external client
-origins, signing/evidence inputs, and Docker daemon availability must be
-resolved before this milestone can produce evidence.
+preflight are committed and the preflight suite passes 13/13. The source-bound
+container builds locally. Its startup executes `tcpdump -D` and fails without
+local `NET_ADMIN`/`NET_RAW`, which is correct fail-closed behavior. No Machine
+has been deployed and no regional capture exists. Fly runtime capture
+capability must be probed after authentication; Fly auth, four external client
+origins, and signer/evidence inputs remain blockers.
 
 Run the exact same artifact, seed, four-client schedule, Deep Field content,
 and 90-minute soak in at least two regions:
@@ -316,7 +340,8 @@ A hosted v0.4 alpha requires all of the following:
 
 - Greg has ratified the service/product decisions;
 - natural four-human invite, play, reconnect, result, and rematch journeys;
-- Phase 5 identity/privacy/lease/settlement gates and no P1/P2/P3;
+- Phase 5 identity/privacy/lease/settlement gates and no P0/P1, with all P2
+  migration, key, retention/privacy, and distributed-boundary work closed;
 - Phase 6 two-region 90-minute proof and Greg movement/art judgment;
 - measured authority density or an explicit one-authority-per-host budget;
 - current provider prices refreshed and the unit-economics model regenerated;

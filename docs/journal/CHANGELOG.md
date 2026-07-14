@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-14 — v0.4 hosted HTTP and lifecycle crash windows closed locally
+
+- Added and tested a fail-closed hosted HTTP reference runtime with separate
+  client, control, and workload auth planes, strict envelopes, four-seat
+  admission, incarnation fencing, terminal result/settlement, and restart
+  replay. It remains a local reference, not a public deployment or production
+  provider composition.
+- Closed the demonstrated co-located SQLite lifecycle P1s: exact replay repair
+  for bootstrap/ready/admission/drain, placement-owned exact admitted-membership
+  digest/count, and a prepared-result journal with bounded settlement recovery.
+  Independent final review found no P0/P1 in that local composition.
+- Preserved explicit P2s for create-time placement capacity reclamation via
+  sweep, pre-repair accepted-row migration/reset policy, key rotation,
+  retention/privacy operations, and replacing single-SQLite direct callbacks
+  with production distributed boundaries.
+- Built the source-bound benchmark container locally. Its startup now executes
+  `tcpdump -D` and correctly fails without `NET_ADMIN`/`NET_RAW`; Fly capture
+  capability remains unproved pending authenticated runtime probing. Fly auth,
+  four external origins, and signer/evidence inputs still block a regional run.
+  No regional, packing, invoice, or observed-cost claim is made.
+
 ## 2026-07-14 — v0.4 benchmark collector capability gate
 
 - Changed the Fly authority benchmark startup from collector discovery to an
@@ -29,10 +50,11 @@
   protocol.
 - Proved four-member reopen/retry reaches one result and one settlement with
   each exact member mutated once; the full core harness is green.
-- Added Fly benchmark packaging and a fail-closed 13/13 preflight. No regional
-  run occurred because provider auth, external client origins/signing inputs,
-  and a running Docker daemon remain unavailable. No host-packing, invoice, or
-  observed-cost claim is made; public HTTP runtime work remains in progress.
+- Added Fly benchmark packaging and a fail-closed 13/13 preflight. At this
+  checkpoint no regional run occurred because provider auth, external client
+  origins/signing inputs, and Docker availability blocked it. The later HTTP/
+  lifecycle closure and local container build are recorded above; neither
+  creates a host-packing, invoice, or observed-cost claim.
 
 ## 2026-07-14 — v0.4 Stage A hosted boundary hardened
 

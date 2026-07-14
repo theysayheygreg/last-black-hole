@@ -34,10 +34,16 @@ public 4–8-player product.
   entitlement, one fenced authority incarnation per match, encrypted product
   state, and exact multi-member result outbox/settlement across SQLite reopen.
   Local control-plane JSON remains the default; SQLite is explicit opt-in.
-- The public hosted HTTP runtime is still being built. Fly packaging and its
-  preflight pass 13/13, but the actual regional four-client run has not started
-  because provider authentication, external client origins, signing inputs,
-  and a running Docker daemon are not yet available. No host-packing or
+- A fail-closed hosted HTTP reference runtime is implemented and tested over
+  the local co-located SQLite composition. It separates client, control, and
+  workload auth planes, preserves four-seat and authority-incarnation fences,
+  and replays safely after restart. It is not a public deployment or a
+  production provider composition.
+- The benchmark container now builds locally and binds its image metadata to
+  the copied S20 sources. Startup executes `tcpdump -D` and fails locally
+  without `NET_ADMIN`/`NET_RAW`; Fly capture capability remains unproved until
+  an authenticated runtime probe. Fly auth, four external client origins, and
+  signer/evidence inputs still block the real regional run. No host-packing or
   observed-cost claim follows from packaging.
 - S24 measured a synthetic H24 fixture, not a live 24-client authority. The
   live cohort never admitted and the raw capture never started. H48/H96 are
@@ -103,9 +109,10 @@ the hot sim; derived client state is boxed; overload is explicit and fair.
 
 ## Program Boundary
 
-The architecture/research objective and the durable hosted reference path are
-complete. Public product implementation and deployment proof are not. The next
-work is the public HTTP runtime, four-human product completion, Greg's hosted-
-progression choice, Phase 6 regional measurement, and measured host packing.
+The architecture/research objective, durable hosted reference path, and local
+fail-closed HTTP reference runtime are complete. Public product implementation,
+production provider composition, and deployment proof are not. The next work
+is four-human product completion, Greg's hosted-progression choice, production
+service integration, Phase 6 regional measurement, and measured host packing.
 No new eight-player optimization or high-count capacity claim is authorized by
 this packet.

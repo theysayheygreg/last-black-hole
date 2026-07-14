@@ -17,7 +17,9 @@ The ideal gameplay outcome is only partially complete:
 - hosted identity/entitlement, placement/incarnation/fencing, encrypted product
   state, and exact multi-member outbox/settlement are implemented as pure
   services with durable SQLite adapters;
-- public HTTP exposure and a public regional authority are not complete;
+- a fail-closed local hosted HTTP reference runtime is implemented and tested,
+  but public exposure, production provider composition, and a public regional
+  authority are not complete;
 - live host density, WAN cost/feel, and H24/H48/H96 capacity are unproved.
 
 No document should describe LBH as an already complete 4–8-player public game.
@@ -137,12 +139,30 @@ encrypted match state, one placement-owned terminal-result CAS, immutable
 outbox, and exactly-once multi-member settlement. Reopen/retry proof preserves
 one settlement and each exact member's profile/ledger/inventory mutation.
 Accepted authority lineage remains retained until an explicit future
-settlement-ack/archive protocol. This is not yet a public HTTP service.
+settlement-ack/archive protocol.
 
-Fly packaging and fail-closed preflight pass 13/13. The actual regional run is
-**NOT DONE** because provider authentication, external client origins,
-signing/evidence inputs, and a running Docker daemon are unavailable. Therefore
-there is no observed authority density, packing factor, invoice, or cost claim.
+The fail-closed HTTP reference runtime exercises distinct client/control/
+workload auth planes, strict bounded envelopes, one-through-four admission,
+authority-incarnation rejection, terminal result/settlement, and restart
+replay against the local composition. It is not a public deployment or a
+production provider composition.
+
+The local co-located SQLite durability proof closes exact bootstrap, ready,
+admission, and drain replay windows; makes placement authoritative for exact
+admitted-membership digest/count; and uses a prepared-result journal with
+bounded settlement recovery. Independent final review found no P0/P1 for the
+demonstrated local composition. Remaining P2s are create-time placement
+capacity reclamation via sweep, migration/reset policy for pre-repair accepted
+rows, key rotation, retention/privacy operations, and the co-located single-
+SQLite/direct-callback boundary.
+
+Fly packaging and fail-closed preflight pass 13/13. The source-bound container
+builds locally; startup executes `tcpdump -D` and fails without local
+`NET_ADMIN`/`NET_RAW`. Fly runtime capture capability remains unproved and must
+be probed after authentication. The actual regional run is **NOT DONE** because
+Fly auth, four external client origins, and signer/evidence inputs are absent.
+Therefore there is no observed authority density, packing factor, invoice, or
+cost claim.
 
 ### 7. $4.99 economics at 1K, 10K, 100K, and 1M copies
 
@@ -248,7 +268,10 @@ and relevant local validation without another network suite.
 | player-host private fallback | DECIDED; implementation open |
 | local/cloud/hybrid identity model | PROVEN reference; production integration open |
 | fenced per-match lease and settlement model | PROVEN durable reference; deployment open |
-| hosted public HTTP runtime | IN PROGRESS |
+| fail-closed local hosted HTTP reference runtime | PROVEN locally |
+| public hosted deployment/provider composition | INCOMPLETE |
+| local co-located SQLite lifecycle P0/P1 | CLOSED for demonstrated composition |
+| hosted lifecycle P2 operations/migration/distribution gaps | OPEN |
 | Fly benchmark package/preflight | PROVEN; 13/13 |
 | real regional four-client benchmark | INCOMPLETE / not run |
 | measured host packing and observed costs | INCOMPLETE / no claim |
@@ -268,9 +291,11 @@ and relevant local validation without another network suite.
    review.
 2. Greg selects central, hybrid, or local/private service posture and ratifies
    the remaining product decisions.
-3. Complete and harden the public HTTP/runtime integration around the committed
-   Phase 5 durable reference path.
-4. Resolve Fly auth, external origins/signing inputs, and Docker availability,
+3. Compose the tested HTTP/runtime reference with production provider/storage
+   boundaries; close capacity compensation, accepted-row migration/reset, key
+   rotation, retention/privacy, and distributed transaction P2s.
+4. Resolve Fly auth and external origins/signing/evidence inputs, prove packet-
+   capture capability in Fly runtime,
    then run Phase 6 same-scenario two-region 90-minute four-player benchmarks,
    starting with Fly performance CPU.
 5. Measure noisy-neighbor host packing and derive `safeAuthoritiesPerHost`.
