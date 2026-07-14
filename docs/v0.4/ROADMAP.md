@@ -698,9 +698,37 @@ under `docs/v0.4/evidence/state-pair-s20/`; design and limits are in
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S20-COMPRESSION.md`.
 
 Each concurrent match still multiplies one dedicated logical authority. The
-next bounded lane is authority projection/publish clock profiling and isolation
-for the existing eight-player failure. Do not claim 24/48/96 capacity, change
-cadence, or begin hosted/fleet work from S20.
+next bounded lane was authority projection/publish clock profiling and
+isolation for the existing eight-player failure.
+
+**S21 eight-player authority clock profile — attribution complete; runtime
+pilot selected:** A profiler-on/off/on diagnostic sequence reproduces the
+instrumented result and proves the profiler's material overhead. The sealed
+S20 rounds remain product truth: eight is still rejected at 5.00/4.90 Hz.
+Attribution locates the critical path in serial per-recipient public work:
+public core/projection/delta construction accounts for 75.06 visible ms per
+accepted eight-recipient beat, while sim-tick p95 is 1.41 ms. Compression,
+queue enqueue, socket send calls, and ACK ingestion total under 2 ms/beat.
+Async send callbacks overlap and are excluded from authority CPU; nested stage
+rows are not summed.
+
+A public-only hermetic worker harness exactly reproduces 234 production-
+publisher jobs across 1/4/8 with zero mismatch. Three Latin-square topology
+orders reduce synthetic eight-recipient batch p95 from 55.69–57.23 ms inline
+to 35.75–37.74 ms with two workers and 26.96–29.13 ms with four. Owner data,
+mixed-pair selection, compression, ACK/ledger state, ordering, queue ownership,
+and send commit remain inside the one dedicated logical authority per match.
+Live issued-request tests reject stale, cross-match, duplicate, and out-of-
+order results and cover mutation isolation, backpressure, timeout, crash,
+graceful drain, and forced shutdown.
+
+S21 changes no default product behavior and does not admit eight. The next
+bounded lane is a feature-flagged runtime **public-only** projection-worker
+pilot with exact authority fencing and an inline fallback. It must produce
+counterbalanced profiler-off 1/4/8 product evidence before any admission.
+Hosted economics, heavier-sim work, cadence changes, and 24/48/96 remain closed.
+Evidence is under `docs/v0.4/evidence/state-pair-s21/`; design and limits are in
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S21-AUTHORITY-CLOCK.md`.
 
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 

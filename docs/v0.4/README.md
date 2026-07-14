@@ -73,6 +73,9 @@ coordinator owns the integrated documents.
   privacy, settlement, bytes, latency, tick, and heap evidence.
 - `phase1-json-wss-adapter-plan.md` — same-process JSON WebSocket integration,
   queue/backpressure, packaging, migration, rollback, and acceptance gates.
+- `MULTIPLAYER-STATE-PAIR-S21-AUTHORITY-CLOCK.md` — eight-player critical-path
+  attribution, public-only worker feasibility, authority fences, and the
+  bounded runtime pilot gate.
 
 ## Evidence Standard
 

@@ -213,6 +213,7 @@ function createAuthorityStageProfiler(options = {}) {
       rows[stage] = Object.freeze({
         scope: stage.startsWith("match.") ? "once-per-match-beat" : "per-recipient",
         timingKind: stage === STAGES.SOCKET_SEND_CALLBACK ? "async-wall-latency"
+          : stage === STAGES.PAIR_CHOICE ? "synchronous-inclusive-time"
           : stage === STAGES.STATIC_MANIFEST_PREP || stage === STAGES.OWNER_SOURCE
               || stage === STAGES.ACK_INGESTION
             ? "awaited-wall-time" : "synchronous-exclusive-time",

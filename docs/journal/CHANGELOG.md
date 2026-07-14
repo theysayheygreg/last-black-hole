@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-07-13 — v0.4 S21 eight-player authority clock attribution
+
+- Added a normally-off bounded authority stage profiler and repeated a clean
+  profiler-on/off/on 1/4/8 capture. The repeat reproduces the first diagnostic;
+  instrumentation materially changes cadence, so sealed S20 remains product
+  truth.
+- Located the eight-player critical path in serial per-recipient public
+  core/projection/delta construction. Sim-tick p95 remains 1.41 ms, while
+  compression, queueing, socket send calls, and ACK ingestion are too small to
+  recover the missing clock. Marked inclusive/nested and overlapping async
+  stage rows so they cannot be mis-summed as authority CPU.
+- Added a public-only projection-worker feasibility harness. Owner data,
+  mixed-pair selection, compression, ACK/ledger mutation, epochs, ordering,
+  queue ownership, send, and commit remain in one dedicated logical authority
+  per match.
+- Sealed 234 jobs and 936 exact byte/digest/frame/selection comparisons with
+  zero mismatch. Three Latin-square topology orders reduce synthetic
+  eight-recipient batch p95 from 55.69–57.23 ms inline to 35.75–37.74 ms with
+  two workers and 26.96–29.13 ms with four.
+- Added real ready/drain/forced-shutdown lifecycle and live issued-request
+  rejection for stale authority, cross-match, duplicate, and out-of-order
+  results, plus mutation, backpressure, timeout, and crash checks.
+- Kept eight rejected and selected only a feature-flagged runtime public-only
+  projection-worker pilot with an inline fallback. No default production
+  behavior changed; hosted/heavy-sim work and 24/48/96 remain closed.
+
 ## 2026-07-13 — v0.4 S20 negotiated state-pair compression
 
 - Selected Brotli quality 1 over five Node-builtins alternatives using 8,712

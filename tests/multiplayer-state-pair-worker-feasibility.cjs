@@ -151,7 +151,7 @@ class Pool {
   constructor(size, options = {}) {
     this.size = size; this.maxPending = options.maxPending || size * 2; this.timeoutMs = options.timeoutMs || 2000;
     this.next = 0; this.sequence = 0; this.pending = new Map(); this.workers = [];
-    this.ready = new Map(); this.shutdown = new Map(); this.alive = new Set();
+    this.ready = new Map(); this.shutdown = new Map(); this.exited = new Map(); this.alive = new Set();
   }
   async start() {
     const started = performance.now();
@@ -163,6 +163,8 @@ class Pool {
   add(index) {
     const worker = new Worker(WORKER);
     this.alive.add(worker);
+    let resolveExit;
+    this.exited.set(worker, new Promise((resolve) => { resolveExit = resolve; }));
     const ready = new Promise((resolve) => this.ready.set(worker, resolve));
     worker.on("message", (message) => {
       if (message.type === "ready") { this.ready.get(worker)?.(); this.ready.delete(worker); return; }
@@ -175,6 +177,7 @@ class Pool {
     });
     worker.on("exit", (code) => {
       this.alive.delete(worker);
+      resolveExit(code);
       this.ready.get(worker)?.(); this.ready.delete(worker);
       this.shutdown.get(worker)?.(); this.shutdown.delete(worker);
       for (const [id, row] of this.pending) if (row.worker === worker) {
@@ -210,10 +213,13 @@ class Pool {
         this.shutdown.set(worker, () => { clearTimeout(timer); resolve(true); });
         worker.postMessage({ type: "shutdown" });
       }).then(async (acked) => {
-        if (!acked && this.alive.has(worker)) { forced += 1; await worker.terminate(); }
+        const exited = acked && await Promise.race([this.exited.get(worker).then(() => true),
+          new Promise((resolve) => setTimeout(() => resolve(false), shutdownTimeoutMs))]);
+        if (!exited && this.alive.has(worker)) { forced += 1; await worker.terminate(); }
       })));
     }
-    return { graceful: this.workers.length - forced, forced, pending: this.pending.size };
+    return { graceful: this.workers.length - forced, forced, pending: this.pending.size,
+      alive: this.alive.size };
   }
 }
 
@@ -236,8 +242,14 @@ function validateResult(job, result) {
 }
 
 class AuthorityCommitGate {
-  constructor() { this.live = new Map(); this.issued = new Map(); this.seen = new Set(); this.lastTick = new Map(); this.generation = 0; }
+  constructor() { this.live = new Map(); this.issued = new Map(); this.latestIssued = new Map();
+    this.cancelled = new Map(); this.seen = new Set(); this.lastTick = new Map(); this.generation = 0; }
   install({ matchId, authorityIncarnation, ballparkEpoch, manifestHash, recipients }) {
+    if (this.live.has(matchId)) {
+      for (const [generation, fenceKey] of this.issued) {
+        if (JSON.parse(fenceKey).matchId === matchId) this.cancel(generation, "stale-worker-result");
+      }
+    }
     this.live.set(matchId, { authorityIncarnation, ballparkEpoch, manifestHash,
       recipients: new Map(recipients.map((entry) => [entry.recipientId, entry.recipientIncarnation])) });
   }
@@ -251,12 +263,30 @@ class AuthorityCommitGate {
     const generation = ++this.generation;
     const issued = structuredClone(job);
     issued.fence.workGeneration = generation;
+    const recipient = this.recipientKey(issued.fence);
+    const prior = this.latestIssued.get(recipient);
+    if (prior) this.cancel(prior.generation, "superseded-worker-result");
     this.issued.set(generation, JSON.stringify(issued.fence));
+    this.latestIssued.set(recipient, { generation, tick: issued.fence.tick,
+      snapshotId: issued.fence.snapshotId });
     return issued;
   }
-  commit(job, result) {
-    validateResult(job, result);
-    const fence = result.fence;
+  recipientKey(fence) {
+    return `${fence.matchId}:${fence.authorityIncarnation}:${fence.recipientId}:${fence.recipientIncarnation}`;
+  }
+  cancel(generation, reason = "cancelled-worker-result") {
+    const fenceKey = this.issued.get(generation);
+    if (!fenceKey) return false;
+    const recipient = this.recipientKey(JSON.parse(fenceKey));
+    this.issued.delete(generation);
+    if (this.latestIssued.get(recipient)?.generation === generation) this.latestIssued.delete(recipient);
+    this.cancelled.set(generation, reason);
+    while (this.cancelled.size > 64) this.cancelled.delete(this.cancelled.keys().next().value);
+    return true;
+  }
+  diagnostics() { return { issued: this.issued.size, latestIssued: this.latestIssued.size,
+    boundedCancelledTombstones: this.cancelled.size }; }
+  validateFence(fence) {
     const live = this.live.get(fence.matchId);
     if (!live || live.authorityIncarnation !== fence.authorityIncarnation
         || live.ballparkEpoch !== fence.ballparkEpoch || live.manifestHash !== fence.manifestHash) {
@@ -267,10 +297,25 @@ class AuthorityCommitGate {
     }
     const fenceKey = JSON.stringify(fence);
     if (this.seen.has(fenceKey)) throw new Error("duplicate-worker-result");
-    if (this.issued.get(fence.workGeneration) !== fenceKey) throw new Error("unissued-worker-result");
-    const recipient = `${fence.matchId}:${fence.authorityIncarnation}:${fence.recipientId}:${fence.recipientIncarnation}`;
+    if (this.issued.get(fence.workGeneration) !== fenceKey) {
+      const cancelled = this.cancelled.get(fence.workGeneration);
+      throw new Error(cancelled || "unissued-worker-result");
+    }
+    const recipient = this.recipientKey(fence);
+    const latest = this.latestIssued.get(recipient);
+    if (!latest || latest.generation !== fence.workGeneration || latest.tick !== fence.tick
+        || latest.snapshotId !== fence.snapshotId) throw new Error("superseded-worker-result");
     if ((this.lastTick.get(recipient) ?? -1) >= fence.tick) throw new Error("out-of-order-worker-result");
-    this.issued.delete(fence.workGeneration); this.seen.add(fenceKey); this.lastTick.set(recipient, fence.tick);
+    return true;
+  }
+  commit(job, result) {
+    const fence = result.fence;
+    this.validateFence(fence);
+    validateResult(job, result);
+    const fenceKey = JSON.stringify(fence);
+    const recipient = this.recipientKey(fence);
+    this.issued.delete(fence.workGeneration); this.latestIssued.delete(recipient);
+    this.seen.add(fenceKey); this.lastTick.set(recipient, fence.tick);
     return true;
   }
 }
@@ -279,14 +324,25 @@ async function benchmark(jobs, workerCount, rounds = ROUNDS) {
   const pool = new Pool(workerCount, { maxPending: 32, timeoutMs: 4000 });
   await pool.start();
   const roundTrip = [], compute = [], finalize = [], finalizeCpu = [], cpuMicros = [], heap = [];
-  const metadataBytes = [], transferredBytes = [], batchWall = [];
+  const metadataBytes = [], transferredBytes = [], inboundBytes = [], dispatchWall = [], dispatchCpu = [];
+  const batchWall = [], rss = [];
   const byPopulation = Object.fromEntries(POPULATIONS.map((population) => [population,
     jobs.filter((job) => job.fence.matchId === `match-s21-${population}`).slice(-population)]));
   for (let round = 0; round < rounds; round += 1) {
     for (const population of POPULATIONS) {
       const batch = round % 2 ? [...byPopulation[population]].reverse() : byPopulation[population];
       const started = performance.now();
-      const rows = await Promise.all(batch.map((job) => pool.run(publicWorkerJob(job))));
+      const dispatchStarted = performance.now();
+      const dispatchCpuStarted = process.threadCpuUsage();
+      const pending = batch.map((job) => {
+        const workerJob = publicWorkerJob(job);
+        inboundBytes.push(Buffer.byteLength(JSON.stringify(workerJob), "utf8"));
+        return pool.run(workerJob);
+      });
+      const dispatchUsed = process.threadCpuUsage(dispatchCpuStarted);
+      dispatchWall.push(performance.now() - dispatchStarted);
+      dispatchCpu.push(dispatchUsed.user + dispatchUsed.system);
+      const rows = await Promise.all(pending);
       for (let index = 0; index < rows.length; index += 1) {
         const finalizeStarted = performance.now();
         const cpuStarted = process.threadCpuUsage();
@@ -301,6 +357,7 @@ async function benchmark(jobs, workerCount, rounds = ROUNDS) {
         transferredBytes.push(rows[index].result.transferredPublicBytes);
       }
       batchWall.push({ population, ms: performance.now() - started });
+      rss.push(process.memoryUsage().rss);
     }
   }
   const shutdown = await pool.close();
@@ -315,6 +372,10 @@ async function benchmark(jobs, workerCount, rounds = ROUNDS) {
     workerHeapHighWaterBytes: Math.max(...heap),
     aggregateWorkerHeapUpperBoundBytes: workerCount * Math.max(...heap),
     metadataCloneProxyBytes: distribution(metadataBytes),
+    inboundPublicCloneProxyBytes: distribution(inboundBytes),
+    mainThreadPrepareAndDispatchWallMsPerBatch: distribution(dispatchWall),
+    mainThreadPrepareAndDispatchCpuMicrosPerBatch: distribution(dispatchCpu),
+    processRssHighWaterBytes: Math.max(...rss),
     transferredPublicBytes: distribution(transferredBytes), shutdown,
     batchWallByPopulation: Object.fromEntries(POPULATIONS.map((population) => [population,
       distribution(batchWall.filter((entry) => entry.population === population).map((entry) => entry.ms))])) };
@@ -344,63 +405,94 @@ async function adversarial(jobs) {
   const pool = new Pool(2, { maxPending: 8, timeoutMs: 500 });
   await pool.start();
   const checks = {};
+  const gates = [];
   const sample = jobs.at(-1);
   const liveFor = (job) => ({ matchId: job.fence.matchId,
     authorityIncarnation: job.fence.authorityIncarnation, ballparkEpoch: job.fence.ballparkEpoch,
     manifestHash: job.fence.manifestHash,
     recipients: [{ recipientId: job.fence.recipientId,
       recipientIncarnation: job.fence.recipientIncarnation }] });
+  const finalizeCurrent = (gate, job, row) => {
+    gate.validateFence(row.result.fence);
+    return finalizeStatePair(job, row.result);
+  };
 
-  const baselineGate = new AuthorityCommitGate(); baselineGate.install(liveFor(sample));
+  const baselineGate = new AuthorityCommitGate(); gates.push(baselineGate); baselineGate.install(liveFor(sample));
   const issued = baselineGate.issue(sample);
   const baselineRow = await pool.run(publicWorkerJob(issued));
-  const baseline = finalizeStatePair(issued, baselineRow.result);
+  const baseline = finalizeCurrent(baselineGate, issued, baselineRow);
   baselineGate.commit(issued, baseline);
   checks.duplicateRejected = (() => { try { baselineGate.commit(issued, baseline); return false; }
     catch (error) { return error.message === "duplicate-worker-result"; } })();
 
-  const staleGate = new AuthorityCommitGate(); staleGate.install(liveFor(sample));
+  const staleGate = new AuthorityCommitGate(); gates.push(staleGate); staleGate.install(liveFor(sample));
   const staleIssued = staleGate.issue(sample);
   const stalePromise = pool.run(publicWorkerJob(staleIssued), { delayMs: 20 });
   staleGate.install({ ...liveFor(sample), authorityIncarnation: 2 });
   const staleRow = await stalePromise;
-  const staleResult = finalizeStatePair(staleIssued, staleRow.result);
-  checks.staleRejected = (() => { try { staleGate.commit(staleIssued, staleResult); return false; }
-    catch (error) { return error.message === "stale-worker-authority-fence"; } })();
+  checks.staleRejectedBeforeFinalize = (() => { try {
+    finalizeCurrent(staleGate, staleIssued, staleRow); return false;
+  } catch (error) { return error.message === "stale-worker-authority-fence"; } })();
 
-  const crossGate = new AuthorityCommitGate();
+  for (const [name, replacement] of [
+    ["ballparkRotationRejected", { ...liveFor(sample), ballparkEpoch: 2 }],
+    ["manifestRotationRejected", { ...liveFor(sample), manifestHash: `sha256:${"9".repeat(64)}` }],
+    ["recipientRotationRejected", { ...liveFor(sample), recipients: [{
+      recipientId: sample.fence.recipientId, recipientIncarnation: sample.fence.recipientIncarnation + 1 }] }],
+  ]) {
+    const gate = new AuthorityCommitGate(); gates.push(gate); gate.install(liveFor(sample));
+    const rotationIssued = gate.issue(sample);
+    const rotationPromise = pool.run(publicWorkerJob(rotationIssued), { delayMs: 10 });
+    gate.install(replacement);
+    const rotationRow = await rotationPromise;
+    checks[name] = (() => { try { finalizeCurrent(gate, rotationIssued, rotationRow); return false; }
+      catch (error) { return error.message.startsWith("stale-worker-"); } })();
+  }
+
+  const crossGate = new AuthorityCommitGate(); gates.push(crossGate);
   const crossSource = jobs.find((job) => job.fence.matchId !== sample.fence.matchId);
-  const crossSourceGate = new AuthorityCommitGate(); crossSourceGate.install(liveFor(crossSource));
+  const crossSourceGate = new AuthorityCommitGate(); gates.push(crossSourceGate); crossSourceGate.install(liveFor(crossSource));
   const crossIssued = crossSourceGate.issue(crossSource);
   const crossRow = await pool.run(publicWorkerJob(crossIssued));
-  const crossResult = finalizeStatePair(crossIssued, crossRow.result);
-  checks.crossMatchRejected = (() => { try { crossGate.commit(crossIssued, crossResult); return false; }
-    catch (error) { return error.message === "stale-worker-authority-fence"; } })();
+  checks.crossMatchRejectedBeforeFinalize = (() => { try {
+    finalizeCurrent(crossGate, crossIssued, crossRow); return false;
+  } catch (error) { return error.message === "stale-worker-authority-fence"; } })();
+  crossSourceGate.cancel(crossIssued.fence.workGeneration);
 
-  const mutationGate = new AuthorityCommitGate(); mutationGate.install(liveFor(sample));
+  const forgeryGate = new AuthorityCommitGate(); gates.push(forgeryGate); forgeryGate.install(liveFor(sample));
+  const forgeryIssued = forgeryGate.issue(sample);
+  const forgedWorkerJob = publicWorkerJob(forgeryIssued);
+  forgedWorkerJob.fence.workGeneration += 1000;
+  const forgedRow = await pool.run(forgedWorkerJob);
+  checks.unissuedGenerationRejectedBeforeFinalize = (() => { try {
+    finalizeCurrent(forgeryGate, forgeryIssued, forgedRow); return false;
+  } catch (error) { return error.message === "unissued-worker-result"; } })();
+  forgeryGate.cancel(forgeryIssued.fence.workGeneration);
+
+  const mutationGate = new AuthorityCommitGate(); gates.push(mutationGate); mutationGate.install(liveFor(sample));
   const mutationIssued = mutationGate.issue(sample);
   const dispatched = publicWorkerJob(mutationIssued);
   const mutationPromise = pool.run(dispatched, { delayMs: 20 });
   dispatched.current.public.entities[0].components.runtimeMotion.value.wx = 999999;
   const mutationRow = await mutationPromise;
-  const mutationResult = finalizeStatePair(mutationIssued, mutationRow.result);
+  const mutationResult = finalizeCurrent(mutationGate, mutationIssued, mutationRow);
   checks.postDispatchMutationIsolated = mutationGate.commit(mutationIssued, mutationResult);
 
   const older = jobs.filter((job) => job.fence.matchId === sample.fence.matchId
     && job.fence.recipientId === sample.fence.recipientId
     && job.fence.recipientIncarnation === sample.fence.recipientIncarnation
     && job.fence.tick < sample.fence.tick).slice(-2);
-  const orderGate = new AuthorityCommitGate(); orderGate.install(liveFor(sample));
+  const orderGate = new AuthorityCommitGate(); gates.push(orderGate); orderGate.install(liveFor(sample));
   const olderIssued = orderGate.issue(older[0]);
   const newerIssued = orderGate.issue(older[1]);
   const [olderRow, newerRow] = await Promise.all([
     pool.run(publicWorkerJob(olderIssued), { delayMs: 40 }),
     pool.run(publicWorkerJob(newerIssued)),
   ]);
-  orderGate.commit(newerIssued, finalizeStatePair(newerIssued, newerRow.result));
-  checks.outOfOrderRejected = (() => { try {
-    orderGate.commit(olderIssued, finalizeStatePair(olderIssued, olderRow.result)); return false;
-  } catch (error) { return error.message === "out-of-order-worker-result"; } })();
+  checks.supersededAfterNewerIssuanceRejectedBeforeFinalize = (() => { try {
+    finalizeCurrent(orderGate, olderIssued, olderRow); return false;
+  } catch (error) { return error.message === "superseded-worker-result"; } })();
+  orderGate.commit(newerIssued, finalizeCurrent(orderGate, newerIssued, newerRow));
   await pool.close();
 
   const pressure = new Pool(2, { maxPending: 2, timeoutMs: 500 }); await pressure.start();
@@ -409,31 +501,49 @@ async function adversarial(jobs) {
   try { await pressure.run(publicWorkerJob(sample)); checks.backpressureRejected = false; }
   catch (error) { checks.backpressureRejected = error.message === "worker-backpressure"; }
   await Promise.all(held);
-  try { await pressure.run(publicWorkerJob(sample), { delayMs: 100, timeoutMs: 5 }); checks.timeoutRejected = false; }
-  catch (error) { checks.timeoutRejected = error.message === "worker-timeout"; }
+  const timeoutGate = new AuthorityCommitGate(); gates.push(timeoutGate); timeoutGate.install(liveFor(sample));
+  const timeoutIssued = timeoutGate.issue(sample);
+  try { await pressure.run(publicWorkerJob(timeoutIssued), { delayMs: 100, timeoutMs: 5 }); checks.timeoutRejected = false; }
+  catch (error) { checks.timeoutRejected = error.message === "worker-timeout";
+    timeoutGate.cancel(timeoutIssued.fence.workGeneration); }
   await new Promise((resolve) => setTimeout(resolve, 120));
   await pressure.close();
 
   const draining = new Pool(1, { timeoutMs: 500 }); await draining.start();
-  const pendingDrain = draining.run(publicWorkerJob(sample), { delayMs: 30 });
+  const drainGate = new AuthorityCommitGate(); gates.push(drainGate); drainGate.install(liveFor(sample));
+  const drainIssued = drainGate.issue(sample);
+  const pendingDrain = draining.run(publicWorkerJob(drainIssued), { delayMs: 30 });
   const drainClose = draining.close({ drainTimeoutMs: 200 });
-  await pendingDrain;
+  const drainedRow = await pendingDrain;
+  drainGate.commit(drainIssued, finalizeCurrent(drainGate, drainIssued, drainedRow));
   const drainResult = await drainClose;
-  checks.gracefulDrain = drainResult.graceful === 1 && drainResult.forced === 0;
+  checks.gracefulDrain = drainResult.graceful === 1 && drainResult.forced === 0
+    && drainResult.alive === 0;
 
   const forced = new Pool(1, { timeoutMs: 500 }); await forced.start();
-  const forcedPending = forced.run(publicWorkerJob(sample), { delayMs: 200 }).catch((error) => error);
+  const forcedGate = new AuthorityCommitGate(); gates.push(forcedGate); forcedGate.install(liveFor(sample));
+  const forcedIssued = forcedGate.issue(sample);
+  const forcedPending = forced.run(publicWorkerJob(forcedIssued), { delayMs: 200 }).catch((error) => error);
   const forcedResult = await forced.close({ drainTimeoutMs: 2 });
   const forcedError = await forcedPending;
+  forcedGate.cancel(forcedIssued.fence.workGeneration);
   checks.forcedShutdownRejectsPending = forcedResult.forced === 1
     && forcedError instanceof Error && forcedError.message.startsWith("worker-exit:");
 
   const crash = new Pool(1, { timeoutMs: 200 }); await crash.start();
-  try { await crash.run(publicWorkerJob(sample), { type: "crash" }); checks.crashRejected = false; }
-  catch (error) { checks.crashRejected = error.message.startsWith("worker-exit:"); }
+  const crashGate = new AuthorityCommitGate(); gates.push(crashGate); crashGate.install(liveFor(sample));
+  const crashIssued = crashGate.issue(sample);
+  try { await crash.run(publicWorkerJob(crashIssued), { type: "crash" }); checks.crashRejected = false; }
+  catch (error) { checks.crashRejected = error.message.startsWith("worker-exit:");
+    crashGate.cancel(crashIssued.fence.workGeneration); }
   await crash.close();
   checks.shutdownClean = pool.pending.size === 0 && pressure.pending.size === 0
-    && draining.pending.size === 0 && forced.pending.size === 0 && crash.pending.size === 0;
+    && draining.pending.size === 0 && forced.pending.size === 0 && crash.pending.size === 0
+    && [pool, pressure, draining, forced, crash].every((entry) => entry.alive.size === 0);
+  checks.issuedRequestRecordsRetired = gates.every((gate) => {
+    const state = gate.diagnostics();
+    return state.issued === 0 && state.latestIssued === 0 && state.boundedCancelledTombstones <= 64;
+  });
   return checks;
 }
 
@@ -495,7 +605,11 @@ async function main() {
       rounds: artifact.comparison.recipientOrderCounterbalancedRoundsPerLatinSquareCell === ROUNDS
         && artifact.comparison.topologyOrderCounterbalanced === true
         && benchmarkRows.length === 9
-        && benchmarkRows.every((row) => row.jobs === ROUNDS * POPULATIONS.reduce((a, b) => a + b, 0)),
+        && benchmarkRows.every((row) => row.jobs === ROUNDS * POPULATIONS.reduce((a, b) => a + b, 0))
+        && benchmarkRows.filter((row) => row.workers > 0).every((row) =>
+          row.inboundPublicCloneProxyBytes?.count === row.jobs
+          && row.mainThreadPrepareAndDispatchCpuMicrosPerBatch?.count === ROUNDS * POPULATIONS.length
+          && row.processRssHighWaterBytes > 0 && row.shutdown?.alive === 0),
       generationBinding: artifact.generation.cleanAtGeneration === true
         && artifact.generation.command.includes("multiplayer-state-pair-worker-feasibility.cjs")
         && artifact.generation.gitCommit.length === 40,
@@ -531,17 +645,18 @@ async function main() {
       decodedFrame: exactComparisons / 4, selectionKind: exactComparisons / 4, mismatches: 0 },
     comparison: { recipientOrderCounterbalancedRoundsPerLatinSquareCell: ROUNDS,
       topologyOrderCounterbalanced: true, latinSquareRuns,
-      cpuBoundary: "Worker thread CPU covers public projection construction only and excludes host structured-clone/message overhead. Authority CPU covers owner construction, pair choice, compression, result validation, and decoded-frame verification.",
-      memoryBoundary: "Per-isolate V8 heap high-water and worker-count multiplied upper bounds exclude RSS, native allocations, external ArrayBuffers, and host clone transients; they are not process-memory forecasts.",
+      cpuBoundary: "Worker thread CPU covers public projection construction. Main-thread public-input preparation plus postMessage dispatch CPU/wall is measured per batch; authority finalization CPU separately covers owner construction, pair choice, compression, result validation, and decoded-frame verification. Scheduler and asynchronous message-delivery CPU cannot be partitioned exactly.",
+      memoryBoundary: "Per-isolate V8 heap high-water, worker-count multiplied heap upper bounds, and whole-process RSS high-water are recorded. They remain short synthetic-run observations, not allocator/native/clone attribution or process-memory forecasts.",
       compressionBoundary: "Compression, owner-lane construction, mixed-pair choice, ledger checks, queue ownership, and send commit remain on the match-authority thread.",
       transferBoundary: "Only canonical public keyframe/delta ArrayBuffers cross back from a worker. Owner input never enters a worker. Small fence and digest metadata is cloned and reported separately." },
     failureChecks, allFailureChecksPassed: Object.values(failureChecks).every(Boolean),
     authorityBoundary: { soleWriter: "The match authority retains tick state, ACK/base and ledger mutation, admission, consequences, ordering, queue ownership, result validation, and send commit.",
-      worker: "Pure public-lane keyframe/delta projection bytes from immutable checksum-bound public snapshots and exact public bases only.",
+      worker: "Pure public-lane keyframe/delta projection bytes from structured-clone-isolated public snapshots and exact public bases only. The harness expected-output oracle proves parity; a runtime pilot must independently bind and validate current public lineage and hashes.",
       workerInputContainsOwner: false,
       compressionOwnerSelectionCommitRemainAuthority: true,
       prohibited: ["sim mutation", "ACK ingestion", "ledger mutation", "epoch rotation", "queue mutation", "network send", "cross-match reuse"] },
     limitations: ["Synthetic hermetic replay, not product admission", "No runtime worker integration",
+      "Do not use feasibility CPU, heap, or RSS for fleet packing or cost; the runtime pilot must measure total authority-process CPU/RSS and clone cost",
       "No hosted/fleet cost claim", "No 24/48/96-client claim"] };
   if (OUT) fs.writeFileSync(OUT, `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });
   console.log(JSON.stringify(result, null, 2));
