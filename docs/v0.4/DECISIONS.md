@@ -61,6 +61,20 @@ available only through its explicit product path.
 consuming the universe while later humans navigated menus. That was technically
 multiplayer but not a fair or understandable human game.
 
+## 2026-07-14 — Lobby truth does not depend on render cadence or HTTP caches
+
+**Status:** ACTIVE
+
+Private-room roster, readiness, connection, and launch state refresh on a
+bounded control cadence independent of animation frames. Dynamic sim/control
+responses are explicitly non-cacheable. A backgrounded, throttled, or newly
+focused client must converge on current authority truth rather than retaining
+the roster it saw when it joined.
+
+**Why:** a multiplayer lobby is coordination state. Treating it like render
+work or cacheable content made different humans see different crews even while
+the authority itself was correct.
+
 ## 2026-07-14 — Private-room readiness is connection-bound lobby state
 
 **Status:** ACTIVE

@@ -35,6 +35,16 @@
   readiness invalidation without widening the fixed S20 gameplay projection.
 - Added a fast one/two/three/four-player lobby matrix covering seat order,
   non-host denial, reconnect epoch fencing, and fifth-seat rejection.
+- Added a five-browser human-surface proof: host, join-code entry, four-seat
+  convergence, readiness, leader launch, durable fifth rejection, shared run,
+  and stable client/membership identity across reconnect.
+- Fixed Crew Muster's first-frame prompt crash, uncoupled lobby refresh from
+  render cadence, and marked dynamic authority responses non-cacheable.
+- Clamped the human client surface to four seats and replaced the stale
+  immediate-launch/eight-player playable-lane test with the private-room proof.
+- Preserved finite well presentation data across staggered component arrival
+  and made spatial well audio fail safe instead of crashing on a transient
+  non-finite pan value.
 
 ### External playtest
 

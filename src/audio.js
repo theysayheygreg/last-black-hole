@@ -407,10 +407,14 @@ export class AudioEngine {
       if (v < wellDists.length) {
         const wd = wellDists[v];
         const maxDist = CONFIG.audio.wellMaxDist;
-        const distGain = wd.dist < maxDist ? Math.max(0, 1 - wd.dist / maxDist) : 0;
-        const freq = CONFIG.audio.wellBaseFreq / (wd.well.mass * CONFIG.audio.wellFreqScale);
+        const distGain = Number.isFinite(wd.dist) && wd.dist < maxDist
+          ? Math.max(0, 1 - wd.dist / maxDist)
+          : 0;
+        const mass = Number.isFinite(wd.well.mass) && wd.well.mass > 0 ? wd.well.mass : 1;
+        const freq = CONFIG.audio.wellBaseFreq / (mass * CONFIG.audio.wellFreqScale);
         const [sx] = worldToScreen(wd.well.wx, wd.well.wy, camX, camY, canvasW, canvasH);
-        const pan = Math.max(-1, Math.min(1, sx * 2 / canvasW - 1));
+        const rawPan = sx * 2 / canvasW - 1;
+        const pan = Number.isFinite(rawPan) ? Math.max(-1, Math.min(1, rawPan)) : 0;
         voice.osc.frequency.linearRampToValueAtTime(Math.max(20, freq), now + ramp);
         voice.subOsc.frequency.linearRampToValueAtTime(Math.max(15, freq * 0.5), now + ramp);
         voice.gain.gain.linearRampToValueAtTime(distGain * CONFIG.audio.wellHarmonicVolume, now + ramp);

@@ -280,6 +280,7 @@ let remoteLaunchRequestInFlight = false;
 let remoteReadyRequestInFlight = false;
 let remoteLobbyRequestInFlight = false;
 let remoteLobbyLastFetchedAt = 0;
+let remoteLobbyPollTimer = null;
 let remoteRoomAction = 'host';
 let remoteRoomCodeInputActive = false;
 let remoteRoomCodeInput = '';
@@ -924,8 +925,7 @@ function getConfiguredSimTransport() {
 }
 
 function getConfiguredSimMaxPlayers() {
-  const requested = Number(new URL(window.location.href).searchParams.get('simMaxPlayers'));
-  return requested === 8 ? 8 : 4;
+  return 4;
 }
 
 // ---- Init ----
@@ -1927,14 +1927,17 @@ function applyRemoteSnapshot(snapshot) {
   if (gamePhase === 'loading') {
     if (snapshot.session?.status === 'lobby') {
       gamePhase = 'crewMuster';
+      startRemoteLobbyPolling();
       audioEngine.setContext('menu');
       hideHUD();
     } else {
+      stopRemoteLobbyPolling();
       gamePhase = 'playing';
       audioEngine.setContext('gameplay');
       showHUD();
     }
   } else if (gamePhase === 'crewMuster' && snapshot.session?.status === 'running') {
+    stopRemoteLobbyPolling();
     gamePhase = 'playing';
     audioEngine.setContext('gameplay');
     showHUD();
@@ -2182,6 +2185,24 @@ async function refreshRemoteLobby(force = false) {
   } finally {
     remoteLobbyRequestInFlight = false;
   }
+}
+
+function stopRemoteLobbyPolling() {
+  if (remoteLobbyPollTimer !== null) clearInterval(remoteLobbyPollTimer);
+  remoteLobbyPollTimer = null;
+}
+
+function startRemoteLobbyPolling() {
+  if (remoteLobbyPollTimer !== null) return;
+  remoteLobbyPollTimer = setInterval(() => {
+    if (gamePhase !== 'crewMuster' || !simClient?.enabled) return;
+    void refreshRemoteSessionHealth(true);
+    void refreshRemoteLobby(true).catch((err) => {
+      if (err.code === 'not-in-lobby') return;
+      remoteJoinErrorCode = err.code || null;
+      remoteJoinError = multiplayerErrorCopy(err);
+    });
+  }, 350);
 }
 
 function renderFauna(ctx, camX, camY, canvasW, canvasH, time) {
@@ -2692,9 +2713,13 @@ function syncRemoteWorldState(world) {
     for (let i = 0; i < Math.min(world.wells.length, wellSystem.wells.length); i++) {
       const remote = world.wells[i];
       const local = wellSystem.wells[i];
-      local.wx = remote.wx;
-      local.wy = remote.wy;
-      local.mass = remote.mass;
+      if (Number.isFinite(remote.wx)) local.wx = remote.wx;
+      if (Number.isFinite(remote.wy)) local.wy = remote.wy;
+      // Component snapshots can deliver motion before the on-change gameplay
+      // component. Preserve the map's finite render/audio mass until the
+      // authoritative mass component arrives instead of poisoning the client
+      // with `undefined` for one publication window.
+      if (Number.isFinite(remote.mass)) local.mass = remote.mass;
       if (remote.killRadius) local.killRadius = remote.killRadius;
       if (remote.name) local.name = remote.name;
     }
@@ -2782,6 +2807,7 @@ async function startRemoteGame(mapEntry, {
   roomAction = 'auto',
   roomCode = null,
 } = {}) {
+  stopRemoteLobbyPolling();
   resetPhantomForNewSession();
   resetHauntForNewSession();
   if (!simClient?.enabled) {
@@ -2890,6 +2916,7 @@ async function startRemoteGame(mapEntry, {
 function transitionToRemoteGame(mapEntry, options = {}) {
   triggerTransition(() => {
     void startRemoteGame(mapEntry, options).catch((err) => {
+      stopRemoteLobbyPolling();
       console.error('[LBH] remote start failed:', err);
       remoteJoinErrorCode = err.code || null;
       remoteJoinError = multiplayerErrorCopy(err);
@@ -2910,6 +2937,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
 }
 
 async function leaveRemoteSessionToHome() {
+  stopRemoteLobbyPolling();
   const activeProfileId = profileManager.active?.id || null;
   if (simClient?.enabled && remoteAuthorityActive) {
     try {
@@ -5171,6 +5199,7 @@ function gameLoop(now) {
     const panel = { x: (w - panelW) / 2, y: (h - panelH) / 2, w: panelW, h: panelH };
     const control = currentRemoteControlState();
     const motion = currentUiMotionSettings();
+    const promptOptions = currentPromptOptions();
     const x = panel.x + 34;
     let y = panel.y + 58;
 

@@ -831,12 +831,12 @@ const SUITES = [
     timeout: 240000,
   },
   {
-    name: "MultiplayerPlayable",
-    file: "multiplayer-browser-journey.cjs",
+    name: "MultiplayerPrivateRoomBrowser",
+    file: "multiplayer-private-room-browser.cjs",
     lanes: ["multiplayer-playable", "full"],
     browser: true,
     slow: true,
-    timeout: 360000,
+    timeout: 240000,
   },
   {
     name: "MultiplayerCrewMuster",

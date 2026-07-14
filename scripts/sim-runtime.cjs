@@ -654,6 +654,7 @@ function sendJson(res, statusCode, body) {
   const payload = `${JSON.stringify(body, null, 2)}\n`;
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
   res.end(payload);

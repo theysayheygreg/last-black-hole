@@ -181,7 +181,7 @@ export class SimClient {
   }
 
   async getLobby() {
-    return this._json('/lobby');
+    return this._json('/lobby', { cache: 'no-store' });
   }
 
   async setReady(ready) {

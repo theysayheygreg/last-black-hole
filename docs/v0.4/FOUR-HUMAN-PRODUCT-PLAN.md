@@ -19,15 +19,13 @@ interpolation, Three, fluid presentation, UI, VFX, and audio.
 
 ## Current Product Gap
 
-The existing browser journey proves four clients, authority-owned gameplay,
-reconnect fencing, leave/rejoin, and bounded S20 replication. It does not yet
-prove a natural human flow:
+The focused private-room journey now proves four human-surface clients,
+authority-owned launch, fifth-seat rejection, and reconnect continuity. The
+remaining product gap begins after admission:
 
-- the first client starts the universe immediately;
-- later clients join an already-progressing run;
-- there is no crew lobby, join-code surface, readiness, or synchronized start;
-- connection failures are transient warnings rather than durable product state;
-- multiplayer result/rematch and fifth-seat rejection are not human-facing;
+- invitation copy/expiry/version language still needs finish work;
+- reconnecting and recovered states need persistent player-facing treatment;
+- multiplayer result/rematch is not yet a coherent crew flow;
 - the strongest run evidence uses test assistance to shorten traversal.
 
 ## Player Journey
@@ -44,8 +42,8 @@ with me, and what action is required next?
 
 ### P1 — Crew Muster And Synchronized Start
 
-**Implementation status:** landed. Authority-matrix proof is green; the
-focused four-browser player journey is the remaining acceptance proof.
+**Implementation status:** complete. Authority-matrix and focused five-browser
+human-surface proofs are green.
 
 - create a four-seat private crew on the existing authority;
 - keep sim time, AI, hazards, and world consequences frozen while staging;
@@ -63,8 +61,8 @@ launch, the host launches once, all four enter play, and a fifth seat rejects.
 **Implementation status:** in progress. Private room creation/join, a bounded
 six-character code, deterministic four-seat roster, connection-bound
 readiness, host launch gating, durable wrong-code/full errors, and explicit
-host/join choices are live. Copy affordance, expiry/version language, and the
-four-browser product proof remain.
+host/join choices are live and browser-proven. Copy affordance and
+expiry/version language remain.
 
 - expose Host Private Game and Join Game as distinct choices;
 - display/copy a bounded private invitation or join code;
@@ -108,15 +106,14 @@ The milestone is complete when four humans can create/join one crew, launch
 together, finish extraction or death, reconnect one player, reject a fifth,
 see the same result, and rematch without terminal intervention.
 
-## Immediate Next Proof
+## Immediate Next Slice
 
-Build one focused four-browser journey that uses the human UI only: browser A
-hosts and reads the code, browsers B-D join with it, all four see the same
-ordered seats, readiness gates launch, a fifth browser receives a durable full
-message, all four enter the same running authority, and one guest reconnects
-without changing seat or accepting stale control. This proof closes P1 and the
-first half of P2; it does not yet claim shared-run readability, result, or
-rematch completion.
+Finish invitation copy plus full/expired/version/unavailable language, preserve
+an explicit offline choice when multiplayer is configured, and default the
+normal multiplayer product path to the admitted stream transport. Then begin
+P3 with readable local/remote crew identity and teammate state in the shared
+ASCII-fluid run. The green five-browser proof does not yet claim shared-run
+readability, result, or rematch completion.
 
 Engineering guardrails remain:
 
