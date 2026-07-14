@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-13 — v0.4 S23 shared public body retained default-off
+
+- Added negotiated `state-pair-public-body-v1` plus a distinct manifest-bound
+  `state-pair-public-body-brotli-v1` envelope over canonical body-frame bytes;
+  fresh sessions without both capabilities retain unchanged S20 fallback.
+- Added one frozen, content-hashed match-public body per authoritative source
+  beat, exact base-to-target cohort delta reuse, recipient-local owner and
+  lineage envelopes, and exact retained compressed retransmit behavior.
+- Closed red-team blockers with a fail-closed body schema, explicit
+  match-public handle contract, same frozen projected source fencing, aligned
+  codec/compression limits, and one 8 MiB combined body/encoded-body/cohort cap.
+- Added 49 public-body proof assertions, runtime S20/S23 semantic/owner/privacy/
+  ACK migration coverage, malformed body/hash/base rejection, divergent-base,
+  eviction, reconnect cleanup, and compression/capability adversarial proof.
+- Sealed two profiler-off rounds with reversed treatment and population order.
+  Four reaches 9.80/9.85 Hz in NORMAL but misses the 50 ms p95 gate once at
+  50.88 ms. Eight reaches 9.00/9.10 Hz in NORMAL but fails at roughly 88.3–88.6
+  ms p95 and 94.6–95.0 ms p99.
+- Confirmed real cohort reuse at four and eight with all correctness, cleanup,
+  privacy, and material bounds green. Rejected S23 product promotion because
+  one regresses S20 cost, four is not repeatably under its p95 gate, and eight
+  misses both absolute tail gates. S20 remains the 1–4 path; eight stays closed.
+
 ## 2026-07-13 — v0.4 S22 runtime public-projection worker rejection
 
 - Added a default-off two/four-thread public-projection pool inside one

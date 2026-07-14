@@ -83,6 +83,22 @@ S15 positional JSON as current truth. See
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S16-BINARY-CODEC.md` and immutable evidence
 under `docs/v0.4/evidence/state-pair-s16/`.
 
+The S23 shared-public-body prototype is also complete and default-off. It keeps
+one dedicated logical gameplay authority per match/group; concurrent matches
+each get their own authority. One immutable match-public body is built and
+hashed per source beat, while recipient lineage, owner-private state,
+ACK/bases, recovery, exact compressed retransmit, queues, and send commit stay
+authority-owned and recipient-local. Red-team closure, 49 focused assertions,
+runtime 13/13, and counterbalanced clean product artifacts all pass.
+
+S23 is not a playable/product promotion. Four reaches 9.80/9.85 Hz in NORMAL
+but records 50.88 ms p95 in round A, above its 50 ms gate. Eight reaches
+9.00/9.10 Hz in NORMAL, but projection remains 88.58/88.33 ms p95 and
+95.05/94.63 ms p99. One materially regresses S20 CPU, tails, and traffic. S20
+therefore remains the product path for one through four and eight remains
+closed. See `docs/v0.4/MULTIPLAYER-STATE-PAIR-S23-PUBLIC-BODY.md` and
+`docs/v0.4/evidence/state-pair-s23/`.
+
 Phase 2 has begun with a production-neutral deterministic scheduler kernel.
 The focused 7/7 suite and full nine-suite multiplayer-network lane pass; no
 adapter/client injection or impaired-browser claim exists yet.

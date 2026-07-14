@@ -756,6 +756,32 @@ heavier-sim work, cadence changes, and 24/48/96 remain closed. Evidence is in
 `docs/v0.4/evidence/state-pair-s22/`; the decision is in
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S22-RUNTIME-PUBLIC-WORKERS.md`.
 
+**S23 shared public body — implemented, corrected, and not admitted:** The
+default-off `state-pair-public-body-v1` representation constructs and hashes
+one immutable public body per authoritative source beat, reuses exact
+base-to-target cohort deltas, and keeps every recipient envelope, owner lane,
+ACK/base ledger, retransmit, recovery, queue, and send commit on the one
+dedicated logical authority for that match. Ticket/welcome/manifest negotiation
+also pins a distinct `state-pair-public-body-brotli-v1` envelope; fresh
+connections without both capabilities remain on unchanged S20.
+
+Red-team blockers were closed before measurement: fail-closed body shape,
+explicit match-public handle semantics, same frozen source plus independent
+content hashing, a combined 8 MiB body/encoded-body/cohort cap, aligned codec
+and compression limits, and explicit S20 semantic/owner/privacy/ACK migration
+proof. Focused proof is green, including 49 public-body assertions and runtime
+13/13.
+
+Two profiler-off rounds reverse treatment and population order. Four reaches
+9.80/9.85 Hz in NORMAL but misses the 50 ms projection p95 gate in round A at
+50.88 ms. Eight recovers 9.00/9.10 Hz in NORMAL, with real cohort reuse, but
+misses both tail gates at 88.58/88.33 ms p95 and 95.05/94.63 ms p99. One stays
+inside absolute gates but materially regresses S20 CPU, projection tails, and
+traffic. S23 therefore remains default-off research scaffolding; S20 remains
+the one-through-four product path and eight remains closed. Evidence is under
+`docs/v0.4/evidence/state-pair-s23/`; the design and decision are in
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S23-PUBLIC-BODY.md`.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

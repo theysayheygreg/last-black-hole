@@ -3055,3 +3055,18 @@ cadence changes, hosted/fleet work, heavier-sim forecasts, and 24/48/96.
 enablement. Open only for the bounded shared-public-body representation lane.
 Hosted/fleet, heavier-sim forecasts,
 cadence changes, and 24/48/96 remain closed.
+
+### Q: Does S23 shared public-body replication admit four or eight?
+
+| Date | Decision |
+|------|----------|
+| Jul 13 | Keep exactly one dedicated logical gameplay authority per match/group; concurrent matches multiply independent authorities horizontally. S23 may share only immutable match-public body/cohort material inside that authority. Recipient envelopes, owner-private state, ACK/bases, recovery, retransmit, queues, send, and commit remain recipient-local and authority-owned. |
+| Jul 13 | Pin `state-pair-public-body-v1` and the distinct `state-pair-public-body-brotli-v1` profile through ticket, welcome, content-addressed manifest, server framing, and client receiver. Preserve unchanged S20 for fresh sessions without both capabilities. |
+| Jul 13 | Close red-team before measurement: allowlisted body shape, explicit match-public `clientId`/`sourceId` semantics, frozen same-source object plus body content hash, combined body/encoded-body/cohort cap, aligned inner/outer byte limit, exact retransmit, and explicit S20 visible-state/owner/privacy/ACK migration proof. |
+| Jul 13 | Preserve the architecture result: both rounds show real cohort reuse at four and eight, exact correctness/cleanup, one body build and hash per body revision, and bounded retained public material. |
+| Jul 13 | Reject S23 product promotion. Four reaches 9.80/9.85 Hz in NORMAL but round A records 50.88 ms p95, above the 50 ms gate. Eight recovers 9.00/9.10 Hz in NORMAL but records 88.58/88.33 ms p95 and 95.05/94.63 ms p99, failing both tail gates. One passes absolute gates but materially regresses S20 CPU, tails, and traffic. |
+| Jul 13 | Keep the corrected capability and proof harness default-off as bounded research scaffolding. S20 remains the product path for one through four; eight remains closed. Do not start hosted/fleet, heavier-sim, cadence, AOI, or 24/48/96 work from this result. |
+
+**Door status:** Closed for S23 promotion and eight-player admission. The
+default-off representation remains available only as measured research
+scaffolding; no next implementation lane is selected by this decision.

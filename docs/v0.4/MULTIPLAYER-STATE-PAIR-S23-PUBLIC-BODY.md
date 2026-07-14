@@ -1,8 +1,8 @@
 # S23 Shared Public Body And Recipient Lineage Envelope
 
-Status: design gate approved for one default-off prototype. Product admission
-remains S20: negotiated Brotli admits one through four players; eight remains
-closed until profiler-off evidence passes every gate below.
+Status: implemented and retained default-off, but rejected for product
+admission. S20 negotiated Brotli remains the product path for one through four
+players. Eight remains closed.
 
 ## Authority boundary
 
@@ -18,12 +18,15 @@ consequences.
 
 ## Version and negotiation
 
-`state-pair-public-body-v1` is an additive capability above the complete S20
-chain (`state-pair-v1`, mixed, sparse runtime components, positional fallback,
-and Brotli). Ticket, welcome, client receiver, and server framing pin one
-schema for the whole connection. A body session never mixes body and legacy
-state-pair frames. A fresh session without the capability uses the unchanged
-S20 compressed positional path.
+`state-pair-public-body-v1` plus the distinct
+`state-pair-public-body-brotli-v1` envelope are additive capabilities above the
+complete S20 chain (`state-pair-v1`, mixed, sparse runtime components,
+positional fallback, and Brotli). The S23 envelope binds canonical
+`lbh-authority-state-pair-body-v1` bytes rather than claiming S20 positional
+inner framing. Ticket, welcome, manifest, client receiver, and server framing
+pin one schema/profile for the whole connection. A body session never mixes
+body and legacy state-pair frames. A fresh session without both S23
+capabilities uses the unchanged S20 compressed positional path.
 
 ## Body-global versus envelope-local fields
 
@@ -73,8 +76,8 @@ cohort.
 
 Hard limits for the prototype:
 
-- 16 retained body revisions and 8 MiB of canonical body/delta material per
-  match authority;
+- 16 retained body revisions and 8 MiB combined canonical body, active encoded
+  body, and cohort-delta material per match authority;
 - 16 exact public base cohorts per target tick;
 - existing 12 pending pairs and 2 MiB retained wire per recipient;
 - existing 256 retired ACK proofs per recipient;
@@ -111,3 +114,35 @@ p99 <=70 ms, normalized 10 Hz mean <=64 KiB/s and p95 <=80 KiB/s, with exact
 correctness, privacy, memory bounds, and cleanup. A failure is preserved as
 evidence and reverted unless a feature-off seam has clear maintenance value
 and leaves the default path byte-for-byte untouched.
+
+## Implemented result
+
+The corrected prototype proves the representation works without weakening the
+authority boundary. The codec allowlists body/world/entity/component shape,
+the adapter deep-freezes one authority-projected source object per beat, the
+authority independently hashes each new body, and the client verifies content,
+base, lineage, and result hashes before publishing visible state. Keyframe body
+bytes are serialized once and shared while inside the combined material cap;
+delta cohorts share one immutable payload object. Recipient envelopes,
+owner-private projections, ACK/base ledgers, retained exact compressed wires,
+recovery, queues, and send commit remain per-recipient and authority-owned.
+
+Focused proof covers 49 public-body assertions, S20/S23 visible-state and ACK
+parity, privacy, malformed body/hash/base rejection, divergent cohorts,
+eviction, reconnect cleanup, exact retransmit, distinct compression profiles,
+and capability dependency chains. The final red-team pass found no remaining
+blocker.
+
+Two profiler-off rounds reverse both treatment and population order. At four,
+S23 sustains 9.80/9.85 Hz in NORMAL with 50.88/49.17 ms projection p95; round A
+misses the 50 ms gate. At eight it recovers 9.00/9.10 Hz and NORMAL overload,
+but projection p95 is 88.58/88.33 ms and p99 is 95.05/94.63 ms, failing both
+tail gates. One passes absolute gates but doubles median projection p95 and
+raises median authority CPU 81.5% versus S20. Real cohort reuse is present at
+four (724/704 hits) and eight (1,722/1,748 hits), and all correctness, cleanup,
+and combined-material bounds pass.
+
+Decision: keep the bounded capability and proof harness default-off because it
+is useful architecture research; do not replace S20, do not admit S23 at any
+population, and do not admit eight. Evidence and recomputed gates are under
+`docs/v0.4/evidence/state-pair-s23/`.
