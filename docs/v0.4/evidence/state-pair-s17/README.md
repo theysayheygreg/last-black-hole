@@ -8,7 +8,10 @@ one global writer or one machine per match.
 
 The publisher now builds one canonical header and four unique lane payloads,
 derives four exact-size descriptors, preserves the S15 tie order, and composes
-only the selected outer frame. The candidate benchmark proves 1,200 exact wire,
+only the selected outer frame. A direct adversarial oracle proves all four lazy
+expanded and positional sizes across 320 UTF-8/escaping comparisons plus 320
+accepted/rejected exact-boundary checks, including losing-candidate rejection.
+The candidate benchmark proves 1,200 exact wire,
 1,200 exact selection-transcript, and 1,200 decoded-semantic comparisons with
 zero mismatch. Across both execution orders, mean publish time falls
 27.05--28.07%, selection p95 falls 43.37--45.91%, prepared hash work falls
@@ -47,7 +50,7 @@ Bindings:
 - sealed S15 baseline composite:
   `c2df9114ce2cfd7ab29ff613b214498b214cebd7df71d1e0c74750b974f6e266`
 - S17 analysis composite:
-  `cd8120b600bf82dd9d78b036c4a17344bd12c95e188022cfe33174629cdcbd57`
+  `7315c65a2620b3989cbb0e4ed7e7dc11bd98ec0f6ed75ccf9d5d00f0ef0fcaf8`
 - exact benchmark transcript:
   `ec1ab6ca33a83f28fc09501c3711401bf60edc72baba94dd40398dd9195058d6`
 

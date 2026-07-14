@@ -168,6 +168,7 @@ function main() {
       implementationSources: Object.fromEntries(["authority-delta-publisher.cjs", "multiplayer-wire-protocol.cjs",
         "state-pair-positional-codec.cjs"].map((file) => [file, shaFile(path.join(ROOT, "scripts", file))])),
       testSources: Object.fromEntries(["state-pair-positional-codec.cjs",
+        "multiplayer-state-pair-canonical-reuse-adversarial.cjs",
         "multiplayer-state-pair-lazy-candidate-benchmark.cjs",
         "multiplayer-state-pair-lazy-candidate-evidence.cjs"].map((file) => [file, shaFile(path.join(ROOT, "tests", file))])) };
     fs.writeFileSync(path.join(EVIDENCE, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
@@ -184,6 +185,7 @@ function main() {
     "multiplayer-wire-protocol.cjs", "state-pair-positional-codec.cjs"]
     .map((file) => [file, shaFile(path.join(ROOT, "scripts", file))]));
   const testSources = Object.fromEntries(["state-pair-positional-codec.cjs",
+    "multiplayer-state-pair-canonical-reuse-adversarial.cjs",
     "multiplayer-state-pair-lazy-candidate-benchmark.cjs",
     "multiplayer-state-pair-lazy-candidate-evidence.cjs"]
     .map((file) => [file, shaFile(path.join(ROOT, "tests", file))]));

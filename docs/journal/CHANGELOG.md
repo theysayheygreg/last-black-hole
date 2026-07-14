@@ -13,8 +13,9 @@
   digest, fallback, ACK/recovery, privacy, accounting, and ledger semantics.
 - Added exact lazy/eager oracle proof, order-counterbalanced benchmark evidence,
   allocation/size-proof/lane-reuse diagnostics, and a sealed profiler-off
-  one-authority-per-match 1/4/8 process artifact. The benchmark reports zero
-  mismatches and 27--28% lower mean publish time.
+  one-authority-per-match 1/4/8 process artifact. All four lazy expanded sizes
+  and exact boundaries pass 320 adversarial comparisons; the benchmark reports
+  zero mismatches and 27--28% lower mean publish time.
 - Kept the optimization but rejected four/eight admission. The candidate reaches
   9.80/5.60/3.80 Hz; four/eight remain `DILATED` and clock-failing. The partial
   instrumented profile is retained as rejected product evidence.

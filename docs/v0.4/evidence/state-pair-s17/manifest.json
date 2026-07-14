@@ -5,13 +5,14 @@
   "candidateCompositeSha256": "9001726f56fbfd895d32f5d3111dd50b16cb80bd1a0903772bffbdc78307d149",
   "baselineCompositeSha256": "c2df9114ce2cfd7ab29ff613b214498b214cebd7df71d1e0c74750b974f6e266",
   "implementationSources": {
-    "authority-delta-publisher.cjs": "781304575ef96b187bfa36a606e193c01a51bfd6bb40c3c73bb6dba672122b2e",
+    "authority-delta-publisher.cjs": "bfa2f9aaa7232c06f23bf30240f9b2ffe3e7845ff1fd3af755ad41cf8e8028e8",
     "multiplayer-wire-protocol.cjs": "f2541429b651acce8c48d562d9d4fa9a4833144ceef4d96481f02facbfcaf449",
     "state-pair-positional-codec.cjs": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c"
   },
   "testSources": {
     "state-pair-positional-codec.cjs": "0a3bb952b1a2fb306c25cf5e4c1dfaed26a6d0ea96874ffb8528399b0d243fb5",
+    "multiplayer-state-pair-canonical-reuse-adversarial.cjs": "e09a3414d756d8b31fcdd6a48a3a94c345510c01ed045a2f214a51d7dc23e146",
     "multiplayer-state-pair-lazy-candidate-benchmark.cjs": "07f81b1f9f2439775dafddf7c28bdab00890b0d3a93e213c8f44b00af15e84e3",
-    "multiplayer-state-pair-lazy-candidate-evidence.cjs": "cb335807a060b996d4a080c48ef1f0293bb08f2745a12b08db63ca8d4da5356f"
+    "multiplayer-state-pair-lazy-candidate-evidence.cjs": "5b0988309287360577d886425c1695443617fbb5c19c6e6330e357f6a480801c"
   }
 }

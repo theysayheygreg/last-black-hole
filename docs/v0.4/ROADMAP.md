@@ -586,7 +586,10 @@ four cross-lane relations remain checked. S15 selected bytes, four-size
 transcript, limits, digest, ACK/recovery, privacy, accounting, fallback, and
 ledger behavior are unchanged. S16 binary remains opt-in.
 
-The order-counterbalanced benchmark proves 1,200 exact wire, 1,200 exact
+The direct adversarial oracle proves all four lazy expanded and positional
+sizes across 320 UTF-8/escaping comparisons and 320 accepted/rejected exact-
+boundary checks, including losing candidates. The order-counterbalanced
+benchmark proves 1,200 exact wire, 1,200 exact
 selection-transcript, and 1,200 semantic comparisons with zero mismatch. Mean
 publish improves 27.05--28.07%, selector p95 improves 43.37--45.91%, prepared
 hash work falls 50%, and the labeled outer reference-slot allocation proxy

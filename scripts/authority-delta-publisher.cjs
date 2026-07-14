@@ -1174,6 +1174,32 @@ function testExactCanonicalCandidateSizesWithReuse(entries, maxPairBytes = null)
       allocationProxyBytes: exact.allocationProxyBytes }) });
 }
 
+// Test-only oracle for S17's lazy expanded-limit path. Like the eager helper,
+// it creates fresh same-operation proofs internally so no production proof
+// token can escape or be replayed by a caller.
+function testExactCanonicalLaneCandidateSizesWithReuse(header, lanes, maxPairBytes = null) {
+  const proofs = new Map();
+  for (const lane of ["public", "owner"]) {
+    for (const kind of ["keyframe", "delta"]) {
+      const payload = lanes?.[lane]?.[kind];
+      if (payload && !proofs.has(payload)) proofs.set(payload, serializedComponentProof(payload, null, null));
+    }
+  }
+  const exact = exactCanonicalLaneCandidateSizes(header, lanes, proofs);
+  const oversize = maxPairBytes === null ? [] : [...exact.sizes]
+    .filter(([, bytes]) => bytes > maxPairBytes).map(([kind]) => kind);
+  return Object.freeze({ sizes: Object.freeze(Object.fromEntries(exact.sizes)),
+    limit: Object.freeze({ maxPairBytes, accepted: maxPairBytes === null || oversize.length === 0,
+      oversizeKinds: Object.freeze(oversize) }),
+    diagnostics: Object.freeze({ componentSerializations: exact.componentSerializations,
+      headerSerializations: exact.headerSerializations, laneSerializations: exact.laneSerializations,
+      laneSerializationReuses: exact.laneSerializationReuses, reusedLaneBytes: exact.reusedLaneBytes,
+      serializedLaneBytes: exact.serializedLaneBytes, bytesExamined: exact.bytesExamined,
+      allocationProxyBytes: exact.allocationProxyBytes, outerCandidateDescriptors: exact.outerCandidateDescriptors,
+      outerCandidateFrames: exact.outerCandidateFrames, lanePayloadsBuilt: exact.lanePayloadsBuilt,
+      lanePayloadReferenceReuses: exact.lanePayloadReferenceReuses }) });
+}
+
 module.exports = {
   PAIR_SCHEMA,
   ACK_SCHEMA,
@@ -1185,6 +1211,7 @@ module.exports = {
   AuthorityDeltaError,
   createAuthorityDeltaPublisher,
   testExactCanonicalCandidateSizesWithReuse,
+  testExactCanonicalLaneCandidateSizesWithReuse,
   isExactEncodedPublication: (value) => Boolean(value && typeof value === "object"
     && exactEncodedPublications.has(value)),
 };

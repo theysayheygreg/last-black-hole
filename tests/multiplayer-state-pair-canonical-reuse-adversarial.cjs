@@ -5,7 +5,8 @@ const assert = require("assert");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { CODEC_PAIR_TIE_ORDER, testExactCanonicalCandidateSizesWithReuse } =
+const { CODEC_PAIR_TIE_ORDER, testExactCanonicalCandidateSizesWithReuse,
+  testExactCanonicalLaneCandidateSizesWithReuse } =
   require("../scripts/authority-delta-publisher.cjs");
 const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
 const { POSITIONAL_CODEC_MANIFEST_HASH, codecContext, encodePositionalFrame,
@@ -50,7 +51,7 @@ function sample(index, marker = markers[index % markers.length]) {
     const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
     return { kind, frame: { ...header, public: lanes.public[publicKind], owner: lanes.owner[ownerKind] } };
   });
-  return { context, entries };
+  return { context, header, lanes, entries };
 }
 
 function errorCode(run) {
@@ -62,12 +63,21 @@ function run() {
   let candidates = 0;
   let boundaryChecks = 0;
   for (let index = 0; index < 80; index += 1) {
-    const { context, entries } = sample(index);
+    const { context, header, lanes, entries } = sample(index);
     const oracleExpanded = Object.fromEntries(entries.map((entry) => [entry.kind, canonicalJsonBytes(entry.frame).length]));
     const reused = testExactCanonicalCandidateSizesWithReuse(entries);
+    const lazyExpanded = testExactCanonicalLaneCandidateSizesWithReuse(header, lanes);
     assert.deepStrictEqual(reused.sizes, oracleExpanded);
+    assert.deepStrictEqual(lazyExpanded.sizes, oracleExpanded,
+      "lazy expanded sizes must match brute-force canonical JSON for all four candidates");
+    assert.deepStrictEqual(lazyExpanded.sizes, reused.sizes,
+      "lazy and eager same-operation size proofs must be exact peers");
     assert.strictEqual(reused.diagnostics.laneSerializations, 0);
     assert.strictEqual(reused.diagnostics.laneSerializationReuses, 4);
+    assert.strictEqual(lazyExpanded.diagnostics.laneSerializations, 0);
+    assert.strictEqual(lazyExpanded.diagnostics.laneSerializationReuses, 4);
+    assert.strictEqual(lazyExpanded.diagnostics.outerCandidateDescriptors, 4);
+    assert.strictEqual(lazyExpanded.diagnostics.outerCandidateFrames, 0);
     const positional = composeStatePairCandidates(entries, context, CODEC_PAIR_TIE_ORDER);
     const oraclePositional = entries.map((entry) => ({ kind: entry.kind,
       wire: encodePositionalFrame(entry.frame, context) }));
@@ -81,27 +91,37 @@ function run() {
     const boundary = Math.max(...Object.values(oracleExpanded));
     const acceptedBoundary = testExactCanonicalCandidateSizesWithReuse(entries, boundary);
     const rejectedBoundary = testExactCanonicalCandidateSizesWithReuse(entries, boundary - 1);
+    const lazyAcceptedBoundary = testExactCanonicalLaneCandidateSizesWithReuse(header, lanes, boundary);
+    const lazyRejectedBoundary = testExactCanonicalLaneCandidateSizesWithReuse(header, lanes, boundary - 1);
     assert.strictEqual(acceptedBoundary.limit.accepted, true);
     assert.strictEqual(rejectedBoundary.limit.accepted, false);
     assert(rejectedBoundary.limit.oversizeKinds.length > 0);
-    boundaryChecks += 2;
+    assert.deepStrictEqual(lazyAcceptedBoundary.limit, acceptedBoundary.limit,
+      "lazy expanded limit must accept the exact all-candidate boundary");
+    assert.deepStrictEqual(lazyRejectedBoundary.limit, rejectedBoundary.limit,
+      "lazy expanded limit must reject the same losing candidates one byte below the boundary");
+    boundaryChecks += 4;
     transcript.push({ expanded: oracleExpanded, positional: positional.candidates,
       chosen: positional.chosen.kind, wireDigest: crypto.createHash("sha256")
-        .update(positional.chosen.wire, "utf8").digest("hex"), diagnostics: reused.diagnostics });
+        .update(positional.chosen.wire, "utf8").digest("hex"), diagnostics: reused.diagnostics,
+      lazyDiagnostics: lazyExpanded.diagnostics });
     candidates += entries.length;
   }
   const invalid = [undefined, NaN, Infinity, -Infinity].map((value, index) => {
-    const { entries } = sample(100 + index);
+    const { header, lanes, entries } = sample(100 + index);
     entries[0].frame.public.projection.world.publicFacts.invalid = value;
     const oracle = errorCode(() => canonicalJsonBytes(entries[0].frame));
     const candidate = errorCode(() => testExactCanonicalCandidateSizesWithReuse(entries));
+    const lazyCandidate = errorCode(() => testExactCanonicalLaneCandidateSizesWithReuse(header, lanes));
     assert.strictEqual(candidate, oracle);
+    assert.strictEqual(lazyCandidate, oracle);
     assert(oracle !== null);
-    return { value: value === undefined ? "undefined" : String(value), oracle, candidate };
+    return { value: value === undefined ? "undefined" : String(value), oracle, candidate, lazyCandidate };
   });
-  const result = { schema: "lbh-s15-canonical-reuse-adversarial-v1", cases: 80,
+  const result = { schema: "lbh-s17-lazy-expanded-size-adversarial-v1", cases: 80,
     candidateComparisons: candidates, exactExpandedComparisons: candidates,
-    exactPositionalComparisons: candidates, semanticDecodes: 80, boundaryChecks,
+    exactLazyExpandedComparisons: candidates, exactPositionalComparisons: candidates,
+    semanticDecodes: 80, boundaryChecks,
     invalidCanonicalCases: invalid, mismatches: 0,
     transcriptSha256: crypto.createHash("sha256").update(JSON.stringify(transcript)).digest("hex") };
   const output = process.env.LBH_S15_ADVERSARIAL_OUTPUT;

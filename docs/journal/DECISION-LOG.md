@@ -2950,7 +2950,7 @@ cadence, and admission policy.
 
 | Date | Event |
 |------|-------|
-| Jul 13 | S17 replaces four eager outer positional frames with four exact-size descriptors and one chosen frame; 1,200 wire, selection-transcript, and semantic comparisons remain exact. |
+| Jul 13 | S17 replaces four eager outer positional frames with four exact-size descriptors and one chosen frame; 320 direct all-candidate expanded/positional comparisons plus 1,200 benchmark wire, selection-transcript, and semantic comparisons remain exact. |
 | Jul 13 | Both benchmark orders improve mean publish 27--28%, but profiler-off process evidence reaches only 5.60 Hz at four and 3.80 Hz at eight; both remain `DILATED`. |
 | Jul 13 | Decision: keep the byte-identical optimization, reject 4/8 admission, and next remove remaining trusted same-operation lane validation/size-proof work. |
 
