@@ -87,18 +87,22 @@ p95 ranges:
 
 | Topology | Batch wall p95 range | Scope |
 |---|---:|---|
-| inline | 55.69–57.23 ms | public compute + authority finalization serially |
-| two workers | 35.75–37.74 ms | public work isolated; authority finalizes |
-| four workers | 26.96–29.13 ms | public work isolated; authority finalizes |
+| inline | 66.24–68.57 ms | public compute + authority finalization serially |
+| two workers | 37.30–37.45 ms | public work isolated; authority finalizes |
+| four workers | 27.73–29.33 ms | public work isolated; authority finalizes |
 
 The worker result transfers 38,189 public bytes p95 plus 473 bytes of cloned
-metadata in this fixture. Across each 52-job Latin-square cell, two workers use
-0.335–0.359 worker core-seconds plus 0.043–0.045 authority-finalization
-core-seconds; four use 0.414–0.435 plus 0.044–0.047. The worker-count-multiplied
-V8 heap upper bounds are 33.7–33.9 MiB for two and 61.6–65.0 MiB for four.
+metadata in this fixture; inbound public JSON size proxy is 57,333 bytes p95.
+Across each 52-job Latin-square cell, two workers use 0.343–0.347 worker
+core-seconds plus 0.050 authority-finalization core-seconds; four use
+0.413–0.426 plus 0.049–0.051. The worker-count-multiplied V8 heap upper bounds
+are 32.5–33.9 MiB for two and 61.7–62.2 MiB for four. Sampled whole-process RSS
+high-water is 202.6–216.6 MiB for two and 256.6–267.0 MiB for four.
 The artifact also records inbound public clone-proxy bytes, main-thread input-
 preparation/dispatch wall and CPU, and whole-process RSS high-water. These are
-short synthetic-run observations; scheduler/message-delivery CPU and native or
+short synthetic-run observations. Dispatch CPU p95 is 4,237–4,745 microseconds
+per population batch, but includes the harness's JSON size-proxy work and is
+not raw structured-clone CPU. Scheduler/message-delivery CPU and native or
 clone allocation attribution remain incomplete. They are feasibility
 diagnostics and must not be used for packing or cost forecasts. The runtime
 pilot must measure total authority-process CPU/RSS and clone cost.

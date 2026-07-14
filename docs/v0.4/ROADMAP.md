@@ -714,8 +714,8 @@ rows are not summed.
 
 A public-only hermetic worker harness exactly reproduces 234 production-
 publisher jobs across 1/4/8 with zero mismatch. Three Latin-square topology
-orders reduce synthetic eight-recipient batch p95 from 55.69–57.23 ms inline
-to 35.75–37.74 ms with two workers and 26.96–29.13 ms with four. Owner data,
+orders reduce synthetic eight-recipient batch p95 from 66.24–68.57 ms inline
+to 37.30–37.45 ms with two workers and 27.73–29.33 ms with four. Owner data,
 mixed-pair selection, compression, ACK/ledger state, ordering, queue ownership,
 and send commit remain inside the one dedicated logical authority per match.
 Live issued-request tests reject stale, cross-match, duplicate, and out-of-

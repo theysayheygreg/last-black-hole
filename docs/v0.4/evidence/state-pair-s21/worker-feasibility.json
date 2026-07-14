@@ -1,0 +1,1036 @@
+{
+  "schema": "lbh-s21-worker-isolation-feasibility-v1",
+  "generatedAt": "2026-07-14T03:49:18.855Z",
+  "generation": {
+    "gitCommit": "92e93e805684cdaad632c8da0ca5eaf0bfb7ef95",
+    "cleanAtGeneration": true,
+    "command": "LBH_S21_WORKER_OUTPUT=docs/v0.4/evidence/state-pair-s21/worker-feasibility.json node tests/multiplayer-state-pair-worker-feasibility.cjs",
+    "machine": {
+      "hostname": "GregBot.local",
+      "platform": "darwin",
+      "release": "27.0.0",
+      "arch": "arm64",
+      "logicalCpuCount": 10,
+      "cpuModel": "Apple M4",
+      "node": "v22.22.3"
+    }
+  },
+  "sources": {
+    "tests/multiplayer-state-pair-worker-feasibility.cjs": "2c6f340b857c8744e5011d44c7ee0d59afc8bce1112ff6ccfe2f223982942fa9",
+    "tests/network/state-pair-pure-replay.cjs": "4a5e9e799408609be6c91bedcf3750b667fb457d7bca3d3f81656d0d6110286b",
+    "tests/network/state-pair-projection-worker.cjs": "157c062e982f915335c4d5164ea1aca9080b6e1a231fa1b070b57d5ac2a9e7d3",
+    "scripts/authority-delta-publisher.cjs": "f4fdde25b9f2eba8be3a5cd66423da7de91522144fa196a8d0d5f7411eb177a3",
+    "scripts/canonical-structural-delta.cjs": "8892339301fa78737a1d1aa9d488e0eec9162b1a787eccb035af923ccdb4bdb4",
+    "scripts/multiplayer-wire-protocol.cjs": "d133454d8bf42cebd8cca189b5fbdb6bf58165a20e219553372cc8b4d4910700",
+    "scripts/state-pair-positional-codec.cjs": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c",
+    "scripts/state-pair-compression-codec.cjs": "e171315739e303ac0ea4bfb48eb0e4b52fd32d68651dd7c24f83b58cd89b1e0d"
+  },
+  "corpus": {
+    "schema": "lbh-s21-projection-replay-corpus-v1",
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "beats": 18,
+    "jobs": 234,
+    "mixedAckBases": true,
+    "recoveryJobs": 19,
+    "churnJobs": 27,
+    "syntheticPublicFixture": true,
+    "syntheticOwnerFixtureAuthorityOnly": true,
+    "realPrivateDataPresent": false,
+    "workerInputContainsOwner": false,
+    "jobInputDigest": "6ec7342d30b64b470680341b76868fb1f6b1607d2fdfc551f7ff5feb0f7aacd9",
+    "expectedOutputDigest": "720c1553714977938b6f49abb60edd020bd69c82efd71cb21065cc442bb1fec4"
+  },
+  "exactComparisons": 936,
+  "parity": {
+    "positionalBytes": 234,
+    "positionalDigest": 234,
+    "decodedFrame": 234,
+    "selectionKind": 234,
+    "mismatches": 0
+  },
+  "comparison": {
+    "recipientOrderCounterbalancedRoundsPerLatinSquareCell": 4,
+    "topologyOrderCounterbalanced": true,
+    "latinSquareRuns": [
+      {
+        "order": [
+          "inline",
+          "twoWorkers",
+          "fourWorkers"
+        ],
+        "rows": {
+          "inline": {
+            "workers": 0,
+            "startupMs": 0,
+            "jobs": 52,
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 8.206853999999908,
+                "p50": 7.956207999999606,
+                "p95": 8.941874999999982,
+                "p99": 8.941874999999982,
+                "max": 8.941874999999982
+              },
+              "4": {
+                "count": 4,
+                "mean": 33.53712500000006,
+                "p50": 33.48416600000019,
+                "p95": 34.00120900000002,
+                "p99": 34.00120900000002,
+                "max": 34.00120900000002
+              },
+              "8": {
+                "count": 4,
+                "mean": 66.97908325000003,
+                "p50": 66.01975000000039,
+                "p95": 68.56529199999977,
+                "p99": 68.56529199999977,
+                "max": 68.56529199999977
+              }
+            },
+            "batchThreadCpuMicros": {
+              "count": 12,
+              "mean": 36048,
+              "p50": 33287,
+              "p95": 67959,
+              "p99": 67959,
+              "max": 67959
+            },
+            "totalMainThreadCoreSeconds": 0.432576,
+            "mainHeapHighWaterBytes": 62024168
+          },
+          "twoWorkers": {
+            "workers": 2,
+            "startupMs": 18.41058299999986,
+            "jobs": 52,
+            "roundTripMs": {
+              "count": 52,
+              "mean": 13.39380688461534,
+              "p50": 12.359124999999949,
+              "p95": 24.5527919999995,
+              "p99": 24.885541999999987,
+              "max": 24.885541999999987
+            },
+            "workerComputeMs": {
+              "count": 52,
+              "mean": 6.693689903846147,
+              "p50": 6.400625000000218,
+              "p95": 8.126792000000023,
+              "p99": 11.24004100000002,
+              "max": 11.24004100000002
+            },
+            "cloneDispatchCollectProxyMs": {
+              "count": 52,
+              "mean": 6.700116980769193,
+              "p50": 5.911042000000634,
+              "p95": 18.06958399999985,
+              "p99": 18.74237499999981,
+              "max": 18.74237499999981
+            },
+            "authorityFinalizeAndValidationMs": {
+              "count": 52,
+              "mean": 0.971911865384632,
+              "p50": 0.9657919999999649,
+              "p95": 1.1567500000001019,
+              "p99": 1.2992080000003625,
+              "max": 1.2992080000003625
+            },
+            "authorityFinalizeAndValidationCpuMicros": {
+              "count": 52,
+              "mean": 965.0384615384615,
+              "p50": 962,
+              "p95": 1132,
+              "p99": 1269,
+              "max": 1269
+            },
+            "workerThreadCpuMicros": {
+              "count": 52,
+              "mean": 6603,
+              "p50": 6296,
+              "p95": 7974,
+              "p99": 10969,
+              "max": 10969
+            },
+            "totalWorkerCoreSeconds": 0.343356,
+            "totalAuthorityFinalizeCoreSeconds": 0.050182,
+            "workerHeapHighWaterBytes": 17045752,
+            "aggregateWorkerHeapUpperBoundBytes": 34091504,
+            "metadataCloneProxyBytes": {
+              "count": 52,
+              "mean": 473,
+              "p50": 473,
+              "p95": 473,
+              "p99": 473,
+              "max": 473
+            },
+            "inboundPublicCloneProxyBytes": {
+              "count": 52,
+              "mean": 57307.07692307692,
+              "p50": 57299,
+              "p95": 57333,
+              "p99": 57333,
+              "max": 57333
+            },
+            "mainThreadPrepareAndDispatchWallMsPerBatch": {
+              "count": 12,
+              "mean": 2.37222925000007,
+              "p50": 2.109750000000531,
+              "p95": 4.600999999999658,
+              "p99": 4.600999999999658,
+              "max": 4.600999999999658
+            },
+            "mainThreadPrepareAndDispatchCpuMicrosPerBatch": {
+              "count": 12,
+              "mean": 2365,
+              "p50": 2107,
+              "p95": 4568,
+              "p99": 4568,
+              "max": 4568
+            },
+            "processRssHighWaterBytes": 212418560,
+            "transferredPublicBytes": {
+              "count": 52,
+              "mean": 34741.61538461538,
+              "p50": 35388,
+              "p95": 38189,
+              "p99": 38189,
+              "max": 38189
+            },
+            "shutdown": {
+              "graceful": 2,
+              "forced": 0,
+              "pending": 0,
+              "alive": 0
+            },
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 9.111156000000165,
+                "p50": 7.841042000000016,
+                "p95": 12.993207999999868,
+                "p99": 12.993207999999868,
+                "max": 12.993207999999868
+              },
+              "4": {
+                "count": 4,
+                "mean": 20.08666674999995,
+                "p50": 18.200832999999875,
+                "p95": 24.76391700000022,
+                "p99": 24.76391700000022,
+                "max": 24.76391700000022
+              },
+              "8": {
+                "count": 4,
+                "mean": 35.83208324999964,
+                "p50": 34.75075000000015,
+                "p95": 37.33116699999937,
+                "p99": 37.33116699999937,
+                "max": 37.33116699999937
+              }
+            }
+          },
+          "fourWorkers": {
+            "workers": 4,
+            "startupMs": 17.028457999999773,
+            "jobs": 52,
+            "roundTripMs": {
+              "count": 52,
+              "mean": 10.888750769230787,
+              "p50": 9.914500000000771,
+              "p95": 16.278916999999637,
+              "p99": 17.81474999999955,
+              "max": 17.81474999999955
+            },
+            "workerComputeMs": {
+              "count": 52,
+              "mean": 8.307904769230898,
+              "p50": 7.77862499999992,
+              "p95": 13.115334000000075,
+              "p99": 14.995375000000422,
+              "max": 14.995375000000422
+            },
+            "cloneDispatchCollectProxyMs": {
+              "count": 52,
+              "mean": 2.58084599999989,
+              "p50": 0.5304989999995087,
+              "p95": 8.370832999999948,
+              "p99": 9.831749999999374,
+              "max": 9.831749999999374
+            },
+            "authorityFinalizeAndValidationMs": {
+              "count": 52,
+              "mean": 0.9860392307692004,
+              "p50": 0.971958000000086,
+              "p95": 1.2379579999997077,
+              "p99": 1.2831250000008367,
+              "max": 1.2831250000008367
+            },
+            "authorityFinalizeAndValidationCpuMicros": {
+              "count": 52,
+              "mean": 976.8653846153846,
+              "p50": 970,
+              "p95": 1201,
+              "p99": 1261,
+              "max": 1261
+            },
+            "workerThreadCpuMicros": {
+              "count": 52,
+              "mean": 8049.2692307692305,
+              "p50": 7528,
+              "p95": 12324,
+              "p99": 14546,
+              "max": 14546
+            },
+            "totalWorkerCoreSeconds": 0.418562,
+            "totalAuthorityFinalizeCoreSeconds": 0.050797,
+            "workerHeapHighWaterBytes": 16306656,
+            "aggregateWorkerHeapUpperBoundBytes": 65226624,
+            "metadataCloneProxyBytes": {
+              "count": 52,
+              "mean": 473,
+              "p50": 473,
+              "p95": 473,
+              "p99": 473,
+              "max": 473
+            },
+            "inboundPublicCloneProxyBytes": {
+              "count": 52,
+              "mean": 57307.07692307692,
+              "p50": 57299,
+              "p95": 57333,
+              "p99": 57333,
+              "max": 57333
+            },
+            "mainThreadPrepareAndDispatchWallMsPerBatch": {
+              "count": 12,
+              "mean": 2.326638833333315,
+              "p50": 2.137166999999863,
+              "p95": 4.294624999999542,
+              "p99": 4.294624999999542,
+              "max": 4.294624999999542
+            },
+            "mainThreadPrepareAndDispatchCpuMicrosPerBatch": {
+              "count": 12,
+              "mean": 2323.9166666666665,
+              "p50": 2136,
+              "p95": 4291,
+              "p99": 4291,
+              "max": 4291
+            },
+            "processRssHighWaterBytes": 269090816,
+            "transferredPublicBytes": {
+              "count": 52,
+              "mean": 34741.61538461538,
+              "p50": 35388,
+              "p95": 38189,
+              "p99": 38189,
+              "max": 38189
+            },
+            "shutdown": {
+              "graceful": 4,
+              "forced": 0,
+              "pending": 0,
+              "alive": 0
+            },
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 9.755520750000187,
+                "p50": 8.331250000000182,
+                "p95": 12.938167000000249,
+                "p99": 12.938167000000249,
+                "max": 12.938167000000249
+              },
+              "4": {
+                "count": 4,
+                "mean": 16.21665599999983,
+                "p50": 15.028582999999344,
+                "p95": 21.13995799999975,
+                "p99": 21.13995799999975,
+                "max": 21.13995799999975
+              },
+              "8": {
+                "count": 4,
+                "mean": 27.42414574999998,
+                "p50": 26.512125000000196,
+                "p95": 29.333999999999833,
+                "p99": 29.333999999999833,
+                "max": 29.333999999999833
+              }
+            }
+          }
+        }
+      },
+      {
+        "order": [
+          "fourWorkers",
+          "inline",
+          "twoWorkers"
+        ],
+        "rows": {
+          "fourWorkers": {
+            "workers": 4,
+            "startupMs": 17.025249999999687,
+            "jobs": 52,
+            "roundTripMs": {
+              "count": 52,
+              "mean": 10.631622615384599,
+              "p50": 9.284416999999848,
+              "p95": 15.394250000000284,
+              "p99": 15.85529200000019,
+              "max": 15.85529200000019
+            },
+            "workerComputeMs": {
+              "count": 52,
+              "mean": 8.136034480769204,
+              "p50": 7.579375000000255,
+              "p95": 13.016375000000153,
+              "p99": 14.101042000000234,
+              "max": 14.101042000000234
+            },
+            "cloneDispatchCollectProxyMs": {
+              "count": 52,
+              "mean": 2.495588134615393,
+              "p50": 0.5239579999997659,
+              "p95": 8.628708000000188,
+              "p99": 8.908959000000323,
+              "max": 8.908959000000323
+            },
+            "authorityFinalizeAndValidationMs": {
+              "count": 52,
+              "mean": 0.9863525000000488,
+              "p50": 0.9466249999995853,
+              "p95": 1.207499999999527,
+              "p99": 2.2999170000002778,
+              "max": 2.2999170000002778
+            },
+            "authorityFinalizeAndValidationCpuMicros": {
+              "count": 52,
+              "mean": 979.5576923076923,
+              "p50": 944,
+              "p95": 1160,
+              "p99": 2278,
+              "max": 2278
+            },
+            "workerThreadCpuMicros": {
+              "count": 52,
+              "mean": 7951.346153846154,
+              "p50": 7361,
+              "p95": 12495,
+              "p99": 13801,
+              "max": 13801
+            },
+            "totalWorkerCoreSeconds": 0.41347,
+            "totalAuthorityFinalizeCoreSeconds": 0.050937,
+            "workerHeapHighWaterBytes": 16226640,
+            "aggregateWorkerHeapUpperBoundBytes": 64906560,
+            "metadataCloneProxyBytes": {
+              "count": 52,
+              "mean": 473,
+              "p50": 473,
+              "p95": 473,
+              "p99": 473,
+              "max": 473
+            },
+            "inboundPublicCloneProxyBytes": {
+              "count": 52,
+              "mean": 57307.07692307692,
+              "p50": 57299,
+              "p95": 57333,
+              "p99": 57333,
+              "max": 57333
+            },
+            "mainThreadPrepareAndDispatchWallMsPerBatch": {
+              "count": 12,
+              "mean": 2.3549617500001054,
+              "p50": 2.1381670000000668,
+              "p95": 4.559958000000734,
+              "p99": 4.559958000000734,
+              "max": 4.559958000000734
+            },
+            "mainThreadPrepareAndDispatchCpuMicrosPerBatch": {
+              "count": 12,
+              "mean": 2348.0833333333335,
+              "p50": 2137,
+              "p95": 4508,
+              "p99": 4508,
+              "max": 4508
+            },
+            "processRssHighWaterBytes": 271663104,
+            "transferredPublicBytes": {
+              "count": 52,
+              "mean": 34741.61538461538,
+              "p50": 35388,
+              "p95": 38189,
+              "p99": 38189,
+              "max": 38189
+            },
+            "shutdown": {
+              "graceful": 4,
+              "forced": 0,
+              "pending": 0,
+              "alive": 0
+            },
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 10.032479000000194,
+                "p50": 8.203333000000384,
+                "p95": 14.733542000000853,
+                "p99": 14.733542000000853,
+                "max": 14.733542000000853
+              },
+              "4": {
+                "count": 4,
+                "mean": 15.252958499999977,
+                "p50": 14.258832999999868,
+                "p95": 19.44916699999976,
+                "p99": 19.44916699999976,
+                "max": 19.44916699999976
+              },
+              "8": {
+                "count": 4,
+                "mean": 26.52432325000018,
+                "p50": 26.70483400000012,
+                "p95": 27.732292000000598,
+                "p99": 27.732292000000598,
+                "max": 27.732292000000598
+              }
+            }
+          },
+          "inline": {
+            "workers": 0,
+            "startupMs": 0,
+            "jobs": 52,
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 7.87707274999957,
+                "p50": 7.819082999999409,
+                "p95": 7.9618329999993875,
+                "p99": 7.9618329999993875,
+                "max": 7.9618329999993875
+              },
+              "4": {
+                "count": 4,
+                "mean": 32.51567699999987,
+                "p50": 32.41858299999967,
+                "p95": 32.65416699999969,
+                "p99": 32.65416699999969,
+                "max": 32.65416699999969
+              },
+              "8": {
+                "count": 4,
+                "mean": 65.75655200000006,
+                "p50": 65.33554099999947,
+                "p95": 66.23966700000074,
+                "p99": 66.23966700000074,
+                "max": 66.23966700000074
+              }
+            },
+            "batchThreadCpuMicros": {
+              "count": 12,
+              "mean": 35222.25,
+              "p50": 32275,
+              "p95": 65923,
+              "p99": 65923,
+              "max": 65923
+            },
+            "totalMainThreadCoreSeconds": 0.422667,
+            "mainHeapHighWaterBytes": 67005816
+          },
+          "twoWorkers": {
+            "workers": 2,
+            "startupMs": 16.94983299999967,
+            "jobs": 52,
+            "roundTripMs": {
+              "count": 52,
+              "mean": 13.635152211538403,
+              "p50": 12.553750000000036,
+              "p95": 25.023082999999133,
+              "p99": 25.074999999999818,
+              "max": 25.074999999999818
+            },
+            "workerComputeMs": {
+              "count": 52,
+              "mean": 6.8222556153846545,
+              "p50": 6.485791999999492,
+              "p95": 8.787709000000177,
+              "p99": 11.47833300000002,
+              "max": 11.47833300000002
+            },
+            "cloneDispatchCollectProxyMs": {
+              "count": 52,
+              "mean": 6.812896596153748,
+              "p50": 6.027583999999479,
+              "p95": 18.46650000000045,
+              "p99": 18.936165999998593,
+              "max": 18.936165999998593
+            },
+            "authorityFinalizeAndValidationMs": {
+              "count": 52,
+              "mean": 0.9708542307691739,
+              "p50": 0.9677089999995587,
+              "p95": 1.2010409999993499,
+              "p99": 1.2895419999995283,
+              "max": 1.2895419999995283
+            },
+            "authorityFinalizeAndValidationCpuMicros": {
+              "count": 52,
+              "mean": 964.6538461538462,
+              "p50": 961,
+              "p95": 1169,
+              "p99": 1277,
+              "max": 1277
+            },
+            "workerThreadCpuMicros": {
+              "count": 52,
+              "mean": 6677.115384615385,
+              "p50": 6405,
+              "p95": 8066,
+              "p99": 11176,
+              "max": 11176
+            },
+            "totalWorkerCoreSeconds": 0.34721,
+            "totalAuthorityFinalizeCoreSeconds": 0.050162,
+            "workerHeapHighWaterBytes": 17304016,
+            "aggregateWorkerHeapUpperBoundBytes": 34608032,
+            "metadataCloneProxyBytes": {
+              "count": 52,
+              "mean": 473,
+              "p50": 473,
+              "p95": 473,
+              "p99": 473,
+              "max": 473
+            },
+            "inboundPublicCloneProxyBytes": {
+              "count": 52,
+              "mean": 57307.07692307692,
+              "p50": 57299,
+              "p95": 57333,
+              "p99": 57333,
+              "max": 57333
+            },
+            "mainThreadPrepareAndDispatchWallMsPerBatch": {
+              "count": 12,
+              "mean": 2.3581181666667512,
+              "p50": 2.106166999999914,
+              "p95": 4.82708300000013,
+              "p99": 4.82708300000013,
+              "max": 4.82708300000013
+            },
+            "mainThreadPrepareAndDispatchCpuMicrosPerBatch": {
+              "count": 12,
+              "mean": 2347.1666666666665,
+              "p50": 2103,
+              "p95": 4745,
+              "p99": 4745,
+              "max": 4745
+            },
+            "processRssHighWaterBytes": 227065856,
+            "transferredPublicBytes": {
+              "count": 52,
+              "mean": 34741.61538461538,
+              "p50": 35388,
+              "p95": 38189,
+              "p99": 38189,
+              "max": 38189
+            },
+            "shutdown": {
+              "graceful": 2,
+              "forced": 0,
+              "pending": 0,
+              "alive": 0
+            },
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 9.210416500000065,
+                "p50": 7.781082999999853,
+                "p95": 13.255292000000736,
+                "p99": 13.255292000000736,
+                "max": 13.255292000000736
+              },
+              "4": {
+                "count": 4,
+                "mean": 20.77266650000024,
+                "p50": 18.76587500000005,
+                "p95": 24.96887500000048,
+                "p99": 24.96887500000048,
+                "max": 24.96887500000048
+              },
+              "8": {
+                "count": 4,
+                "mean": 36.185468750000155,
+                "p50": 35.18858399999954,
+                "p95": 37.45270800000071,
+                "p99": 37.45270800000071,
+                "max": 37.45270800000071
+              }
+            }
+          }
+        }
+      },
+      {
+        "order": [
+          "twoWorkers",
+          "fourWorkers",
+          "inline"
+        ],
+        "rows": {
+          "twoWorkers": {
+            "workers": 2,
+            "startupMs": 16.214708000000428,
+            "jobs": 52,
+            "roundTripMs": {
+              "count": 52,
+              "mean": 13.52987734615387,
+              "p50": 12.358291000000463,
+              "p95": 24.976834000000053,
+              "p99": 25.595374999999876,
+              "max": 25.595374999999876
+            },
+            "workerComputeMs": {
+              "count": 52,
+              "mean": 6.729653865384587,
+              "p50": 6.368124999999964,
+              "p95": 8.33349999999973,
+              "p99": 10.979084000000512,
+              "max": 10.979084000000512
+            },
+            "cloneDispatchCollectProxyMs": {
+              "count": 52,
+              "mean": 6.800223480769284,
+              "p50": 5.892417000000023,
+              "p95": 18.3866680000001,
+              "p99": 19.54462499999954,
+              "max": 19.54462499999954
+            },
+            "authorityFinalizeAndValidationMs": {
+              "count": 52,
+              "mean": 0.9768228846153831,
+              "p50": 0.9504170000000158,
+              "p95": 1.2547500000000582,
+              "p99": 1.677958000000217,
+              "max": 1.677958000000217
+            },
+            "authorityFinalizeAndValidationCpuMicros": {
+              "count": 52,
+              "mean": 968.8461538461538,
+              "p50": 945,
+              "p95": 1219,
+              "p99": 1663,
+              "max": 1663
+            },
+            "workerThreadCpuMicros": {
+              "count": 52,
+              "mean": 6627.307692307692,
+              "p50": 6322,
+              "p95": 8160,
+              "p99": 10825,
+              "max": 10825
+            },
+            "totalWorkerCoreSeconds": 0.34462,
+            "totalAuthorityFinalizeCoreSeconds": 0.05038,
+            "workerHeapHighWaterBytes": 17746096,
+            "aggregateWorkerHeapUpperBoundBytes": 35492192,
+            "metadataCloneProxyBytes": {
+              "count": 52,
+              "mean": 473,
+              "p50": 473,
+              "p95": 473,
+              "p99": 473,
+              "max": 473
+            },
+            "inboundPublicCloneProxyBytes": {
+              "count": 52,
+              "mean": 57307.07692307692,
+              "p50": 57299,
+              "p95": 57333,
+              "p99": 57333,
+              "max": 57333
+            },
+            "mainThreadPrepareAndDispatchWallMsPerBatch": {
+              "count": 12,
+              "mean": 2.3097845833333395,
+              "p50": 2.1189589999994496,
+              "p95": 4.24120800000037,
+              "p99": 4.24120800000037,
+              "max": 4.24120800000037
+            },
+            "mainThreadPrepareAndDispatchCpuMicrosPerBatch": {
+              "count": 12,
+              "mean": 2306.5,
+              "p50": 2118,
+              "p95": 4237,
+              "p99": 4237,
+              "max": 4237
+            },
+            "processRssHighWaterBytes": 227115008,
+            "transferredPublicBytes": {
+              "count": 52,
+              "mean": 34741.61538461538,
+              "p50": 35388,
+              "p95": 38189,
+              "p99": 38189,
+              "max": 38189
+            },
+            "shutdown": {
+              "graceful": 2,
+              "forced": 0,
+              "pending": 0,
+              "alive": 0
+            },
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 9.203094250000504,
+                "p50": 7.895667000000685,
+                "p95": 13.0048340000003,
+                "p99": 13.0048340000003,
+                "max": 13.0048340000003
+              },
+              "4": {
+                "count": 4,
+                "mean": 20.233635750000076,
+                "p50": 18.192667000000256,
+                "p95": 24.694292000000132,
+                "p99": 24.694292000000132,
+                "max": 24.694292000000132
+              },
+              "8": {
+                "count": 4,
+                "mean": 35.84011475000034,
+                "p50": 34.70333400000072,
+                "p95": 37.30016599999999,
+                "p99": 37.30016599999999,
+                "max": 37.30016599999999
+              }
+            }
+          },
+          "fourWorkers": {
+            "workers": 4,
+            "startupMs": 16.995458000000326,
+            "jobs": 52,
+            "roundTripMs": {
+              "count": 52,
+              "mean": 11.015054480769253,
+              "p50": 9.980249999999614,
+              "p95": 16.98266699999931,
+              "p99": 17.117457999999715,
+              "max": 17.117457999999715
+            },
+            "workerComputeMs": {
+              "count": 52,
+              "mean": 8.386991230769162,
+              "p50": 7.698374999999942,
+              "p95": 13.649042000000009,
+              "p99": 15.93695899999966,
+              "max": 15.93695899999966
+            },
+            "cloneDispatchCollectProxyMs": {
+              "count": 52,
+              "mean": 2.628063250000091,
+              "p50": 0.5149579999997513,
+              "p95": 9.236667000000125,
+              "p99": 10.171291999999085,
+              "max": 10.171291999999085
+            },
+            "authorityFinalizeAndValidationMs": {
+              "count": 52,
+              "mean": 0.954950192307706,
+              "p50": 0.9519579999996495,
+              "p95": 1.14154199999939,
+              "p99": 1.2910000000001673,
+              "max": 1.2910000000001673
+            },
+            "authorityFinalizeAndValidationCpuMicros": {
+              "count": 52,
+              "mean": 947.9230769230769,
+              "p50": 950,
+              "p95": 1124,
+              "p99": 1275,
+              "max": 1275
+            },
+            "workerThreadCpuMicros": {
+              "count": 52,
+              "mean": 8199.192307692309,
+              "p50": 7496,
+              "p95": 13290,
+              "p99": 15408,
+              "max": 15408
+            },
+            "totalWorkerCoreSeconds": 0.426358,
+            "totalAuthorityFinalizeCoreSeconds": 0.049292,
+            "workerHeapHighWaterBytes": 16163616,
+            "aggregateWorkerHeapUpperBoundBytes": 64654464,
+            "metadataCloneProxyBytes": {
+              "count": 52,
+              "mean": 473,
+              "p50": 473,
+              "p95": 473,
+              "p99": 473,
+              "max": 473
+            },
+            "inboundPublicCloneProxyBytes": {
+              "count": 52,
+              "mean": 57307.07692307692,
+              "p50": 57299,
+              "p95": 57333,
+              "p99": 57333,
+              "max": 57333
+            },
+            "mainThreadPrepareAndDispatchWallMsPerBatch": {
+              "count": 12,
+              "mean": 2.3594165000001035,
+              "p50": 2.1385410000002594,
+              "p95": 4.5900000000001455,
+              "p99": 4.5900000000001455,
+              "max": 4.5900000000001455
+            },
+            "mainThreadPrepareAndDispatchCpuMicrosPerBatch": {
+              "count": 12,
+              "mean": 2347.4166666666665,
+              "p50": 2136,
+              "p95": 4482,
+              "p99": 4482,
+              "max": 4482
+            },
+            "processRssHighWaterBytes": 279969792,
+            "transferredPublicBytes": {
+              "count": 52,
+              "mean": 34741.61538461538,
+              "p50": 35388,
+              "p95": 38189,
+              "p99": 38189,
+              "max": 38189
+            },
+            "shutdown": {
+              "graceful": 4,
+              "forced": 0,
+              "pending": 0,
+              "alive": 0
+            },
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 9.803166749999946,
+                "p50": 8.384000000000015,
+                "p95": 12.922249999999622,
+                "p99": 12.922249999999622,
+                "max": 12.922249999999622
+              },
+              "4": {
+                "count": 4,
+                "mean": 16.41888525000013,
+                "p50": 15.00041599999986,
+                "p95": 21.794167000000016,
+                "p99": 21.794167000000016,
+                "max": 21.794167000000016
+              },
+              "8": {
+                "count": 4,
+                "mean": 26.985479250000026,
+                "p50": 27.400166000000354,
+                "p95": 28.128208000000086,
+                "p99": 28.128208000000086,
+                "max": 28.128208000000086
+              }
+            }
+          },
+          "inline": {
+            "workers": 0,
+            "startupMs": 0,
+            "jobs": 52,
+            "batchWallByPopulation": {
+              "1": {
+                "count": 4,
+                "mean": 7.892729249999547,
+                "p50": 7.623374999999214,
+                "p95": 8.529082999999446,
+                "p99": 8.529082999999446,
+                "max": 8.529082999999446
+              },
+              "4": {
+                "count": 4,
+                "mean": 32.662541749999946,
+                "p50": 31.645666999999776,
+                "p95": 33.99070800000027,
+                "p99": 33.99070800000027,
+                "max": 33.99070800000027
+              },
+              "8": {
+                "count": 4,
+                "mean": 65.09073975000001,
+                "p50": 63.64416700000038,
+                "p95": 68.57220799999959,
+                "p99": 68.57220799999959,
+                "max": 68.57220799999959
+              }
+            },
+            "batchThreadCpuMicros": {
+              "count": 12,
+              "mean": 34979.5,
+              "p50": 31445,
+              "p95": 68111,
+              "p99": 68111,
+              "max": 68111
+            },
+            "totalMainThreadCoreSeconds": 0.419754,
+            "mainHeapHighWaterBytes": 41142712
+          }
+        }
+      }
+    ],
+    "cpuBoundary": "Worker thread CPU covers public projection construction. Main-thread public-input preparation plus postMessage dispatch CPU/wall is measured per batch; authority finalization CPU separately covers owner construction, pair choice, compression, result validation, and decoded-frame verification. Scheduler and asynchronous message-delivery CPU cannot be partitioned exactly.",
+    "memoryBoundary": "Per-isolate V8 heap high-water, worker-count multiplied heap upper bounds, and whole-process RSS high-water are recorded. They remain short synthetic-run observations, not allocator/native/clone attribution or process-memory forecasts.",
+    "compressionBoundary": "Compression, owner-lane construction, mixed-pair choice, ledger checks, queue ownership, and send commit remain on the match-authority thread.",
+    "transferBoundary": "Only canonical public keyframe/delta ArrayBuffers cross back from a worker. Owner input never enters a worker. Small fence and digest metadata is cloned and reported separately."
+  },
+  "failureChecks": {
+    "duplicateRejected": true,
+    "staleRejectedBeforeFinalize": true,
+    "ballparkRotationRejected": true,
+    "manifestRotationRejected": true,
+    "recipientRotationRejected": true,
+    "crossMatchRejectedBeforeFinalize": true,
+    "unissuedGenerationRejectedBeforeFinalize": true,
+    "postDispatchMutationIsolated": true,
+    "supersededAfterNewerIssuanceRejectedBeforeFinalize": true,
+    "backpressureRejected": true,
+    "timeoutRejected": true,
+    "gracefulDrain": true,
+    "forcedShutdownRejectsPending": true,
+    "crashRejected": true,
+    "shutdownClean": true,
+    "issuedRequestRecordsRetired": true
+  },
+  "allFailureChecksPassed": true,
+  "authorityBoundary": {
+    "soleWriter": "The match authority retains tick state, ACK/base and ledger mutation, admission, consequences, ordering, queue ownership, result validation, and send commit.",
+    "worker": "Pure public-lane keyframe/delta projection bytes from structured-clone-isolated public snapshots and exact public bases only. The harness expected-output oracle proves parity; a runtime pilot must independently bind and validate current public lineage and hashes.",
+    "workerInputContainsOwner": false,
+    "compressionOwnerSelectionCommitRemainAuthority": true,
+    "prohibited": [
+      "sim mutation",
+      "ACK ingestion",
+      "ledger mutation",
+      "epoch rotation",
+      "queue mutation",
+      "network send",
+      "cross-match reuse"
+    ]
+  },
+  "limitations": [
+    "Synthetic hermetic replay, not product admission",
+    "No runtime worker integration",
+    "Do not use feasibility CPU, heap, or RSS for fleet packing or cost; the runtime pilot must measure total authority-process CPU/RSS and clone cost",
+    "No hosted/fleet cost claim",
+    "No 24/48/96-client claim"
+  ]
+}

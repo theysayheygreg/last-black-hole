@@ -17,8 +17,8 @@
   per match.
 - Sealed 234 jobs and 936 exact byte/digest/frame/selection comparisons with
   zero mismatch. Three Latin-square topology orders reduce synthetic
-  eight-recipient batch p95 from 55.69–57.23 ms inline to 35.75–37.74 ms with
-  two workers and 26.96–29.13 ms with four.
+  eight-recipient batch p95 from 66.24–68.57 ms inline to 37.30–37.45 ms with
+  two workers and 27.73–29.33 ms with four.
 - Added real ready/drain/forced-shutdown lifecycle and live issued-request
   rejection for stale authority, cross-match, duplicate, and out-of-order
   results, plus mutation, backpressure, timeout, and crash checks.
