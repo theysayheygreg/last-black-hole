@@ -19,18 +19,20 @@ const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABI
   PUBLIC_BODY_MANIFEST: PUBLIC_BODY_COMPRESSION_MANIFEST,
   PUBLIC_BODY_MANIFEST_HASH: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH } =
   require("../../scripts/state-pair-compression-codec.cjs");
-const { CAPABILITY: PUBLIC_BODY_CAPABILITY, CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
+const { CAPABILITY: PUBLIC_BODY_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY,
+  CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
   CODEC_MANIFEST_HASH: PUBLIC_BODY_CODEC_MANIFEST_HASH } =
   require("../../scripts/state-pair-public-body-codec.cjs");
 const { canonicalJsonBytes } = require("../../scripts/session-replication-manifest.cjs");
 const { distribution } = require("./state-pair-product-metrics.cjs");
 
 const INPUT_HZ = 10;
-function requestedCapabilities(binary, compression, publicBody) {
+function requestedCapabilities(binary, compression, publicBody, preparedPublicSource) {
   return ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
     RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY,
     ...(binary ? [BINARY_CODEC_CAPABILITY] : []), ...(compression ? [COMPRESSION_CODEC_CAPABILITY] : []),
-    ...(publicBody ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY] : [])];
+    ...(publicBody ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY,
+      ...(preparedPublicSource ? [PREPARED_PUBLIC_SOURCE_CAPABILITY] : [])] : [])];
 }
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
@@ -188,7 +190,7 @@ function startInputs({ startAt, durationMs, phase }) {
 
 async function initialize(config) {
   const capabilities = requestedCapabilities(config.binary === true, config.compression === true,
-    config.publicBody === true);
+    config.publicBody === true, config.preparedPublicSource === true);
   const issued = await request(config.port, "/multiplayer/ticket", {
     method: "POST", authority: config.authority, body: {
       kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2], capabilities,

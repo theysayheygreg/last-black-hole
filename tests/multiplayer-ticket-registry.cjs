@@ -223,6 +223,22 @@ async function run() {
     });
     const redeemed = registry.redeem(issued.ticket, { kind: "admission", runId: "run-a" });
     assert(redeemed.claims.capabilities.includes("state-pair-public-body-v1"));
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-prepared-bad", playerId: "player-prepared-bad",
+      profileId: "profile-prepared-bad", wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies, "state-pair-public-body-prepared-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+    const prepared = registry.issueAdmission({
+      membershipId: "membership-prepared", playerId: "player-prepared",
+      profileId: "profile-prepared", wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies, "state-pair-public-body-v1", "state-pair-public-body-prepared-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    });
+    const redeemedPrepared = registry.redeem(prepared.ticket, { kind: "admission", runId: "run-a" });
+    assert(redeemedPrepared.claims.capabilities.includes("state-pair-public-body-prepared-v1"));
   });
 
   await runner.run("expiry is deterministic under an injected clock", async () => {

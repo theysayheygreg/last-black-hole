@@ -28,7 +28,8 @@ const {
   encodeCompressedStatePair,
   decodeCompressedStatePair,
 } = require("./state-pair-compression-codec.cjs");
-const { CAPABILITY: PUBLIC_BODY_CAPABILITY } = require("./state-pair-public-body-codec.cjs");
+const { CAPABILITY: PUBLIC_BODY_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY } =
+  require("./state-pair-public-body-codec.cjs");
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
 const trustedStatePairLazyCandidateSelectors = new WeakMap();
@@ -293,6 +294,10 @@ function validateHello(frame) {
           || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
       fail("invalid-field", `${PUBLIC_BODY_COMPRESSION_CAPABILITY} requires public-body v1 plus its fallback and excludes binary`);
     }
+    if (frame.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
+        && !frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)) {
+      fail("invalid-field", `${PREPARED_PUBLIC_SOURCE_CAPABILITY} requires public-body v1`);
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -363,6 +368,10 @@ function validateWelcome(frame) {
           || !frame.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
           || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
       fail("invalid-field", `${PUBLIC_BODY_COMPRESSION_CAPABILITY} requires public-body v1 plus its fallback and excludes binary`);
+    }
+    if (frame.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
+        && !frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)) {
+      fail("invalid-field", `${PREPARED_PUBLIC_SOURCE_CAPABILITY} requires public-body v1`);
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");

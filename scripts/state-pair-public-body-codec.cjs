@@ -6,6 +6,7 @@ const { MAX_ORIGINAL_BYTES, PUBLIC_BODY_COMPRESSION_CAPABILITY, PUBLIC_BODY_MANI
   require("./state-pair-compression-codec.cjs");
 
 const CAPABILITY = "state-pair-public-body-v1";
+const PREPARED_PUBLIC_SOURCE_CAPABILITY = "state-pair-public-body-prepared-v1";
 const PAIR_SCHEMA = "lbh-authority-state-pair-body-v1";
 const BODY_SCHEMA = "lbh-public-body-v1";
 const BODY_DELTA_SCHEMA = "lbh-public-body-delta-v1";
@@ -255,6 +256,7 @@ function codecContext(input = {}) {
 
 module.exports = {
   CAPABILITY,
+  PREPARED_PUBLIC_SOURCE_CAPABILITY,
   PAIR_SCHEMA,
   BODY_SCHEMA,
   BODY_DELTA_SCHEMA,

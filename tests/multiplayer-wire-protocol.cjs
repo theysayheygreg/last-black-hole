@@ -150,6 +150,11 @@ async function run() {
       "runtime-public-components-v1", "state-pair-positional-json-v1", "state-pair-brotli-v1",
       "state-pair-public-body-v1", "state-pair-public-body-brotli-v1"];
     validateWireFrame({ ...hello, capabilities: bodyCapabilities }, { direction: CLIENT_TO_SERVER });
+    const preparedCapabilities = [...bodyCapabilities, "state-pair-public-body-prepared-v1"];
+    validateWireFrame({ ...hello, capabilities: preparedCapabilities }, { direction: CLIENT_TO_SERVER });
+    expectProtocolError(() => validateWireFrame({ ...hello,
+      capabilities: preparedCapabilities.filter((value) => value !== "state-pair-public-body-v1") },
+    { direction: CLIENT_TO_SERVER }), "invalid-field");
     expectProtocolError(() => validateWireFrame({ ...hello,
       capabilities: bodyCapabilities.filter((value) => value !== "state-pair-brotli-v1") },
     { direction: CLIENT_TO_SERVER }), "invalid-field");

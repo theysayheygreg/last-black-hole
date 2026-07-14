@@ -109,6 +109,7 @@ const {
   POSITIONAL_CODEC_CAPABILITY,
   BINARY_CODEC_CAPABILITY,
   PUBLIC_BODY_CAPABILITY,
+  PREPARED_PUBLIC_SOURCE_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
 const {
@@ -1059,6 +1060,8 @@ const MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED = MULTIPLAYER_POSITIONAL_JSON_E
   && String(process.env.LBH_SIM_WS_STATE_PAIR_COMPRESSION_V1 || "").trim() === "true";
 const MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED = MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED
   && String(process.env.LBH_SIM_WS_STATE_PAIR_PUBLIC_BODY_V1 || "").trim() === "true";
+const MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED = MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED
+  && String(process.env.LBH_SIM_WS_STATE_PAIR_PREPARED_PUBLIC_SOURCE_V1 || "").trim() === "true";
 const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
   process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
 ).trim() === "true";
@@ -6735,12 +6738,21 @@ function closeMultiplayerBinding(binding) {
   runtimeStatePairAuthority?.disconnect(binding);
 }
 
+function prepareRuntimeStatePairPublicSource(publicFrame, consumers) {
+  if (!runtimeStatePairAuthority) throw streamCommandFailure("state-pair-not-admitted");
+  return runtimeStatePairAuthority.preparePublicSource(publicFrame, consumers);
+}
+
+function finishRuntimeStatePairPublicSource(proof) {
+  return runtimeStatePairAuthority?.finishPreparedPublicSource(proof) || false;
+}
+
 function buildRuntimeStatePair(binding, publicFrame, ownerFrame, _context, _callbackContext,
-  s23tRecipientSlot = null) {
+  options = {}) {
   if (!runtimeStatePairAuthority || !binding.capabilities?.includes(STATE_PAIR_CAPABILITY)) {
     throw streamCommandFailure("state-pair-not-admitted");
   }
-  return runtimeStatePairAuthority.publish(binding, publicFrame, ownerFrame, { s23tRecipientSlot });
+  return runtimeStatePairAuthority.publish(binding, publicFrame, ownerFrame, options);
 }
 
 function acknowledgeRuntimeMultiplayer(binding, frame) {
@@ -7449,7 +7461,10 @@ const server = http.createServer(async (req, res) => {
                           ...(MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED
                             && body.capabilities.includes(PUBLIC_BODY_CAPABILITY)
                             && body.capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)
-                            ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY] : [])]
+                            ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY,
+                              ...(MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED
+                                && body.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
+                                ? [PREPARED_PUBLIC_SOURCE_CAPABILITY] : [])] : [])]
                         : [])] : [])] : [])]
             : [])] : [])].sort()
         : [];
@@ -7866,6 +7881,10 @@ if (MULTIPLAYER_WS_ENABLED) {
     onBindingClosed: closeMultiplayerBinding,
     buildOwnerState: buildOwnerMultiplayerState,
     buildStatePair: MULTIPLAYER_STATE_PAIR_V1_ENABLED ? buildRuntimeStatePair : null,
+    prepareStatePairPublicSource: MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED
+      ? prepareRuntimeStatePairPublicSource : null,
+    finishStatePairPublicSource: MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED
+      ? finishRuntimeStatePairPublicSource : null,
     buildEventRecovery: buildMultiplayerEventRecovery,
     onAck: acknowledgeRuntimeMultiplayer,
     onStatePairRecovery: recoverRuntimeStatePair,

@@ -15,6 +15,7 @@ const {
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   POSITIONAL_CODEC_CAPABILITY,
   PUBLIC_BODY_CAPABILITY,
+  PREPARED_PUBLIC_SOURCE_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   RuntimeStatePairError,
   createRuntimeStatePairAuthority,
@@ -138,6 +139,20 @@ function wire(frame) {
   return encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
 }
 
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+function publicBodySourceFrames(id, beat) {
+  const source = sourceFrames(id, beat);
+  for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
+    source.publicFrame.state.world[lane] = [];
+  }
+  return source;
+}
+
 async function run() {
   const runner = new TestRunner("RuntimeStatePairIntegration");
 
@@ -151,8 +166,8 @@ async function run() {
     const server = authority();
     server.admit(a, claims(a));
     server.admit(b, claims(b));
-    const sourceA = sourceFrames(a, 1);
-    const sourceB = sourceFrames(b, 1);
+    const sourceA = publicBodySourceFrames(a, 1);
+    const sourceB = publicBodySourceFrames(b, 1);
     for (const source of [sourceA, sourceB]) {
       for (const lane of ["wrecks", "portals", "scavengers", "fauna", "sentries"]) {
         source.publicFrame.state.world[lane] = [];
@@ -192,6 +207,97 @@ async function run() {
     assert.strictEqual(diagnostics.bodyBuilds, 2);
     assert.strictEqual(diagnostics.bodyCacheHits, 0);
     assert.strictEqual(diagnostics.recipients, 2);
+  });
+
+  await runner.run("S23P prepares and proves one public source for an exact bounded recipient set", async () => {
+    const caps = [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+      POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_CAPABILITY,
+      PUBLIC_BODY_COMPRESSION_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY,
+      "static-manifest-v1"].sort();
+    const a = binding("prepared-a", { capabilities: caps });
+    const b = binding("prepared-b", { capabilities: caps });
+    const server = authority();
+    server.admit(a, claims(a));
+    server.admit(b, claims(b));
+    const sourceA = publicBodySourceFrames(a, 1);
+    const sourceB = publicBodySourceFrames(b, 1);
+    const publicFrame = deepFreeze(sourceA.publicFrame);
+    const proof = server.preparePublicSource(publicFrame, [
+      { binding: a, ordinal: 0 }, { binding: b, ordinal: 1 },
+    ]);
+    const firstA = server.publish(a, publicFrame, sourceA.ownerFrame, {
+      preparedPublicSource: proof, preparedRecipientOrdinal: 0,
+    });
+    const firstB = server.publish(b, publicFrame, sourceB.ownerFrame, {
+      preparedPublicSource: proof, preparedRecipientOrdinal: 1,
+    });
+    assert.strictEqual(firstA.frame.bodyHash, firstB.frame.bodyHash);
+    assert.strictEqual(firstA.frame.public, firstB.frame.public);
+    const controlCaps = caps.filter((value) => value !== PREPARED_PUBLIC_SOURCE_CAPABILITY);
+    const controlA = { ...a, capabilities: controlCaps };
+    const controlB = { ...b, capabilities: controlCaps };
+    const control = authority();
+    control.admit(controlA, claims(controlA));
+    control.admit(controlB, claims(controlB));
+    assert.strictEqual(control.publish(controlA, publicFrame, sourceA.ownerFrame).encodedWire,
+      firstA.encodedWire, "S23P must preserve the exact S23 recipient wire");
+    assert.strictEqual(control.publish(controlB, publicFrame, sourceB.ownerFrame).encodedWire,
+      firstB.encodedWire, "S23P must preserve the exact S23 recipient wire");
+    const diagnostics = server.diagnostics().publicBody;
+    assert.strictEqual(diagnostics.authority.bodyBuilds, 1);
+    assert.deepStrictEqual({
+      active: diagnostics.preparedPublicSource.active,
+      issued: diagnostics.preparedPublicSource.issued,
+      consumed: diagnostics.preparedPublicSource.consumed,
+      rejected: diagnostics.preparedPublicSource.rejected,
+      validations: diagnostics.preparedPublicSource.publicValidations,
+      canonicalizations: diagnostics.preparedPublicSource.publicCanonicalizations,
+      hashes: diagnostics.preparedPublicSource.publicHashes,
+    }, { active: 0, issued: 1, consumed: 2, rejected: 0, validations: 1,
+      canonicalizations: 1, hashes: 1 });
+    assert(!JSON.stringify(diagnostics).includes(a.membershipId));
+    assert(!JSON.stringify(diagnostics).includes(a.playerId));
+
+    const beatTwoA = publicBodySourceFrames(a, 2);
+    const beatTwoB = publicBodySourceFrames(b, 2);
+    const beatTwoPublic = deepFreeze(beatTwoA.publicFrame);
+    const swapped = server.preparePublicSource(beatTwoPublic, [
+      { binding: a, ordinal: 0 }, { binding: b, ordinal: 1 },
+    ]);
+    assert.throws(() => server.publish(a, beatTwoPublic, beatTwoA.ownerFrame, {
+      preparedPublicSource: swapped, preparedRecipientOrdinal: 1,
+    }), (error) => error.code === "invalid-prepared-public-source");
+    assert.throws(() => server.publish(b, beatTwoPublic, beatTwoB.ownerFrame, {
+      preparedPublicSource: swapped, preparedRecipientOrdinal: 1,
+    }), (error) => error.code === "invalid-prepared-public-source");
+
+    const stale = server.preparePublicSource(beatTwoPublic, [
+      { binding: a, ordinal: 0 }, { binding: b, ordinal: 1 },
+    ]);
+    assert(server.finishPreparedPublicSource(stale));
+    assert.throws(() => server.publish(a, beatTwoPublic, beatTwoA.ownerFrame, {
+      preparedPublicSource: stale, preparedRecipientOrdinal: 0,
+    }), (error) => error.code === "invalid-prepared-public-source");
+
+    const mutable = publicBodySourceFrames(a, 3).publicFrame;
+    Object.freeze(mutable);
+    assert.throws(() => server.preparePublicSource(mutable, [{ binding: a, ordinal: 0 }]),
+      (error) => error.code === "mutable-public-source");
+    assert.throws(() => server.preparePublicSource(deepFreeze(publicBodySourceFrames(a, 4).publicFrame), [
+      { binding: a, ordinal: 0 }, { binding: a, ordinal: 1 },
+    ]), (error) => error.code === "prepared-consumer-set");
+
+    const beatFive = publicBodySourceFrames(a, 5);
+    const beatFivePublic = deepFreeze(beatFive.publicFrame);
+    const exactRef = server.preparePublicSource(beatFivePublic, [{ binding: a, ordinal: 0 }]);
+    const equalClone = deepFreeze(JSON.parse(JSON.stringify(beatFivePublic)));
+    assert.throws(() => server.publish(a, equalClone, beatFive.ownerFrame, {
+      preparedPublicSource: exactRef, preparedRecipientOrdinal: 0,
+    }), (error) => error.code === "invalid-prepared-public-source");
+    const forged = Object.freeze(Object.create(null));
+    assert.throws(() => server.publish(a, beatFivePublic, beatFive.ownerFrame, {
+      preparedPublicSource: forged, preparedRecipientOrdinal: 0,
+    }), (error) => error.code === "invalid-prepared-public-source");
   });
 
   await runner.run("S20 fallback and S23 preserve visible semantics owner privacy and ACK consequences", async () => {

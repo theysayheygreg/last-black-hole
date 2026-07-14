@@ -54,6 +54,7 @@ const MAX_PENDING_REPLAY_BYTES = 64 * 1024;
 const ACTION_RELIABLE_MESSAGE_RESERVE = 16;
 const ACTION_RELIABLE_BYTE_RESERVE = 32 * 1024;
 const STATE_PAIR_RECOVERY_COOLDOWN_MS = 1000;
+const PREPARED_PUBLIC_SOURCE_CAPABILITY = "state-pair-public-body-prepared-v1";
 const ACK_REJECT_REASON_CODES = new Set(["unknown-recipient", "identity-mismatch", "invalid-frame-id",
   "unknown-frame", "invalid-ack-schema", "lineage-mismatch", "unexpected-state-pair-ack", "unknown"]);
 const ACK_REJECT_RELATIONS = new Set(["duplicate", "stale", "future", "unknown", "pending-missing", "hash",
@@ -101,7 +102,9 @@ function createSimWebSocketAdapter(options = {}) {
   const onBindingOpened = typeof options.onBindingOpened === "function" ? options.onBindingOpened : null;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
-    onPong, onAck, onStatePairRecovery, onPressureTransition, buildStatePair, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
+    onPong, onAck, onStatePairRecovery, onPressureTransition, buildStatePair,
+    prepareStatePairPublicSource, finishStatePairPublicSource, now, path, helloTimeoutMs,
+    heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
     maxConnections, maxPendingHello, maxPendingInbound, maxPendingInboundBytes, maxPendingInboundBytesTotal,
     sweepIntervalMs, queueOptions,
   } = config;
@@ -1715,6 +1718,46 @@ function createSimWebSocketAdapter(options = {}) {
     }
     let sharedBodyPublicFrame = null;
     let sharedBodyManifestHash = null;
+    let preparedPublicSource = null;
+    let preparedPublicSourceError = null;
+    const preparedRecipientOrdinals = new Map();
+    const preparedCandidates = prepareStatePairPublicSource
+      ? statePairCandidates.filter((state) =>
+          state.capabilities?.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)) : [];
+    if (preparedCandidates.length > 0) {
+      try {
+        const first = preparedCandidates[0];
+        sharedBodyManifestHash = first.binding?.manifestHash;
+        if (preparedCandidates.some((state) => state.binding?.manifestHash !== sharedBodyManifestHash)) {
+          throw new WireProtocolError("manifest-mismatch",
+            "one prepared public source cannot span different session manifests", 4403);
+        }
+        const projectPreparedSource = () => first.binding?.manifestHash
+          ? projectPublicStateForBinding(
+              first.binding,
+              publicFrame,
+              callbackContext(first, "state-pair-prepared-public-source"),
+            )
+          : publicFrame;
+        const projectedPreparedSource = stageProfiler
+          ? await stageProfiler.measureAsync(STAGES.STATIC_MANIFEST_PREP, (projectedFrame) => ({
+              recipientKey: profileRecipientKey(first),
+              inputBytes: Buffer.byteLength(JSON.stringify(publicFrame), "utf8"),
+              outputBytes: Buffer.byteLength(JSON.stringify(projectedFrame), "utf8"),
+            }), projectPreparedSource)
+          : await projectPreparedSource();
+        sharedBodyPublicFrame = deepFreezeSharedPublicSource(projectedPreparedSource);
+        const consumers = preparedCandidates.map((state, ordinal) => {
+          preparedRecipientOrdinals.set(state, ordinal);
+          return Object.freeze({ binding: state.binding, ordinal });
+        });
+        preparedPublicSource = await prepareStatePairPublicSource(sharedBodyPublicFrame,
+          Object.freeze(consumers));
+      } catch (error) {
+        preparedPublicSourceError = error;
+      }
+    }
+    try {
     for (const state of statePairCandidates) {
       try {
         if (!(await isBindingCurrent(state, "private-state-pair-project"))) {
@@ -1733,6 +1776,12 @@ function createSimWebSocketAdapter(options = {}) {
             )
           : publicFrame;
         const wantsSharedBody = state.capabilities?.includes("state-pair-public-body-v1");
+        const wantsPreparedSource = state.capabilities?.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY);
+        if (wantsPreparedSource && preparedPublicSourceError) throw preparedPublicSourceError;
+        if (wantsPreparedSource && !preparedPublicSource) {
+          throw new WireProtocolError("prepared-source-unavailable",
+            "prepared public source proof was not issued for this authority beat", 4403);
+        }
         if (wantsSharedBody && sharedBodyPublicFrame
             && sharedBodyManifestHash !== state.binding?.manifestHash) {
           throw new WireProtocolError("manifest-mismatch",
@@ -1773,7 +1822,13 @@ function createSimWebSocketAdapter(options = {}) {
           ownerFrame,
           context,
           callbackContext(state, "state-pair-project"),
-          s23tRecipientSlot(state),
+          Object.freeze({
+            s23tRecipientSlot: s23tRecipientSlot(state),
+            ...(wantsPreparedSource ? {
+              preparedPublicSource,
+              preparedRecipientOrdinal: preparedRecipientOrdinals.get(state),
+            } : {}),
+          }),
         );
         const pair = s23tProfiler && !wantsSharedBody
           ? await Promise.resolve(s23tProfiler.measureSync(
@@ -1795,6 +1850,11 @@ function createSimWebSocketAdapter(options = {}) {
       } catch (error) {
         skipped += 1;
         failConnection(state, error, { fatal: error?.fatal === true });
+      }
+    }
+    } finally {
+      if (preparedPublicSource && finishStatePairPublicSource) {
+        await finishStatePairPublicSource(preparedPublicSource);
       }
     }
     return { projected, skipped, snapshotId: publicFrame.snapshotId };
