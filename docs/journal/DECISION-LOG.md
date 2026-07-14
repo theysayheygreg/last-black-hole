@@ -3070,3 +3070,22 @@ cadence changes, and 24/48/96 remain closed.
 **Door status:** Closed for S23 promotion and eight-player admission. The
 default-off representation remains available only as measured research
 scaffolding; no next implementation lane is selected by this decision.
+
+### Q: What causes S23's remaining one/eight-player tail?
+
+| Date | Decision |
+|------|----------|
+| Jul 13 | Add S23T as attribution only. Its activation requires test mode, replication evidence guards, accounting, and the evidence-harness guard. Its 512-beat ring contains only ordinal slots and numeric values; exclusive timers cannot nest, and async callback/ACK wall time is not summed as CPU. |
+| Jul 13 | Accept the A1/B/A2 method. Profiler-off B remains NORMAL and correct at 9.35/9.85 Hz for eight/one, within 10% of sealed S23 p50/p95. Positive profiler overhead is <=3.8% at p50/p95 and <=0.018 core; 192--204 beats and >=99.15% reconciliation pass. |
+| Jul 13 | Attribute the bounded cause to public source/body preparation: source/core construction, source/body normalization and allowlist validation, and source/body/structural canonical encoding/hashes. Its eight-player p95 is 43.67/44.36 ms across A1/A2 and its one-player delta over S20 is 15.45/14.87 ms. Both exceed the required 70% explanation threshold. |
+| Jul 13 | Do not target GC, compression, send, ACK, workers, or relaxed gates. Eight-player GC p95 is only 0.45/0.52 ms; other individual families do not explain both regressions. |
+| Jul 13 | Select exactly one next lane: S23P prepared public-source proof. Prepare one immutable normalized/canonical public proof before the recipient loop; preserve recipient-local owner validation, identity, ACK/base selection, pending/retired records, compression, queue/send state, and the one gameplay writer. |
+
+Each match/group still owns one dedicated logical authority. Concurrent matches
+multiply independent authorities horizontally. S23 remains default-off, eight
+remains closed, and S24 remains reserved for future 24-player scale work.
+
+**Door status:** Open only for S23P prepared public-source proof with exact
+parity/privacy/adversarial proof and unchanged 50/70 ms gates. Closed for S23
+promotion, workers, cadence/gate changes, hosted/fleet/heavier-sim work, and
+24/48/96.

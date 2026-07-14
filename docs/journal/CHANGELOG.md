@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-07-13 — v0.4 S23T public-body tail attribution
+
+- Added a test/evidence-only S23T profiler with a 512-source-beat numeric ring,
+  ordinal recipient slots, non-nested exclusive timers, separately labeled
+  async callback/ACK wall time, sim tick, GC, process CPU/ELU, and bounded
+  memory high-water evidence.
+- Guarded activation behind `NODE_ENV=test`, replication accounting/baseline
+  guards, and the evidence-harness flag; no ticket, capability, product config,
+  or release default can enable it.
+- Sealed clean A1/B/A2 S23 captures plus an S20 one-player comparator at commit
+  `65e3676`; every population uses one authority process, isolated client
+  processes, 5 s warmup, and an exact 20 s window.
+- Proved the profiler method is low-overhead and repeatable with 192--204
+  complete beats, >=99.15% aggregate stage reconciliation, and <1%
+  unattributed p95 wall time.
+- Attributed the eight-player excess and one-player S23 regression to public
+  source/body preparation. GC p95 remains <=0.52 ms and is not the leading
+  cause.
+- Selected exactly one next lane, S23P prepared public-source proof. S23 stays
+  default-off, S20 remains the 1--4 path, eight stays closed, and S24 remains
+  reserved for the future 24-player scale track.
+
 ## 2026-07-13 — v0.4 S23 shared public body retained default-off
 
 - Added negotiated `state-pair-public-body-v1` plus a distinct manifest-bound

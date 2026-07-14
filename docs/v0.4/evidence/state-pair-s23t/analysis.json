@@ -1,0 +1,56 @@
+{
+  "schema": "lbh-s23t-tail-attribution-analysis-v1",
+  "commit": "65e3676f01e398f1a2d41c50681d6686ac61b9e2",
+  "captures": {
+    "a1": { "compositeSha256": "e6c23b119de3326a74d83715f4ed1a010fe5e30ff0b6765ee6379c6677ac7406", "profile": true, "populations": [1, 8] },
+    "b": { "compositeSha256": "7b59cece97583ffdab93281f613377b593b5b5c4a78e5ff22a9950a337d79c7f", "profile": false, "populations": [8, 1] },
+    "a2": { "compositeSha256": "dbca2fd2947b43a7b51ba87c91dea1029945cee852fd070e0b96c248bb40e8b6", "profile": true, "populations": [8, 1] },
+    "s20One": { "compositeSha256": "f07dc0a48b0ecf093c271a4ec8cd06350109ab5034e05d960c6a29e37706973a", "profile": true, "populations": [1] }
+  },
+  "sealedS23Reference": {
+    "one": { "p50Ms": [25.252125, 25.51625], "p95Ms": [28.219208, 28.30725] },
+    "eight": { "p50Ms": [73.148, 71.789916], "p95Ms": [88.575292, 88.330583] }
+  },
+  "control": {
+    "one": { "hz": 9.85, "overload": "NORMAL", "p50Ms": 25.51195899999948, "p95Ms": 28.47425000000112, "p99Ms": 32.24974999999904, "oneCoreFraction": 0.29035464304626196 },
+    "eight": { "hz": 9.35, "overload": "NORMAL", "p50Ms": 67.60829100000046, "p95Ms": 83.08075000000099, "p99Ms": 89.93016699999862, "oneCoreFraction": 0.7361952923165247 }
+  },
+  "profiles": {
+    "a1": {
+      "one": { "hz": 9.85, "p50Ms": 24.564707999998063, "p95Ms": 28.503708000000188, "p99Ms": 28.921374999999898, "oneCoreFraction": 0.28687025362144475, "completeBeats": 204, "reconciliationRatio": 0.99188420982818, "unattributedP95Ms": 0.25862799999777053, "sourceBodyPreparationP95Ms": 16.24566799999957 },
+      "eight": { "hz": 9.25, "p50Ms": 69.14258300000074, "p95Ms": 82.18549999999959, "p99Ms": 90.19475000000057, "oneCoreFraction": 0.7540866838981428, "completeBeats": 194, "reconciliationRatio": 0.9916336597313143, "unattributedP95Ms": 0.8192890000027546, "sourceBodyPreparationP95Ms": 43.670541999992565, "gcP95Ms": 0.44979190826416016, "gcP99Ms": 1.002458095550537, "gcMaxMs": 4.664124965667725, "heapUsedHighWater": 47273384, "rssHighWater": 141967360, "arrayBuffersHighWater": 2654369 },
+      "overheadVersusB": { "oneP50": -0.037129684945065744, "oneP95": 0.0010345487589336066, "oneCore": -0.0034843894248172136, "eightP50": 0.02269384386598783, "eightP95": -0.010775661028594286, "eightCore": 0.01789139158161812 }
+    },
+    "a2": {
+      "one": { "hz": 9.8, "p50Ms": 26.35516700000062, "p95Ms": 27.677165999999488, "p99Ms": 28.08679099999972, "oneCoreFraction": 0.2910536583016232, "completeBeats": 203, "reconciliationRatio": 0.9919535951160617, "unattributedP95Ms": 0.2575399999986985, "sourceBodyPreparationP95Ms": 15.665291999997862 },
+      "eight": { "hz": 9.15, "p50Ms": 69.9433339999996, "p95Ms": 86.26370799999859, "p99Ms": 95.77441700000054, "oneCoreFraction": 0.7536090996168583, "completeBeats": 192, "reconciliationRatio": 0.9914711491868758, "unattributedP95Ms": 0.845002000030945, "sourceBodyPreparationP95Ms": 44.36258399999679, "gcP95Ms": 0.5172500610351562, "gcP99Ms": 1.1819591522216797, "gcMaxMs": 4.144042015075684, "heapUsedHighWater": 45993880, "rssHighWater": 142344192, "arrayBuffersHighWater": 2187695 },
+      "overheadVersusB": { "oneP50": 0.033051479896199165, "oneP95": -0.027993151707300545, "oneCore": 0.0006990152553612572, "eightP50": 0.03453782022088259, "eightP95": 0.03831161851569176, "eightCore": 0.017413807300333595 }
+    },
+    "s20One": { "hz": 9.75, "p50Ms": 13.889250000000175, "p95Ms": 15.311875000001237, "p99Ms": 16.029458999997587, "oneCoreFraction": 0.17249824155706509, "completeBeats": 202, "sourceBodyPreparationP95Ms": 0.7985420000004524 }
+  },
+  "methodGates": {
+    "controlNormalCadenceCorrectCleanup": true,
+    "controlWithinSealedS23TenPercent": true,
+    "profilerOverheadP50P95WithinTenPercent": true,
+    "positiveAuthorityCoreOverheadAtMost005": true,
+    "minimumCompleteBeats128": true,
+    "exclusiveReconciliationAtLeast099": true,
+    "unattributedP95BelowTenPercent": true,
+    "leadingFamilyAgreementWithinFifteenPercent": true,
+    "selectionThresholdMetAtOneAndEight": true,
+    "methodPassed": true
+  },
+  "selection": {
+    "family": "public source/body preparation",
+    "stages": ["publicCoreSource", "bodyNormalizeAllowlist", "bodyCanonicalEncodingHash"],
+    "a1EightExcessMs": 32.18549999999959,
+    "a1EightFamilyShare": 1.3568390113558315,
+    "a2EightExcessMs": 36.26370799999859,
+    "a2EightFamilyShare": 1.223332815276323,
+    "a1OneRegressionMs": 13.191832999998951,
+    "a1OneFamilyShare": 1.1709613061354207,
+    "a2OneRegressionMs": 12.365290999998251,
+    "a2OneFamilyShare": 1.2022968161444412,
+    "nextLane": "S23P prepared public-source proof"
+  }
+}

@@ -504,7 +504,7 @@ function validateArtifact(directory) {
     aggregateContract: aggregate.schema === (run.config.publicBody ? "lbh-s23-public-body-aggregate-v1"
       : run.config.compression ? "lbh-s20-compression-aggregate-v1"
       : run.config.binary ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1")
-      && aggregate.commit === run.commit && aggregate.scenarios.length === POPULATIONS.length,
+      && aggregate.commit === run.commit && aggregate.scenarios.length === artifactPopulations.length,
     exactPopulations: JSON.stringify(scenarios.map((entry) => entry.population))
       === JSON.stringify(artifactPopulations),
     semanticRecomputation: semantic.every((checks) => Object.values(checks).every(Boolean)),
@@ -513,7 +513,7 @@ function validateArtifact(directory) {
       && entry.performance.clients.every((client) => client.cpuUsage.totalMicroseconds > 0)),
     fixedWindowRetainsAllClients: scenarios.every((entry) =>
       Object.keys(entry.cadence.receiverAcceptedPairsPerSecondByClient).length === entry.population),
-    cleanup: cleanup.every((entry, index) => entry.population === POPULATIONS[index]
+    cleanup: cleanup.every((entry, index) => entry.population === artifactPopulations[index]
       && entry.authorityPid === scenarios[index].topology.authorityPid
       && entry.passed === true && entry.portDead === true && entry.pidDead === true
       && entry.preStopConnections === 0

@@ -782,6 +782,27 @@ the one-through-four product path and eight remains closed. Evidence is under
 `docs/v0.4/evidence/state-pair-s23/`; the design and decision are in
 `docs/v0.4/MULTIPLAYER-STATE-PAIR-S23-PUBLIC-BODY.md`.
 
+**S23T tail attribution — complete; one bounded next lane selected:** A
+test/evidence-only 512-beat profiler measures non-nested exclusive authority
+stages plus separate async callback/ACK wall time, sim tick, GC, ELU/CPU, and
+memory high-water. Clean A1/B/A2 captures and an S20 one-player comparator use
+isolated processes, 5 s warmup, and exact 20 s windows. The profiler-off
+control remains NORMAL at 9.35/9.85 Hz for eight/one and stays within 10% of
+sealed S23 p50/p95. Profiler overhead, minimum beat count, 99% reconciliation,
+<10% unattributed tail, and repeatability gates pass.
+
+Public source/body preparation is the only family above the 70% selection
+threshold in both dimensions. It measures 43.67/44.36 ms p95 at eight and
+15.45/14.87 ms more than S20 at one, explaining the full eight-player excess
+and one-player regression after offsetting savings. GC p95 remains <=0.52 ms
+and is not the primary cause. Select only S23P prepared public-source proof:
+one immutable normalized/canonical public proof before the recipient loop,
+with owner validation and every recipient authority boundary left local.
+S23 remains default-off; eight remains closed; `S24` stays reserved for the
+future 24-player scale track. Evidence is under
+`docs/v0.4/evidence/state-pair-s23t/` and the method/decision is in
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S23T-TAIL-ATTRIBUTION.md`.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms
