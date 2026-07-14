@@ -148,6 +148,22 @@ async function main() {
   });
   const localProfile = await local.bootstrapProfile({ fallbackName: "Offline Pilot" });
   assert(localProfile.id, "Local embedded mode must remain network-independent");
+  assert.strictEqual(local.storageBackend, "json", "JSON remains the explicit local default");
+  const relational = createControlPlaneClient({
+    controlPlaneFile: path.join(tmp, "local-store.sqlite"),
+    sessionRegistryFile: path.join(tmp, "local-relational-registry.json"),
+    storageBackend: "sqlite",
+  });
+  const relationalProfile = await relational.bootstrapProfile({ fallbackName: "Relational Pilot" });
+  assert(relationalProfile.id, "Relational local mode must derive a durable profile id");
+  await relational.saveEchoWreck({ wreckId: "echo-a", mapId: "map-a", seed: "seed-a", loot: [{ id: "relic-a" }] });
+  assert.strictEqual((await relational.getEchoesForSeed("seed-a", "map-a")).length, 1, "Relational local mode must preserve echo parity");
+  relational.close();
+  assert.throws(() => createControlPlaneClient({
+    controlPlaneFile: path.join(tmp, "bad-backend"),
+    sessionRegistryFile: path.join(tmp, "bad-backend-registry.json"),
+    storageBackend: "caller-selected-cloud",
+  }), /json or sqlite/);
   assert.throws(() => createControlPlaneClient({
     controlPlaneFile: path.join(tmp, "bad-hosted.json"),
     sessionRegistryFile: path.join(tmp, "bad-hosted-registry.json"),

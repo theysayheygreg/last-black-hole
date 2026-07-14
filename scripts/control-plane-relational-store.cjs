@@ -225,9 +225,10 @@ class RelationalControlPlaneStore {
   }
 
   bootstrapProfile({ profileId, snapshot, fallbackName = "Pilot" }) {
+    const durableProfileId = profileId || snapshot?.id || crypto.randomUUID();
     return this._transaction(() => {
-      const existing = this._profileRow(boundedString(profileId || snapshot?.id, "profileId"));
-      if (!existing) return clone(this._rowToProfile(this._insertProfile(profileId || snapshot?.id, snapshot, fallbackName)));
+      const existing = this._profileRow(boundedString(durableProfileId, "profileId"));
+      if (!existing) return clone(this._rowToProfile(this._insertProfile(durableProfileId, snapshot, fallbackName)));
       const name = boundedString(snapshot?.name || existing.name, "profile.name", { max: 64 });
       if (name !== existing.name) {
         const revision = Number(existing.revision) + 1;
@@ -620,6 +621,62 @@ class RelationalControlPlaneStore {
     return this.upsertSession({ ...session, status: extra.status || "ENDED" }, players);
   }
 
+  saveEchoWreck(wreck) {
+    if (!wreck || typeof wreck !== "object" || Array.isArray(wreck)) {
+      throw Object.assign(new Error("echo is malformed"), { code: "INVALID_INPUT" });
+    }
+    if (!Array.isArray(wreck.loot) || wreck.loot.filter(Boolean).length === 0) {
+      throw Object.assign(new Error("echo.loot is required"), { code: "INVALID_INPUT" });
+    }
+    const mapId = boundedString(wreck.mapId, "echo.mapId");
+    const seed = boundedString(wreck.seed, "echo.seed");
+    const wreckId = boundedString(wreck.wreckId, "echo.wreckId");
+    const createdAt = typeof wreck.createdAt === "string" && wreck.createdAt
+      ? boundedString(wreck.createdAt, "echo.createdAt", { max: 64 })
+      : nowIso();
+    const record = { ...clone(wreck), mapId, seed, wreckId, createdAt };
+    const payloadJson = boundedJson(record, "echo", 65536);
+    return this._transaction(() => {
+      this.db.prepare(`
+        INSERT INTO echo_wrecks(map_id, seed, wreck_id, payload_json, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(map_id, seed, wreck_id) DO UPDATE SET
+          payload_json = excluded.payload_json,
+          created_at = excluded.created_at
+      `).run(mapId, seed, wreckId, payloadJson, createdAt);
+      this.db.prepare(`
+        DELETE FROM echo_wrecks
+        WHERE map_id = ? AND seed = ? AND wreck_id IN (
+          SELECT wreck_id FROM echo_wrecks
+          WHERE map_id = ? AND seed = ?
+          ORDER BY created_at DESC, wreck_id DESC
+          LIMIT -1 OFFSET 8
+        )
+      `).run(mapId, seed, mapId, seed);
+      return clone(record);
+    });
+  }
+
+  getEchoesForSeed(seed, mapId = null) {
+    if (seed == null || mapId == null) return [];
+    const safeMapId = boundedString(mapId, "echo.mapId");
+    const safeSeed = boundedString(seed, "echo.seed");
+    return this.db.prepare(`
+      SELECT payload_json FROM echo_wrecks
+      WHERE map_id = ? AND seed = ?
+      ORDER BY created_at, wreck_id
+    `).all(safeMapId, safeSeed)
+      .map((row) => parseJson(row.payload_json, null))
+      .filter((echo) => echo && Array.isArray(echo.loot) && echo.loot.filter(Boolean).length > 0)
+      .map(clone);
+  }
+
+  clearEchoesForSeed(seed, mapId = null) {
+    if (seed == null || mapId == null) return 0;
+    return Number(this.db.prepare("DELETE FROM echo_wrecks WHERE map_id = ? AND seed = ?")
+      .run(boundedString(mapId, "echo.mapId"), boundedString(seed, "echo.seed")).changes);
+  }
+
   inspectJsonSnapshot(sourcePath) {
     return relationalMigration.inspectJsonSnapshot(sourcePath).report;
   }
@@ -647,7 +704,7 @@ class RelationalControlPlaneStore {
   inspectCounts() {
     const tables = ["profiles", "profile_revisions", "inventory_items", "ledger_entries", "sessions",
       "session_memberships", "runs", "run_memberships", "authority_leases", "run_results",
-      "run_settlements", "conflict_quarantine", "import_journal", "deletion_ledger"];
+      "run_settlements", "conflict_quarantine", "import_journal", "deletion_ledger", "echo_wrecks"];
     return Object.fromEntries(tables.map((table) => [table, Number(this.db.prepare(`SELECT count(*) AS count FROM ${table}`).get().count)]));
   }
 

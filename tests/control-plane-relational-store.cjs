@@ -206,6 +206,28 @@ async function main() {
   }
 
   {
+    const { store } = tempStore("echo-parity");
+    for (let index = 0; index < 10; index += 1) {
+      const saved = store.saveEchoWreck({
+        wreckId: `wreck-${index}`,
+        mapId: "deep-field",
+        seed: "seed-a",
+        loot: [{ id: `loot-${index}` }],
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      });
+      equal(saved.wreckId, `wreck-${index}`, "echo save should return durable record");
+    }
+    equal(store.getEchoesForSeed("seed-a", "deep-field").length, 8, "echo cap should retain eight newest records");
+    equal(store.getEchoesForSeed("seed-a", "other-map").length, 0, "echoes must remain map scoped");
+    store.saveEchoWreck({ wreckId: "wreck-9", mapId: "deep-field", seed: "seed-a", loot: [{ id: "replacement" }] });
+    equal(store.getEchoesForSeed("seed-a", "deep-field").filter((echo) => echo.wreckId === "wreck-9").length, 1, "echo replacement should be idempotent");
+    rejects(() => store.saveEchoWreck({ wreckId: "empty", mapId: "deep-field", seed: "seed-a", loot: [] }), "INVALID_INPUT", "empty echo loot should reject");
+    equal(store.clearEchoesForSeed("seed-a", "deep-field"), 8, "echo clear should return deleted count");
+    equal(store.getEchoesForSeed("seed-a", "deep-field").length, 0, "echo clear should remove scoped rows");
+    store.close();
+  }
+
+  {
     const { directory, store } = tempStore("import");
     const dryA = store.importJsonSnapshot({ sourcePath: FIXTURE, dryRun: true });
     const dryB = store.importJsonSnapshot({ sourcePath: FIXTURE, dryRun: true });

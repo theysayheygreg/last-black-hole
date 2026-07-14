@@ -1,4 +1,5 @@
 const { ControlPlaneStore } = require("./control-plane-store.cjs");
+const { RelationalControlPlaneStore } = require("./control-plane-relational-store.cjs");
 const { SessionRegistry } = require("./session-registry.cjs");
 const {
   SERVICE_MODES,
@@ -24,9 +25,19 @@ async function requestJson(method, baseUrl, route, body = null, extraHeaders = n
 }
 
 class LocalControlPlaneClient {
-  constructor({ controlPlaneFile, sessionRegistryFile }) {
-    this.store = new ControlPlaneStore(controlPlaneFile);
+  constructor({ controlPlaneFile, sessionRegistryFile, storageBackend = "json" }) {
+    if (storageBackend !== "json" && storageBackend !== "sqlite") {
+      throw new Error("Local control-plane storageBackend must be json or sqlite");
+    }
+    this.storageBackend = storageBackend;
+    this.store = storageBackend === "sqlite"
+      ? new RelationalControlPlaneStore(controlPlaneFile)
+      : new ControlPlaneStore(controlPlaneFile);
     this.registry = new SessionRegistry(sessionRegistryFile);
+  }
+
+  close() {
+    if (typeof this.store.close === "function") this.store.close();
   }
 
   async bootstrapProfile({ profileId, snapshot, fallbackName }) {

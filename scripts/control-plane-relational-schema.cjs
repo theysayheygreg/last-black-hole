@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const MIGRATIONS = [
   {
@@ -250,6 +250,23 @@ const MIGRATIONS = [
       BEGIN
         SELECT RAISE(ABORT, 'lease epoch must increase monotonically');
       END;
+    `,
+  },
+  {
+    version: 3,
+    name: "echo-wreck-parity",
+    sql: `
+      CREATE TABLE echo_wrecks (
+        map_id TEXT NOT NULL CHECK(length(map_id) BETWEEN 1 AND 128),
+        seed TEXT NOT NULL CHECK(length(seed) BETWEEN 1 AND 128),
+        wreck_id TEXT NOT NULL CHECK(length(wreck_id) BETWEEN 1 AND 128),
+        payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(map_id, seed, wreck_id)
+      ) STRICT;
+
+      CREATE INDEX echo_wrecks_by_seed_age
+        ON echo_wrecks(map_id, seed, created_at, wreck_id);
     `,
   },
 ];
