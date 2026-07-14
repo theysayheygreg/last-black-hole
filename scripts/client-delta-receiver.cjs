@@ -716,7 +716,6 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
             projection: bodyMeta.projection }),
           owner: deepFreeze({ kind: "keyframe", resultHash: overlay.owner.resultHash,
             projection: overlay.owner.view }) });
-        counters.splitAtomicPublishes += 1;
       } else frame = publicBody
         ? decodePublicBodyFrame(decodeCompressedPublicBodyStatePair(raw), bodyCodecContext)
         : parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
@@ -913,6 +912,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         recoveryEpisode = null;
         lastRecovery = null;
         counters.published += 1;
+        if (splitPublicFragment) counters.splitAtomicPublishes += 1;
       } else {
         counters.staleAccepted += 1;
       }

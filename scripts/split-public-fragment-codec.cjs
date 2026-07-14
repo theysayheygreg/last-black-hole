@@ -3,7 +3,8 @@
 const crypto = require("crypto");
 const zlib = require("zlib");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
-const { assertPublicBody, BODY_SCHEMA, BODY_DELTA_SCHEMA } = require("./state-pair-public-body-codec.cjs");
+const { assertPublicBody, scanPublicBodyPrivacy, BODY_SCHEMA, BODY_DELTA_SCHEMA } =
+  require("./state-pair-public-body-codec.cjs");
 
 const CAPABILITY = "state-pair-split-public-fragment-v1";
 const FRAGMENT_SCHEMA = "lbh-split-public-fragment-v1";
@@ -11,7 +12,10 @@ const OVERLAY_SCHEMA = "lbh-split-owner-overlay-v1";
 const FRAGMENT_MAGIC = Buffer.from("LBHPF001", "ascii");
 const OVERLAY_MAGIC = Buffer.from("LBHPO001", "ascii");
 const HEADER_BYTES = 49;
-const MAX_FRAGMENT_BYTES = 1024 * 1024;
+// A split pair is accepted by the existing 256 KiB state-pair receiver. Keep
+// each physical half within that ceiling; the authority separately bounds the
+// combined fragment + overlay bytes to the same total.
+const MAX_FRAGMENT_BYTES = 256 * 1024;
 const MAX_OVERLAY_BYTES = 256 * 1024;
 
 const MANIFEST = Object.freeze({
@@ -95,7 +99,22 @@ function assertPublicPayload(payload, fragment) {
     if (payload.schema !== BODY_DELTA_SCHEMA) fail("unknown-schema", "public delta schema is unsupported");
     for (const key of ["baseBodyId", "baseHash", "structuralBaseHash", "structuralResultHash"]) string(payload[key], key);
     integer(payload.baseBodyRevision, "baseBodyRevision", 1);
-    if (!plainObject(payload.delta)) fail("invalid-layout", "public delta must be a fixed structural-delta object");
+    exactKeys(payload.delta, ["schema", "lane", "runId", "authorityEpoch", "connectionEpoch",
+      "ballparkEpoch", "manifestHash", "statePairId", "baseSnapshotId", "snapshotId", "baseHash",
+      "resultHash", "rootOps", "creates", "updates", "despawns"], "public structural delta");
+    if (payload.delta.schema !== "lbh-canonical-structural-delta-v1" || payload.delta.lane !== "public"
+        || !Array.isArray(payload.delta.rootOps) || !Array.isArray(payload.delta.creates)
+        || !Array.isArray(payload.delta.updates) || !Array.isArray(payload.delta.despawns)) {
+      fail("invalid-layout", "public delta must use the fixed public structural-delta schema");
+    }
+    // Delta envelope identity includes connectionEpoch by schema. Privacy applies to
+    // the public mutations it carries, not to that authority-owned lineage field.
+    scanPublicBodyPrivacy({
+      rootOps: payload.delta.rootOps,
+      creates: payload.delta.creates,
+      updates: payload.delta.updates,
+      despawns: payload.delta.despawns,
+    });
   }
   for (const key of ["bodyId", "resultHash"]) string(payload[key], key);
   integer(payload.bodyRevision, "bodyRevision", 1);

@@ -135,7 +135,11 @@ function main() {
     compositions: diagnostics.perRecipientPublicCompositions },
   { fragments: 2, packs: 2, compressions: 2, hashes: 2, overlays: 16, traversals: 0, compositions: 0 });
   assert.strictEqual(diagnostics.pendingPairs, 0);
-  assertions += 2;
+  ids.forEach((id) => authority.disconnect(id));
+  assert.strictEqual(authority.diagnostics().splitPublicFragment.authority.recipients, 0);
+  clients.forEach((receiver) => receiver.teardown());
+  assert(clients.every((receiver) => receiver.diagnostics().closed));
+  assertions += 4;
 
   console.log(JSON.stringify({ schema: "lbh-split-public-fragment-runtime-proof-v1",
     assertions, recipients: 8, authorityBeats: 2, fragmentBuilds: 2,
