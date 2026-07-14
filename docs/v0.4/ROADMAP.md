@@ -610,7 +610,10 @@ remove remaining repeated trusted lane semantic validation and pair-choice
 size-proof work while preserving S15 bytes and S17 one-frame materialization.
 One dedicated logical authority process remains scoped to one match/group and
 multiplies horizontally across concurrent matches. Hosted, compression,
-cadence-policy, heavy-sim, and 24/48/96 work remain closed.
+cadence-policy, heavy-sim, and 24/48/96 work remain closed. Independent
+red-team closes its non-hermetic benchmark-registration and expanded-limit
+proof findings with no remaining P1/P2; the registered 35-suite
+`multiplayer-network` lane passes once with retries disabled.
 
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 

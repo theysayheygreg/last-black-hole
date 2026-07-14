@@ -58,3 +58,9 @@ Bindings:
 `manifest.json` binds implementation and proof sources. `checksums.json` seals
 the analysis, benchmark, and manifest. `candidate-process/` and the sealed S15
 baseline retain their own independent checksum manifests.
+
+After both red-team findings were fixed, the registered 35-suite
+`multiplayer-network` lane passed once with retries disabled. The historical
+counterbalanced benchmark generator is intentionally not registered because it
+requires its detached baseline worktree; only its sealed artifact and the
+hermetic S17 evidence validator participate in the lane.

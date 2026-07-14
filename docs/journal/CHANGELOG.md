@@ -22,6 +22,9 @@
 - Kept S15 positional JSON as release default and S16 binary opt-in. The next
   bounded lane targets trusted same-operation validation/size-proof work, not
   compression, cadence policy, hosted/heavy-sim work, or 24/48/96.
+- Resolved red-team's non-hermetic benchmark-registration and expanded-limit
+  oracle findings. No P1/P2 remains, and the registered 35-suite
+  `multiplayer-network` lane passes once with retries disabled.
 
 ## 2026-07-13 — v0.4 S16 lossless binary state-pair bakeoff
 
