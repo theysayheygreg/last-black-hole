@@ -3123,3 +3123,27 @@ S23P remain live default-off research paths, not admitted product paths; split
 is historical only and absent from live source. S24 remains terminal/not
 proven. The next phase is hosted identity, placement, cost, and unit economics,
 not another eight-player protocol.
+
+### Q: What is the final v0.4 multiplayer architecture and completion verdict?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Close the research/planning objective as decision-ready, but do not claim the ideal product is complete. S20 admits one through four locally; the requested maximum eight is rejected for v0.4. |
+| Jul 14 | Define one dedicated authority as one logical single-writer gameplay authority per live match/group. Concurrent matches multiply independently fenced authorities; measured placement may pack several per host. Never describe one global authority or infer density from copies/vCPU/socket count. |
+| Jul 14 | Use dedicated hosted authority for verified play; reject true authority-free public P2P; retain relay-assisted player-host authority for private/local continuity with local or visibly unverified progression. |
+| Jul 14 | Build a provider-neutral control plane for identity, entitlement, party, placement, tickets, cloud profiles, and settlement. Benchmark Fly performance CPU first; use Cloudflare edge plus Postgres as control-plane reference and Hetzner CCX as fallback. Measure Cloudflare Container/Durable Object and ordinary containers. Keep Vercel web/control-only. |
+| Jul 14 | Accept the official-source Fly four-seat cost envelope and reproducible $4.99 model. Central best/base can work under their assumptions; worst is structurally loss-making because variable cost per copy already exceeds receipts before its long fixed service tail. |
+| Jul 14 | Preserve S24 synthetic H24 as component evidence only. Live H24 never admitted and raw capture never started. H48/H96 remain far coefficient extrapolations; X96 fails modeled writer/network screens. Internal workers at higher count may compute only deterministic derived work; one match writer retains all gameplay commit authority. |
+| Jul 14 | Sequence next work as four-player product completion, Greg service/product choice, Phase 5 identity/settlement/placement, Phase 6 real regional four-player 90-minute proof, and measured noisy-neighbor host packing. Revisit a production-valid exact H24 fixture only afterward. Select no new eight-player optimization. |
+
+**Where it landed:**
+`docs/v0.4/MULTIPLAYER-DECISION-PACKET.md`, reconciled `README.md`,
+`ARCHITECTURE.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`, and
+`COMPLETION-AUDIT.md`.
+
+**Door status:** Research/planning is complete. Open implementation doors are
+the admitted four-player product, Greg's explicitly listed product decisions,
+Phase 5 hosted control-plane trust, Phase 6 regional evidence, and measured
+packing. Closed for another v0.4 eight-player protocol, true authority-free
+verified play, unmeasured packing, Vercel live authority, or any claim that
+synthetic H24/modeled H48/H96 proves capacity.

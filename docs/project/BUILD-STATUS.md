@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.4. Updated 2026-07-13. This file answers “what can I
+> Document revision: v0.4. Updated 2026-07-14. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -17,103 +17,58 @@ does not erase newer committed work.
 
 ## v0.4 Multiplayer Program
 
-**Source status:** Phase 0 trust closure is green; the optional same-process
-Phase 1 WebSocket runtime and dual-transport SimClient are integrated,
-independently reviewed, and registered in the multiplayer and authority harness
-lanes. HTTP remains the default diagnostic oracle; `simTransport=stream`
-explicitly selects the live stream path. Research/design is complete.
+**Branch status (2026-07-14):** research and architecture are complete and
+decision-ready. Public hosted multiplayer is not implemented. The final packet
+is `docs/v0.4/MULTIPLAYER-DECISION-PACKET.md`.
 
-**Playable status:** local loopback browser multiplayer is now automation-green:
-four browsers completed the natural journey twice and eight completed it once.
-This is the first honest local playable milestone, not an internet/public-ready
-claim. Invite UI, WAN/TLS-edge proof, hosted soak, Greg's hands-on movement/art
-judgment, and physical-device validation remain.
+**Playable status:** local loopback authority and browser journeys are
+automation-green. S20 negotiated compression is the admitted product
+replication path for one through four players. Four is the supported multiplayer
+target; a fifth seat must reject at every trust boundary. This is local evidence,
+not WAN, hosted, public-matchmaking, human-feel, or physical-device proof.
 
-**Current v0.4 admission status (2026-07-14):** S20 remains the supported and
-admitted replication path for one through four players. The final eight-seat
-split-fragment experiment failed its short abort screen at 55.9045 ms
-projection/publish p95 against the operator-provided pre-screen `>55 ms`
-boundary. The raw artifact does not itself encode that threshold. No rerun or
-sealed capture ran, the prototype was fully reverted, and v0.4 remains capped
-at four. S23 and S23P remain live default-off research paths, not admitted
-product paths; split is historical only and absent from live source. S24 is
-terminal/not proven. The next phase is hosted identity, match placement, cost,
-and unit economics for the four-player path.
+**Eight-player status:** closed for v0.4. S23 and S23P remain executable
+default-off research paths and are not admitted. The final split-fragment
+prototype crossed its short-screen abort at 55.9045 ms projection/publish p95,
+was not rerun, and was fully reverted. Split-fragment is historical only and
+absent from live source. Do not describe the build as a 4–8-player product and
+do not select another v0.4 eight-player optimization.
 
-**Current evidence:** `npm run test:multiplayer-structure` and
-`npm run test:multiplayer-authority` pass. The Phase 1
-`npm run test:multiplayer-network` primitive lane also passes. HTTP input and
-inventory share transport-neutral executors, public snapshots carry a
-run-scoped field revision, and the optional `/stream` adapter uses the same
-process, port, tick, and authority. The corrected focused baseline held
-`NORMAL` around 9.7 Hz projection and 14.5--14.8 Hz authority for 1/4/8 real
-loopback sockets, with roughly 20--23 KiB public frames and 1--1.6 KiB owner
-overlays. All five reliable action kinds now have bounded 32-receipt
-membership/run idempotency, reconnect replay, deterministic conflict/gap
-semantics, and exact-once consequence evidence. Event recovery adds
-run-qualified cursors, membership-private HTTP/WS filtering, issued-only
-playback ACKs, atomic full-baseline rebase, and bounded 32-frame/64 KiB replay
-with action headroom. These are local Shallows measurements, not hosted or
-heavy-sim capacity claims. The browser client now proves exact public/owner
-merge lineage, continuous-input ACKs independent of semantic action settlement,
-reconnect credential rotation, bounded cancellation/leave behavior, distinct
-delivery/playback ACKs, and zero hot-path HTTP in stream mode. See
-`docs/v0.4/research/phase1-ws-runtime-baseline.md`.
+**Authority contract:** one dedicated logical gameplay authority exists per
+live match/group. Concurrent matches multiply independent, fenced authorities.
+Measured packing may place several authorities on a host; there is no global
+gameplay authority and no unmeasured density claim.
 
-The definitive `npm run test:multiplayer-playable` report kept authority
-`NORMAL` at 15 Hz tick / 10 Hz projection. Steady uncompressed JSON application
-traffic measured 0.810--0.812 MB/s aggregate for four clients and 1.927 MB/s
-for eight (roughly 200--211 kB/s and 239--249 kB/s per browser respectively).
-The eight-client projection-average p95 was 5.49 ms, sim-tick p95 was 3.98 ms,
-input-ACK p95 ranged 7.6--18.3 ms, and exactly-once reconnect recovered in
-105 ms. All 4/4/8 Chrome processes and sim listeners shut down cleanly. These
-are local Shallows loopback measurements without compression, WAN impairment,
-TLS, relay, or hosted-edge overhead.
+**Hosted status:** identity, entitlement, local/cloud lineage, match placement,
+one fenced writer lease per run, opaque admission/resume tickets, immutable
+result outbox, and exactly-once relational settlement are designed but not
+implemented. Fly performance CPU is the first authority benchmark; Cloudflare
+edge plus Postgres is the control-plane reference; Hetzner CCX is the fallback.
+Cloudflare Container/Durable Object and ordinary containers are measured
+comparators. Vercel is web/control-plane only.
 
-The S11 converged positional admission gate is method-valid but product-red.
-Canonical SHA-256
-`983eae7457b61e77c7477669c7f9e1116172261dc286cf08b840b183cd48a4ca`
-passes its external checksum/method validator and rejects admission. One client
-passes. Four clients remain correctness-clean but deliver only 6.577 Hz,
-become `DEGRADED`, and exceed the normalized 10 Hz mean budget. Eight clients
-include a 0 Hz receiver, exceed burst and normalized traffic budgets, miss the
-projection clock, become `DILATED`, and fail closed-world ACK terminal
-conservation; churn-eight also fails convergence/lifecycle. Ledger high water
-stays below 8 MiB/client and cleanup drains. This is local loopback decision
-evidence, not WAN/WSS/hosted readiness. The next bounded lane is additional
-positional schema cleanup before binary, compression, or cadence policy; AOI
-remains deferred.
+**Economics status:** the refreshed four-seat Fly envelope is
+$0.0590/$0.0693/$0.0903 per authority-hour and
+$0.014750/$0.017325/$0.022575 per occupied player-hour best/base/worst.
+Central cohort break-even is 614/11,598/none. Full $4.99 contribution tables at
+1K/10K/100K/1M copies are reproducible from
+`docs/v0.4/evidence/unit-economics/`. Host density remains one in the model
+until a real noisy-neighbor benchmark proves otherwise.
 
-The later S16 lossless binary state-pair prototype is complete and rejected as
-the release default. It preserves one sole gameplay authority per match/group,
-exact S15 keyframe/delta selection, JSON fallback, ACK/recovery, privacy, and
-admission rules. Measured 1/4/8 wire traffic improves 26--33%, but authority
-projection/publish p95 regresses 6--8%, CPU rises, and cadence falls to
-9.85/5.20/3.10 Hz. Only one player passes; four/eight remain `DILATED`. Keep
-S15 positional JSON as current truth. See
-`docs/v0.4/MULTIPLAYER-STATE-PAIR-S16-BINARY-CODEC.md` and immutable evidence
-under `docs/v0.4/evidence/state-pair-s16/`.
+**High-count status:** S24 measured a synthetic H24 component fixture:
+0.828/1.417 ms writer p95/p99, 3.417/4.333 ms dense sensitivity,
+13,468 B/s/client, and 2.586 Mbit/s/match. It did not admit a live 24-client
+cohort and the raw capture never started. H48/H96 are far extrapolations
+(1.207/2.646 ms base, 26,354/50,150 B/s/client,
+10.120/38.515 Mbit/s); X96 is a modeled rejection at 86.769 ms and
+118,219 B/s/client. None is a live capacity claim.
 
-The S23 shared-public-body prototype is also complete and default-off. It keeps
-one dedicated logical gameplay authority per match/group; concurrent matches
-each get their own authority. One immutable match-public body is built and
-hashed per source beat, while recipient lineage, owner-private state,
-ACK/bases, recovery, exact compressed retransmit, queues, and send commit stay
-authority-owned and recipient-local. Red-team closure, 49 focused assertions,
-runtime 13/13, and counterbalanced clean product artifacts all pass.
-
-S23 is not a playable/product promotion. Four reaches 9.80/9.85 Hz in NORMAL
-but records 50.88 ms p95 in round A, above its 50 ms gate. Eight reaches
-9.00/9.10 Hz in NORMAL, but projection remains 88.58/88.33 ms p95 and
-95.05/94.63 ms p99. One materially regresses S20 CPU, tails, and traffic. S20
-therefore remains the product path for one through four and eight remains
-closed. See `docs/v0.4/MULTIPLAYER-STATE-PAIR-S23-PUBLIC-BODY.md` and
-`docs/v0.4/evidence/state-pair-s23/`.
-
-Phase 2 has begun with a production-neutral deterministic scheduler kernel.
-The focused 7/7 suite and full nine-suite multiplayer-network lane pass; no
-adapter/client injection or impaired-browser claim exists yet.
-
+**Next gates:** finish the four-player product journey and Greg feel/art review;
+Greg selects central/hybrid/local service posture; implement Phase 5 identity,
+settlement, and placement; run Phase 6 same-scenario two-region 90-minute
+four-player authority soaks; then derive `safeAuthoritiesPerHost` from measured
+packing. Only after those gates may a production-valid exact H24 live fixture be
+revisited.
 ## v0.3 Candidate
 
 **Source status:** green visual-production candidate.

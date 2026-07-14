@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-07-14 — v0.4 multiplayer decision packet completed
+
+- Reconciled the v0.4 source-of-truth docs around the final admitted product:
+  S20 supports one through four players; eight is closed for v0.4. S23/S23P
+  remain executable default-off research paths, while split-fragment is fully
+  reverted and historical only.
+- Published `docs/v0.4/MULTIPLAYER-DECISION-PACKET.md` as the direct executive
+  answer to the original architecture, identity, P2P, hosted-cost, $4.99
+  economics, authority, and 24/48/96 questions.
+- Standardized “one authority” as one dedicated logical single writer per live
+  match/group, multiplied across concurrent matches and packed only from
+  measured host density. No document now implies one global authority or
+  unmeasured match packing.
+- Updated hosted direction to Fly performance CPU first, Cloudflare edge plus
+  Postgres control plane, Hetzner CCX fallback, measured Cloudflare
+  Container/Durable Object and ordinary-container comparators, and Vercel
+  web/control-plane only.
+- Integrated the refreshed Fly four-seat variable envelope:
+  $0.0590/$0.0693/$0.0903 per authority-hour,
+  $0.014750/$0.017325/$0.022575 per occupied player-hour, and central
+  break-even at 614/11,598/none best/base/worst. Preserved the worst-case
+  structural-loss explanation and linked the full 1K/10K/100K/1M tables.
+- Classified high-count evidence precisely: synthetic H24 measured
+  0.828/1.417 ms writer p95/p99 and 13,468 B/s/client; live H24 never admitted
+  and no raw capture started; H48/H96 remain far extrapolations; X96 is a
+  modeled rejection.
+- Replaced the stale broad roadmap with a staged four-player product, Greg
+  service decision, Phase 5 identity/settlement/placement, Phase 6 two-region
+  90-minute authority proof, measured host-packing, private continuity, and
+  deferred S24 plan. No further v0.4 eight-player optimization is selected.
+- Updated the completion audit and build status so research/planning completion
+  is not confused with public hosted implementation or a complete 4–8 product.
+
 ## 2026-07-14 — v0.4 eight-seat split-fragment terminal negative sealed
 
 - Preserved the one and only eight-client short-screen artifact at composite
