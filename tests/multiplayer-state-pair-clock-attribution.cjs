@@ -26,19 +26,9 @@ const S20_COMPRESSION = String(process.env.LBH_S20_COMPRESSION || "").trim() ===
 const S21_STAGE_PROFILE = String(process.env.LBH_S21_STAGE_PROFILE || "").trim() === "1";
 const S22_PUBLIC_WORKERS = Number(String(process.env.LBH_S22_PUBLIC_WORKERS || "0").trim());
 if (![0, 2, 4].includes(S22_PUBLIC_WORKERS)) throw new Error("LBH_S22_PUBLIC_WORKERS must be 0, 2, or 4");
-const S22_PROFILE = S22_PUBLIC_WORKERS > 0;
 if (S16_BINARY && S20_COMPRESSION) throw new Error("S20 compression cannot be combined with S16 binary");
 const PROFILE = S22_PUBLIC_WORKERS ? `s22-${S22_PUBLIC_WORKERS}`
   : S20_COMPRESSION ? "s20" : S16_BINARY ? "s16" : "s13";
-const SCENARIO_SCHEMA = S22_PROFILE ? "lbh-s22-runtime-public-workers-candidate-v1"
-  : S20_COMPRESSION ? "lbh-s20-compression-candidate-v1"
-    : S16_BINARY ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1";
-const RUN_SCHEMA = S22_PROFILE ? "lbh-s22-runtime-public-workers-run-v1"
-  : S20_COMPRESSION ? "lbh-s20-compression-run-v1"
-    : S16_BINARY ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1";
-const AGGREGATE_SCHEMA = S22_PROFILE ? "lbh-s22-runtime-public-workers-aggregate-v1"
-  : S20_COMPRESSION ? "lbh-s20-compression-aggregate-v1"
-    : S16_BINARY ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function git(...args) {
@@ -292,17 +282,11 @@ async function runScenario(population, runDir, commit) {
         && entry.submittedActionSteps === Math.floor((entry.plannedInputSteps - 1) / (15 * 10))),
       noHighWaterOrQueuePolicyTransition: cumulativePressure.noHighWaterOrQueuePolicyTransition,
       accountingComplete: accounting.overflow === 0 && accounting.evidenceFailure === null,
-      ...(S22_PROFILE ? { workerPathClean:
-        endHealth.multiplayer.statePair.publicProjectionWorkers?.configuredWorkers === S22_PUBLIC_WORKERS
-        && endHealth.multiplayer.statePair.publicProjectionWorkers?.fallback === 0
-        && endHealth.multiplayer.statePair.publicProjectionWorkers?.fenceRejected === 0
-        && endHealth.multiplayer.statePair.publicProjectionWorkers?.pending === 0
-        && endHealth.multiplayer.statePair.publicProjectionWorkers?.inFlight === 0
-        && endHealth.multiplayer.statePair.publicProjectionWorkers?.pendingAcks === 0 } : {}),
     };
     correctness.passed = Object.values(correctness).every(Boolean);
     const result = {
-      schema: SCENARIO_SCHEMA,
+      schema: S20_COMPRESSION ? "lbh-s20-compression-candidate-v1"
+        : S16_BINARY ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1",
       commit, population, codec: S20_COMPRESSION ? "state-pair-brotli-v1"
         : S16_BINARY ? "state-pair-binary-v1" : "state-pair-positional-json-v1",
       topology: { matches: 1, dedicatedLogicalAuthorities: 1, authorityPid,
@@ -345,7 +329,6 @@ async function runScenario(population, runDir, commit) {
         skippedProjectionBeats: endHealth.multiplayer.projection.skippedBeats
           - startHealth.multiplayer.projection.skippedBeats,
         statePair: endHealth.multiplayer.statePair.publisher,
-        publicProjectionWorkers: endHealth.multiplayer.statePair.publicProjectionWorkers,
         adapter: endHealth.multiplayer.adapter.statePair },
       processBoundary: {
         authority: "sim tick, overload controller, public/owner projection, codec-candidate work per admitted recipient, pair selection, queueing, publish callbacks, ACK ingestion",
@@ -435,7 +418,8 @@ function validateArtifact(directory) {
     const processIds = [entry.topology.authorityPid, entry.topology.coordinatorPid,
       ...entry.topology.isolatedClientProcesses];
     return {
-      schemaCommit: entry.schema === SCENARIO_SCHEMA
+      schemaCommit: entry.schema === (run.config.compression ? "lbh-s20-compression-candidate-v1"
+        : run.config.binary ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1")
         && entry.commit === run.commit,
       codecContract: entry.codec === (run.config.compression ? "state-pair-brotli-v1"
         : run.config.binary ? "state-pair-binary-v1" : "state-pair-positional-json-v1")
@@ -476,10 +460,12 @@ function validateArtifact(directory) {
   const invariants = {
     checksums: checksums.passed,
     exactFileSet: JSON.stringify(actualFiles) === JSON.stringify(expectedFiles),
-    runContract: run.schema === RUN_SCHEMA && run.dirty === false
+    runContract: run.schema === (run.config.compression ? "lbh-s20-compression-run-v1"
+      : run.config.binary ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1") && run.dirty === false
       && JSON.stringify(run.config.populations) === JSON.stringify(POPULATIONS)
       && run.config.warmupMs === WARMUP_MS && run.config.windowMs === WINDOW_MS,
-    aggregateContract: aggregate.schema === AGGREGATE_SCHEMA
+    aggregateContract: aggregate.schema === (run.config.compression ? "lbh-s20-compression-aggregate-v1"
+      : run.config.binary ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1")
       && aggregate.commit === run.commit && aggregate.scenarios.length === POPULATIONS.length,
     exactPopulations: JSON.stringify(scenarios.map((entry) => entry.population)) === JSON.stringify(POPULATIONS),
     semanticRecomputation: semantic.every((checks) => Object.values(checks).every(Boolean)),
@@ -522,24 +508,22 @@ async function main() {
   const commit = git("rev-parse", "HEAD");
   const dirty = Boolean(git("status", "--porcelain"));
   if (dirty && process.env.LBH_S13_ALLOW_DIRTY !== "1" && process.env.LBH_S16_ALLOW_DIRTY !== "1"
-      && process.env.LBH_S20_ALLOW_DIRTY !== "1" && process.env.LBH_S22_ALLOW_DIRTY !== "1") {
+      && process.env.LBH_S20_ALLOW_DIRTY !== "1") {
     throw new Error(`${PROFILE.toUpperCase()} evidence requires clean HEAD`);
   }
-  const runDir = path.resolve((S22_PROFILE ? process.env.LBH_S22_OUTPUT_DIR
-    : S20_COMPRESSION ? process.env.LBH_S20_OUTPUT_DIR
+  const runDir = path.resolve((S20_COMPRESSION ? process.env.LBH_S20_OUTPUT_DIR
     : S16_BINARY ? process.env.LBH_S16_OUTPUT_DIR : process.env.LBH_S13_OUTPUT_DIR)
     || path.join(__dirname, "screenshots",
       `multiplayer-state-pair-${PROFILE}-${new Date().toISOString().replace(/[:.]/g, "")}-${commit.slice(0, 7)}`));
   fs.mkdirSync(runDir, { recursive: false });
   writeExclusive(path.join(runDir, "run.json"), {
-    schema: RUN_SCHEMA, commit, dirty, seed: SEED,
+    schema: S20_COMPRESSION ? "lbh-s20-compression-run-v1"
+      : S16_BINARY ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1", commit, dirty, seed: SEED,
     command: `${S20_COMPRESSION ? "LBH_S20_COMPRESSION=1 " : S16_BINARY ? "LBH_S16_BINARY=1 " : ""}`
       + `${S21_STAGE_PROFILE ? "LBH_S21_STAGE_PROFILE=1 " : ""}`
-      + `${S22_PROFILE ? `LBH_S22_PUBLIC_WORKERS=${S22_PUBLIC_WORKERS} ` : ""}`
       + "node tests/multiplayer-state-pair-clock-attribution.cjs",
     config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS,
-      binary: S16_BINARY, compression: S20_COMPRESSION, stageProfile: S21_STAGE_PROFILE,
-      publicProjectionWorkers: S22_PUBLIC_WORKERS },
+      binary: S16_BINARY, compression: S20_COMPRESSION, stageProfile: S21_STAGE_PROFILE },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, node: process.version },
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },
@@ -548,7 +532,8 @@ async function main() {
   const scenarios = [];
   for (const population of POPULATIONS) scenarios.push(await runScenario(population, runDir, commit));
   const aggregate = {
-    schema: AGGREGATE_SCHEMA, commit,
+    schema: S20_COMPRESSION ? "lbh-s20-compression-aggregate-v1"
+      : S16_BINARY ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1", commit,
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },
     ...(S16_BINARY ? { s15Binding: { path: path.relative(ROOT, S15_ARTIFACT), compositeSha256: S15_SHA256 } } : {}),
     scenarios: scenarios.map((entry) => ({ population: entry.population,
