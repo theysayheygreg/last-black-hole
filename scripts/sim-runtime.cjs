@@ -2134,6 +2134,12 @@ function getHumanPlayerCount(options = {}) {
   return getHumanPlayers(options).length;
 }
 
+function getConnectedAdmittedHumanPlayers() {
+  return getHumanPlayers().filter((player) =>
+    player.connected === true && runtime.playerAuthorities.has(player.clientId)
+  );
+}
+
 function getIdleState() {
   const humanPlayerCount = getHumanPlayerCount();
   const activeHumanPlayerCount = getHumanPlayerCount({ activeOnly: true });
@@ -2209,10 +2215,30 @@ function clearTerminalShutdown() {
 
 function scheduleTerminalShutdown(reason) {
   clearTerminalShutdown();
-  runtime.terminalSince = Date.now();
-  runtime.terminalShutdownAt = runtime.keepAlive ? null : runtime.terminalSince + TERMINAL_SESSION_GRACE_MS;
-  if (runtime.keepAlive || TERMINAL_SESSION_GRACE_MS <= 0) return;
+  runtime.terminalSince = runtime.terminalSince || Date.now();
+  runtime.terminalShutdownAt = runtime.keepAlive
+    ? null
+    : runtime.terminalSince + TERMINAL_SESSION_GRACE_MS;
+  if (runtime.keepAlive) return;
+  const terminalShutdownAt = runtime.terminalShutdownAt;
   terminalShutdownHandle = setTimeout(() => {
+    terminalShutdownHandle = null;
+    const connectedAdmittedHumanPlayers = getConnectedAdmittedHumanPlayers();
+    if (connectedAdmittedHumanPlayers.length > 0) {
+      // The bounded grace has elapsed, but an admitted crew member is still
+      // reviewing S20 truth. Keep the final snapshot/event journal resident;
+      // the next explicit leave/disconnect will schedule the already-expired
+      // deadline again without extending the original grace policy.
+      runtime.terminalShutdownAt = null;
+      telemetry.info("runtime.terminalResidency", {
+        reason,
+        terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
+        connectedAdmittedHumanCount: connectedAdmittedHumanPlayers.length,
+        sessionId: runtime.session?.id || null,
+        mapId: runtime.session?.mapId || null,
+      });
+      return;
+    }
     runtime.shutdownReason = `terminal-${reason}`;
     telemetry.info("runtime.terminalShutdown", {
       reason,
@@ -2221,8 +2247,14 @@ function scheduleTerminalShutdown(reason) {
       mapId: runtime.session?.mapId || null,
     });
     shutdown();
-  }, TERMINAL_SESSION_GRACE_MS);
+  }, Math.max(0, terminalShutdownAt - Date.now()));
   terminalShutdownHandle.unref?.();
+}
+
+function rescheduleTerminalShutdownAfterMembershipChange() {
+  if (runtime.session.status !== "ended" || runtime.keepAlive) return;
+  if (getConnectedAdmittedHumanPlayers().length > 0) return;
+  scheduleTerminalShutdown(runtime.session.endReason || "terminal");
 }
 
 function buildCanonicalCrewResult(reason) {
@@ -7040,6 +7072,7 @@ function closeMultiplayerBinding(binding) {
       }
     }
   }
+  rescheduleTerminalShutdownAfterMembershipChange();
 }
 
 function prepareRuntimeStatePairPublicSource(publicFrame, consumers) {
@@ -8349,6 +8382,7 @@ const server = http.createServer(async (req, res) => {
       promoteHostIfNeeded();
       persistSessionRegistry();
       refreshBallparkMirror("player-left");
+      rescheduleTerminalShutdownAfterMembershipChange();
       sendJson(res, 200, { ok: true, session: runtime.session, playerCount: runtime.players.size });
       return;
     }

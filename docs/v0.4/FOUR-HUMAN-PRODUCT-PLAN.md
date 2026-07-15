@@ -128,8 +128,9 @@ P5 closes in this order:
    terminal pilots wait for shared truth instead of leaving early. **Live.**
 2. **P5B settled rewards:** fix default JSON multi-player run-record identity,
    wait for persistence, and publish exact owner-only credited/overflow truth.
+   **Live.**
 3. **P5C results residency:** final S20 delivery is live; keep the match
-   authority alive while connected crew members are reviewing results.
+   authority alive while connected crew members are reviewing results. **Live.**
 4. **P5D rematch:** host proposes a rematch that preserves party, seats, and
    leader while rotating run lineage, credentials, snapshots, events, and
    readiness. Old-run commands must fail closed.
@@ -152,9 +153,9 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Continue with P5B settled rewards, then P5C results residency and P5D/E rematch
-controls. Do not build rematch on the legacy `/session/reset`: it destroys the
-party and grants only the host a new join claim. Preserve the party while
+Continue with P5D rematch and P5E controls. Do not build rematch on the
+legacy `/session/reset`: it destroys the party and grants only the host a new
+join claim. Preserve the party while
 creating a fresh run lineage, and retain explicit leave-to-home. Do not reopen
 hosting, costing, or high-count work.
 
