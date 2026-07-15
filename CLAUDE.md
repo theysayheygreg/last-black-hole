@@ -18,20 +18,11 @@ Current platform reality:
 
 ## Read These First
 
-Before starting ANY task, load these into context:
-1. `docs/v0.2/README.md` — read order and source-of-truth rules for the current line
-2. `docs/v0.2/DESIGN-CODE-DELTA.md` — older ideas versus shipped code truth
-3. `docs/v0.2/DESIGN.md` — current v0.2 game bible
-4. `docs/v0.2/ROADMAP.md` — current phase plan
-5. `docs/design/PILLARS.md` — decision lenses, with v0.2 status notes
-6. `docs/design/MOVEMENT.md` — control affordances and tuning variables
-7. `docs/journal/DECISION-LOG.md` — what's decided, what's open, what was rejected
-
-For your specific layer, also read:
-- L0: `docs/design/DESIGN-DEEP-DIVE.md` (physics architecture), `docs/design/CONTROLS.md` (ship physics, input schemes, tuning variables), `docs/design/TUNING.md` (dev panel, CONFIG object, tuning workflow), `docs/design/AGENT-TESTING.md` (test harness, `__TEST_API`), `docs/project/PRE-MONDAY-RESEARCH.md`
-- L1-L2: `docs/design/SIGNAL-DESIGN.md`, `docs/design/COMBAT.md`, `docs/design/SCAVENGERS.md` (AI ships), `docs/design/SLINGSHOT.md` (gravity slingshot)
-- L3-L4: `docs/design/DESIGN-DEEP-DIVE.md` (ASCII renderer section), `docs/design/AUDIO.md`, `docs/project/RENDERER-RECOVERY-PLAN.md`, HUD section
-- L5: `docs/design/SCALING.md`, `docs/design/SIGNATURES.md` (cosmic signatures)
+Start with the active version's `README.md`, the decision source it names, the
+direct task spec, and the one design or architecture document that owns the
+changed contract. Read `docs/project/BUILD-STATUS.md` for runtime or
+playability work. Load broad roadmaps and historical design docs only for
+planning, release, or conflict resolution.
 
 Older jam-era docs in `docs/design/` and `docs/project/` are still valuable idea
 mines, but when they conflict with `docs/v0.2/`, prefer the v0.2 docs unless a
@@ -51,7 +42,7 @@ See `docs/design/PILLARS.md` for full descriptions and tests.
 ## Important Constraints
 
 - **Art Is Product is non-negotiable** — Three.js deepens the ASCII-fluid identity; it does not replace it with generic 3D space
-- **Forge is the architectural brake** — flag concerns in night reports, don't just ship
+- **Forge is the architectural brake** — route concerns through review docs or checkpoint receipts; do not create mandatory night-report ceremony
 - **Signal does NOT buy capability** — see SIGNAL-DESIGN.md
 - **Layer boundaries need Greg's sign-off** — especially when changing movement, sim authority, progression, or platform contracts
 - **Target 60fps** — performance is a hard constraint, not a nice-to-have
@@ -60,14 +51,19 @@ See `docs/design/PILLARS.md` for full descriptions and tests.
 
 ## Git Rules
 
-This is a game jam. Work moves fast. Commits should be frequent and atomic.
+This is a pre-release game. Work moves fast, and commits are durable handoffs.
+Cross-task work follows
+`docs/project/LBH-ORCHESTRATION-CONTRACT.md`; its primary orchestrator owns
+cross-branch routing, CI scheduling, and review intake.
 
 ### Commit Cadence
 
-- **Commit after every meaningful change.** Not at the end of a session — after each discrete piece of work lands.
-- A "meaningful change" is anything you'd be sad to lose: a new shader, a tuned constant, a fixed bug, a design decision, a new system wired up.
-- If you've been working for more than 15 minutes without a commit, you've probably gone too long.
-- When in doubt, commit. Small commits are always better than big ones during a jam.
+- Commit each meaningful feature, fix, decision, or handoff artifact.
+- Commit before another actor depends on the work; the repo history is the
+  orchestration spine.
+- Fix forward and preserve useful history. Do not optimize for a clock or split
+  one coherent change into bookkeeping commits.
+- A commit queues broader validation. It does not wait for the full harness.
 
 ### What Gets Its Own Commit
 
@@ -119,10 +115,12 @@ Docs: resolved portal charge-time question (instant for v1)
 
 ### Branch Strategy
 
-- `main` is the deployable game at all times (after Layer 0)
-- Feature branches only if two agents are working simultaneously on different systems
-- Merge to main as soon as a feature works — don't let branches drift
-- No PRs during the jam — direct commits to main unless parallel work requires coordination
+- `main` is the current public/demo line.
+- v0.3 and v0.4 use their dedicated version branches and isolated worktrees.
+- The primary orchestrator in `docs/project/LBH-ORCHESTRATION-CONTRACT.md`
+  owns cross-version routing, merges, and cherry-picks.
+- Do not merge a next-version line backward into `main` without Greg's explicit
+  promotion call.
 
 ### Recovery
 
@@ -163,23 +161,24 @@ Key conversion functions in `coords.js`:
 ## Documentation Workflow
 
 After completing a task, before reporting done:
-1. Update `docs/journal/CHANGELOG.md` with what changed
-2. If you made a design decision, append to `docs/journal/DECISION-LOG.md`
-3. If your work invalidates anything in the design docs, update or flag it
-4. Note tuning changes in commit messages (what it felt like before/after)
+1. Update a durable decision, changelog, or build-status source only when its
+   truth actually changed; do not duplicate routine commits or CI receipts.
+2. If you made a durable design decision, append to the active decision source.
+3. If your work invalidates anything in the design docs, update or flag it.
+4. Note tuning changes in commit messages (what it felt like before/after).
 
 See `docs/project/JAM-CONTRACT.md` for full "When Done" checklist, journal triggers, and ownership table.
 
 ## Testing
 
-- **Feature loop:** run the smallest focused check that proves the changed behavior, plus a boot smoke when the launch path changed. Do not run or debug the full harness after every commit.
-- **CI/checkpoints:** broad authority, visual, package, soak, agent-eval, and full lanes run asynchronously at integration or release checkpoints. A non-critical failure creates follow-up work; it does not trap the feature thread.
-- **Resolution source:** Codex task `019f6315-910b-7e03-99c3-a50a3ed8efa6` owns the detailed test-throughput redesign.
-- **Manual:** playtesting for feel, art direction, balance. No unit test framework.
-- `console.log` is fine. Remove before ship day (Sunday).
-- Performance matters: 60fps on a mid-range laptop. Profile if you're unsure.
-- Expose `window.__TEST_API` for automated test access to game state (see AGENT-TESTING.md).
-- Self-verify the changed feature in its narrowest representative path, then commit and keep building.
+- During feature work, run the smallest focused check that proves the changed
+  behavior. A direct regression, failure to boot, or corrupted project state
+  blocks the handoff.
+- Broader contract, playable, visual, package, and platform lanes run as CI at
+  the checkpoint justified by the change. Unrelated, flaky, and release-only
+  failures do not trap the feature thread.
+- Manual playtesting remains the feel, art-direction, and balance gate. See
+  `docs/design/TEST-HARNESS.md` for lane selection and release gates.
 
 ## Playtest Notes
 

@@ -6,19 +6,25 @@
 
 ## Position
 
-The harness is CI for a pre-release game, not a multiple-nines release
-certification system. Feature threads should spend roughly 80-90% of their time
-implementing. They run focused changed-contract proof and a launch smoke when
-needed; broad lanes run asynchronously at integration or release checkpoints.
-Non-critical failures become separate QA/debug work instead of blocking the
-feature builder. Codex task `019f6315-910b-7e03-99c3-a50a3ed8efa6` owns the
-detailed throughput redesign behind this policy.
+LBH is a pre-release game with no live-player or security exposure. The harness
+works like CI: it reports confidence around committed artifacts without turning
+the feature thread into a serial test runner.
 
-The harness is split by the question being asked. Fast data invariants, browser
-boot checks, authority-process checks, renderer visual fixtures, and real
-playtest flows should not all live in one default command. When they do, a
-stale browser or a slow menu transition makes unrelated renderer work look
-broken.
+- **Feature loop:** run the smallest check that proves the changed contract.
+- **Checkpoint CI:** run the relevant exposure lenses asynchronously.
+- **Candidate/release:** run the broad, package, platform, soak, and evidence
+  gates justified by the build.
+
+Only failure to boot, a direct changed-contract regression, or project-state
+corruption blocks ordinary feature work. Unrelated, flaky, harness, and
+release-only failures are recorded for separate fix-forward work.
+
+Agent ownership, immutable-SHA CI dispatch, receipts, and GregBot concurrency
+limits are defined in `docs/project/LBH-ORCHESTRATION-CONTRACT.md`.
+
+Fast data invariants, browser boot checks, authority-process checks, renderer
+fixtures, and real playtest flows stay in separate lanes so one stale browser
+or slow menu transition does not make unrelated feature work look broken.
 
 For "where does the local build stand?", start with
 `docs/project/BUILD-STATUS.md`, then check `node scripts/build-health.cjs
@@ -40,9 +46,8 @@ The harness should let agents play, look, and understand LBH well enough that
 Greg is the last stop for feel, taste, and polish, not the first person to
 discover that a feature does not work.
 
-That means every meaningful feature should eventually have evidence in three
-layers. Only the focused changed-contract proof blocks an implementation
-commit; playable and visual proof are checkpoint receipts:
+Reviewable gameplay milestones may need one or more evidence layers selected
+for the claim:
 
 1. **Contract proof** — deterministic tests prove the sim, renderer, protocol,
    or UI contract that changed.
@@ -71,6 +76,9 @@ remote agent can see an unlocked macOS desktop or hear host audio. When those
 capabilities are unavailable, retain screenshots/video as visual evidence and
 inspect `window.__TEST_API.getAudioDiagnostics()` for audio phase and mixer
 activity instead of reporting that the product cannot run non-headless.
+
+These lanes are not replacements for manual playfeel. Run them before a
+gameplay checkpoint asks Greg for attention, not for each intermediate commit.
 
 Browser suites run through `tests/browser-driver.cjs`, a small Chrome DevTools
 Protocol wrapper around system Chrome. In Codex desktop sessions headless Chrome
@@ -152,23 +160,16 @@ sampling, or sim snapshots, review these contracts before blaming constants:
   remote/authority path. Movement force, slingshot state, collision/death,
   spawn placement, signal, loot, and run results must be sim-side first.
 
-Minimum regression lane for this class of work:
-
-```sh
-npm test
-npm run test:playtest
-npm run test:authority
-npm run test:visual
-```
-
-Then do one fresh Codex app browser pass. Automated tests can prove the contract
-did not drift; they cannot prove the ship feels good.
+During implementation, run the smallest affected contract or boot check. Queue
+authority, playtest, visual, and fresh-browser lenses for checkpoint CI when
+the exposure area requires them. Automated tests can prove the contract did
+not drift; they cannot prove the ship feels good.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `npm test` | Stable core gate for local code changes. Three renderer target. |
+| `npm test` | Stable core checkpoint gate. Three renderer target. |
 | `npm run test:fast` | Cheap static + Three smoke canary for quick iteration. |
 | `npm run test:legacy` | Deprecated compatibility check for the old renderer target. Use only for deliberate fallback archaeology. |
 | `npm run test:three` | Three renderer canary: smoke, infra boot, and renderer fixtures with `?renderer=three`. |
@@ -259,7 +260,7 @@ local readability matters more than making every pixel bright.
 | Lane | What Belongs Here | What Does Not |
 |------|-------------------|---------------|
 | `fast` | static manifests, tiny smoke | remote authority, screenshots, menu play |
-| `core` | commit gate: data, local browser state, representative gameplay API checks | subjective feel, long remote flows |
+| `core` | checkpoint gate: data, local browser state, representative gameplay API checks | subjective feel, long remote flows |
 | `static` | pure Node/data invariants | browser or process lifecycle |
 | `browser` | headless browser checks through `__TEST_API` | aesthetic approval |
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
@@ -352,10 +353,12 @@ flag for normal performance claims.
 
 ## When To Escalate
 
-- A `fast` or `core` failure blocks normal code handoff.
-- A `three` failure blocks renderer migration work.
-- A `visual` diff/failure blocks aesthetic claims, even if gameplay tests pass.
-- A `playtest` failure should be reproduced in Codex Browser before treating it
-  as a product bug; many old menu-flow tests are timing-sensitive.
-- An `authority` failure blocks remote/multiplayer claims and packaged authority
-  work.
+- A focused changed-contract failure, failure to boot, or project-state
+  corruption blocks the current feature handoff.
+- A checkpoint `fast`, `core`, `three`, authority, visual, package, or platform
+  failure blocks only the claim that lane was selected to prove. Route it as
+  bounded fix-forward work; do not trap unrelated feature development.
+- Reproduce a timing-sensitive `playtest` failure once before treating it as a
+  product bug. A visual failure still blocks the associated aesthetic claim,
+  and an authority failure blocks the associated remote/packaged-authority
+  claim.

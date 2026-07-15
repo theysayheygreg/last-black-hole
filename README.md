@@ -28,6 +28,22 @@ For the current design snapshot, start here:
 - [v0.3 Ballpark roadmap](docs/v0.3/ROADMAP.md)
 - [v0.3 release-candidate gate](docs/v0.3/RC-GATE.md)
 
+### Active Version Lines
+
+LBH develops forward through three deliberately separate lines:
+
+| Line | Role | Canonical branch-local docs |
+|---|---|---|
+| `main` / v0.2 | Current public and live demo | `docs/v0.2/README.md`, `docs/v0.2/ROADMAP.md`, and the durable project decision log |
+| v0.3 | Next feature line and release-candidate lineage | `docs/v0.3/README.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`, and `RC-GATE.md` on `codex/v0.3-ballpark-roadmap` |
+| v0.4 | Experimental multiplayer product line | `docs/v0.4/README.md`, `ROADMAP.md`, `DECISIONS.md`, `OPEN-DECISIONS.md`, and `FOUR-HUMAN-PRODUCT-PLAN.md` on `codex/v0.4-multiplayer-product` |
+
+Version-specific docs stay on their owning branch until promotion. Primary Sol
+owns cross-version merges, release-candidate selection, and the main-line
+README, roadmap, decision journal, and GitHub push policy. See
+[`BRANCHING-AND-RELEASE-LINES.md`](docs/project/BRANCHING-AND-RELEASE-LINES.md)
+and [`LBH-ORCHESTRATION-CONTRACT.md`](docs/project/LBH-ORCHESTRATION-CONTRACT.md).
+
 ## Pitch
 
 You are a black-hole surfer and salvage pilot. Drop into collapsing universe instances, read the flow of spacetime, loot wreckage from dead civilizations, manage the signal you throw into the dark, and extract before the remaining portals evaporate.
@@ -317,8 +333,8 @@ iPad web-app, macOS, Windows, and Linux release artifacts, stages weekly assets,
 and verifies the output shape. Use `npm run release:public` only when Greg calls
 for the third number to advance.
 
-The tracked pre-push hook runs the same release check for `origin`; install it
-once with:
+The tracked pre-push hook runs release preparation only when `origin/main` is
+being updated; version-branch pushes remain cheap. Install it once with:
 
 ```sh
 git config core.hooksPath .githooks
@@ -327,7 +343,7 @@ git config core.hooksPath .githooks
 For now, the version shape is `major.minor.public.commit`. Internal commits chew
 up the hash field automatically. Public release increments chew up the third
 field. Large decisive `0.3` or `1.0` moves are by Greg's call only. Intentional
-docs/process-only pushes that do not publish a build can use
+main-line docs/process-only pushes that do not publish a build can use
 `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
 
 With `git config core.hooksPath .githooks` installed, every commit prints the

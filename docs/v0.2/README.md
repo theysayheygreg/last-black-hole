@@ -39,6 +39,12 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
 
 Older docs remain valuable, but they are not all current. When an older page conflicts with this folder, prefer this folder unless a newer decision-log entry explicitly says otherwise.
 
+v0.2 predates the per-version decision files used by the later lines, so its
+current and durable decisions remain in `docs/journal/DECISION-LOG.md`. v0.3
+and v0.4 decisions stay in their branch-local version folders until Greg calls
+a promotion; `main` records only cross-version policy and the eventual
+promotion summary.
+
 Important current anchors:
 
 - `docs/design/PILLARS.md`

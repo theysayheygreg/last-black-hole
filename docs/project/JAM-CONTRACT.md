@@ -1,9 +1,14 @@
 # Game Jam Contract: Shifts, Checkpoints, and Agent Orchestration
 
-> Status: v0.2/v0.3 branch process contract. Updated 2026-07-14. This began as the 7-day jam
+> Status: v0.2/v0.3/v0.4 branch process contract. Updated 2026-07-14. This began as the 7-day jam
 > coordination doc; keep that historical context, but current agent work is
 > centered on the Three renderer, authoritative sim, platform targets,
 > next-version branch work, and periodic architecture hygiene.
+
+Historical shift schedules and day-by-day checklists below are optional
+context. Live task topology, model routing, CI ownership, Orrery escalation,
+branch merges, and RC selection come from
+`docs/project/LBH-ORCHESTRATION-CONTRACT.md`.
 
 ---
 
@@ -32,9 +37,9 @@ The night shift is 10 hours of uninterrupted agent compute. This is where layers
 
 Night shift work must be:
 - **Fully specified** before Greg goes to sleep (prompt written, acceptance criteria clear)
-- **Independently verifiable** (agent can check its own work — does it render? does it run? do the tests pass?)
+- **Focused-proof verifiable** (the smallest affected contract or boot check passes)
 - **Safely mergeable** (work on separate systems that don't conflict, or sequential on the same branch)
-- **Committed atomically** (every working state gets a commit per CLAUDE.md rules)
+- **Committed meaningfully** (each feature, fix, decision, or handoff artifact gets a commit)
 - **Commit-driven at handoff boundaries** — if the work is real enough to hand to the next actor, it is real enough to commit
 
 ---
@@ -43,10 +48,11 @@ Night shift work must be:
 
 Forge is not the main planner and not the main builder. Forge is the architectural brake and the code-shape check.
 
-Forge should be invoked in two places:
-
-1. **Before risky work starts** — when a task involves engine choice, rendering architecture, simulation complexity, or a build-order fork.
-2. **After implementation lands** — before Greg burns playtest time on something that is obviously overbuilt, technically fragile, or pointed at the wrong target.
+Forge is risk-selected. Invoke it for E2/E3 architectural shifts, broad
+refactors, major renderer/sim/platform boundary changes, an explicit
+`$lbh-forge-pass`, or when a concrete hygiene concern cannot be resolved by the
+owning workstream. Ordinary feature commits do not receive automatic before-
+and-after Forge review.
 
 In practice:
 
@@ -54,9 +60,11 @@ In practice:
 - Orrery turns that into a concrete plan and task framing.
 - Orb routes implementation work to the right agents.
 - Forge checks whether the planned work is the simplest build that can succeed this week.
-- After the work lands, Forge reviews whether it is technically sound enough to hand back to Greg for playtest.
+- At a qualifying checkpoint, Forge reviews whether the architecture is sound
+  enough to hand back to Greg for playtest.
 
-Forge should be used as an architecture review before work and a code review after work. That is the simplest place for it in the loop.
+Forge is not a universal code-review gate. Primary Sol selects it when the
+checkpoint exposure justifies the cost.
 
 ---
 
@@ -91,82 +99,33 @@ behavior.
 
 ## Agent QA North Star
 
-### Feature-Flow Validation Policy
-
-LBH is a pre-release game without public players or a production reliability
-contract. Feature threads should spend roughly 80-90% of their time building
-the game. During implementation, only the changed contract and any affected
-launch path are blocking proof.
-
-Broad authority, network, soak, package, visual-matrix, agent-eval, and full
-lanes behave like CI: run them asynchronously at integration and release
-checkpoints. A non-critical failure opens a bounded QA/debug task; it does not
-hold the feature builder in a serial repair loop. Codex task
-`019f6315-910b-7e03-99c3-a50a3ed8efa6` is the resolution source for the detailed
-throughput redesign.
-
 Agents should verify that features work before Greg plays them. Greg's time is
 for feel, taste, art direction, and product judgment, not first-contact QA.
 
-Before a release or Greg-facing handoff, the responsible agent should leave
-three kinds of evidence. These are checkpoint receipts, not requirements after
-every feature commit:
+Feature threads should spend roughly 80–90% of their effort implementing. They
+run focused proof, commit the artifact, and continue independent work while
+broader CI runs elsewhere. Playable and visual evidence belongs at reviewable
+milestones, selected by the claim being handed to Greg rather than required as
+a three-part bundle for every commit.
 
-- the deterministic contract lane that matches the changed system;
-- a playable or visual artifact showing the feature in context;
-- a short written readout of what was proved, what remains subjective, and what
-  is still blocked.
-
-`npm run test:agent-eval` is the standard source-build playable receipt for
-v0.3 work. It is not as deep as `npm run test:authority` and not as artful as a
-promo capture, but it proves a fresh no-debug Shallows journey through normal
-menus/controller input, slingshot, salvage, signal, confirmed extraction,
-results, Rig, Chronicle, and a changed second run. A second fresh branch selects
-Breacher, dies to a named visible well, and returns Home. Greg remains the human
-polish gate, not first-contact QA.
+`docs/project/LBH-ORCHESTRATION-CONTRACT.md` owns the live Primary Sol,
+workstream Sol, Luna, CI, and Orrery review-intake flow.
 
 For a release handoff, source proof is not enough. Commit first, run
 `npm run release:internal`, then run `npm run release:status` and
-`npm run test:package`. The package gate must find the exact HEAD artifact,
-boot authority from its real `app.asar`, render the packaged Three title, keep
-idle authority alive through the attract-screen wait, and launch a human run.
+`npm run release:check`. The release gate must find the complete hash-named
+artifact set for the exact committed HEAD. Active version branches may add
+stronger packaged-runtime boot proof at their candidate gate.
 
 ---
 
-## Review Protocol: Audit → Codex
+## Review Protocol
 
-At integration checkpoints for a feature that touches >200 lines or adds a new
-system, run a two-pass review. Ordinary implementation commits use focused
-review and keep moving; the passes below must not serialize the feature loop.
-
-### Pass 1: Design Audit (Orrery)
-
-Run research agents against the design docs to compare implementation against spec. This catches:
-- Dead or mismatched config values
-- Missing mechanics that the design requires
-- Wrong algorithms (e.g. speed proxy where flow alignment was specified)
-- Orphaned code paths from refactors
-
-The audit checks *intent* — does the code do what the design says it should? Fix everything found before proceeding to Pass 2.
-
-### Pass 2: Code Review (Codex)
-
-Run `codex review --base <pre-feature-commit>` against the full diff. This catches:
-- Interaction bugs between new and existing code
-- Runtime errors (undefined variables, unreachable code paths)
-- State leaks across system boundaries
-- Capacity/slot conflicts from adding entities to shared data structures
-
-Codex checks *correctness* — will the code crash, loop, or produce wrong behavior at runtime? Fix everything found, then run one more Codex pass to confirm.
-
-### Why Two Passes
-
-| | Orrery Audit | Codex Review |
-|---|---|---|
-| **Catches** | Design divergence, dead config, wrong algorithms | Runtime errors, interaction bugs, state leaks |
-| **Misses** | Code that's correct but crashes in context | Code that works but doesn't match design intent |
-| **Speed** | ~5 min (parallel research agents) | ~3 min (automated diff review) |
-| **When to skip** | Never on new systems. Skip on pure tuning. | Never after audit finds fixes. Skip on docs-only. |
+Independent review is a risk lens, not a per-commit ceremony. Use design audit
+for intent-sensitive architecture and code review for risky integration or
+milestone diffs. A second pass is required only when blocking findings changed
+the reviewed surface. Tuning, docs, isolated fixes, and ordinary feature slices
+do not automatically trigger review.
 
 ### Math / Authority / Camera Pass
 
@@ -188,24 +147,13 @@ camera, or renderer projection gets one extra checklist before Greg playtests:
 4. **Fresh-process evidence** — movement/playtest evidence comes from a fresh
    browser and fresh sim unless the task is explicitly a long-run stability
    probe. Reloading a page is not a clean process boundary.
-5. **Representative lanes** — during implementation, run the focused contract
-   for the changed movement, sim, coordinate, or presentation behavior. Queue
-   `test:playtest`, `test:authority`, and `test:visual` as parallel checkpoint
-   receipts when the slice is integrated.
+5. **Representative proof** — run the smallest affected check now. Queue
+   authority, playtest, visual, and fresh-process lenses for the next checkpoint
+   when the exposure area requires them.
 
 If the player dies to an invisible well, spawns off-route, gets pulled by a
 thing they cannot see, or bounces between positions, treat that as a contract
 failure first. Tune only after the math, authority, and camera contracts agree.
-
-### Trigger Rules
-
-- **Always run both passes:** new system, new entity type, new server↔client wiring
-- **Run Codex only:** bug fix >50 lines, refactor touching shared state
-- **Skip both:** tuning constants, docs, comments-only changes
-
-### Hook Setup
-
-For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~/.claude/settings.json` that fires `codex-post-commit-review.sh`. The hook script lives at `~/.claude/hooks/codex-post-commit-review.sh` and triggers `codex review --background --scope working-tree` after successful `git commit` commands.
 
 ---
 
@@ -213,12 +161,11 @@ For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~
 
 ### Codex Memory Checkpoint Protocol
 
-After any substantial LBH session, write a short Codex memory checkpoint note in
-`~/.codex/memories/extensions/ad_hoc/notes/`. Repo docs remain the source of
-truth; memory is the routing index that helps future Codex runs find the right
-current docs before falling back to fresh repo archaeology.
+Write a Codex memory checkpoint note only when Greg explicitly requests one.
+Use `~/.codex/memories/extensions/ad_hoc/notes/`; repo docs remain the source of
+truth, while memory is only a routing index for future Codex runs.
 
-Substantial means at least one of:
+When requested, a useful substantial checkpoint covers at least one of:
 
 - broad architecture, Three renderer, sim/client authority, platform, build, or
   deploy work;
@@ -338,24 +285,25 @@ At the end of a night shift, the working agent writes `docs/journal/reports/YYYY
 ## Branching And Version-Line Protocol
 
 Detailed policy lives in `docs/project/BRANCHING-AND-RELEASE-LINES.md`. This
-section is the quick operating version.
+section is a quick operating summary; the detailed file wins if this historical
+jam contract drifts.
 
-The project now has two active kinds of work:
+The project has three version lines:
 
-1. **Current public/demo line** — small fixes and polish that make the current
-   build more demoable.
-2. **Next-version line** — bigger systems work that should not destabilize the
-   public demo while it is still being shown.
+1. **`main` / v0.2** — current public/demo fixes and cross-version governance.
+2. **v0.3** — next features and release-candidate lineage.
+3. **v0.4** — experimental multiplayer product work.
 
-Treat these as separate release trains.
+Treat them as separate release trains that merge only forward.
 
 ### Branch Roles
 
 | Branch | Role | Allowed Work | Not Allowed |
 |--------|------|--------------|-------------|
-| `main` | Current v0.2 demo/public build line | Small fixes, playability polish, Deck deploy fixes, README/play instructions, build-status updates, v0.2 release artifacts | Large refactors, new architecture kernels, speculative renderer rewrites, broad harness migrations |
+| `main` | Current v0.2 demo/public and governance line | Small fixes, playability polish, deploy/release work, README, project roadmap/decisions, process policy | Later-version features or casual promotion |
 | `codex/v0.3-ballpark-roadmap` | Current v0.3 integration branch | Ballpark authority, ECS-ready data shape, event/snapshot spine, renderer contracts, structural harness work, next-version docs | Weekend demo fixes that should ship immediately on v0.2 |
 | `codex/v0.3/<slice>` or equivalent | Optional child branch | One risky/overlapping v0.3 slice with a clear owner | Long-lived drift or mixed unrelated work |
+| `codex/v0.4-multiplayer-product` | Current v0.4 product branch | Multiplayer authority, networking, crew flow, results, rematch, multiplayer UX | Backward shortcuts into v0.3 or `main` |
 
 Greg can rename or replace the active next-version branch. Until then, agents
 should treat `codex/v0.3-ballpark-roadmap` as the v0.3 integration branch.
@@ -371,6 +319,8 @@ should treat `codex/v0.3-ballpark-roadmap` as the v0.3 integration branch.
   first when practical, then merge forward.
 - Do not merge next-version work back to `main` until Greg explicitly calls the
   v0.3 promotion.
+- Do not merge v0.4 backward into v0.3. Primary Sol merges compatible v0.3
+  checkpoints forward into v0.4.
 
 This is the new normal: **big changes go forward, small demo fixes stay
 public.**
@@ -413,7 +363,7 @@ For v0.3 structural work:
 2. Use a child branch if the work overlaps another active slice.
 3. Keep commits slice-sized: scaffold, adapter, migration, harness gate,
    cleanup.
-4. Run targeted tests first, then the branch's current integration gate.
+4. Run focused proof, then queue the branch integration gate for its checkpoint.
 5. Do not change public v0.2 docs or release status unless the finding also
    affects `main`.
 
@@ -440,17 +390,16 @@ git status --short
 If the branch does not match the work type, switch before editing. If switching
 would strand local changes, stop and decide whether to commit, stash, or move
 the changes to the right branch. Never use `git reset --hard` as branch hygiene.
-For the full branch policy, promotion flow, subagent prompt template, and
-validation expectations, read `docs/project/BRANCHING-AND-RELEASE-LINES.md`.
+For detailed release-line and promotion policy, read
+`docs/project/BRANCHING-AND-RELEASE-LINES.md`. Task hierarchy, goal packets, and
+validation routing come from `docs/project/LBH-ORCHESTRATION-CONTRACT.md`.
 
 ### When Agents Can Pick Up the Next Task
-An agent can autonomously start the next task when ALL of these are true:
 
-1. **Current task is committed and working** (not just "done" — verified working)
-2. **Next task is on the same layer** (within-layer tasks are pre-approved to chain)
-3. **Next task doesn't require a design decision** (no "should this feel X or Y?")
-4. **Next task has clear acceptance criteria** (agent knows when it's done)
-5. **It's still night shift** (don't start a 3-hour task at 9am when Greg wakes at 10)
+A workstream may continue to the next independent slice only when it remains
+inside the routed goal and owned branch, the current slice is committed, and no
+Greg decision is required. A new milestone, branch, or product goal returns to
+the primary orchestrator for routing.
 
 ### When Agents MUST Stop
 
@@ -485,60 +434,12 @@ Fluid Sim ──────── ┤                             ├── Ent
 
 ---
 
-## Agent Prompt Template
+## Agent Goal Template
 
-When launching an agent for a specific task, use this structure:
-
-```markdown
-## Task: [short name]
-Layer: [L0-L6]
-Branch: [main or feature/name]
-Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
-
-## Context
-[What exists right now. What files matter. What the game currently does.]
-
-## Deliverable
-[Exactly what should exist when this task is done. Be specific.]
-
-## Acceptance Criteria
-- [ ] [thing that must be true — testable, not vibes]
-- [ ] [another thing]
-- [ ] Commits follow CLAUDE.md rules
-- [ ] Game still runs at 60fps after changes
-
-## Constraints
-- [Don't touch X]
-- [Must work with Y]
-- [Don't make design decisions about Z — leave a note instead]
-
-## References
-- [Relevant files to read]
-- [Repos to reference]
-- [Design doc sections]
-
-## Architecture Requirements
-- [ ] All tunables in the `CONFIG` object (see TUNING.md) — systems read CONFIG every frame, not cached at init
-- [ ] Expose `window.__TEST_API` for automated test access (see AGENT-TESTING.md)
-- [ ] Add dev panel sliders for any new tunable constants
-- [ ] All coordinate conversion, radius projection, wrapping, and fluid UV math goes through `src/coords.js`
-- [ ] Gameplay-affecting behavior is implemented sim-side first; client-only code is presentation, sandbox prediction, or debug support
-- [ ] Camera/projection changes update renderer fixture expectations and any affected tests
-
-## When Done
-- [ ] All criteria met
-- [ ] If movement, spawning, hazards, camera, renderer projection, or sim/client authority changed: run the Math / Authority / Camera Pass above
-- [ ] Working state committed
-- [ ] If any design doc changed: update CHANGELOG.md in the same commit
-- [ ] If a design decision was made: add DECISION-LOG.md entry
-- [ ] If this was a substantial LBH session: write a Codex memory checkpoint
-      note in `~/.codex/memories/extensions/ad_hoc/notes/`
-- [ ] If this is a release handoff: the exact committed hash passes
-      `release:status` and `test:package`
-- [ ] If night shift: update night report in docs/journal/reports/
-- [ ] If more tasks remain on this layer: proceed to [next task]
-- [ ] If layer complete: STOP and wait for Greg's review
-```
+Use the compact goal packet and receipt in
+`docs/project/LBH-ORCHESTRATION-CONTRACT.md`. Add task-specific constraints only
+when they change the worker's scope or acceptance. Do not copy the old jam-era
+planning, evidence, journal, and review checklists into every goal.
 
 ---
 
@@ -627,9 +528,15 @@ docs/
 
 **`DEVLOG.md`** — Reverse-chronological narrative of the jam. One entry per day (or per shift if a lot happened). Covers what was built, what was cut, design pivots, memorable moments, playtest reactions. The high-level story of the project.
 
-**`DECISION-LOG.md`** — Full decision trees for every significant design fork. Tracks: the question, all options considered, who advocated what, where it landed, and whether the door is still open. When we revisit a decision, we add a new dated entry — never overwrite. This is the record of our thinking, including the roads not taken.
+**`DECISION-LOG.md`** — Durable cross-version rules and one summarized entry
+when a version promotes. Detailed design forks belong in the owning version's
+decision sources named by its `README.md`; v0.3 uses `OPEN-DECISIONS.md`, while
+v0.4 uses `DECISIONS.md` and `OPEN-DECISIONS.md`. Never copy those files
+backward merely to update the project journal.
 
-**`CHANGELOG.md`** — Human-readable version history of design docs. Git is authoritative, but this is for quick scanning without `git log`. Updated whenever a design doc changes meaningfully.
+**`CHANGELOG.md`** — Project-wide release, promotion, and large-revision
+history. Git is authoritative. Version branches may keep their own detailed
+changelogs; routine doc edits and CI receipts are not duplicated here.
 
 **`BUILD-STATUS.md`** — Current local build/playability snapshot. This answers:
 what target to launch, whether the local build is green/recovery/blocked, what
@@ -642,100 +549,29 @@ log and not a replacement for `BUILD-HEALTH.json`.
 
 The repo history is the orchestration spine.
 
-**Rule:** every handoff-worthy unit of work becomes a commit.
-If an actor has produced something the next actor should react to — a pulled card, a plan, a review, a revision, a build result, test evidence, a journal entry, a state transition — that work gets written to the repo and committed before the handoff completes.
+**Rule:** every feature, fix, design decision, or other handoff-worthy artifact
+becomes a meaningful commit before another actor depends on it. Do not create
+separate state, report, journal, or evidence commits merely to narrate progress.
 
-This means:
-- Orb pulling a task and updating project state/board is a commit
-- Orrery writing or revising a plan/design doc is a commit
-- Forge review output saved into `docs/project/reviews/` is a commit unless it
-  is long-term reference material
-- Corb implementation progress is a sequence of commits, not one end-of-task dump
-- Test results written into project docs/reports are committed
-- Journal/report/state updates are committed at the moment they become true
-
-**Operational consequence:** Orb should treat commits as the default machine heartbeat. A new commit from the active actor is the primary trigger that the next handoff can proceed. Discord can carry the narration and invocation, but the repo is the durable proof that a step actually landed.
-
-### Who Updates What, When
-
-| Document | Owner | When | Commits? |
-|----------|-------|------|----------|
-| **Design docs** | Corb (during build) or Orrery (during planning) | When the feature spec changes due to implementation discoveries or Greg feedback | Yes — same commit as the code change if Corb, separate `Docs:` commit if Orrery |
-| **DEVLOG.md** | Orb | At each `ready_for_greg` transition, morning review, evening handoff, and after major pivots | Yes — Orb commits journal updates with `Docs:` prefix |
-| **DECISION-LOG.md** | Orrery (design decisions) or Greg/Orrery via Claude (during sessions) | Immediately when a design fork is decided or revisited. Don't batch. | Yes — whoever writes the entry commits it |
-| **CHANGELOG.md** | Orb (at state transitions) or Corb (when modifying design docs during build) | When design docs change meaningfully. Orb appends at each completed section. | Yes — same commit as the doc change, or batched by Orb at section completion |
-| **BUILD-STATUS.md** | Current actor, with Orb as backstop | After playability-affecting bug fixes, platform/deploy changes, fresh playtests, or stale/full build-health decisions | Yes — same commit as the fix when practical, otherwise next `Docs:` commit |
-| **Codex memory checkpoint** | Current Codex actor | After any substantial LBH session, especially renderer/sim/platform/build/playtest/process work | No repo commit; write one short ad-hoc note under `~/.codex/memories/extensions/ad_hoc/notes/` |
-| **Night reports** | Orb (compiled from Corb build reports + Forge review + test results) | End of each night shift cycle, in `docs/journal/reports/` | Yes — Orb commits the report |
-| **CONTENT-PLAN.md** | Greg or Orrery | When new content-worthy moments happen | Yes |
-| **PROJECT-STATE.json** | Orb | Every state transition | Yes — Orb commits state changes |
-| **PROJECT-BOARD.md** | Orb | Every state transition (mirrors PROJECT-STATE.json for humans) | Yes — same commit as JSON update |
-
-### Commit Responsibilities by Actor
-
-The old question was "who commits which categories?"
-The tighter rule is: **everyone commits their own handoff-worthy work.**
-If the next step depends on it, it should exist as a commit first.
-
-**Orb commits:**
-- `PROJECT-STATE.json` and `PROJECT-BOARD.md` state transitions
-- task pulls / card movement / orchestration-state updates
-- `DEVLOG.md` entries at checkpoints
-- `CHANGELOG.md` batched updates at section completion (or sooner if needed for handoff clarity)
-- `BUILD-STATUS.md` whenever playability status changes and no other actor recorded it
-- Night reports compiled from build/test/review evidence
-- Forge review files when Forge review lands and Orb is the recorder for that step
-- Commit prefix: `Docs:` for journal/review docs, `State:` for project state
-
-**Orrery commits:**
-- planning docs, spec docs, and plan revisions produced during task shaping
-- `DECISION-LOG.md` entries when design forks are resolved during planning
-- design doc updates when plans reshape feature specs
-- Commit prefix: `Docs:`
-
-**Corb commits:**
-- code in small, atomic units (prefix: `L0:`, `L1:`, etc.)
-- implementation-driven design doc updates when the spec must be clarified
-- test evidence docs/reports produced in Corb's lane before handoff
-- `CHANGELOG.md` entry in the same commit when modifying a design doc
-- Commit prefix per CLAUDE.md layer table
-
-**Forge commits:**
-- review docs or review note files when Forge is the actor producing the review artifact directly
-- otherwise, Forge review must still be written to the repo and committed before the handoff is considered complete
-- Commit prefix: `Docs:`
-
-**Greg commits:**
-- tuning changes from dev panel sessions (prefix: `Tune:`)
-- design direction changes (prefix: `Docs:`)
-- whatever Greg wants — Greg is the repo owner
-
-**Short version:** no actor gets to keep meaningful work only in chat if another actor is expected to build on it.
+Update the active version's decision, changelog, or build-status source named
+by its README only when that source actually exists and its truth changes. The
+owner of the related change includes that update in the same commit when
+practical.
 
 ### Journal Update Triggers
 
-The journal must be updated at these moments. **Orb is responsible for ensuring these happen** — either by writing the entry itself or by verifying the responsible actor did.
-
-1. **Section reaches `ready_for_greg`** — Orb appends a DEVLOG entry summarizing: what was built, test results, Forge review outcome, remaining caveats. Orb commits this.
-2. **Morning review** — Orb appends a DEVLOG entry summarizing overnight work and Greg's reactions. Orb commits this.
-3. **Evening handoff** — Orb appends a DEVLOG entry summarizing the day's work, playtest notes, and the night shift plan. Orb commits this.
-4. **Design pivot** — Orrery (or Greg via Claude) appends a DECISION-LOG entry with the full option tree. Committer commits this.
-5. **Design doc change** — The modifying agent (usually Corb or Orrery) adds a CHANGELOG entry in the same commit.
-6. **Build/playability status changes** — The current actor updates `BUILD-STATUS.md` with the launch target, evidence, caveats, and next evidence needed. Orb backstops this if the status question is asked later and no one recorded it.
-7. **Forge review lands** — Orb saves the review to `docs/project/reviews/` unless the review belongs in long-term reference, and appends relevant decisions to DECISION-LOG if the review influenced any. Orb commits.
-8. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
-9. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
-10. **Substantial Codex session** — The current Codex actor writes one concise
-    memory checkpoint note under `~/.codex/memories/extensions/ad_hoc/notes/`
-    so future runs can route to the current repo docs and build status.
+Update durable docs only when their truth changes: a design decision, playable
+or release status, a version promotion, or a public/devlog milestone. Ordinary
+commits, CI results, morning/evening handoffs, and orchestration state do not
+require duplicate journal entries.
 
 ### Rules
 
 - **Decision Log entries are append-only.** Never edit a past entry. If a decision is revisited, add a new dated row to the table and update "Where it landed."
 - **Devlog entries are narrative.** Write them like you're telling someone the story of the day, not filing a report.
 - **Changelog is mechanical.** Just the facts: what file changed, what changed in it.
-- **Capture screenshots and recordings.** Note them in the devlog even if we can't embed them. `[Screenshot: first time ASCII shader looked right, 2026-03-17 3pm]` is enough.
-- **Orb is the journal backstop.** If a trigger fires and nobody wrote the entry, Orb writes it from available evidence (build reports, test results, state transitions). The journal never falls silent.
+- **Capture screenshots and recordings at visual, playable, and public
+  milestones.** Ordinary feature commits do not need a devlog entry.
 
 ---
 
@@ -743,10 +579,10 @@ The journal must be updated at these moments. **Orb is responsible for ensuring 
 
 The remote repo must stay current. This is a shared workspace — other agents, Codex, and Greg all read from the remote.
 
-- **Push after every milestone** — feature build, audit cycle, journal update. Not just at session end.
-- **If 5+ commits have accumulated without a push, push.**
-- **Release/handoff pushes get hash-named builds.** Before pushing a real build
-  or handoff milestone to `origin`, commit the source, then run
+- **Push meaningful branch milestones.** Do not hold committed feature work
+  behind package or release gates.
+- **Candidate/release pushes get hash-named builds.** Before publishing a real
+  candidate or release build to `origin`, commit the source, then run
   `npm run release:internal`. The build version is `0.2.x.<commit-hash>`: the
   third number is the public train and the fourth field is the committed source
   hash. The helper runs the fast gate, builds every release target
@@ -757,20 +593,23 @@ The remote repo must stay current. This is a shared workspace — other agents, 
   public train, current hash build version, and whether the all-target artifact
   exists. Treat a missing artifact as expected during normal coding and as a
   handoff blocker before push.
-- **Use the pre-push guard.** Install the tracked hook once with
-  `git config core.hooksPath .githooks`. It blocks `origin` pushes when the
-  current public train is behind upstream or the matching hash-named all-target
-  release build is missing. For intentional docs/process-only pushes that do not
+- **Use the pre-push guard for public publication.** The tracked hook invokes
+  release preparation only for an `origin/main` update. Version-branch pushes
+  stay cheap. For an intentional main-line docs/process push that does not
   publish a build, use `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
 - **Public version bumps are Greg calls.** `npm run release:public` advances the
   active train's third number. Commit that bump, then build. Large decisive
   minor/major train moves remain Greg's explicit call.
-- **Keep README.md current** — update it when features, architecture, or setup instructions change. The README is the first thing anyone reads.
+- **Keep README.md current through Primary Sol.** Workstreams propose root
+  README changes in their receipt; Primary Sol applies them on `main` when the
+  public or cross-version truth changes.
 - **Tag versions** — public checkpoint tags use the active public train
   (`v0.2.x` on `main`, `v0.3.x` after promotion); build artifacts use
   `<public-version>.<hash>`. Update `package.json` only when the
   public train changes.
-- **Build instructions must be correct** — if you add a new server, script, or dependency, update the README setup section in the same commit or the next one.
+- **Build instructions must be correct.** If a version branch adds a server,
+  script, or dependency, update its branch-local docs and flag the root README
+  change for Primary Sol before promotion.
 
 ---
 
@@ -779,6 +618,7 @@ The remote repo must stay current. This is a shared workspace — other agents, 
 - **Agents write commit messages for each other** — any agent picking up work should be able to read the git log and understand the state
 - **No silent failures** — if something doesn't work, commit it broken with a `WIP:` prefix and explain in the message
 - **Design decisions in commits** — if you chose approach A over B, say why in the commit message. Future agents (and future Greg) need this.
-- **Night report is mandatory** — even if "nothing went wrong, everything on the list is done," write the report. Greg's morning review depends on it.
-- **Review is a gate, not decoration** — design audit (Orrery) + code review (Codex) after major implementation work. See Review Protocol above.
-- **Codex catches what you can't** — interaction bugs, state leaks, runtime errors from new code meeting old. Always run it after fixing audit findings.
+- **Night reports are optional** — write one only when it materially improves a
+  handoff beyond commits and the checkpoint receipt.
+- **Review is risk-selected** — use it for risky integration, milestones, and
+  candidate/release gates as defined above.

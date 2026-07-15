@@ -1,185 +1,119 @@
 # Branching And Release Lines
 
-> Status: v0.2/v0.3 current process truth. This document supersedes the
-> original jam-era "merge everything to main immediately" habit.
+> Status: v0.2/v0.3/v0.4 process truth. Primary Sol owns this contract and all
+> cross-version merges, cherry-picks, RC selection, and main-line pushes.
 
-## Principle
+## One-Way Version Hierarchy
 
-Last Singularity now has a public/demo line and a next-version line. They have
-different risk profiles, so they need different branch behavior.
+```text
+main (v0.2 current/live public)
+  -> v0.3 next feature line and RC candidates
+       -> v0.4 experimental multiplayer
+```
 
-**Big changes go forward. Small demo fixes stay public.**
-
-- `main` should stay playable and demoable.
-- Next-version architecture should move fast without destabilizing `main`.
-- Fixes discovered on one line should be deliberately merged or cherry-picked
-  into the other line, not smuggled through accidental branch drift.
+Work moves forward through this hierarchy. A later version never merges
+backward for convenience. Greg explicitly calls promotion into `main`.
 
 ## Branch Roles
 
-| Branch | Role | Default Work |
-|--------|------|--------------|
-| `main` | Current public/demo build line | v0.2 fixes, playability polish, Deck deploy fixes, public README/play instructions, build status, release artifacts |
-| `codex/v0.3-ballpark-roadmap` | Current v0.3 integration branch | Ballpark authority, ECS-ready data shape, event/snapshot spine, renderer contracts, structural harness work, next-version docs |
-| `codex/v0.3/<slice>` | Optional child branch | One risky or overlapping v0.3 slice with a clear owner |
+| Branch | Role | Default work |
+|---|---|---|
+| `main` | Current v0.2 public/demo and governance line | Narrow live fixes, demo polish, deploy/release work, root README, cross-version roadmap and decisions, orchestration and push policy |
+| `codex/v0.3-ballpark-roadmap` | v0.3 integration and RC lineage | Ballpark, feature reworks, movement/gameplay/UI iteration, renderer contracts, and v0.3 release evidence |
+| `codex/v0.3.1-movement-truth` and other v0.3 children | Bounded v0.3 slices | One owned feature or risky integration slice, returned to the v0.3 integrator as committed artifacts |
+| `codex/v0.4-multiplayer-product` | Stable v0.4 multiplayer product line | One-to-four-player authority, crew flow, networking, result settlement, rematch, and multiplayer UX |
+| Other v0.4 children | Bounded experimental slices | One owned product or architecture slice, returned as committed artifacts |
 
-Greg can rename or replace the active next-version branch. Until then,
-`codex/v0.3-ballpark-roadmap` is the v0.3 integration branch.
+## Documentation Ownership
 
-## Work Routing
+The file existing on a later branch does not make it `main` truth.
 
-### Route To `main`
+| Scope | Canonical sources |
+|---|---|
+| Cross-version/current public | root `README.md`, `docs/project/ROADMAP.md`, `docs/journal/DECISION-LOG.md`, this file, and `docs/project/LBH-ORCHESTRATION-CONTRACT.md` on `main` |
+| v0.2 | `docs/v0.2/README.md`, `DESIGN.md`, `ROADMAP.md`, and `docs/project/BUILD-STATUS.md` on `main` |
+| v0.3 | `docs/v0.3/README.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`, and `RC-GATE.md` on the v0.3 integration line |
+| v0.4 | `docs/v0.4/README.md`, `ROADMAP.md`, `DECISIONS.md`, `OPEN-DECISIONS.md`, `CHANGELOG.md`, and `FOUR-HUMAN-PRODUCT-PLAN.md` on the v0.4 product line |
 
-Use `main` when the change should improve the current demo build:
+v0.3 currently uses `OPEN-DECISIONS.md` as its version decision surface; do
+not invent a `DECISIONS.md` merely for symmetry. v0.4 has both resolved and
+open decision files. Version-local decisions stay local until promotion. The
+project journal receives only a durable cross-version rule or one summarized
+promotion entry.
 
-- movement/control bug fix;
-- UI readability or Deck prompt polish;
-- release/deploy/build packaging fix;
-- README/play instruction update;
-- build-status update;
-- small safe regression fix discovered while testing v0.3;
-- process rule that affects all agents immediately.
+## Routing
 
-Validate the current v0.2 surface before committing. If the same fix matters
-to v0.3, merge `main` forward or cherry-pick the commit after it lands.
+Route to `main` when the result should improve the current public build or how
+all workstreams operate today. Route to v0.3 for next-version features and
+architecture. Route to v0.4 only for experimental multiplayer product work.
 
-### Route To The v0.3 Branch
+When a later line exposes a current-version bug, fix it on `main` first when
+practical, then merge forward. Do not backport scaffolding that does not
+independently help the current line.
 
-Use the next-version branch when the change is bigger than a demo fix:
+Every delegated task names its branch/base SHA, owned write scope, avoided
+high-conflict files, focused proof, committed deliverable, and stop conditions.
+Chat or agent memory is not a handoff.
 
-- sim authority kernel or body registry;
-- event journal, snapshot ring, replication lanes;
-- renderer contract/material registry/render plan;
-- broad harness reshaping;
-- large cleanup after a major refactor;
-- feature work that depends on v0.3 scaffolding;
-- docs that describe v0.3-only design truth.
+## Merge Ownership And Cadence
 
-Do not let v0.3 scaffolding leak into `main` unless it independently fixes or
-protects the current demo build.
+Workstream Sols integrate child commits inside their own version. Primary Sol
+alone performs cross-version merges and release-candidate selection.
 
-### Route To A Child Branch
+At the next clean checkpoint:
 
-Use a child branch off v0.3 when:
+1. Commit and push the main governance checkpoint.
+2. Let the v0.3 Workstream Sol finish and integrate its accepted child slice.
+3. Primary Sol merges current `main` into `codex/v0.3-ballpark-roadmap` and
+   resolves conflicts on v0.3.
+4. After that v0.3 checkpoint is coherent, Primary Sol merges the compatible
+   v0.3/main lineage forward into `codex/v0.4-multiplayer-product` and resolves
+   conflicts on v0.4.
 
-- multiple agents may touch the same high-conflict file;
-- the work may need review before joining the integration branch;
-- the slice is risky enough that reverting it should be one merge/revert;
-- the worker needs more than one commit before the branch is stable.
+Never resolve next-version conflict noise by editing `main`. Never merge all of
+v0.4 into v0.3 or all of v0.3 into `main` without Greg's promotion call.
 
-High-conflict files include:
+## Validation By Checkpoint
 
-- `scripts/sim-runtime.cjs`
-- `src/main.js`
-- `src/render-three/three-renderer.js`
-- `tests/suite-manifest.cjs`
-- shared content manifests
-- roadmap/process docs
+- Feature commits run only the smallest proof for the changed contract.
+- Version integrators select exposure-matched CI at coherent checkpoints.
+- Primary Sol does not become the suite runner; it chooses the claim and
+  delegates the lens.
+- Broad, package, platform, soak, visual, and play evidence gate an RC or
+  release claim, not ordinary forward development.
+- v0.4 failures do not block a v0.3 RC unless a deliberately shared contract is
+  affected.
 
-## Subagent Prompt Template
+## GitHub Push Policy
 
-Every delegated task should include:
+Primary Sol owns pushes to `origin/main`. Workstream Sols may push their owned
+version branches as committed artifact handoffs, but they do not push or
+promote `main`.
 
-```markdown
-Target branch: [main / codex/v0.3-ballpark-roadmap / child branch]
-Owned write scope:
-- [files/modules]
+The tracked `.githooks/pre-push` policy is ref-aware:
 
-Avoid:
-- [high-conflict files or unrelated systems]
+- an `origin/main` update runs `node scripts/release.cjs prepush` once;
+- a v0.3/v0.4 or other non-main branch push skips release preparation;
+- a deliberate docs/process-only main push may use
+  `LBH_SKIP_RELEASE_PREP=1 git push origin main`;
+- a candidate/release push never uses that skip.
 
-Validation:
-- [targeted commands]
+This is a release-build gate, not CI for every branch commit. GitHub branch
+protection remains useful, but the ownership contract is enforced by Primary
+Sol and review rather than a magic local environment variable.
 
-Commit behavior:
-- [commit directly / report patch / wait for integrator]
-```
+## Promotion
 
-Also tell workers:
+When Greg calls a version promotion, Primary Sol freezes incompatible work,
+merges current lower-version truth forward, runs the named candidate/release
+gates asynchronously, obtains Greg's required taste/device acceptance, updates
+the public README/version docs/build status, and performs one intentional
+promotion merge. Promotion is a product call, not the automatic result of a
+green branch.
 
-- they are not alone in the codebase;
-- they must not revert unrelated edits;
-- they must check the branch before editing;
-- they should report changed files, tests, commit hash, and integration notes.
+## Recovery
 
-## Merge Cadence
-
-### From `main` To v0.3
-
-Merge forward often:
-
-- after every meaningful v0.2 demo fix;
-- after build/deploy process fixes;
-- at least daily during active parallel work;
-- before any v0.3 release-candidate gate.
-
-Resolve conflicts on the v0.3 branch. `main` should not absorb next-version
-conflict resolution noise.
-
-### From v0.3 To `main`
-
-Do not merge v0.3 back to `main` until Greg calls the version promotion.
-
-Allowed exceptions:
-
-- narrow cherry-pick of a fix that is independently safe for v0.2;
-- docs/process wording that applies to current work and should have landed on
-  `main` first;
-- emergency revert/fix needed to keep `main` deployable.
-
-If a change needs more than a narrow cherry-pick, it probably belongs in the
-promotion window, not the demo line.
-
-## Promotion Flow
-
-When Greg calls v0.3 promotion:
-
-1. Freeze new v0.2-only work except urgent fixes.
-2. Merge current `main` into the v0.3 branch.
-3. Resolve conflicts on the v0.3 branch.
-4. Run full automated gates.
-5. Run fresh local playtest and Deck acceptance.
-6. Update version docs, release notes, README, build status, and public train.
-7. Create the release build.
-8. Merge v0.3 into `main` intentionally.
-9. Tag/build according to the release process.
-
-Promotion is a product decision, not the natural end of a branch getting "green
-enough."
-
-## Required Branch Check
-
-Before any non-trivial edit:
-
-```sh
-git branch --show-current
-git status --short
-```
-
-If the branch is wrong, switch before editing. If switching would strand local
-changes, stop and decide whether to commit, stash, or move the changes. Never
-use `git reset --hard` as branch hygiene.
-
-## Validation By Line
-
-For `main`:
-
-- prioritize the risk-matched v0.2 validation lane;
-- update `docs/project/BUILD-STATUS.md` when playability changes;
-- run release/build checks before any public push or Deck handoff.
-
-For v0.3:
-
-- run targeted scaffold/unit tests first;
-- run the branch integration gate before merging slices together;
-- keep release-build claims clearly separate from v0.2 demo readiness.
-
-## Commit And Journal Rules
-
-- Commit meaningful work on the branch where the truth applies.
-- Add `docs/journal/CHANGELOG.md` when process docs change.
-- Add `docs/journal/DECISION-LOG.md` when branch/release policy changes.
-- If a main-line fix gets merged forward, the v0.3 merge commit should say why
-  it was merged.
-- If a v0.3 fix gets cherry-picked back, the `main` commit should say why it is
-  safe for v0.2.
+Fix forward. Preserve committed history, do not reset shared work, and use a
+narrow revert only when Greg or Primary Sol explicitly chooses it. If a merge
+or push exposes a problem, record the artifact and route one bounded correction
+instead of expanding the current worker into a cleanup program.

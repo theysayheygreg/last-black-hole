@@ -3,13 +3,25 @@
 > Originally the hour-by-hour game jam plan (March 16-22, 2026).
 > Now the project roadmap covering jam + post-jam development.
 > The jam plan below is historical — see **Current Status** for where we are.
-> Current versioned docs live in `docs/v0.2/`. v0.3 planning now lives in
-> `docs/v0.3/` and should stay on a branch while `main` carries v0.2 demo
-> fixes.
+> Primary Sol owns this cross-version index. Detailed version execution stays
+> in the roadmap on each owning branch.
 
 ---
 
-## Current Status (2026-07-09)
+## Active Version Lines (2026-07-14)
+
+| Line | Product role | Detailed truth |
+|---|---|---|
+| `main` / v0.2 | Current live/public demo and narrow stabilization | `docs/v0.2/README.md`, `docs/v0.2/ROADMAP.md`, `docs/project/BUILD-STATUS.md` |
+| v0.3 | Next features, Ballpark/movement/UI iteration, and RC candidates | `docs/v0.3/README.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`, `RC-GATE.md` on `codex/v0.3-ballpark-roadmap` |
+| v0.4 | Experimental one-to-four-player multiplayer | `docs/v0.4/README.md`, `ROADMAP.md`, `DECISIONS.md`, `OPEN-DECISIONS.md`, `FOUR-HUMAN-PRODUCT-PLAN.md` on `codex/v0.4-multiplayer-product` |
+
+Work and documentation move forward `main -> v0.3 -> v0.4`. Version-local
+roadmaps do not move backward merely to make `main` look complete. Primary Sol
+owns merge checkpoints and selects immutable v0.3 RC candidates; Greg owns
+promotion and release calls.
+
+## Current v0.2 Status (2026-07-09)
 
 **Version:** v0.2 - Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set. The next structural line is v0.3, tracked in `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md`.
 
