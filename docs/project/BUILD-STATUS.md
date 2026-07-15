@@ -9,7 +9,7 @@
 |---|---|---|
 | Current public/demo | `main` | v0.2 build line for weekend demos, small fixes, and existing Deck deploys |
 | Next candidate | `codex/v0.3-ballpark-roadmap` | v0.3 authority/Ballpark/product candidate; do not merge backward until Greg promotes it |
-| Multiplayer program | `codex/v0.4-multiplayer-architecture` | v0.3-forward branch with Phase 0 trust/proof implementation; not yet a playable internet multiplayer build |
+| Multiplayer program | `codex/v0.4-multiplayer-product` | Experimental four-human product line; not yet a public internet multiplayer build |
 
 When someone asks “what is the build status,” name the branch and evidence.
 Git activity alone is not a playability verdict, and an old build-health ledger
@@ -75,7 +75,12 @@ packing. Only after those gates may a production-valid exact H24 live fixture be
 revisited.
 ## v0.3 Candidate
 
-**Source status:** green visual-production candidate.
+**Source status:** feature-stability candidate. Orrery's S0/S1 findings are
+fixed on the v0.3 line. Fresh remote-authority (18/18), controller (3/3), Three
+renderer (5/5), and fast gates pass. A fresh autonomous journey no longer
+crashes after extraction; one later run missed its portal after exhausting
+most of its fuel, so the complete no-retry promotion gate remains open rather
+than being hidden behind evaluator retuning.
 
 **Package status:** green. `release:internal` built all targets, the release
 checker found the matching hash directory, and the Linux artifact's actual
@@ -86,7 +91,9 @@ live run through normal keyboard input. `npm run release:status` is the
 authority for the exact current HEAD hash.
 
 **Physical Steam Deck status:** pending Gaming Mode acceptance. Automated
-1280x800 evidence exists; that is not a substitute for the real device.
+1280x800 evidence exists; that is not a substitute for the real device. The
+review-fix replacement was packaged on 2026-07-14, but the Deck was offline on
+Tailscale and has not received it yet.
 
 **Human status:** Greg has not yet made the final movement-feel or visual-taste
 call.
@@ -126,11 +133,12 @@ call.
 
 ### Current Automated Evidence
 
-Completed on 2026-07-10:
+Completed on 2026-07-14:
 
-- `npm run test:fast`: pass.
-- `npm run test:authority`: pass.
-- `npm run test:agent-eval`: pass from a fresh sim and disposable browser.
+- `npm run test:full -- --no-retries`: pass, covering static, authority,
+  sim-structure, browser play, agent-eval, renderer, and UI visual suites.
+- `npm run test:agent-eval`: pass from a fresh sim and disposable browser,
+  without using its timing retry.
 - `npm run test:package`: staged closure plus hash artifact authority/client
   boot pass.
 - focused HUD, audio, presentation, lifecycle, protocol, route, world geometry,
@@ -149,18 +157,18 @@ Latest Deep Field measurement:
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 7.74 / 8 Hz |
-| snapshot p95 latency | 5.72 ms |
+| authority tick | 7.65 / 8 Hz |
+| snapshot p95 latency | 5.32 ms |
 | snapshot p95 size | 107.88 KiB |
 | estimated transport | 0.33 MB/s |
-| heap growth | 4.12 MiB |
-| Ballpark sync p95 | 1.555 ms |
+| heap growth | 1.12 MiB |
+| Ballpark sync p95 | 1.142 ms |
 
 ### Natural Playable Evidence
 
 Latest complete passing report:
 
-`tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-14T191436848Z/summary.md`
 
 It contains eighteen 1280x800 screenshots and proves two fresh protocol-v2
 Shallows journeys through:
@@ -183,25 +191,22 @@ Latest no-retry slingshot evidence:
 
 `tests/screenshots/agent-play-eval-2026-07-10T224511366Z/summary.md`
 
-### Latest Representative Promo Evidence
+### Visual Review Evidence
 
-The 2026-07-10 promo batch used a fresh profile, Home, route briefing, and
-authoritative gameplay flow. It contains no fixture injection, reference-scene
-composition, or debug mutation:
-
-`docs/journal/screenshots/social-promo-2026-07-10-234309/manifest.json`
-
-The batch contains ten 4K stills plus two 30 fps MP4/GIF motion pairs. Capture
-validation found no weak frames or browser errors and measured nonzero motion
-in both clips. The shareable copies are mirrored to:
-
-`~/Library/Mobile Documents/com~apple~CloudDocs/LastSingularity/promo-media/social-promo-2026-07-10-234309/`
+The tracked review contract is
+`docs/v0.3/evidence/visual-review-manifest.md`. Timestamped renderer, UI, and
+agent-eval captures are intentionally ignored worker-local evidence and must be
+regenerated for a new acceptance claim. Historical promo media may remain in
+iCloud, but it is not repository evidence for the current RC hash.
 
 ### What Still Must Happen
 
 - deploy to the physical Deck if reachable;
 - verify Gaming Mode, Steam Input, readability, suspend/resume, and logs;
 - Greg reviews feel, route pleasure, visual hierarchy, and polish;
+- Greg reviews the target-speaker/headphone mix and agents inspect the browser
+  audio graph/source counts;
+- finish or explicitly defer Troubadorb's prioritized runtime text retunes;
 - Greg explicitly promotes v0.3 to `main` when ready.
 
 ### Steam Deck Side-by-side Comparison

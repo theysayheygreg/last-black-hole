@@ -182,6 +182,14 @@ export function initTestAPI(getState) {
       return perfStats ? JSON.parse(JSON.stringify(perfStats)) : null;
     },
 
+    getAudioDiagnostics() {
+      const { audioEngine } = getState();
+      return clone(audioEngine?.getDiagnostics?.() || {
+        phase: 'unavailable',
+        mixer: null,
+      });
+    },
+
     getFluidGridState() {
       const { getFluidGridStateForTest, perfStats } = getState();
       const direct = getFluidGridStateForTest ? getFluidGridStateForTest() : null;
@@ -220,6 +228,11 @@ export function initTestAPI(getState) {
     getRunResultsView() {
       const { getRunResultsViewModel } = getState();
       return getRunResultsViewModel ? getRunResultsViewModel() : null;
+    },
+
+    getEndScreenState() {
+      const { getEndScreenStateForTest } = getState();
+      return clone(getEndScreenStateForTest?.() || null);
     },
 
     getChronicleView() {
@@ -749,6 +762,8 @@ export function initTestAPI(getState) {
       if (!inputManager) return null;
       return {
         facing: inputManager.facing,
+        moveX: inputManager.moveX,
+        moveY: inputManager.moveY,
         thrustIntensity: inputManager.thrustIntensity,
         brakeIntensity: inputManager.brakeIntensity,
         lastInputSource: inputManager.lastInputSource,
@@ -791,6 +806,9 @@ export function initTestAPI(getState) {
       }
       if (Number.isFinite(Number(controls.facing))) {
         ship.setFacingDirect(Number(controls.facing));
+      }
+      if (Number.isFinite(Number(controls.moveX)) || Number.isFinite(Number(controls.moveY))) {
+        ship.setMoveIntent(Number(controls.moveX) || 0, Number(controls.moveY) || 0);
       }
       if (Number.isFinite(Number(controls.thrustIntensity))) {
         ship.setThrustIntensity(Math.max(0, Math.min(1, Number(controls.thrustIntensity))));

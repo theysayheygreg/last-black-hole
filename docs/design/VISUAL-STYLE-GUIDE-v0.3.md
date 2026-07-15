@@ -97,7 +97,8 @@ Rules:
 - A normal screen uses void, neutral, and at most two active role colors.
 - White is the peak value for the player, critical text, hot well cores, and
   tiny specular accents. Large white areas flatten the hierarchy.
-- Gold means value or stellar energy, never generic selection.
+- Amber means value or stellar energy, never generic selection. Use “gold” only
+  when describing source pixels, not as the semantic role name.
 - Magenta means anomaly/Inhibitor influence, never generic rarity alone.
 - Red is immediate danger or destructive intent. Do not use it for routine
   signal status when magenta carries that role.

@@ -35,9 +35,13 @@ Right now it records:
 
 - `npm test`
 - `npm run test:renderer`
+- `npm run test:perf`
 - `npm run test:title-prototype`
 
-That is intentionally narrow. It covers the real architecture stack, deterministic renderer fixtures, and the standalone title-prototype Composer lane without trying to turn every commit into a release build.
+That is intentionally narrow. It covers the real architecture stack,
+deterministic renderer fixtures, the production performance probe, and the
+standalone title-prototype Composer lane without turning every commit into a
+release build.
 
 Telemetry smoke is intentionally kept in the authority lane, not the everyday
 core `npm test` lane. Run `npm run test:telemetry` or the authority lane when a

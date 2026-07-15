@@ -13,6 +13,31 @@ Version decision logs:
 - [`v0.3`](../v0.3/DECISIONS.md)
 - [`v0.4`](../v0.4/DECISIONS.md) — current active multiplayer line
 
+## 2026-07-14 — Main is the cross-version governance line
+
+**Decision:** Primary Sol owns the root README, project roadmap, durable
+decision journal, branch/release contract, and `origin/main` push policy.
+Version-specific implementation and decisions remain on their owning lines:
+v0.3 uses its branch-local `README.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`, and
+`RC-GATE.md`; v0.4 uses its branch-local `README.md`, `ROADMAP.md`,
+`DECISIONS.md`, `OPEN-DECISIONS.md`, and four-human product plan. Those files
+are summarized here only when a choice is genuinely cross-version or Greg
+promotes the version.
+
+**Why:** Two forward merges were approaching, and copying later-version truth
+backward would make `main` look authoritative for work it does not yet ship.
+A small main-owned governance surface gives every workstream one routing map
+without turning the journal into a duplicate of branch-local decisions.
+
+**Where it landed:** root `README.md`, `docs/project/ROADMAP.md`,
+`docs/project/BRANCHING-AND-RELEASE-LINES.md`,
+`docs/project/LBH-ORCHESTRATION-CONTRACT.md`, `.githooks/pre-push`, and this
+decision log.
+
+**Door status:** Closed for casual backward copying or merging of v0.3/v0.4
+decision docs. Open for explicit promotion summaries and genuinely durable
+cross-version policy.
+
 ## 2026-07-14 — Detailed journals are version-scoped
 
 **Decision:** Each version line owns its detailed `DECISIONS.md` and
@@ -316,7 +341,6 @@ using client ids as authority, or treating one logical authority as one global
 server/one VM per match. Open and evidence-gated for 24/48/96 product modes,
 movement clocks, replication codec, hosted identity/progression, vendor,
 private-host rewards, voice, late join, and any future sharding experiment.
-
 ## 2026-07-10 — Specialist polish lanes run behind Greg's verdict, with one presentation-fact owner
 
 **Decision:** The v0.3 palette, timbre, and troubadorb plans execute as
@@ -342,6 +366,11 @@ integrated amendments in all three `docs/v0.3/plans/2026-07-10-*.md` files.
 volume-control persistence, executor routing, and troubadorb plan ratification
 are Greg's calls. The troubadorb plan is an Orrery reconstruction because the
 overnight lane produced no output.
+
+**Follow-through (2026-07-14):** The reviewed audio and public-roster code waves
+did land, so the automated candidate gate was reopened and rerun. Palette's
+larger runtime execution and Troubadorb's prioritized string retunes remain
+polish work rather than silently completed scope.
 
 ## 2026-07-10 — Promo evidence must disclose how the state was reached
 

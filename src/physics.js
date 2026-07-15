@@ -7,10 +7,11 @@
  *
  * FORCE MODEL OVERVIEW:
  *
- * All forces return a scalar acceleration (world-units/s²). The caller
- * provides the direction vector and timestep via applyForceToShip().
+ * Scalar force helpers return acceleration (world-units/s²). The well-gravity
+ * helper also returns the direction-resolved vector. Callers provide the
+ * timestep via applyForceToShip() or their body integration step.
  *
- * Three force profiles exist:
+ * Force profiles include:
  *
  *   inversePowerForce:  strength × mass / dist^falloff, fading to 0 at maxRange
  *   ├── Used by: wells (pull), stars (push)
@@ -28,7 +29,13 @@
  *   waveBandForce:  strength × amplitude × cos(position in band)
  *   ├── Used by: wave rings (push)
  *   └── Only applies when ship is inside the expanding wavefront band
+ *
+ *   wellGravityVector: body-class parameterized inverse-power well gravity
+ *   ├── Used by: player, scavenger, and wreck bodies
+ *   └── Direction comes from coords.js; shared content owns magnitude + vector
  */
+
+import { gravityVector, inversePowerMagnitude } from './content/well-gravity.js';
 
 /**
  * Reference distance for inverse-power force normalization.
@@ -52,6 +59,36 @@ export const FORCE_REF_DIST = 0.25;
 export const FORCE_MIN_DIST = 0.15;
 
 /**
+ * Named well-gravity parameters that differ by body class.
+ *
+ * Player and scavenger gravity use the accepted ship curve: strength is
+ * normalized at FORCE_REF_DIST, the singularity is clamped at
+ * FORCE_MIN_DIST, and force fades linearly to zero at maxRange. Wrecks keep
+ * their deliberately tiny raw-distance drift curve and hard range cutoff.
+ * Keeping those differences as data lets every consumer use one formula.
+ */
+export const WELL_GRAVITY_BODY_CLASSES = Object.freeze({
+  player: Object.freeze({
+    referenceDistance: FORCE_REF_DIST,
+    minimumDistance: FORCE_MIN_DIST,
+    rangeMode: 'linear',
+    zeroDistanceThreshold: 0.001,
+  }),
+  scavenger: Object.freeze({
+    referenceDistance: FORCE_REF_DIST,
+    minimumDistance: FORCE_MIN_DIST,
+    rangeMode: 'linear',
+    zeroDistanceThreshold: 0.001,
+  }),
+  wreck: Object.freeze({
+    referenceDistance: 1,
+    minimumDistance: 0.02,
+    rangeMode: 'cutoff',
+    zeroDistanceThreshold: 0.001,
+  }),
+});
+
+/**
  * Inverse-power force with finite range.
  *
  * Formula: (strength × mass / (dist/REF)^falloff) × (1 - dist/maxRange)
@@ -68,15 +105,52 @@ export const FORCE_MIN_DIST = 0.15;
  * @returns {number} scalar acceleration in world-units/s², or 0 if out of range
  */
 export function inversePowerForce(dist, strength, mass, falloff, maxRange) {
-  if (dist < 0.001 || dist > maxRange) return 0;
-  const safeDist = Math.max(dist, FORCE_MIN_DIST);
-  const normDist = safeDist / FORCE_REF_DIST;
-  const baseAccel = strength * mass / Math.pow(normDist, falloff);
-  // Linear range fade: 1.0 at center, 0.0 at maxRange.
-  // (Was quadratic — crushed gravity to 25% at half-range, making wells feel sluggish.)
-  const t = dist / maxRange;
-  const rangeFade = 1 - t;
-  return baseAccel * rangeFade;
+  return inversePowerMagnitude(dist, {
+    strength,
+    mass,
+    falloff,
+    maxRange,
+    referenceDistance: FORCE_REF_DIST,
+    minimumDistance: FORCE_MIN_DIST,
+    rangeMode: 'linear',
+    zeroDistanceThreshold: 0.001,
+  });
+}
+
+/**
+ * Calculate a toroidal well-gravity vector for a named body class.
+ *
+ * `direction` must come from coords.js worldDirectionTo(), so all three
+ * consumers share the same wrapped direction and the same force family.
+ * Per-system strength, falloff, and range remain caller-owned tunables; the
+ * body-class profile supplies only the intentional shape differences.
+ *
+ * @param {'player'|'scavenger'|'wreck'} bodyClass
+ * @param {object} options
+ * @param {{dist:number,nx:number,ny:number}} options.direction
+ * @param {number} options.strength - acceleration scale
+ * @param {number} options.mass - well mass multiplier
+ * @param {number} options.falloff - distance exponent
+ * @param {number} options.maxRange - force range in world-units
+ * @returns {{x:number,y:number,magnitude:number}}
+ */
+export function wellGravityVector(bodyClass, {
+  direction,
+  strength,
+  mass,
+  falloff,
+  maxRange,
+}) {
+  const profile = WELL_GRAVITY_BODY_CLASSES[bodyClass];
+  if (!profile) throw new Error(`Unknown well gravity body class: ${bodyClass}`);
+
+  return gravityVector(direction, {
+    strength,
+    mass,
+    falloff,
+    maxRange,
+    ...profile,
+  });
 }
 
 /**

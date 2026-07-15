@@ -15,6 +15,7 @@ async function run() {
 
   assert.strictEqual(cue('player.loot', { clientId: 'pilot-local' }), 'loot');
   assert.strictEqual(cue('player.loot', { clientId: 'pilot-remote' }), null);
+  assert.strictEqual(cue('player.loot', {}), null, 'ownerless private events fail closed when a local identity exists');
   assert.strictEqual(cue('player.slingshotEngaged', { clientId: 'pilot-local' }), 'slingshotEngage');
   assert.strictEqual(cue('player.slingshotReleased', { clientId: 'pilot-local' }), 'slingshotRelease');
   assert.strictEqual(cue('player.portalProximity', { clientId: 'pilot-local', entered: true }), 'portalProximity');
@@ -45,6 +46,12 @@ async function run() {
   assert.strictEqual(cooldown.admit('portalProximity', 5), true);
   assert.strictEqual(cooldown.admit('portalProximity', 5.2), false);
   assert.strictEqual(cooldown.admit('portalProximity', 5.8), true);
+
+  const rollback = new EventVoiceBudget(16);
+  assert.strictEqual(rollback.admit('menuMove', 10), true);
+  assert.strictEqual(rollback.release('menuMove', 10), true);
+  assert.strictEqual(rollback.activeVoices(10), 0);
+  assert.strictEqual(rollback.admit('menuMove', 10), true, 'rolled-back admission must not retain cooldown state');
 
   console.log('AudioEvents: 2 passed, 0 failed');
 }

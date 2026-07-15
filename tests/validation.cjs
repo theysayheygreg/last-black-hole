@@ -86,8 +86,12 @@ const playableMaps = maps.filter(map => playableMapNames.has(map.name));
 
 function parseConfig() {
   const src = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
-  const fn = new Function(src.replace('export const CONFIG =', 'return'));
-  return fn();
+  const movement = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'movement.data.json'), 'utf8'));
+  const evaluable = src
+    .replace("import { MOVEMENT } from './content/movement.js';", '')
+    .replace('export const CONFIG =', 'return');
+  const fn = new Function('MOVEMENT', evaluable);
+  return fn(movement);
 }
 
 const CONFIG = parseConfig();

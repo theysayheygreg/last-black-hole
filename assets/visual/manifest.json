@@ -1,7 +1,7 @@
 {
   "version": 1,
   "sourceDirectory": "assets/source/generated/v0.3",
-  "sourceDigest": "7526cb34623058664b8b1ad3c520fab0317404c83e9eb782edf6845c7fe40dac",
+  "sourceDigest": "b020020aea96f989a2b9c8cf3cb609a4404fd9e952e1f37e4d2b3f8d2e804546",
   "atlases": {
     "entities": [
       "assets/visual/entities/ship-drifter.png",
@@ -20,6 +20,9 @@
       "assets/visual/entities/portal-rift.png",
       "assets/visual/entities/sentry-fauna.png",
       "assets/visual/entities/well-instrument.png"
+    ],
+    "threats": [
+      "assets/visual/entities/sentry-threat.png"
     ],
     "itemFamilies": [
       "assets/visual/item-families/thruster.png",

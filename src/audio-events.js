@@ -20,7 +20,7 @@ const LOCAL_PLAYER_EVENTS = new Set([
 
 function isLocalEvent(payload, clientId) {
   if (!clientId) return true;
-  return !payload?.clientId || payload.clientId === clientId;
+  return Boolean(payload?.clientId) && payload.clientId === clientId;
 }
 
 export function cueForAuthoritativeEvent(event, { clientId = null } = {}) {
@@ -88,7 +88,17 @@ export class EventVoiceBudget {
     if (this.activeVoices(now) + voices > ceiling) return false;
 
     this.lastStartByCue.set(cue, now);
-    this.leases.push({ cue, voices, until: now + Math.max(0.01, spec.duration || 0.5) });
+    this.leases.push({ cue, voices, startedAt: now, until: now + Math.max(0.01, spec.duration || 0.5) });
+    return true;
+  }
+
+  release(cue, startedAt) {
+    const index = this.leases.findLastIndex((lease) => lease.cue === cue && lease.startedAt === startedAt);
+    if (index < 0) return false;
+    this.leases.splice(index, 1);
+    const prior = this.leases.filter((lease) => lease.cue === cue).at(-1);
+    if (prior) this.lastStartByCue.set(cue, prior.startedAt);
+    else this.lastStartByCue.delete(cue);
     return true;
   }
 }

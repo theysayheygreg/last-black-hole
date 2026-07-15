@@ -1,5 +1,10 @@
 # v0.2 Design Bible
 
+> Historical current-version bible for the `main` demo line. On the v0.3
+> branch, `docs/v0.3/README.md`, `docs/v0.3/ROADMAP.md`, and
+> `docs/v0.3/RC-GATE.md` supersede roster, rig, authority, and release claims
+> while this document preserves the v0.2 product history.
+
 ## Pitch
 
 **Last Singularity** is an ASCII-fluid extraction roguelike about piloting through the last surviving pockets of a collapsing universe. You do not fly through empty space. You fly through spacetime as a hostile ocean: currents pull, wells churn, stars become route anchors, and every confident burn spends the delta-v you may need to get home.

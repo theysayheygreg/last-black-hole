@@ -13,6 +13,24 @@ Version changelogs:
 - [`v0.3`](../v0.3/CHANGELOG.md)
 - [`v0.4`](../v0.4/CHANGELOG.md) — current active multiplayer line
 
+## 2026-07-14 — asynchronous feature delivery and Primary Sol routing
+
+- Feature workers now run only changed-contract proof, commit a durable
+  artifact, and return control; broad CI runs asynchronously at integration,
+  nightly, candidate, or release checkpoints.
+- Primary Sol owns cross-version routing, merge topology, and RC selection.
+  Workstream Sols integrate version-local commits and delegate bounded feature
+  and CI work to Luna agents.
+- Orrery/Fable/Opus review is reserved for bundled milestone verticals or
+  strategic design forks rather than stepwise commit review.
+- Primary runs Sol/high, version integrators run Sol/medium, and descendant
+  workers use Luna/high or the narrow Luna/xhigh risk lane. Routine LBH Forge
+  traffic goes to `#last-black-hole`; only Primary may DM Greg when attention
+  is actually required.
+- Main now owns the cross-version README, roadmap, durable decision journal,
+  branch/release contract, and push policy. The pre-push release gate runs only
+  for `origin/main`; v0.3/v0.4 pushes no longer trigger release preparation.
+
 ## 2026-07-14 — v0.4 multiplayer architecture and costing closeout
 
 - Closed the architecture-and-costing goal with the admitted one-through-four
@@ -382,6 +400,43 @@ Version changelogs:
 - Kept S6 prepared public projection/core work intact, and passed all 38
   registered `multiplayer-network` suites once after the revert with retries
   disabled.
+## 2026-07-14 — Orrery RC findings fixed and review path hardened
+
+- Fixed finite well-contact grace so upgraded hulls receive one protection
+  window, emit one event, and then die if they remain inside the well.
+- Replaced the split `1.7`/`2.5` movement baselines with one shared movement
+  data contract consumed by browser fallback physics and authoritative sim.
+- Corrected the browser gravity proof so lethal contact cannot count as
+  evidence of inward pull.
+- Verified the Shallows slingshot/extraction route ten times from fresh sim and
+  browser processes; the reported failure was a too-precise harness waypoint,
+  not fuel exhaustion, so production movement/fuel tuning was left alone.
+- Made title corruption honor reduced motion and removed duplicate remote
+  star/scavenger audio cues.
+- Kept every remote-authority phase presentation-only until the session is
+  released, preventing results transitions from locally advancing snapshot
+  entities and crashing on server-only scavenger death state.
+- Added a portable visible agent-eval lane and exposed structural audio
+  diagnostics for hosts where a reviewer cannot see an unlocked desktop or
+  hear the audio device.
+- Recorded Orrery's complete review under `docs/project/reviews/` and routed
+  sentry identity, palette hygiene, continuous propulsion audio, and future
+  Ballpark/network scaling work without pretending they were release blockers.
+
+## 2026-07-14 — v0.3 clean RC evidence and visual harness closure
+
+- Re-ran the complete v0.3 automated lane from a stopped stack with timing
+  retries disabled. Authority, protocol, Ballpark, movement, product flow,
+  controller, keyboard/mouse, natural agent play, renderer, and UI evidence
+  remained green.
+- Raised the UI visual suite budget from six to ten minutes. Its sixteen
+  settled animation/layout captures had outgrown the old wrapper timeout; the
+  captured states themselves were passing.
+- Refreshed the RC, roadmap, build-status, and visual-evidence ledgers around
+  current no-retry proof and removed a stale pointer to ignored promo media.
+- Kept physical Steam Deck Gaming Mode, Greg's feel/visual/audio review, browser
+  audio-graph inspection, and prioritized runtime copy retunes explicit rather
+  than folding them into automated acceptance.
 
 > Human-readable version history of design docs.
 > Git is authoritative. This is for quick scanning without `git log`.
@@ -1081,6 +1136,21 @@ Version changelogs:
   scheduler/reset continuation.
 - Merged the latest v0.3 audio, text, and visual-contract work forward into
   v0.4, then reran the full core harness successfully at the merge tip.
+## 2026-07-11 — v0.3 overnight specialist integration review
+
+- Confirmed Palette, Timbre, Troubadorb, and Orrery work is contained to the
+  v0.3 branch; the active v0.4 multiplayer worktree remained untouched.
+- Removed an accidental 925 MiB promo-media archive from current source and
+  made generated journal captures ignored by default.
+- Fixed duplicate and stale-run authoritative audio, bounded router history,
+  ownerless private-event leakage, undercounted oscillator costs, failed
+  admission rollback, continuous control rate, and nearest-well layer count.
+- Removed internal hull names from generated public copy and added regression
+  coverage for the v0.3 Drifter/Breacher roster boundary.
+- Corrected plan-versus-runtime claims: Palette's shared presentation schema and
+  Troubadorb's broad copy retune remain reviewed v0.3 work, not shipped code.
+- Added a review record under `docs/project/reviews/` with remaining visual,
+  listening, Git-history, and runtime-copy acceptance gaps.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 

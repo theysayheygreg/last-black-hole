@@ -1,7 +1,9 @@
 import { VisualFamilyLifecycle } from './visual-family.js';
 import {
   selectPlanetoidAsset,
+  selectFaunaAsset,
   selectScavengerAsset,
+  selectSentryAsset,
 } from '../entity-assets.js';
 
 function movementHeading(entity) {
@@ -28,8 +30,8 @@ export class WorldSpriteVisualFamily extends VisualFamilyLifecycle {
       ['stars', budgets.stars ?? 32, this.landmarkGroup, () => 'starWarm', () => 0.045, () => 0],
       ['planetoids', budgets.planetoids ?? 48, this.landmarkGroup, selectPlanetoidAsset, () => 0.034, movementHeading],
       ['scavengers', budgets.scavengers ?? 48, this.activeGroup, selectScavengerAsset, () => 0.038, movementHeading],
-      ['fauna', faunaBudget, this.activeGroup, () => 'sentryFauna', (entity) => 0.018 + entity.size * 0.003, () => 0],
-      ['sentries', ecologyBudget - faunaBudget, this.activeGroup, () => 'sentryFauna', () => 0.027, () => 0],
+      ['fauna', faunaBudget, this.activeGroup, selectFaunaAsset, (entity) => 0.018 + entity.size * 0.003, () => 0],
+      ['sentries', ecologyBudget - faunaBudget, this.activeGroup, selectSentryAsset, () => 0.027, () => 0],
     ];
     this.objectBudget = families.reduce((sum, [, budget]) => sum + Math.max(0, budget), 0);
 
@@ -42,7 +44,7 @@ export class WorldSpriteVisualFamily extends VisualFamilyLifecycle {
       for (; index < entities.length && active < familyBudget; index++) {
         const entity = entities[index];
         if (draw.sprite(group, selectAsset(entity), entity.world.x, entity.world.y,
-          selectRadius(entity), selectRotation(entity), name)) {
+          selectRadius(entity), selectRotation(entity), name, entity)) {
           this.countObject(4);
           active += 1;
         }

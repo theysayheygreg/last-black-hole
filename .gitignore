@@ -5,6 +5,7 @@ release-staging/
 .DS_Store
 *.log
 tests/screenshots/
+docs/journal/screenshots/
 tmp/
 .claude/*
 !.claude/skills/

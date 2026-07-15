@@ -17,6 +17,7 @@ const {
   assert,
   waitFor,
   withQuery,
+  stepGameFrames,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
@@ -101,7 +102,7 @@ async function slingshotEdgeAcks(page) {
 
 async function tapAcknowledgedSlingshotEdge(page, label) {
   const before = await slingshotEdgeAcks(page);
-  await tapGamepadButton(page, 3, 80);
+  await tapGamepadButton(page, 3, 0);
   await waitFor(page, (count) => {
     const acks = window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || [];
     return acks.length === count + 1;
@@ -171,7 +172,10 @@ async function capturePage(page, outputDir, label) {
 }
 
 async function waitForPhase(page, phase, timeout = 12000) {
-  await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
+  await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, {
+    timeout,
+    label: `game phase ${phase}`,
+  }, phase);
 }
 
 async function waitForSettledResult(page, outcome, timeout = 12000) {
@@ -187,7 +191,14 @@ async function waitForSettledResult(page, outcome, timeout = 12000) {
       && Boolean(view?.cargoTitle)
       && motion?.phase === expectedPhase
       && Number(motion?.timer || 0) >= settledAfter;
-  }, { timeout }, outcome);
+  }, { timeout, label: `settled ${outcome} result` }, outcome);
+}
+
+async function waitForEndScreenContinue(page, phase, timeout = 12000) {
+  await waitFor(page, (expected) => {
+    const state = window.__TEST_API?.getEndScreenState?.();
+    return state?.phase === expected && state?.canContinue === true;
+  }, { timeout, label: `${phase} continue unlock` }, phase);
 }
 
 async function waitForSettledMetaReport(page, timeout = 12000) {
@@ -237,8 +248,13 @@ async function setGamepadButton(page, buttonIndex, pressed) {
 
 async function tapGamepadButton(page, buttonIndex, settleMs = 160) {
   await setGamepadButton(page, buttonIndex, true);
-  await sleep(90);
+  // Headless Chrome may throttle ambient animation frames during a long lane.
+  // Step the product loop while each edge is held so the same virtual Deck
+  // input contract is deterministic under isolated and full-suite load.
+  await stepGameFrames(page, 1, 0.001);
+  await sleep(16);
   await setGamepadButton(page, buttonIndex, false);
+  await stepGameFrames(page, 1, 0.001);
   await sleep(settleMs);
 }
 
@@ -433,7 +449,9 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
     wy: wrap(anchor.wy + awayY / awayMag * 0.22, ws),
   };
   const approach = await steerTo(page, clientId, ringPoint, {
-    radius: 0.09,
+    // The playable current is a band, not a precision-docking point. This
+    // tolerance stays outside the kill radius and inside engagement range.
+    radius: 0.12,
     maxCruiseSpeed: 0.31,
     arrivalSpeed: 0.30,
     // A slingshot approach should preserve orbital momentum; stopping at the
@@ -548,23 +566,33 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   const { match: initialPortal } = await waitForWorld((snapshot) =>
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
-  const travel = await steerTo(page, clientId, initialPortal, {
-    radius: Math.max(0.045, (Number(initialPortal.radius) || 0.06) * 0.6),
+  const portalApproach = {
+    radius: Math.max(0.012, (Number(initialPortal.radius) || 0.06) * 0.25),
     maxCruiseSpeed: 0.27,
-    arrivalSpeed: 0.19,
+    arrivalSpeed: 0.08,
     timeout: 70000,
-  });
-  const ready = await waitForPlayer(
+  };
+  const waitForPortalReady = (label) => waitForPlayer(
     clientId,
     (player) => player.portalInteraction?.portalId === initialPortal.id && player.portalInteraction?.ready === true,
-    { timeout: 7000 },
+    { timeout: 7000, label },
   );
+  const travel = await steerTo(page, clientId, initialPortal, portalApproach);
+  const ready = await waitForPortalReady(`portal ${initialPortal.id} evidence-ready state`);
   assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
   screenshots.push(await capturePage(page, outputDir, "08-portal-zone-awaiting-confirm"));
 
+  // Capturing the evidence frame can take long enough for strong portal flow
+  // to carry the ship out. Reacquire normal ready state before the real input
+  // instead of widening the production residence/abort contract for the test.
+  await steerTo(page, clientId, initialPortal, portalApproach);
+  await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready state`);
   // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
   await tapGamepadButton(page, 0, 100);
-  const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", { timeout: 8000 });
+  const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
+    timeout: 8000,
+    label: `portal ${initialPortal.id} extraction consequence`,
+  });
   await waitForPhase(page, "escaped", 8000);
   await waitForSettledResult(page, "extracted", 12000);
   screenshots.push(await capturePage(page, outputDir, "09-authoritative-extraction-result"));
@@ -611,7 +639,10 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
   });
   screenshots.push(await capturePage(page, outputDir, "16-well-contact-approach"));
   await tapGamepadButton(page, 4, 80);
-  await waitForPlayer(clientId, (entry) => entry.abilityState?.burnActive === true, { timeout: 5000 });
+  await waitForPlayer(clientId, (entry) => entry.abilityState?.burnActive === true, {
+    timeout: 5000,
+    label: 'Breacher burn activation',
+  });
 
   let dead = null;
   let lastInterceptError = null;
@@ -643,7 +674,7 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
 
   // The result screen deliberately locks confirm for one beat. This proves the
   // same Deck A path a player uses, including authority leave and Home recovery.
-  await sleep(1300);
+  await waitForEndScreenContinue(page, 'dead');
   await tapGamepadButton(page, 0, 220);
   await waitForPhase(page, "home", 10000);
   screenshots.push(await capturePage(page, outputDir, "18-death-return-home"));
@@ -656,7 +687,7 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
 }
 
 async function proveHomeAndSecondRun(page, firstRun, outputDir, screenshots) {
-  await sleep(2400);
+  await waitForEndScreenContinue(page, 'escaped');
   await tapGamepadButton(page, 0, 220);
   await waitForPhase(page, "meta", 10000);
   await waitForSettledMetaReport(page, 10000);

@@ -1,3 +1,5 @@
+import { MOVEMENT } from './content/movement.js';
+
 /**
  * CONFIG — single source of truth for every tunable value.
  * Every system reads from CONFIG every frame (never cached at init).
@@ -34,13 +36,12 @@ export const CONFIG = {
   },
 
   ship: {
-    thrustAccel: 1.7,        // world-units/s². Used directly (no px conversion).
-                             // 1.7 ≈ old 800px/s² feel. Higher = zippier. 0.5 = sluggish.
-    fluidCoupling: 1.2,      // Lerp rate toward fluid velocity (per second). 0 = ship ignores
+    thrustAccel: MOVEMENT.player.thrustAccel, // Canonical world-units/s² baseline.
+    fluidCoupling: MOVEMENT.player.fluidCoupling, // Lerp rate toward fluid velocity (per second). 0 = ship ignores
                              // currents entirely. 1+ = fluid rider — currents carry you.
                              // Clamped to max 0.5 per frame to prevent velocity teleport.
     turnRate: 360,            // deg/s rotation toward mouse/stick. 360 = snappy, 120 = sluggish.
-    drag: 0.015,             // Fraction of velocity removed per 60 Hz reference frame.
+    drag: MOVEMENT.player.baseDragPer60HzFrame, // Fraction removed per 60 Hz reference frame.
                              // Applied as exponential damping so lower render/sim
                              // cadences keep the same stopping feel.
                              // Reduced from 0.06 — space drag should be near-zero
@@ -50,7 +51,7 @@ export const CONFIG = {
                              // alone, but coasting actually preserves momentum
                              // long enough for conservation-of-speed to be
                              // playable.
-    maxSpeedWorld: 8.0,      // Hard cap on ship speed in world-units/sec.
+    maxSpeedWorld: MOVEMENT.player.maxSpeedWorld, // Hard cap in world-units/sec.
                              // Defensive — slingshot chains + favorable currents
                              // can otherwise compound into camera-breaking
                              // velocities. Set obscenely high (~17× the old
@@ -63,13 +64,13 @@ export const CONFIG = {
     // refills slowly when not thrusting (small ambient regen) and after
     // a short pause when releasing thrust (deltaVRegenDelay). These are
     // the BASELINE — hulls override via deltaV{Max,Regen,BurnEff}.
-    deltaVMax: 100,           // Default tank size (Drifter is small/efficient,
+    deltaVMax: MOVEMENT.player.deltaVMax, // Default tank size (Drifter is small/efficient,
                               // Breacher is large/expensive — see hulls.data.json).
-    deltaVRegen: 1.5,         // deltaV/sec ambient regen (always-on, even mid-burn).
-    deltaVRegenBoost: 6.0,    // Bonus regen rate added when not thrusting.
-    deltaVRegenDelay: 0.5,    // Seconds of "no regen boost" after thrust ends —
+    deltaVRegen: MOVEMENT.player.deltaVRegen, // deltaV/sec ambient regen (always-on, even mid-burn).
+    deltaVRegenBoost: MOVEMENT.player.deltaVRegenBoost, // Bonus regen rate added when not thrusting.
+    deltaVRegenDelay: MOVEMENT.player.deltaVRegenDelay, // Seconds before boost regen —
                               // keeps the thrust→regen race from feeling fluttery.
-    deltaVBurnRate: 12,       // deltaV/sec consumed at thrustIntensity = 1.0.
+    deltaVBurnRate: MOVEMENT.player.deltaVBurnRate, // deltaV/sec consumed at thrustIntensity = 1.0.
                               // Burns linearly with intensity (analog trigger ⇒
                               // half pull = half cost).
     size: 12,                 // Ship triangle radius in pixels (overlay rendering only).
@@ -323,8 +324,8 @@ export const CONFIG = {
     // forward burn rate. Player can reverse, anti-slingshot, or just
     // course-correct without paying full delta-v. Less powerful than
     // the gas pedal by design.
-    brakeThrustScale: 0.4,    // Reverse thrust = forward thrust × this.
-    brakeFuelScale: 0.6,      // Reverse fuel cost = forward × this.
+    brakeThrustScale: MOVEMENT.player.brakeThrustScale, // Reverse thrust multiplier.
+    brakeFuelScale: MOVEMENT.player.brakeFuelScale, // Reverse fuel-cost multiplier.
 
     // --- Mouse thrust curve (keyboard + mouse install path) ---
     mouseDeadzonePx: 28,      // Cursor distance from ship below this = drift/no thrust.
@@ -356,7 +357,7 @@ export const CONFIG = {
     count: 3,                    // base count per map (overridden by signature layout)
     vultureRatio: 0.3,           // fraction that spawn as vultures
     size: 8,                     // overlay triangle radius in px (70% of player ship.size)
-    thrustAccel: 0.5,            // world-units/s², slightly slower than player (1.7)
+    thrustAccel: 0.5,            // world-units/s², slightly slower than player (2.5)
     drag: 0.06,                  // same 60 Hz reference damping model as player
     fluidCoupling: 1.2,          // same as player — scavengers surf the same currents
     decisionInterval: 0.8,       // seconds between AI decision updates (not per-frame)

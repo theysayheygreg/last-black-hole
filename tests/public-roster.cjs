@@ -1,4 +1,6 @@
 const { TestRunner, assert } = require("./helpers.cjs");
+const fs = require("fs");
+const path = require("path");
 const { HULL_DEFINITIONS, PUBLIC_HULL_IDS } = require("../scripts/content/hulls.cjs");
 
 async function run() {
@@ -21,6 +23,16 @@ async function run() {
     for (const hullId of ["resonant", "shroud", "hauler"]) {
       assert(HULL_DEFINITIONS[hullId], `Expected internal ${hullId} definition to remain available`);
       assert(!PUBLIC_HULL_IDS.includes(hullId), `Expected ${hullId} to stay out of the public roster`);
+    }
+  });
+
+  await runner.run("generated player-facing copy does not leak internal hull names", async () => {
+    const root = path.resolve(__dirname, "..");
+    for (const relative of ["src/seeded-generation.js", "scripts/seeded-generation.cjs", "src/wrecks.js"]) {
+      const source = fs.readFileSync(path.join(root, relative), "utf8");
+      for (const hidden of ["Resonant", "Shroud", "Hauler"]) {
+        assert(!source.includes(hidden), `${relative} must not expose internal hull name ${hidden}`);
+      }
     }
   });
 

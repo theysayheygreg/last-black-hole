@@ -84,6 +84,7 @@ import {
   withAlpha,
 } from './ui/canvas-primitives.js';
 import {
+  advanceMotionClock,
   drawCommandButtonMotion,
   drawDirectionalWipe,
   drawTerminalWindow,
@@ -921,7 +922,7 @@ function getUiMotionStateForTest() {
 }
 
 function updateUiMotion(rawDt) {
-  const step = Math.max(0, Math.min(Number(rawDt) || 0, 0.25));
+  const nextClock = advanceMotionClock(0, rawDt);
   if (gamePhase !== uiMotionPhase) {
     uiMotionPhase = gamePhase;
     uiMotionTimer = 0;
@@ -929,13 +930,13 @@ function updateUiMotion(rawDt) {
     uiFocusPulseTimer = 0;
     return;
   }
-  uiMotionTimer += step;
+  uiMotionTimer += nextClock;
   const nextFocusKey = currentUiFocusKey();
   if (nextFocusKey !== uiFocusKey) {
     uiFocusKey = nextFocusKey;
     uiFocusPulseTimer = 0;
   } else {
-    uiFocusPulseTimer += step;
+    uiFocusPulseTimer += nextClock;
   }
 }
 
@@ -1316,6 +1317,7 @@ function init() {
       camX, camY,
       fps,
       perfStats,
+      audioEngine,
       getFluidGridStateForTest: () => {
         const renderInputs = getVisibleWellRenderInputs(camX, camY);
         return {
@@ -1374,6 +1376,16 @@ function init() {
       setLastRunResult: (result) => { lastRunResult = result ? JSON.parse(JSON.stringify(result)) : null; },
       setLastCrewResult: (result) => { lastCrewResult = result ? JSON.parse(JSON.stringify(result)) : null; },
       getRunResultsViewModel: currentRunResultsViewModel,
+      getEndScreenStateForTest: () => {
+        const timer = gamePhase === 'dead' ? deathTimer : gamePhase === 'escaped' ? escapeTimer : 0;
+        const unlockAt = DEATH_LINGER_DURATION + 1.0;
+        return {
+          phase: gamePhase,
+          timer,
+          unlockAt,
+          canContinue: (gamePhase === 'dead' || gamePhase === 'escaped') && timer > unlockAt,
+        };
+      },
       getChronicleViewModel: buildChronicleViewModel,
       setRecentEchoes: (echoes) => {
         recentEchoes = Array.isArray(echoes) ? echoes.map((echo) => ({ ...echo })).slice(0, 8) : [];
@@ -1891,7 +1903,7 @@ function startGame(map, seed = null) {
   currentSignature = computeSeedPreview(map, localSeed).signature;
 
   // Reset audio for new run
-  audioEngine.reset();
+  audioRouter?.reset(`local:${localSeed}`);
 
   // Place ship in a safe spawn
   const [spawnX, spawnY] = findSafeSpawn();
@@ -2642,23 +2654,19 @@ function applyRemoteEvents(events) {
           showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
         } else if (payload.effectId === 'breachFlare') {
           showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
-          audioEngine.playEvent('breachFlare');
         }
         break;
       case 'player.effectExpired':
         if (isLocal && payload.effectId === 'timeSlowLocal') {
-          audioEngine.playEvent('timeSlowEnd');
         }
         break;
       case 'player.shieldAbsorbed':
         if (isLocal) {
           showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
-          audioEngine.playEvent('shieldAbsorb');
         }
         break;
       case 'player.died':
         if (isLocal) {
-          audioEngine.playEvent('death');
         }
         break;
       case 'run.result':
@@ -2693,12 +2701,10 @@ function applyRemoteEvents(events) {
       case 'inhibitor.drainCargo':
         if (isLocal) {
           showInhibitorWarning('cargo drained', Math.max(1, payload.form || 2), payload.intensity ?? 0.9, 1800, 'rgba(204, 26, 128, 0.9)');
-          audioEngine.playEvent?.('inhibitorDrain');
         }
         break;
       case 'inhibitor.finalPortal':
         showWarning('final portal opened', 'rgba(255, 217, 102, 0.95)', 4000);
-        audioEngine.playEvent?.('inhibitorFinalPortal');
         break;
       case 'player.loot':
         // Echo wreck pickup — show the chronicle fragment as a warning
@@ -2743,7 +2749,6 @@ function applyRemoteEvents(events) {
           }
           const [cr, cg, cb] = payload.starColor;
           showWarning(`${payload.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
-          audioEngine.playEvent('starConsumed', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
           _starFlashTimer = 0.8;
           _starFlashColor = payload.starColor;
         }
@@ -2767,9 +2772,6 @@ function applyRemoteEvents(events) {
             ? `${payload.name} destroyed — loot scattered`
             : `${payload.name} consumed`;
           showWarning(message, 'rgba(200, 140, 80, 0.9)', 3000);
-        }
-        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-          audioEngine.playEvent('scavDeath', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         }
         break;
       default:
@@ -2977,7 +2979,7 @@ async function startRemoteGame(mapEntry, {
   currentSignature = runningSession?.cosmicSignature
     ? { ...runningSession.cosmicSignature }
     : computeSeedPreview(targetMapEntry.map, briefingSeed).signature;
-  audioEngine.reset();
+  audioRouter?.reset(`remote:${targetMapEntry.id}:${briefingSeed}`);
   // Enter loading phase — transition to 'playing' when first snapshot arrives
   loadingMapName = targetMapEntry.name || targetMapEntry.id || '';
   loadingStartTime = performance.now();
@@ -3653,6 +3655,7 @@ function collectTitleVfxEvents(ctx, w, h, time, {
   fixtureVfx = null,
   layoutName = titleLayout,
 } = {}) {
+  if (currentUiMotionSettings().reducedMotion) return [];
   const glitchState = titleGlitchForVfx(time, fixtureVfx);
   if ((glitchState.active || 0) <= 0.01) return [];
   const layout = titleLayoutMetrics(w, h, layoutName);
@@ -3764,7 +3767,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.fillStyle = roleColor('bone', 0.96 * titleReveal);
   ctx.fillText(cleanTitle, layout.textX + baseJitterX, layout.titleY + baseJitterY);
 
-  if (titleReveal > 0.2 && glitchState.active > 0.01) {
+  if (!motion.reducedMotion && titleReveal > 0.2 && glitchState.active > 0.01) {
     const glitchTitle = corruptGlyphText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
       density: 0.92,
       frequencyHz: 9 + glitchState.amount * 24,
@@ -4243,7 +4246,7 @@ function gameLoop(now) {
 
   // Scene transition: tick timer, fire callback at midpoint, end when done
   if (transitionActive) {
-    transitionTimer += rawDt;  // use rawDt, not scaled dt
+    transitionTimer = advanceMotionClock(transitionTimer, rawDt, { maxStep: 1 / 15 });
     const timing = transitionTiming();
     // Fire scene swap at the midpoint (full corruption — scene invisible)
     if (!transitionFired && transitionTimer >= timing.handoff) {
@@ -4263,9 +4266,9 @@ function gameLoop(now) {
   const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home'
     || gamePhase === 'mapSelect' || gamePhase === 'loading' || gamePhase === 'crewMuster'
     || rendererFixtureActive;
-  // Authority ownership persists through escaped/dead/result transitions.
-  // If this falls back to local gameplay stepping after a remote outcome, the
-  // presentation begins advancing partially projected entities as local truth.
+  // A remote session owns gameplay state until it is explicitly released.
+  // Results and transitions still render its final snapshot, but must never
+  // resume local simulation of those server-owned entities.
   const remoteVisualMode = remoteAuthorityActive;
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
@@ -4641,6 +4644,7 @@ function gameLoop(now) {
             });
           });
           _prevConfirm = confirmNow;
+          _prevExtract = extractNow;
           _prevPause = pauseNow;
           _prevBack = backNow;
           _prevUp = upNow;
@@ -4651,6 +4655,7 @@ function gameLoop(now) {
           _prevTabRight = inputManager.tabRightPressed;
           _prevDelete = inputManager.deletePressed;
           _prevPulse = pulseNow;
+          _prevSlingshot = slingshotNow;
           _prevInventory = inventoryNow;
           _prevConsumable1 = consumable1Now;
           _prevConsumable2 = consumable2Now;
@@ -4787,8 +4792,12 @@ function gameLoop(now) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
-          const intentX = Number.isFinite(facing) ? Math.cos(facing) : 1;
-          const intentY = Number.isFinite(facing) ? Math.sin(facing) : 0;
+          const intentX = Number.isFinite(inputManager.moveX)
+            ? inputManager.moveX
+            : (Number.isFinite(facing) ? Math.cos(facing) : 1);
+          const intentY = Number.isFinite(inputManager.moveY)
+            ? inputManager.moveY
+            : (Number.isFinite(facing) ? Math.sin(facing) : 0);
           const canDispatchActions = simClient.transport !== 'stream' || !remoteActionSettlementInFlight;
           const sentPulse = canDispatchActions && remotePendingPulse;
           const sentExtractConfirm = canDispatchActions && remotePendingExtractConfirm;
@@ -5149,6 +5158,7 @@ function gameLoop(now) {
   }
 
   updateTitleAttractScene();
+  if (gamePhase === 'meta') metaPhaseTimer += dt;
   updateUiMotion(rawDt);
 
   _prevConfirm = confirmNow;
@@ -5202,6 +5212,15 @@ function gameLoop(now) {
   }
 
   // 6b. Audio update — spatial mixing based on game state
+  const authorityPlayer = remoteAuthorityActive
+    ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+    : null;
+  audioRouter?.movementState({
+    active: gamePhase === 'playing' && !inventoryOpen,
+    deliveredThrust: authorityPlayer?.deliveredThrust ?? ship.lastDeliveredThrustIntensity,
+    deliveredBrake: authorityPlayer?.deliveredBrake ?? ship.lastDeliveredBrakeIntensity,
+    speed: Math.hypot(ship.vx || 0, ship.vy || 0),
+  });
   if (!inMenu) {
     audioEngine.update(dt, wellSystem.wells, ship, camX, camY,
       overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime, CONFIG.universe.runDuration, inhibitorState);
@@ -6957,7 +6976,6 @@ function gameLoop(now) {
 
   // === META SCREEN (between runs) ===
   if (!rendererFixtureActive && gamePhase === 'meta') {
-    metaPhaseTimer += dt;
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
     const t = salvageReportDisplayTime();

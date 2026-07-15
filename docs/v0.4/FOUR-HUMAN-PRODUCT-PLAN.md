@@ -1,6 +1,6 @@
 # v0.4 Four-Human Product Plan
 
-> Status: **ACTIVE** on `codex/v0.4-multiplayer-architecture`
+> Status: **ACTIVE** on `codex/v0.4-multiplayer-product`
 >
 > Product target: one through four humans on the admitted S20 authority path.
 > Four humans are the acceptance gate, not the minimum required party size.
@@ -21,9 +21,10 @@ interpolation, Three, fluid presentation, UI, VFX, and audio.
 
 The focused private-room journey now proves four human-surface clients,
 copy/paste invitation, authority-owned launch, fifth-seat rejection, explicit
-offline recovery, reconnect continuity, and terminal recovery. The remaining
-product gap is the end-of-run loop: settled per-player rewards, one shared
-result, party-preserving rematch, and human evidence without debug navigation.
+offline recovery, reconnect continuity, terminal recovery, settled per-player
+rewards, one shared result, result residency, and party-preserving rematch
+lineage. The remaining product gap is player-facing rematch/wait/leave controls
+and human evidence without debug navigation.
 
 ## Player Journey
 

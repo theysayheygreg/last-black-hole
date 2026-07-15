@@ -26,18 +26,21 @@ function eventKey(event) {
  * turns snapshot state into an authoritative outcome.
  */
 export class AudioRouter {
-  constructor(audioEngine, { clientId = null, now = () => performance.now() } = {}) {
+  constructor(audioEngine, { clientId = null, now = () => performance.now(), maxSeen = 4096 } = {}) {
     this.audio = audioEngine;
     this.clientId = clientId;
     this.now = now;
     this.runId = null;
     this.seen = new Set();
+    this.seenOrder = [];
+    this.maxSeen = Math.max(32, Math.floor(maxSeen));
     this.portalActive = false;
   }
 
   reset(runId = null) {
     this.runId = runId;
     this.seen.clear();
+    this.seenOrder.length = 0;
     this.portalActive = false;
     this.audio?.reset?.();
   }
@@ -46,9 +49,18 @@ export class AudioRouter {
 
   authoritative(event, context = {}) {
     if (!event || typeof event.type !== 'string') return false;
+    const eventRunId = event.runId || event.payload?.runId || null;
+    if (eventRunId && this.runId && eventRunId !== this.runId) {
+      this.runId = eventRunId;
+      this.seen.clear();
+      this.seenOrder.length = 0;
+      this.portalActive = false;
+    } else if (eventRunId && !this.runId) {
+      this.runId = eventRunId;
+    }
     const key = eventKey(event);
     if (key && this.seen.has(key)) return false;
-    if (key) this.seen.add(key);
+    if (key) this._remember(key);
     const translated = cueForAuthoritativeEvent(event, { clientId: this.clientId });
     const directCue = this._localEventCue(event);
     const mapped = translated?.cue || directCue;
@@ -61,7 +73,7 @@ export class AudioRouter {
     if (!cue || !cueSpec(cue)) return false;
     const presentationId = payload.presentationId || `${this.runId || 'local'}:${id}:${payload.seq ?? this.now()}`;
     if (this.seen.has(presentationId)) return false;
-    this.seen.add(presentationId);
+    this._remember(presentationId);
     return this.play(cue, payload, context);
   }
 
@@ -74,6 +86,15 @@ export class AudioRouter {
 
   setPhase(phase) { this.audio?.setContext?.(phase); }
 
+  /**
+   * Forward presentation-only movement state to the single bounded player
+   * voice. `deliveredThrust`/`deliveredBrake` keep input intent from sounding
+   * like motion when the authority rejects or gates a burn.
+   */
+  movementState(state = {}) {
+    return Boolean(this.audio?.updateMovementState?.(state));
+  }
+
   play(cue, payload = {}, context = {}) {
     const spec = cueSpec(cue);
     if (!spec) return false;
@@ -82,10 +103,19 @@ export class AudioRouter {
 
   _localEventCue(event) {
     const payload = event.payload || {};
-    const local = !payload.clientId || payload.clientId === this.clientId;
+    const local = this.clientId ? payload.clientId === this.clientId : true;
     if (!local && event.type.startsWith('player.')) return null;
     if (event.type === 'player.effectUsed') return LOCAL_EVENT_CUES[`${event.type}:${payload.effectId}`] || null;
     if (event.type === 'player.effectExpired') return LOCAL_EVENT_CUES[`${event.type}:${payload.effectId}`] || null;
     return LOCAL_EVENT_CUES[event.type] || null;
+  }
+
+  _remember(key) {
+    if (this.seen.has(key)) return;
+    this.seen.add(key);
+    this.seenOrder.push(key);
+    while (this.seenOrder.length > this.maxSeen) {
+      this.seen.delete(this.seenOrder.shift());
+    }
   }
 }

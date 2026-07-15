@@ -130,10 +130,10 @@ async function run() {
     });
   });
 
-  await runner.run("High-speed portal crossing does not bypass explicit confirmation", async () => {
+  await runner.run("High-speed portal crossing does not create residence or bypass explicit confirmation", async () => {
     const port = BASE_PORT + 2;
     const clientId = "swept-portal";
-    await withPlayer(port, clientId, async () => {
+    await withPlayer(port, clientId, async (authority) => {
       const initial = (await request(port, "/snapshot")).body;
       const player = initial.players.find((entry) => entry.clientId === clientId);
       const scale = initial.session.worldScale;
@@ -163,9 +163,56 @@ async function run() {
       );
       const crossedPlayer = snapshot.players.find((entry) => entry.clientId === clientId);
       assert(crossedPlayer?.status !== "escaped", "A swept fly-through must not extract without confirmation");
+      assert(crossedPlayer?.portalInteraction === null, "A swept fly-through must not create portal residence");
       assert(!snapshot.recentEvents.some((event) =>
         event.type === "player.escaped" && event.payload?.portalId === "swept-portal-target"),
       "A fly-through must not publish player.escaped");
+      const events = await readAuthorizedEvents(port, authority);
+      assert(!events.events.some((event) =>
+        event.type === "player.portalProximity" &&
+        event.payload?.portalId === "swept-portal-target" &&
+        event.payload?.entered === true),
+      "A swept fly-through must not publish portal residence");
+    });
+  });
+
+  await runner.run("Portal residence is detected when a movement step ends inside across the world seam", async () => {
+    const port = BASE_PORT + 4;
+    const clientId = "endpoint-portal";
+    await withPlayer(port, clientId, async () => {
+      const initial = (await request(port, "/snapshot")).body;
+      const scale = initial.session.worldScale;
+      const portalX = wrap(0.02, scale);
+      const portalY = wrap(2.5, scale);
+      await request(port, "/debug/portal-state", {
+        id: "endpoint-portal-target",
+        wx: portalX,
+        wy: portalY,
+        type: "standard",
+        alive: true,
+        blockedByInhibitor: false,
+        lifespan: 30,
+      });
+      const placed = await request(port, "/debug/player-state", {
+        clientId,
+        wx: wrap(portalX - 0.1, scale),
+        wy: portalY,
+        vx: 0.3,
+        vy: 0,
+        status: "alive",
+      });
+      const placedTick = placed.body.snapshot.tick;
+      const snapshot = await waitFor(
+        port,
+        async () => (await request(port, "/snapshot")).body,
+        (body) => body.players.some((player) =>
+          player.clientId === clientId &&
+          player.status === "alive" &&
+          player.portalInteraction?.portalId === "endpoint-portal-target" &&
+          player.portalInteraction.enteredTick > placedTick),
+      );
+      const resident = snapshot.players.find((player) => player.clientId === clientId);
+      assert(resident?.status === "alive", "Portal residence must still require confirmation to extract");
     });
   });
 

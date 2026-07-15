@@ -3,12 +3,24 @@ set -euo pipefail
 
 remote="${1:-}"
 
-if [[ "${LBH_SKIP_RELEASE_PREP:-}" == "1" || "${LBH_SKIP_RELEASE_PREP:-}" == "true" ]]; then
-  echo "LBH release pre-push check skipped by LBH_SKIP_RELEASE_PREP."
+if [[ -n "$remote" && "$remote" != "origin" ]]; then
   exit 0
 fi
 
-if [[ -n "$remote" && "$remote" != "origin" ]]; then
+pushes_main=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/main" && ! "$local_sha" =~ ^0+$ ]]; then
+    pushes_main=1
+  fi
+done
+
+if [[ "$pushes_main" != "1" ]]; then
+  echo "LBH release pre-push check skipped: origin/main is not being updated."
+  exit 0
+fi
+
+if [[ "${LBH_SKIP_RELEASE_PREP:-}" == "1" || "${LBH_SKIP_RELEASE_PREP:-}" == "true" ]]; then
+  echo "LBH release pre-push check skipped by LBH_SKIP_RELEASE_PREP."
   exit 0
 fi
 

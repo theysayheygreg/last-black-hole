@@ -80,7 +80,13 @@ const {
   applyPlayerDriveAndFlow,
 } = require("./sim/player-movement-step.cjs");
 const {
+  WELL_GRAVITY_PARAMS,
+  wellGravityMagnitude,
+  wellGravityVector,
+} = require("./sim/well-gravity.cjs");
+const {
   sweptMovingCircleVsCircle,
+  wrappedDistance,
   wrappedDelta,
 } = require("./sim/world-geometry.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
@@ -144,6 +150,9 @@ const PORTAL_CONFIG = {
     { time: 570, count: [1, 1], types: ["standard"], lifespan: 30 },
   ],
 };
+const AUTHORITY_INPUT_CONFIG = Object.freeze({
+  heldInputTimeoutMs: readNumber(process.env.LBH_SIM_HELD_INPUT_TIMEOUT_MS, 750, 1),
+});
 const PLAYER_CARGO_SLOTS = 8;
 const RUN_DURATION = 600;
 const MATCH_MAX_SIM_TIME = readNumber(process.env.LBH_SIM_MAX_SIM_TIME, RUN_DURATION, 1);
@@ -215,7 +224,7 @@ function createMultiplayerProjectionStats(runId = null) {
 const WRECK_ADJECTIVES = [
   "Ascending", "Crystalline", "Shattered", "Infinite", "Dreaming",
   "Ossified", "Luminous", "Drifting", "Harmonic", "Forgotten",
-  "Silent", "Fractured", "Prismatic", "Hollow", "Resonant",
+  "Silent", "Fractured", "Prismatic", "Hollow", "Echoing",
 ];
 const WRECK_NOUNS = [
   "Chorus", "Lattice", "Meridian", "Archive", "Theorem",
@@ -388,9 +397,9 @@ const SERVER_COMBAT = {
   timeSlowDuration: 3.0,
 };
 const SERVER_WELLS = {
-  shipPullStrength: 0.6,
-  shipPullFalloff: 1.5,
-  maxRange: 1.2,
+  shipPullStrength: WELL_GRAVITY_PARAMS.player.strength,
+  shipPullFalloff: WELL_GRAVITY_PARAMS.player.falloff,
+  maxRange: WELL_GRAVITY_PARAMS.player.maxRange,
   currentStrength: 0.3,
   currentFalloff: 1.5,
   currentRange: 1.35,
@@ -602,7 +611,6 @@ const AI_PERSONALITIES = {
   },
 };
 
-const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
@@ -704,17 +712,16 @@ function worldDirection(ax, ay, bx, by, worldScale) {
   const dy = worldDisplacement(ay, by, worldScale);
   const dist = Math.hypot(dx, dy);
   if (dist < 0.000001) return { dist, nx: 0, ny: 0 };
-  return { dist, nx: dx / dist, ny: dy / dist };
+  return { dist, dx, dy, nx: dx / dist, ny: dy / dist };
 }
 
 function inversePowerForce(dist, strength, mass, falloff, maxRange) {
-  if (dist < 0.001 || dist > maxRange) return 0;
-  const safeDist = Math.max(dist, FORCE_MIN_DIST);
-  const normDist = safeDist / FORCE_REF_DIST;
-  const baseAccel = strength * mass / Math.pow(normDist, falloff);
-  const t = dist / maxRange;
-  const rangeFade = 1 - t;
-  return baseAccel * rangeFade;
+  return wellGravityMagnitude("player", dist, mass, {
+    strength,
+    falloff,
+    maxRange,
+    zeroDistanceThreshold: 0.001,
+  });
 }
 
 function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
@@ -1420,6 +1427,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       ability2: false,
       consumeSlot: null,
       timestamp: Date.now(),
+      receivedAt: Date.now(),
     },
     status: "alive",
     cargo: new Array(brain.cargoSlots).fill(null),
@@ -1432,6 +1440,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       pulseCooldownRemaining: 0,
       hullGraceRemaining: 0,
     },
+    _wellGraceContactActive: false,
+    _wellGraceLastTick: -1,
     signal: {
       level: 0,
       zone: "ghost",
@@ -2056,6 +2066,8 @@ function publicPlayerSnapshot(player) {
     wy: player.wy,
     vx: player.vx,
     vy: player.vy,
+    deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
+    deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
     slingshot: player.slingshot ? {
       engaged: Boolean(player.slingshot.engaged),
       anchorId: player.slingshot.anchorId ?? null,
@@ -3165,13 +3177,10 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
     let ax = 0;
     let ay = 0;
     for (const well of runtime.mapState.wells) {
-      const dx = worldDisplacement(wreck.wx, well.wx, ws);
-      const dy = worldDisplacement(wreck.wy, well.wy, ws);
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.8 || dist < 0.001) continue;
-      const accel = (0.0045 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.5);
-      ax += (dx / dist) * accel;
-      ay += (dy / dist) * accel;
+      const direction = worldDirection(wreck.wx, wreck.wy, well.wx, well.wy, ws);
+      const gravity = wellGravityVector("wreck", direction, well.mass);
+      ax += gravity.x;
+      ay += gravity.y;
     }
 
     let terminal = 0.05;
@@ -3308,6 +3317,43 @@ function sweptEntityContact(sweep, entity, radius) {
   return result.hit ? result : null;
 }
 
+function portalEndpointDistance(player, portal) {
+  return wrappedDistance(
+    player.wx,
+    player.wy,
+    portal.wx,
+    portal.wy,
+    runtime.session.worldScale
+  );
+}
+
+function expireHeldInput(player, now = Date.now()) {
+  if (player.isAI || !player.lastInput) return player.lastInput;
+  const receivedAt = Number(player.lastInput.receivedAt);
+  if (!Number.isFinite(receivedAt) || now - receivedAt < AUTHORITY_INPUT_CONFIG.heldInputTimeoutMs) {
+    return player.lastInput;
+  }
+
+  const input = player.lastInput;
+  if (input.moveX === 0 && input.moveY === 0 && input.thrust === 0 && input.brake === 0
+    && !input.slingshot && !input.ability1 && !input.ability2) {
+    return input;
+  }
+
+  // Receipt time is authoritative; client timestamps are only transport metadata.
+  player.lastInput = {
+    ...input,
+    moveX: 0,
+    moveY: 0,
+    thrust: 0,
+    brake: 0,
+    slingshot: false,
+    ability1: false,
+    ability2: false,
+  };
+  return player.lastInput;
+}
+
 function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sweep = null) {
   for (const scav of scavengers) {
     if (scav.alive === false || scav.state === "dying") continue;
@@ -3370,19 +3416,24 @@ function resolveWellContact(player, well, dt, dx, dy) {
     });
     return "protected";
   }
-  if ((player.effectState.hullGraceRemaining || 0) > 0) {
-    player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
-    if (player.effectState.hullGraceRemaining > 0) return "protected";
-  } else if ((player.brain?.wellGraceDuration || 0) > 0) {
-    player.effectState.hullGraceRemaining = player.brain.wellGraceDuration;
+  const graceDuration = player.brain?.wellGraceDuration || 0;
+  if (graceDuration > 0 && !player._wellGraceContactActive) {
+    player._wellGraceContactActive = true;
+    player._wellGraceLastTick = runtime.tick;
+    player.effectState.hullGraceRemaining = graceDuration;
     publishEvent("player.hullGraceStarted", {
       clientId: player.clientId,
       wellId: well.id,
       wellName: well.name || well.id,
-      duration: player.brain.wellGraceDuration,
+      duration: graceDuration,
     });
     return "protected";
   }
+  if (player._wellGraceContactActive && player._wellGraceLastTick !== runtime.tick) {
+    player._wellGraceLastTick = runtime.tick;
+    player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
+  }
+  if ((player.effectState.hullGraceRemaining || 0) > 0) return "protected";
   if (player.abilityState && player.abilityState.hullType === 'hauler'
       && player.abilityState.wellSurvivesRemaining > 0) {
     player.abilityState.wellSurvivesRemaining--;
@@ -3427,14 +3478,19 @@ function applyWellGravity(player, dt) {
     runtime.mapState.wells,
     runtime.session.maxWellInfluencesPerPlayer || runtime.mapState.wells.length || 1
   );
+  let hasWellContact = false;
   for (const { entity: well } of relevantWells) {
     const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
     const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
-    if (dist < 0.0001) continue;
-    if (dist < well.killRadius && resolveWellContact(player, well, dt, dx, dy) === "dead") return;
+    if (dist < well.killRadius) {
+      hasWellContact = true;
+      if (resolveWellContact(player, well, dt, dx, dy) === "dead") return;
+    }
   }
-  if ((player.effectState.hullGraceRemaining || 0) > 0) {
+  if (!hasWellContact && player._wellGraceContactActive) {
+    player._wellGraceContactActive = false;
+    player._wellGraceLastTick = -1;
     player.effectState.hullGraceRemaining = 0;
   }
   let pullX = 0;
@@ -3445,19 +3501,10 @@ function applyWellGravity(player, dt) {
     pullY = field.gravity?.y ?? field.gravityY;
   } else {
     for (const { entity: well } of relevantWells) {
-      const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
-      const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
-      const dist = Math.hypot(dx, dy);
-      if (dist < 0.0001) continue;
-      const pull = inversePowerForce(
-        dist,
-        SERVER_WELLS.shipPullStrength,
-        well.mass,
-        SERVER_WELLS.shipPullFalloff,
-        SERVER_WELLS.maxRange
-      );
-      pullX += (dx / dist) * pull;
-      pullY += (dy / dist) * pull;
+      const direction = worldDirection(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
+      const gravity = wellGravityVector("player", direction, well.mass);
+      pullX += gravity.x;
+      pullY += gravity.y;
     }
   }
   let pullScale = 1;
@@ -3541,7 +3588,7 @@ function collectPortalExtractionCandidates(player, portals, captureDist, limit) 
     ranked.push({
       entity: portal,
       handle: mirror.getHandleById(hit.id),
-      dist: worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale),
+      dist: portalEndpointDistance(player, portal),
     });
   }
   ranked.sort((a, b) => a.dist - b.dist);
@@ -3640,7 +3687,7 @@ function tickExtraction(player, confirmRequested = false) {
   const maxCaptureDist = portals.reduce((best, portal) => {
     if (!isPortalAvailable(portal)) return best;
     return Math.max(best, portalCaptureRadius(portal));
-  }, 0.08);
+  }, PORTAL_CONFIG.captureRadius);
   const limit = clampBudgetCount(runtime.session.maxPortalChecksPerPlayer || portals.length || 1, portals.length || 1);
   const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
   const portalHit = endpointCandidates
@@ -4297,14 +4344,15 @@ function steerToward(entity, targetWX, targetWY, intensity = 1) {
   entity.thrustIntensity = intensity;
 }
 
-function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
+function applyWellGravityToEntity(entity, dt) {
   let ax = 0;
   let ay = 0;
   for (const well of runtime.mapState.wells) {
-    const dx = worldDisplacement(entity.wx, well.wx, runtime.session.worldScale);
-    const dy = worldDisplacement(entity.wy, well.wy, runtime.session.worldScale);
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.0001) continue;
+    const direction = worldDirection(entity.wx, entity.wy, well.wx, well.wy, runtime.session.worldScale);
+    if (direction.dist < WELL_GRAVITY_PARAMS.scavenger.zeroDistanceThreshold) continue;
+    const dx = direction.dx;
+    const dy = direction.dy;
+    const dist = direction.dist;
     if (dist < well.killRadius) {
       if (entity.state !== "dying") {
         entity.state = "dying";
@@ -4320,9 +4368,9 @@ function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
       }
       return false;
     }
-    const pull = (pullScale * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
-    ax += (dx / dist) * pull;
-    ay += (dy / dist) * pull;
+    const gravity = wellGravityVector("scavenger", direction, well.mass);
+    ax += gravity.x;
+    ay += gravity.y;
   }
   entity.vx += ax * dt;
   entity.vy += ay * dt;
@@ -4487,7 +4535,7 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
 
     scav.vx += Math.cos(scav.facing) * SCAVENGER_CONFIG.thrustAccel * scav.thrustIntensity * dt;
     scav.vy += Math.sin(scav.facing) * SCAVENGER_CONFIG.thrustAccel * scav.thrustIntensity * dt;
-    if (!applyWellGravityToEntity(scav, dt, 0.02)) continue;
+    if (!applyWellGravityToEntity(scav, dt)) continue;
 
     const dragFactor = Math.exp(-SCAVENGER_CONFIG.drag * dt * 60);
     scav.vx *= dragFactor;
@@ -6421,7 +6469,7 @@ function tickSim() {
       }
     }
 
-    let input = player.lastInput;
+    let input = expireHeldInput(player);
     if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
       const queuedItem = player.consumables[input.consumeSlot] || null;
       if (!input.consumeItemId || queuedItem?.id === input.consumeItemId) {
@@ -6474,12 +6522,13 @@ function tickSim() {
     applyWaveRingPush(player, playerDt);
     const movementStartWX = player.wx;
     const movementStartWY = player.wy;
-    applyPlayerBrakeAndIntegrate(player, input, playerDt, {
+    const brakeStep = applyPlayerBrakeAndIntegrate(player, input, playerDt, {
       brain: b,
       controlMult,
       thrustIntensity: driveStep.thrustIntensity,
       worldScale: runtime.session.worldScale,
     });
+    player.lastDeliveredBrakeIntensity = brakeStep.brakeIntensity;
     const sweep = movementSweep(movementStartWX, movementStartWY, player);
     applySweptWellContacts(player, playerDt, sweep);
     if (player.status !== "alive") continue;
@@ -7679,6 +7728,7 @@ function executeInputCommand({ body = {}, identity = {} } = {}) {
   const { commandCredential: _commandCredential, ...inputState } = message;
   player.lastInput = {
     ...inputState,
+    receivedAt: Date.now(),
     slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
     pulse: Boolean(player.lastInput.pulse || message.pulse),
     extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),

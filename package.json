@@ -65,6 +65,7 @@
     "test:multiplayer-impairment:t2-8p": "node tests/run-all.cjs --lane=multiplayer-impairment-transport-8p --renderer=three --no-retries",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
+    "test:agent-eval:visible": "node scripts/run-visible-agent-eval.cjs",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",
     "test:telemetry": "node tests/telemetry-smoke.cjs",
     "test:renderer": "node tests/renderer.cjs \"index-a.html?renderer=three\"",

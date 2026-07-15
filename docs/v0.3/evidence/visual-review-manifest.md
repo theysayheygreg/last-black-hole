@@ -7,18 +7,32 @@ is intentionally ignored. This file records the review contract and the most
 recent baseline produced in this isolated implementation worktree; it references
 those outputs without copying them into source control.
 
-## Baseline captured after worktree provisioning
+## Overnight baseline record
 
-- Renderer: `tests/screenshots/renderer-2026-07-11T062924257Z/manifest.json`
-- UI: `tests/screenshots/ui-visual-2026-07-11T063039676Z/manifest.json`
-- Visual-lane UI: `tests/screenshots/ui-visual-2026-07-11T063039676Z/manifest.json`
+- Source commit: `47ca73e` (`Palette: lock v0.3 visual direction and evidence`).
 - Evidence type: deterministic fixture captures. These are **not** player-reachable proof.
 - Command: `npm run test:visual`
 - Result: HudDeck, Renderer, and UIVisual passed on 2026-07-11.
+- Artifact retention: the worker-local `tests/screenshots/` outputs were ignored
+  and were not retained. This records the command result, not durable visual
+  evidence. A reviewer must rerun the lane and record fresh paths before making
+  a visual acceptance claim.
 
-The two UI entries intentionally name the same run: the lane executes the UI
-harness after the renderer baseline. Keep a future manifest entry to one run per
-command; do not invent an evidence type from the filename.
+## RC baseline record
+
+- Source lineage: `codex/v0.3-ballpark-roadmap`, final RC hash reported by
+  `npm run release:status`.
+- Evidence type: deterministic renderer/UI fixtures plus two natural journeys.
+- Commands: `npm run test:visual` and `npm run test:agent-eval` as part of the
+  no-retry full lane.
+- Result: HudDeck, Renderer, UIVisual, and both AgentPlayEval journeys passed on
+  2026-07-14.
+- Artifact retention: raw timestamped captures remain ignored. The current run
+  paths are recorded in the build-status and RC-gate documents for local review.
+
+Do not turn this index into an artifact archive. Durable selected evidence may
+be added later as a small curated set; raw frame sequences, duplicate exports,
+and historical promo directories remain outside source control.
 
 ## Review matrix
 

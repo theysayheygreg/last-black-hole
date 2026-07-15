@@ -12,7 +12,7 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance,
          worldDirectionTo, wrapWorld, uvScale, shouldCull } from './coords.js';
-import { inversePowerForce } from './physics.js';
+import { wellGravityVector } from './physics.js';
 
 // ---- CONFIG block to add to config.js ----
 // scavengers: {
@@ -259,11 +259,17 @@ export class ScavengerSystem {
     if (wellSystem) {
       const maxRange = wellCfg.maxRange ?? 0.8;
       for (const well of wellSystem.wells) {
-        const { dist, nx, ny } = worldDirectionTo(scav.wx, scav.wy, well.wx, well.wy);
-        const accel = inversePowerForce(dist, wellCfg.shipPullStrength, well.mass, wellCfg.shipPullFalloff, maxRange);
-        if (accel > 0) {
-          scav.vx += nx * accel * dt;
-          scav.vy += ny * accel * dt;
+        const direction = worldDirectionTo(scav.wx, scav.wy, well.wx, well.wy);
+        const gravity = wellGravityVector('scavenger', {
+          direction,
+          strength: wellCfg.shipPullStrength,
+          mass: well.mass,
+          falloff: wellCfg.shipPullFalloff,
+          maxRange,
+        });
+        if (gravity.magnitude > 0) {
+          scav.vx += gravity.x * dt;
+          scav.vy += gravity.y * dt;
         }
       }
     }

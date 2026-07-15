@@ -1,4 +1,6 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 
 function makeRecordingContext() {
   const calls = [];
@@ -29,6 +31,7 @@ function makeRecordingContext() {
 
 (async () => {
   const {
+    advanceMotionClock,
     drawCommandButtonMotion,
     drawDirectionalWipe,
     drawMotionPanel,
@@ -46,6 +49,8 @@ function makeRecordingContext() {
   } = await import('../src/ui/motion.js');
 
   assert.strictEqual(motionProgress(0.1, { delay: 0.2, duration: 1 }), 0);
+  assert.strictEqual(advanceMotionClock(0.2, 5), 0.45, 'suspended tabs must not skip UI motion');
+  assert.strictEqual(advanceMotionClock(0.2, 5, { maxStep: 1 / 15 }), 0.2 + (1 / 15));
   assert.strictEqual(motionProgress(9, { delay: 0.2, duration: 1 }), 1);
   assert.strictEqual(motionProgress(0, { reducedMotion: true }), 1);
   assert(staggerProgress(0.3, 0, { duration: 1 }) > staggerProgress(0.3, 3, { duration: 1 }));
@@ -127,6 +132,20 @@ function makeRecordingContext() {
   assert(!buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A  CONTINUE'),
     'button label must not fuse input affordance into the main action text');
   assert(buttonCtx.calls.some((call) => call[0] === 'strokeRect'), 'button pulse should draw an edge');
+
+  const mainSource = fs.readFileSync(path.resolve(__dirname, '../src/main.js'), 'utf8');
+  const titleVfx = mainSource.slice(
+    mainSource.indexOf('function collectTitleVfxEvents'),
+    mainSource.indexOf('function drawTitleCorruptionOverlay'),
+  );
+  assert(titleVfx.includes('if (currentUiMotionSettings().reducedMotion) return [];'),
+    'reduced motion must suppress emitted title glyph VFX');
+  const titleOverlay = mainSource.slice(
+    mainSource.indexOf('function drawTitleScreenOverlay'),
+    mainSource.indexOf('function renderShipVelocityReadout'),
+  );
+  assert(titleOverlay.includes('if (!motion.reducedMotion && titleReveal > 0.2 && glitchState.active > 0.01)'),
+    'reduced motion must suppress the canvas title fault overlay');
 
   const wipeCtx = makeRecordingContext();
   drawDirectionalWipe(wipeCtx, { x: 0, y: 0, w: 400, h: 240 }, { progress: 0.5 });

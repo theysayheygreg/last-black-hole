@@ -1,6 +1,5 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
-
-const FORCE_REF_DIST = 0.25;
+const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
 const FORCE_MIN_DIST = 0.15;
 
 function wrapWorld(value, worldScale) {
@@ -19,14 +18,6 @@ function worldDisplacement(a, b, worldScale) {
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
-}
-
-function inversePowerForce(dist, strength, mass, falloff, maxRange) {
-  if (dist < 0.001 || dist > maxRange) return 0;
-  const safeDist = Math.max(dist, FORCE_MIN_DIST);
-  const normDist = safeDist / FORCE_REF_DIST;
-  const baseAccel = strength * mass / Math.pow(normDist, falloff);
-  return baseAccel * (1 - dist / maxRange);
 }
 
 function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
@@ -99,13 +90,11 @@ function buildCoarseFlowField({
           }
         }
 
-        const gravityStrength = inversePowerForce(
-          dist,
-          wellGravityScale,
-          well.mass || 1,
-          wellGravityFalloff,
-          wellGravityMaxRange
-        );
+        const gravityStrength = wellGravityMagnitude("player", dist, well.mass || 1, {
+          strength: wellGravityScale,
+          falloff: wellGravityFalloff,
+          maxRange: wellGravityMaxRange,
+        });
         gravityX += (dx / dist) * gravityStrength;
         gravityY += (dy / dist) * gravityStrength;
         if (currentAccel > 0) surf = Math.max(surf, clamp01(currentAccel / 2.5));
