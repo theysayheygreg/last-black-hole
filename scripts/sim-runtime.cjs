@@ -110,7 +110,7 @@ const PORTAL_CONFIG = Object.freeze({
       rift: { anchor: "map-center", minRadius: 0.20, maxRadius: 1.30, minWellDistance: 0.18, maxWellDistance: 0.70 },
       finalExfil: { anchor: "map-center", minRadius: 0.70, maxRadius: 1.35, minWellClearance: 0.22 },
     }),
-    finalExfilDuration: 60,
+    finalExfilDuration: readNumber(process.env.LBH_SIM_FINAL_EXFIL_DURATION, 60, 1),
     placementAttempts: 128,
     minPortalSpacing: 0.30,
   }),

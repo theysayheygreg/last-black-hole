@@ -240,12 +240,13 @@ async function run() {
     }
   });
 
-  await runner.run("Match lifetime cap collapses active runs", async () => {
+  await runner.run("Match lifetime cap opens final exfil before ending active runs", async () => {
     await startSimServer(MATCH_CAP_PORT, {
       idleShutdownMs: 5000,
       keepAlive: true,
       env: {
-        LBH_SIM_MAX_SIM_TIME: "1",
+        LBH_SIM_MAX_SIM_TIME: "10",
+        LBH_SIM_FINAL_EXFIL_DURATION: "10",
         LBH_SIM_TERMINAL_GRACE_MS: "60000",
       },
     });
@@ -264,15 +265,17 @@ async function run() {
       });
       assert(join.status === 200, `Expected /join 200, got ${join.status}`);
 
-      const ended = await waitForHealth(MATCH_CAP_PORT, (body) => body.session?.status === "ended", 6000);
-      assert(ended.body.session?.endReason === "run-timeout",
-        `Expected run-timeout end reason, got ${ended.body.session?.endReason}`);
-      assert(ended.body.simTime >= 1,
-        `Expected simTime to reach cap, got ${ended.body.simTime}`);
-      assert(ended.body.idleState?.activeHumanPlayerCount === 0,
-        `Expected timeout to leave no active humans, got ${ended.body.idleState?.activeHumanPlayerCount}`);
-      assert(ended.body.match?.maxSimTime === 1,
-        `Expected health to expose maxSimTime 1, got ${ended.body.match?.maxSimTime}`);
+      const opened = await waitForHealth(MATCH_CAP_PORT, (body) =>
+        body.session?.status === "running" && body.simTime >= 10 && body.simTime < 20, 12000);
+      assert(opened.body.match?.maxSimTime === 10,
+        `Expected health to expose maxSimTime 10, got ${opened.body.match?.maxSimTime}`);
+      const snapshot = await fetchJson(MATCH_CAP_PORT, "/snapshot");
+      assert(snapshot.body.session?.status === "running",
+        `Expected session to remain running through final open, got ${snapshot.body.session?.status}`);
+      assert(snapshot.body.inhibitor?.finalPortalSpawned === true,
+        "Expected main timer to materialize the guaranteed final exfil");
+      assert(snapshot.body.world?.portals?.some((portal) => portal.finalInhibitor && portal.alive !== false),
+        "Expected a live guaranteed final portal at the main timer");
     } finally {
       await stopSimServer(MATCH_CAP_PORT).catch(() => null);
     }

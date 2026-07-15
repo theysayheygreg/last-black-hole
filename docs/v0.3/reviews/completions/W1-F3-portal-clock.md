@@ -1,6 +1,13 @@
 # W1-F3 Portal Clock Completion
 
-Status: complete for the bounded W1-F schedule authority slice.
+Status: red/WIP checkpoint. The implementation is preserved, but focused
+proof is not accepted yet.
+
+The latest `node tests/portal-clock.cjs` rerun was interrupted after the
+commit-before-rerun checkpoint rule was violated. No conclusion from that
+interrupted run is used as closure evidence. The first unproven contract is
+the real server final-exfil transition at the guard-valid 10-20 second test
+schedule.
 
 ## Delivered
 
@@ -50,7 +57,9 @@ Inhibitor blocking and optional thinning.
 The portal contract covers stable multi-seed schedule data, guarded fronts,
 open/close IDs and order, no pre-window portal state, deterministic late
 thinning/shortening, declared final spawn bands, and the main-timer/final-close
-transition. No browser, broad suite, or long live-time wait was used.
+transition. Its short guard-valid server declaration proves the real open,
+spawn, close, and session transition without waiting through the production
+`600s/60s` window. No browser or broad suite was used.
 
 ## Deferred
 

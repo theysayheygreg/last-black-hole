@@ -7,10 +7,12 @@ const {
 const { Conductor } = require("../scripts/sim/conductor.cjs");
 
 const SIM_PORT = Number(process.env.LBH_PORTAL_CLOCK_SIM_PORT || 8818);
+const TRANSITION_PORT = Number(process.env.LBH_PORTAL_CLOCK_TRANSITION_PORT || 8819);
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
-async function request(path, body = null) {
-  const response = await fetch(`${SIM_URL}${path}`, body == null ? undefined : {
+async function request(path, body = null, port = SIM_PORT) {
+  const baseUrl = port === SIM_PORT ? SIM_URL : `http://127.0.0.1:${port}`;
+  const response = await fetch(`${baseUrl}${path}`, body == null ? undefined : {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -18,6 +20,44 @@ async function request(path, body = null) {
   const json = await response.json();
   if (!response.ok || json.ok === false) throw new Error(`${path} failed: ${response.status} ${JSON.stringify(json)}`);
   return json;
+}
+
+async function waitForSnapshot(port, predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    try {
+      last = await request("/snapshot", null, port);
+      if (predicate(last)) return last;
+    } catch (error) {
+      last = { error };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for snapshot on ${port}: ${JSON.stringify({
+    session: last?.session,
+    simTime: last?.simTime,
+    portals: last?.world?.portals,
+    players: last?.players?.map((player) => ({ clientId: player.clientId, isAI: player.isAI, status: player.status })),
+    finalWindow: last?.portalSchedule?.windows?.find((window) => window.metadata?.finalExfil),
+  })}`);
+}
+
+async function waitForEvents(port, since, predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = [];
+  while (Date.now() < deadline) {
+    try {
+      last = (await request(`/events?since=${since}`, null, port)).events || [];
+      if (predicate(last)) return last;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for events on ${port}: ${JSON.stringify(last)}`);
+}
+
+function maxEventSeq(events) {
+  return Math.max(0, ...(events || []).map((event) => Number(event.seq) || 0));
 }
 
 function assertGuarded(fronts, guard) {
@@ -65,26 +105,70 @@ async function run() {
       ), "Expected same seed/config to produce byte-stable portal schedule data");
     });
 
-    await runner.run("final-exfil transition stays live through open and hard-times only at close", async () => {
-      const schedule = (await request("/snapshot")).portalSchedule;
-      const finalWindow = schedule.windows.find((window) => window.metadata.finalExfil);
-      const state = { running: true, opened: false, closed: false, hardTimeout: false };
-      const advance = (time) => {
-        if (time >= finalWindow.openTime) state.opened = true;
-        if (time >= finalWindow.closeTime) {
-          state.closed = true;
-          state.hardTimeout = true;
-          state.running = false;
-        }
-      };
-      advance(finalWindow.openTime - 0.001);
-      assert(!state.opened && state.running, "Final exfil must not open before its schedule front");
-      advance(finalWindow.openTime);
-      assert(state.opened && state.running && !state.hardTimeout, "Main timer expiry must open final exfil while session truth stays running");
-      advance(finalWindow.closeTime - 0.001);
-      assert(state.running && !state.hardTimeout, "Final duration must remain usable until its close front");
-      advance(finalWindow.closeTime);
-      assert(state.closed && state.hardTimeout && !state.running, "Hard timeout belongs only to the declared final close front");
+    await runner.run("live server opens and closes guaranteed final exfil on its declared fronts", async () => {
+      await startSimServer(TRANSITION_PORT, {
+        keepAlive: true,
+        idleShutdownMs: 5000,
+        env: {
+          LBH_SIM_MAX_SIM_TIME: "10",
+          LBH_SIM_FINAL_EXFIL_DURATION: "10",
+          LBH_SIM_TERMINAL_GRACE_MS: "60000",
+        },
+      });
+      try {
+        const start = await request("/session/start", {
+          mapId: "shallows",
+          requesterId: "portal-clock-host",
+          requesterName: "Portal Clock Host",
+          maxPlayers: 1,
+        }, TRANSITION_PORT);
+        assert(start.session?.runId, "Expected a real session start run id");
+        const join = await request("/join", {
+          runId: start.session.runId,
+          clientId: "portal-clock-host",
+          name: "Portal Clock Host",
+          joinTicket: start.joinTicket,
+        }, TRANSITION_PORT);
+        assert(join.ok === true, "Expected a real human to join the transition session");
+
+        const baseline = await request("/events?since=0", null, TRANSITION_PORT);
+        const since = maxEventSeq(baseline.events);
+        const beforeOpen = await waitForSnapshot(TRANSITION_PORT, (snapshot) =>
+          snapshot.session?.status === "running" && snapshot.simTime >= 5 && snapshot.simTime < 10, 8000);
+        assert(!beforeOpen.world.portals.some((portal) => portal.finalInhibitor && portal.alive !== false),
+          "Real server must not materialize final exfil before the main timer");
+
+        const opened = await waitForSnapshot(TRANSITION_PORT, (snapshot) =>
+          snapshot.session?.status === "running" && snapshot.simTime >= 10 && snapshot.simTime < 20 &&
+          snapshot.world.portals.some((portal) => portal.id === "portal-final-exfil" && portal.alive !== false), 12000);
+        const finalPortal = opened.world.portals.find((portal) => portal.id === "portal-final-exfil");
+        const openEvents = await waitForEvents(TRANSITION_PORT, since, (events) =>
+          events.some((event) => event.type === "portal.windowOpened" && event.payload?.windowId === "portal:final-exfil:1") &&
+          events.some((event) => event.type === "portal.spawned" && event.payload?.portalId === "portal-final-exfil"), 3000);
+        const openedEvent = openEvents.find((event) => event.type === "portal.windowOpened" && event.payload?.windowId === "portal:final-exfil:1");
+        const spawnedEvent = openEvents.find((event) => event.type === "portal.spawned" && event.payload?.portalId === "portal-final-exfil");
+        assert(opened.session.status === "running", "Real session must remain running at final open");
+        assert(finalPortal.windowId === "portal:final-exfil:1" && finalPortal.scheduledOpenTime === 10 && finalPortal.scheduledCloseTime === 20,
+          "Real final portal must carry the declared open and close schedule");
+        assert(openedEvent.payload.conductorId === "match-conductor" && openedEvent.payload.openId.endsWith(":open") &&
+          openedEvent.payload.scheduledOpenTime === 10 && openedEvent.payload.scheduledCloseTime === 20,
+        "Real open event must carry Conductor identity and schedule fronts");
+        assert(spawnedEvent.payload.conductorId === "match-conductor" && spawnedEvent.payload.portalId === finalPortal.id,
+          "Real spawn event must identify the guaranteed final portal");
+
+        const ended = await waitForSnapshot(TRANSITION_PORT, (snapshot) =>
+          snapshot.session?.status === "ended" && snapshot.simTime >= 20, 20000);
+        const closeEvents = await waitForEvents(TRANSITION_PORT, since, (events) =>
+          events.some((event) => event.type === "portal.windowClosed" && event.payload?.windowId === "portal:final-exfil:1") &&
+          events.some((event) => event.type === "portal.expired" && event.payload?.portalId === "portal-final-exfil"), 3000);
+        assert(ended.session.endReason === "run-timeout", "Real final close must end the session as run-timeout");
+        assert(ended.players.filter((player) => !player.isAI && player.status === "alive").length === 0,
+          "Real final close must leave no active humans");
+        assert(closeEvents.some((event) => event.type === "portal.windowClosed" && event.payload?.closeId.endsWith(":close")),
+          "Real close event must carry its paired close identity");
+      } finally {
+        await stopSimServer(TRANSITION_PORT).catch(() => null);
+      }
     });
 
     await runner.run("Conductor spawn selection preserves declared final radius bands", async () => {
