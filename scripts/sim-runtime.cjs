@@ -34,6 +34,7 @@ const {
   runEmEarned,
 } = require("./content/balance.cjs");
 const { getSessionProfile } = require("./content/session-profiles.cjs");
+const { simUnitsToMeters } = require("./content/units.cjs");
 const {
   defaultRigLevels,
   normalizeRigLevels,
@@ -1407,6 +1408,11 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       inputWasDown: false,
       lastReleaseTime: -Infinity,
       lastReleasedAnchorKey: null,
+      entryVX: 0,
+      entryVY: 0,
+      lockedVX: 0,
+      lockedVY: 0,
+      lastPayoff: null,
     },
     committedOutcome: null,
     deltaV: brain.deltaVMax || BRAIN_DEFAULTS.deltaVMax,
@@ -1874,6 +1880,7 @@ function buildSnapshotBody() {
       deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
       deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
       forceLedger: player.forceLedger || null,
+      ruler: buildPlayerRulerFacts(player),
       lastInputSeq: player.lastInput.seq,
       lastInputBrake: player.lastInput.brake || 0,
       pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
@@ -3630,6 +3637,11 @@ function applyDebugPlayerState(player, body) {
     state.inputWasDown = false;
     state.lastReleaseTime = -Infinity;
     state.lastReleasedAnchorKey = null;
+    state.entryVX = 0;
+    state.entryVY = 0;
+    state.lockedVX = 0;
+    state.lockedVY = 0;
+    state.lastPayoff = null;
     state.consumedEdgeIds = [];
     if (player.lastInput) player.lastInput.slingshotEdges = [];
   }
@@ -4523,6 +4535,11 @@ function ensurePlayerSlingshot(player) {
     inputWasDown: false,
     lastReleaseTime: -Infinity,
     lastReleasedAnchorKey: null,
+    entryVX: 0,
+    entryVY: 0,
+    lockedVX: 0,
+    lockedVY: 0,
+    lastPayoff: null,
   };
   return player.slingshot;
 }
@@ -4633,6 +4650,67 @@ function slingshotHullMods(player) {
   };
 }
 
+function vectorAngleDegrees(a, b) {
+  const aMag = Math.hypot(a.x, a.y);
+  const bMag = Math.hypot(b.x, b.y);
+  if (aMag <= 1e-9 || bMag <= 1e-9) return 0;
+  const cosine = Math.max(-1, Math.min(1, (a.x * b.x + a.y * b.y) / (aMag * bMag)));
+  return Math.acos(cosine) * 180 / Math.PI;
+}
+
+function buildPlayerRulerFacts(player) {
+  const state = ensurePlayerSlingshot(player);
+  const mods = slingshotHullMods(player);
+  const effectiveChainWindow = SLINGSHOT_SERVER.chainWindowSeconds * mods.chainWindowMult;
+  const chainElapsed = runtime.simTime - (state.lastReleaseTime ?? -Infinity);
+  const chainRemaining = Number.isFinite(chainElapsed)
+    ? Math.max(0, effectiveChainWindow - chainElapsed)
+    : 0;
+  const releaseDirection = slingshotReleaseDirection(player);
+  const chainMult = Math.pow(SLINGSHOT_SERVER.chainMultiplier, Math.max(0, (state.chainCount || 1) - 1));
+  const projectedBoost = (state.energy || 0) * chainMult * SLINGSHOT_SERVER.releaseMultiplier * mods.energyMult;
+  const livePayoff = state.engaged ? {
+    entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+    exit: {
+      x: player.vx + releaseDirection.x * projectedBoost,
+      y: player.vy + releaseDirection.y * projectedBoost,
+    },
+  } : state.lastPayoff;
+  const entrySpeed = Math.hypot(livePayoff?.entry?.x || 0, livePayoff?.entry?.y || 0);
+  const exitSpeed = Math.hypot(livePayoff?.exit?.x || 0, livePayoff?.exit?.y || 0);
+  return {
+    source: "authority",
+    slingshot: {
+      captureRadius_m: {
+        well: simUnitsToMeters(SLINGSHOT_SERVER.range.well),
+        star: simUnitsToMeters(SLINGSHOT_SERVER.range.star),
+        planetoid: simUnitsToMeters(SLINGSHOT_SERVER.range.planetoid),
+      },
+      magnetism: {
+        active: Boolean(state.engaged),
+        entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+        locked: { x: state.lockedVX || 0, y: state.lockedVY || 0 },
+        bend_deg: vectorAngleDegrees(
+          { x: state.entryVX || 0, y: state.entryVY || 0 },
+          { x: state.lockedVX || 0, y: state.lockedVY || 0 }
+        ),
+      },
+      coyoteTime: { implemented: false, duration_ms: 0, remaining_ms: 0 },
+      payoffCurve: {
+        active: Boolean(livePayoff),
+        entry: livePayoff?.entry || { x: 0, y: 0 },
+        exit: livePayoff?.exit || { x: 0, y: 0 },
+        ratio: entrySpeed > 1e-9 ? exitSpeed / entrySpeed : 0,
+      },
+      chainWindow: {
+        duration_s: effectiveChainWindow,
+        remaining_s: chainRemaining,
+        active: chainRemaining > 0,
+      },
+    },
+  };
+}
+
 function engagePlayerSlingshot(player, currentTime) {
   const state = ensurePlayerSlingshot(player);
   if (state.engaged) return false;
@@ -4660,6 +4738,8 @@ function engagePlayerSlingshot(player, currentTime) {
   const tangentNX = -radialNY * orbitDir;
   const tangentNY = radialNX * orbitDir;
   const speed = Math.hypot(player.vx, player.vy);
+  state.entryVX = player.vx;
+  state.entryVY = player.vy;
 
   state.engaged = true;
   state.anchorId = anchor.id;
@@ -4673,6 +4753,8 @@ function engagePlayerSlingshot(player, currentTime) {
   state.orbitDir = orbitDir;
   player.vx = tangentNX * speed;
   player.vy = tangentNY * speed;
+  state.lockedVX = player.vx;
+  state.lockedVY = player.vy;
 
   publishEvent("player.slingshotEngaged", {
     clientId: player.clientId,
@@ -4699,6 +4781,14 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   const chainMult = Math.pow(SLINGSHOT_SERVER.chainMultiplier, Math.max(0, (state.chainCount || 1) - 1));
   const totalEnergy = baseEnergy * chainMult * SLINGSHOT_SERVER.releaseMultiplier * mods.energyMult;
   const dir = slingshotReleaseDirection(player, input);
+  const beforeRelease = { x: player.vx, y: player.vy };
+  state.lastPayoff = {
+    entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+    exit: {
+      x: beforeRelease.x + (applyBoost ? dir.x * totalEnergy : 0),
+      y: beforeRelease.y + (applyBoost ? dir.y * totalEnergy : 0),
+    },
+  };
   if (applyBoost) {
     player.vx += dir.x * totalEnergy;
     player.vy += dir.y * totalEnergy;

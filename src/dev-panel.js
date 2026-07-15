@@ -70,6 +70,10 @@ const CONTROL_LABELS = {
   'vfx.titleCorruption': 'title corruption sparks',
   'vfx.inhibitorFaults': 'inhibitor VFX',
   'vfx.nearCameraAtmosphere': 'near-camera atmosphere',
+  'debug.showRulerOverlay': 'ruler overlay',
+  'debug.ruler.captureRadiusPreview_m': 'capture preview',
+  'debug.ruler.chainWindowPreview_s': 'chain preview',
+  'debug.ruler.forceVectorScalePxPerMps2': 'force vector scale',
 };
 
 const CHOICE_HINTS = {
@@ -230,6 +234,9 @@ export const RANGE_HINTS = {
   'input.triggerThreshold': { min: 0.01, max: 0.2, step: 0.01, tip: 'Trigger activation threshold' },
   'input.brakeThrustScale': { min: 0, max: 1, step: 0.05, tip: 'Reverse thrust strength as fraction of forward thrust' },
   'input.brakeFuelScale':   { min: 0, max: 1.5, step: 0.05, tip: 'Reverse thrust fuel cost as fraction of forward burn rate' },
+  'debug.ruler.captureRadiusPreview_m': { min: 0, max: 1000, step: 25, unit: 'm', startBias: '0 = authority', tip: 'Presentation-only S4 capture-radius preview. Never changes sim authority.' },
+  'debug.ruler.chainWindowPreview_s': { min: 0, max: 5, step: 0.5, unit: 's', startBias: '0 = authority', tip: 'Presentation-only S4 chain-window preview. Never changes sim authority.' },
+  'debug.ruler.forceVectorScalePxPerMps2': { min: 0.01, max: 0.1, step: 0.005, unit: 'px/(m/s²)', startBias: 'readable', tip: 'Presentation-only force vector scale.' },
 };
 
 export function controlMetadata(path, value = 0) {

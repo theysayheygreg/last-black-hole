@@ -35,6 +35,7 @@ import { VignettePass } from './render/passes/vignette-pass.js';
 import { ChromaticAberrationPass } from './render/passes/chromatic-aberration-pass.js';
 import { ScanlinesPass } from './render/passes/scanlines-pass.js';
 import { initTestAPI } from './test-api.js';
+import { drawRulerOverlay } from './ruler-overlay.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
@@ -183,6 +184,7 @@ const perfStats = {
   composerPasses: [],
   three: null,
 };
+let rulerOverlayStats = Object.freeze({ enabled: false, handlerCount: 0, geometry: Object.freeze({}) });
 
 function recordPerfStat(key, ms) {
   const prev = perfStats[key] || 0;
@@ -1185,6 +1187,7 @@ function init() {
       camX, camY,
       fps,
       perfStats,
+      getRulerOverlayStatsForTest: () => rulerOverlayStats,
       audioEngine,
       getFluidGridStateForTest: () => {
         const renderInputs = getVisibleWellRenderInputs(camX, camY);
@@ -3589,6 +3592,7 @@ function collectThreeSceneState() {
       hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
       deltaVRatio: ship.getDeltaVRatio?.() ?? 1,
       forceLedger: authorityPlayer?.forceLedger || null,
+      ruler: authorityPlayer?.ruler || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
     } : null,
     wells: (wellSystem?.wells || []).map((well, index) => ({
@@ -5340,6 +5344,13 @@ function gameLoop(now) {
   // Show/hide HUD based on phase
   if (inMenu) hideHUD();
   else if (gamePhase === 'playing') showHUD();
+
+  rulerOverlayStats = drawRulerOverlay(ctx, {
+    presentation,
+    canvasW: overlayCanvas.width,
+    canvasH: overlayCanvas.height,
+    reducedMotion: currentUiMotionSettings().reducedMotion,
+  });
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {

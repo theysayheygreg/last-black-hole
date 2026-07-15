@@ -76,6 +76,48 @@ function forceLedger(source = null) {
   });
 }
 
+function rulerFacts(source = null) {
+  const sling = source?.slingshot;
+  if (!sling) return null;
+  const capture = sling.captureRadius_m || {};
+  const magnetism = sling.magnetism || {};
+  const coyote = sling.coyoteTime || {};
+  const payoff = sling.payoffCurve || {};
+  const chain = sling.chainWindow || {};
+  return Object.freeze({
+    source: text(source.source, 'authority'),
+    slingshot: Object.freeze({
+      captureRadius: Object.freeze({
+        well: Math.max(0, finite(capture.well)),
+        star: Math.max(0, finite(capture.star)),
+        planetoid: Math.max(0, finite(capture.planetoid)),
+      }),
+      magnetism: Object.freeze({
+        active: magnetism.active === true,
+        entry: forceVector(magnetism.entry),
+        locked: forceVector(magnetism.locked),
+        bendDegrees: Math.max(0, finite(magnetism.bend_deg)),
+      }),
+      coyoteTime: Object.freeze({
+        implemented: coyote.implemented === true,
+        durationMs: Math.max(0, finite(coyote.duration_ms)),
+        remainingMs: Math.max(0, finite(coyote.remaining_ms)),
+      }),
+      payoffCurve: Object.freeze({
+        active: payoff.active === true,
+        entry: forceVector(payoff.entry),
+        exit: forceVector(payoff.exit),
+        ratio: Math.max(0, finite(payoff.ratio)),
+      }),
+      chainWindow: Object.freeze({
+        active: chain.active === true,
+        durationSeconds: Math.max(0, finite(chain.duration_s)),
+        remainingSeconds: Math.max(0, finite(chain.remaining_s)),
+      }),
+    }),
+  });
+}
+
 function hull(source = {}) {
   return Object.freeze({
     type: text(source.hullType || source.shipType, 'drifter').toLowerCase(),
@@ -126,6 +168,7 @@ function normalizeLocalPlayer(source = null, scene = {}) {
     }),
     hull: hull(source),
     forceLedger: forceLedger(source.forceLedger),
+    ruler: rulerFacts(source.ruler),
     slingshot: Object.freeze({
       engaged: Boolean(source.slingshotEngaged || sling.engaged),
       affordance: anchor(sling.affordance),

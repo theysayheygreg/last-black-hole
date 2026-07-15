@@ -448,5 +448,11 @@ export const CONFIG = {
     showFPS: false,           // Opt-in diagnostic; never cover the default title or playable frame.
     showCoordDiagnostic: false, // Inject green dots at well positions to verify coord alignment.
     showFluidDiagnostic: false, // Show density/velocity readouts at well positions.
+    showRulerOverlay: false,    // Production-disabled S4/S5 units and force-ledger overlay.
+    ruler: {
+      captureRadiusPreview_m: 0, // 0 reads authority; positive values preview geometry only.
+      chainWindowPreview_s: 0,   // 0 reads authority; positive values preview timing only.
+      forceVectorScalePxPerMps2: 0.04, // Debug vector length only; never feeds movement.
+    },
   },
 };
