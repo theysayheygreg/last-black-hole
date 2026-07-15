@@ -48,7 +48,7 @@ Representative route legs, direct raw medians across the three deterministic lab
 
 ## Evidence
 
-- `node scripts/x-d-travel-time-probe.cjs --verify --print`: deterministic rerun identical; 60 raw runs; schema and derived math assertions pass.
+- `node scripts/x-d-travel-time-probe.cjs --verify --print`: deterministic rerun identical; 72 raw runs; schema and derived math assertions pass.
 - `node tests/w2a4-map-scale.cjs`: 8 passed, 0 failed.
 - `git diff --no-ext-diff e693adb26fc69390bdb2b0a1d9fb72404f4f5376 -- scripts/ src/ tests/`: no production behavior diff; only the new harness and docs/artifact are changed.
 - Parent/base: `e693adb26fc69390bdb2b0a1d9fb72404f4f5376`.
