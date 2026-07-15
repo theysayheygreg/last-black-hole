@@ -13,6 +13,7 @@ const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
 } = require("./coarse-flow-field.cjs");
+const { createSeededSea, hashSeededSea } = require("./sim/seeded-sea.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PUBLIC_HULL_IDS,
@@ -173,7 +174,7 @@ const WRECK_NOUNS = [
 ];
 const WRECK_PREFIXES = ["Wreck", "Remains", "Hulk"];
 
-function generateWreckName(rng = Math.random) {
+function generateWreckName(rng) {
   const pick = (list) => list[Math.floor(rng() * list.length)] || list[0];
   return `${pick(WRECK_PREFIXES)} of the ${pick(WRECK_ADJECTIVES)} ${pick(WRECK_NOUNS)}`;
 }
@@ -189,7 +190,15 @@ function readNumber(value, fallback, min = -Infinity) {
 // seeded from runtime.session.seed. Same seed → same initial loot.
 
 function currentRNG(streamName) {
-  return runtime.session?.rng?.rawStream(streamName) || Math.random;
+  if (!runtime.session?.rng) {
+    throw new Error(`Seeded sim RNG requested before session stream setup: ${streamName}`);
+  }
+  return runtime.session.rng.rawStream(streamName);
+}
+
+function nextSeededToken(prefix, streamName = "authorityIds") {
+  const value = Math.floor(currentRNG(streamName)() * 0x100000000).toString(36);
+  return `${prefix}-${value}`;
 }
 
 function rollTier(sessionTime, streamName = 'loot') {
@@ -200,8 +209,7 @@ function rollTier(sessionTime, streamName = 'loot') {
 function rollItem(tier, streamName = 'loot') {
   const item = SEEDED_GEN.rollItem(currentRNG(streamName), tier);
   if (!item) return null;
-  // instanceId uses Math.random — purely cosmetic, not seed-dependent
-  return { ...item, instanceId: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };
+  return { ...item, instanceId: nextSeededToken("item") };
 }
 
 function generateWreckLoot(sessionTime, slotCount, streamName = 'loot') {
@@ -211,7 +219,7 @@ function generateWreckLoot(sessionTime, slotCount, streamName = 'loot') {
   // Stamp cosmetic instance IDs after rolling so instance IDs don't affect RNG order
   for (const item of items) {
     const prefix = item.effect ? 'cons' : 'item';
-    item.instanceId = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    item.instanceId = nextSeededToken(prefix);
   }
   return items;
 }
@@ -845,10 +853,11 @@ function updatePlanetoidState(planetoid, wells, dt, worldScale) {
 }
 
 function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
+  if (!rngStreams) throw new Error("Map state cloning requires seeded RNG streams");
   const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
   const parsedWorldScale = worldScaleOverride == null ? NaN : Number(worldScaleOverride);
   const worldScale = Number.isFinite(parsedWorldScale) && parsedWorldScale > 0 ? parsedWorldScale : map.worldScale;
-  const growthRng = rngStreams ? rngStreams.rawStream('wellGrowthVar') : Math.random;
+  const growthRng = rngStreams.rawStream('wellGrowthVar');
   const wells = map.wells.map((well) => ({
     ...well,
     baseKillRadius: well.killRadius,
@@ -862,8 +871,8 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     driftVX: star.driftVX ?? 0,
     driftVY: star.driftVY ?? 0,
   }));
-  const initialLootStream = rngStreams ? rngStreams.rawStream('initialWreckLoot') : Math.random;
-  const initialNameStream = rngStreams ? rngStreams.rawStream('initialWreckNames') : Math.random;
+  const initialLootStream = rngStreams.rawStream('initialWreckLoot');
+  const initialNameStream = rngStreams.rawStream('initialWreckNames');
   const wrecks = map.wrecks.map((wreck) => ({
     ...wreck,
     name: wreck.name || generateWreckName(initialNameStream),
@@ -916,16 +925,8 @@ function isPortalAvailable(portal) {
   return Boolean(portal && portal.alive !== false && portal.blockedByInhibitor !== true);
 }
 
-function randomBetween(min, max) {
-  return min + Math.random() * (max - min);
-}
-
-function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 function generateScavengerIdentity(archetype) {
-  const rng = runtime.session?.rng?.rawStream('scavNames') || Math.random;
+  const rng = currentRNG('scavNames');
   const pickSeeded = (list) => list[Math.floor(rng() * list.length)];
   const faction = pickSeeded(SCAVENGER_FACTIONS);
   const callsign = archetype === "vulture" ? pickSeeded(VULTURE_NAMES) : pickSeeded(DRIFTER_NAMES);
@@ -951,7 +952,8 @@ function spawnServerScavengers(mapState, session) {
   );
   const vultureCount = Math.max(1, Math.round(count * 0.33));
   const scavengers = [];
-  const rng = session?.rng?.rawStream('scavSpawn') || Math.random;
+  const rng = session?.rng?.rawStream('scavSpawn');
+  if (!rng) throw new Error("Scavenger spawning requires seeded RNG streams");
   for (let i = 0; i < count; i++) {
     const archetype = i < vultureCount ? "vulture" : "drifter";
     const edge = i % 4;
@@ -1166,6 +1168,7 @@ const runtime = {
   players: new Map(),
   playerAuthorities: new Map(),
   joinClaims: new Map(),
+  idCounters: Object.create(null),
   waveRings: [],
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
@@ -1473,7 +1476,9 @@ function startSession(config = {}) {
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
   // Build the RNG streams BEFORE cloning the map state so well growth
   // variance and initial wreck loot roll through the seed.
-  const seed = Number.isFinite(Number(config.seed)) ? Number(config.seed) : Math.floor(Math.random() * 1e9);
+  const seed = Number.isFinite(Number(config.seed))
+    ? Number(config.seed)
+    : crypto.randomInt(1, 1_000_000_000);
   const rngStreams = createRNGStreams(seed);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
@@ -1553,6 +1558,14 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
+  runtime.session.seededSea = createSeededSea({
+    seed,
+    mapId: mapState.id,
+    worldScale: mapState.worldScale,
+    wells: mapState.wells,
+    rngStreams: runtime.session.rng,
+  });
+  runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
 
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
@@ -1579,6 +1592,7 @@ function startSession(config = {}) {
     });
   runtime.tick = 0;
   runtime.simTime = 0;
+  runtime.idCounters = Object.create(null);
   runtime.emptySince = null;
   runtime.terminalSince = null;
   runtime.terminalShutdownAt = null;
@@ -2358,9 +2372,10 @@ function buildEchoWreckRecord(player, runResult) {
 // is preserved so the client can render it distinctly and the signal
 // leak / pickup-spike systems can detect it.
 function hydrateEchoWreck(echo) {
+  const fallbackEchoKey = `${echo.seed || runtime.session.seed}:${echo.pilotName || "unknown"}:${echo.wx || 0}:${echo.wy || 0}`;
   const wreck = {
     ...echo,
-    id: `echo-${echo.wreckId || Math.random().toString(36).slice(2, 8)}`,
+    id: `echo-${echo.wreckId || Math.abs(hashStringFNV(fallbackEchoKey)).toString(16)}`,
     type: 'echo',
     isEcho: true,
     alive: true,
@@ -2467,7 +2482,7 @@ function commitPlayerOutcome(player, outcome) {
 
 function spawnWaveRing(wx, wy, amplitude) {
   runtime.waveRings.push({
-    id: `wave-${runtime.tick}-${Math.random().toString(36).slice(2, 6)}`,
+    id: nextSeededToken(`wave-${runtime.tick}`, "waveIds"),
     sourceWX: wx,
     sourceWY: wy,
     radius: 0,
@@ -2646,8 +2661,8 @@ function tickWreckWaves(dt) {
   if (!runtime._wreckWaveRepeatTimer) runtime._wreckWaveRepeatTimer = 0;
   if (!runtime._wreckRepeatWaveCount) runtime._wreckRepeatWaveCount = 0;
   const ws = runtime.session.worldScale;
-  const waveRng = runtime.session?.rng?.rawStream('wreckWave') || Math.random;
-  const nameRng = runtime.session?.rng?.rawStream('wreckNames') || Math.random;
+  const waveRng = currentRNG('wreckWave');
+  const nameRng = currentRNG('wreckNames');
 
   // Process scheduled waves
   while (runtime._wreckWaveIndex < WRECK_WAVES.length) {
@@ -2714,7 +2729,7 @@ function tickWreckWaves(dt) {
 // Spawn position biased by danger zone: lower dangerZone = closer to wells
 function findWreckSpawnPosition(dangerZone) {
   const ws = runtime.session.worldScale;
-  const rng = runtime.session?.rng?.rawStream('wreckPos') || Math.random;
+  const rng = currentRNG('wreckPos');
   for (let attempt = 0; attempt < 20; attempt++) {
     const wx = rng() * ws;
     const wy = rng() * ws;
@@ -2798,7 +2813,7 @@ function tickStars(dt, stars = runtime.mapState.stars) {
         star.alive = false;
         well.mass += (star.mass || 1) * 0.5;
         well.killRadius = wellKillRadiusForMass(well);
-        const angle = (runtime.session?.rng?.rawStream('starRemnant') || Math.random)() * Math.PI * 2;
+        const angle = currentRNG('starRemnant')() * Math.PI * 2;
         const ejectDist = 0.08;
         const ejectSpeed = 0.4;
         const remnant = {
@@ -3108,7 +3123,7 @@ function resolveWellContact(player, well, dt, dx, dy) {
     player.vy = Math.sin(ejectAngle) * 0.3;
     player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    const scatterRng = runtime.session?.rng?.rawStream('hullSave') || Math.random;
+    const scatterRng = currentRNG('hullSave');
     const filled = player.cargo.map((cargo, index) => cargo ? index : -1).filter((index) => index >= 0);
     const scatterCount = Math.min(filled.length, 1 + Math.floor(scatterRng() * 2));
     for (let scatter = 0; scatter < scatterCount; scatter++) {
@@ -3411,7 +3426,7 @@ function refreshPlayerEffects(player) {
 }
 
 function spawnTemporaryPortalNearPlayer(player) {
-  const rng = runtime.session?.rng?.rawStream('breachFlare') || Math.random;
+  const rng = currentRNG('breachFlare');
   const angle = rng() * Math.PI * 2;
   const dist = 0.15 + rng() * 0.1;
   const portal = {
@@ -3531,7 +3546,7 @@ function applyPulse(player) {
 
 function addDroppedItemWreck(player, item) {
   if (!item) return;
-  const rng = runtime.session?.rng?.rawStream('cargoDrop') || Math.random;
+  const rng = currentRNG('cargoDrop');
   const inputAngle =
     Math.hypot(player.lastInput.moveX, player.lastInput.moveY) > 0.1
       ? Math.atan2(player.lastInput.moveY, player.lastInput.moveX)
@@ -3540,7 +3555,7 @@ function addDroppedItemWreck(player, item) {
   const ejectDist = 0.18;
   const ejectSpeed = 0.3;
   const wreck = {
-    id: `wreck-drop-${player.clientId}-${runtime.tick}-${Math.random().toString(36).slice(2, 6)}`,
+    id: nextSeededToken(`wreck-drop-${player.clientId}-${runtime.tick}`, "wreckIds"),
     wx: wrapWorld(player.wx + Math.cos(rearAngle) * ejectDist, runtime.session.worldScale),
     wy: wrapWorld(player.wy + Math.sin(rearAngle) * ejectDist, runtime.session.worldScale),
     type: "derelict",
@@ -4063,7 +4078,7 @@ function spawnScavengerDeathDrops(scav) {
   if ((scav.lootCount || 0) <= 0) return [];
   const tier = scav.archetype === "vulture" ? 2 : 1;
   const drops = [];
-  const rng = runtime.session?.rng?.rawStream('scavDeath') || Math.random;
+  const rng = currentRNG('scavDeath');
   for (let i = 0; i < scav.lootCount; i++) {
     const angle = rng() * Math.PI * 2;
     const ejectDist = 0.05 + rng() * 0.05;
@@ -4152,7 +4167,7 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
           scav.targetPortalId = null;
         } else {
           scav.state = "drift";
-          scav.driftHeading = (runtime.session?.rng?.rawStream('scavDrift') || Math.random)() * Math.PI * 2;
+          scav.driftHeading = currentRNG('scavDrift')() * Math.PI * 2;
           scav.targetWreckId = null;
           scav.targetPortalId = null;
         }
@@ -4397,7 +4412,7 @@ function spikePlayerSignal(player, amount) {
 function createAIPlayer(personalityKey, index, hullType = 'drifter') {
   const p = AI_PERSONALITIES[personalityKey];
   const name = p.names[index % p.names.length];
-  const rng = runtime.session?.rng?.rawStream('aiInit') || Math.random;
+  const rng = currentRNG('aiInit');
   const lootTarget = p.lootTarget[0] + Math.floor(rng() * (p.lootTarget[1] - p.lootTarget[0] + 1));
   const player = createPlayer(`ai-${personalityKey}-${index}`, name, hullType);
   player.isAI = true;
@@ -4420,7 +4435,8 @@ function createAIPlayer(personalityKey, index, hullType = 'drifter') {
 function spawnAIPlayers(mapState, session) {
   const personalityKeys = Object.keys(AI_PERSONALITIES);
   const count = 3;
-  const rng = session?.rng?.rawStream('aiPick') || Math.random;
+  const rng = session?.rng?.rawStream('aiPick');
+  if (!rng) throw new Error("AI personality selection requires seeded RNG streams");
 
   let humanHull = null;
   for (const p of runtime.players.values()) {
@@ -4509,7 +4525,7 @@ function findSafeSpawn(mapState) {
   const ws = mapState.worldScale;
   const minDist = Math.max(0.55, ws * 0.055);
   const hazards = collectSpawnHazards(mapState, minDist);
-  const rng = runtime.session?.rng?.rawStream('safeSpawn') || Math.random;
+  const rng = currentRNG('safeSpawn');
   let best = { wx: ws / 2, wy: ws * 0.15, score: -Infinity };
   const consider = (wx, wy) => {
     const score = scoreSpawnCandidate(wx, wy, hazards, ws);
@@ -5226,7 +5242,7 @@ function aiScoreWreck(ai, wreck) {
   const itemCount = wreck.loot ? wreck.loot.length : 1;
   const tierMult = (wreck.tier || 1);
   const rawValue = itemCount * tierMult * 50;
-  const noise = 1.0 + ((runtime.session?.rng?.rawStream('aiPerception') || Math.random)() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
+  const noise = 1.0 + (currentRNG('aiPerception')() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
   let score = rawValue * noise;
 
   // Distance penalty
@@ -5485,7 +5501,7 @@ function tickAIPlayers(dt) {
     } else {
       // Drift
       ai.thrustIntensity = 0.05;
-      ai.facingAngle += ((runtime.session?.rng?.rawStream('aiDrift') || Math.random)() - 0.5) * 0.1 * dt;
+      ai.facingAngle += (currentRNG('aiDrift')() - 0.5) * 0.1 * dt;
     }
 
     // Set lastInput — main tick loop handles all physics (thrust, gravity, drag).
@@ -5765,7 +5781,7 @@ function getMomentumShieldMult(player) {
 function spawnSentries(mapState) {
   const cfg = SENTRY_CONFIG;
   const sentries = [];
-  const rng = runtime.session?.rng?.rawStream('sentrySpawn') || Math.random;
+  const rng = currentRNG('sentrySpawn');
   for (const well of mapState.wells) {
     const count = cfg.perWell[0] + Math.floor(rng() * (cfg.perWell[1] - cfg.perWell[0] + 1));
     const baseOrbit = (well.ringOuter || 0.1);
@@ -5897,7 +5913,7 @@ function tickFauna(dt) {
   }
   const peakZone = peakPlayer ? peakPlayer.signal.zone : "ghost";
 
-  const faunaRng = runtime.session?.rng?.rawStream('fauna') || Math.random;
+  const faunaRng = currentRNG('fauna');
 
   // Spawn drift jellies to maintain count
   const jellyCount = fauna.filter(f => f.type === "jelly" && f.alive).length;
@@ -5906,7 +5922,7 @@ function tickFauna(dt) {
     if (runtime._jellySpawnTimer >= cfg.jellySpawnInterval) {
       runtime._jellySpawnTimer = 0;
       fauna.push({
-        id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
+        id: nextSeededToken(`fauna-${runtime.tick}`, "faunaIds"),
         type: "jelly",
         wx: faunaRng() * ws, wy: faunaRng() * ws,
         vx: (faunaRng() - 0.5) * 0.005, vy: (faunaRng() - 0.5) * 0.005,
@@ -5927,7 +5943,7 @@ function tickFauna(dt) {
       const angle = faunaRng() * Math.PI * 2;
       const dist = cfg.bloomSpawnRange[0] + faunaRng() * (cfg.bloomSpawnRange[1] - cfg.bloomSpawnRange[0]);
       fauna.push({
-        id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
+        id: nextSeededToken(`fauna-${runtime.tick}`, "faunaIds"),
         type: "bloom",
         wx: ((peakPlayer.wx + Math.cos(angle) * dist) % ws + ws) % ws,
         wy: ((peakPlayer.wy + Math.sin(angle) * dist) % ws + ws) % ws,
@@ -6076,7 +6092,7 @@ function configureInhibitorPhase(phase, signalSource, vesselTarget, ws) {
       inh.lastSignalWX = spawnFrom.wx;
       inh.lastSignalWY = spawnFrom.wy;
     } else {
-      const rng = runtime.session?.rng?.rawStream("inhibitorSpawn") || Math.random;
+      const rng = currentRNG("inhibitorSpawn");
       inh.wx = rng() * ws;
       inh.wy = rng() * ws;
     }
@@ -6287,7 +6303,7 @@ function tickInhibitor(dt) {
       if (pd < inh.radius * 0.5) {
         spikePlayerSignal(player, cfg.swarmContactSignalSpike * dt);
         player.controlDebuff = Math.max(player.controlDebuff || 0, cfg.swarmControlDebuffDuration);
-        if ((runtime.session?.rng?.rawStream('swarmDrain') || Math.random)() < cfg.swarmContactDrain * dt) {
+        if (currentRNG('swarmDrain')() < cfg.swarmContactDrain * dt) {
           for (let i = player.cargo.length - 1; i >= 0; i--) {
             if (player.cargo[i]) {
               player.cargo[i] = null;

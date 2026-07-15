@@ -1,7 +1,7 @@
 // seeded-generation.js — Pure deterministic generation functions.
 //
 // All functions take an RNG stream object and return deterministic
-// output. No Math.random(), no time-based randomness.
+// output. No global RNG or time-based randomness.
 //
 // Both server (scripts/seeded-generation.js) and client
 // (src/seeded-generation.js) import this. They MUST stay in sync.

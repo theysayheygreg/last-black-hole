@@ -138,6 +138,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SeededSea",
+    file: "seeded-sea.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "SimRandomGuard",
+    file: "sim-random-guard.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "FlowField",
     file: "flow-field.cjs",
     lanes: ["core", "static", "full"],
