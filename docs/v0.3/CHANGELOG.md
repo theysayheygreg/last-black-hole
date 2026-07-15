@@ -31,3 +31,5 @@
 - Corrected X-A compatibility coverage: Spacecraft/Surfer preset drag, saved
   profile drag ranks, all hull/item drag scales, and Ship wake terminal velocity
   now share the canonical half-life seam with parent-literal parity fixtures.
+- Restored the parent wake boundary: Ship wake terminal velocity uses converted
+  base drag only; composed `dragScale` remains movement-only.

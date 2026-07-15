@@ -24,7 +24,7 @@ audit. The durable ruling is still "never per-player time".
 | Local wreck `driftDrag` | `1.5` legacy-prefixed decay rate | `dragRate = 1.5` | Local wreck movement | `1/s`; `[0.5, 5]`, step `0.25`, standard damping | Same exponential `exp(-dragRate * dt)` path |
 | `SIGNAL_CONFIG.thrustBaseRate`, `wellProximityRate`, `coastRate` | Fractions/s: `.005`, `.002`, `.001` | `.5%`, `.2%`, `.1%` full-scale/s via `signalFractionPerSecond()` | Authority `tickPlayerSignal` | Full-scale percent/s; ranges `[0, 5]`, `[0, 2]`, `[0, 2]`; steps `.5`, `.1`, `.1`; quiet/opposition, environmental tax, barely audible | Exact helper conversion assertions |
 | `SIGNAL_CONFIG.decayBase`, `decayWreckWake`, `decayAccretionShadow` | Fractions/s: `.025`, `.040`, `.050` | `2.5%`, `4%`, `5%` full-scale/s via the same helper | Authority `tickPlayerSignal` | Full-scale percent/s; `[0, 10]`, step `.5`; quiet baseline, wake relief, shadow relief | Exact helper conversion and authority signal tests |
-| `CONFIG.ship.drag` | Raw movement coefficient and duplicate dev-panel knob | Deleted; movement derives from the shared half-life. Wake terminal velocity derives from the same exposed `CONFIG.ship.coastHalfLifeSeconds` | Local `Ship` | No surviving contract | Source scan plus movement parity |
+| `CONFIG.ship.drag` | Raw movement coefficient and duplicate dev-panel knob | Deleted; movement derives from the shared half-life. Wake terminal velocity derives from the converted base drag only, matching the parent | Local `Ship` | No surviving contract | Source scan plus movement and wake parity |
 | `ascii.colorTemperature`, `input.gamepadTurnRate` | Unused client config | Deleted | None; no runtime consumer | No contract | Runtime source scan |
 | `vfx.shipMotion`, `portalSparks`, `pickupGlints`, `inhibitorFaults`, `nearCameraAtmosphere`, `debugBounds`, `freezeSeed` | Future/reserved or unused client flags | Deleted | None; no runtime consumer | No contract | Runtime source and dev-panel scan |
 | `pressureFromTime` | Handoff example `0.0005/s` | No current runtime/config name; no new behavior invented | None in current source | No contract | Source scan; already absent after the prior pressure ruling |
@@ -80,8 +80,9 @@ all surviving compatibility paths:
   half-lives through the canonical seam instead of disappearing.
 - Saved `upgrades.drag` ranks use one conversion in local `Ship` and authority
   `PlayerBrain`; hull and item `dragScale` composition remains multiplicative.
-- Ship wake terminal velocity now consumes the same effective drag coefficient
-  as movement, including hull, profile, and item scales.
+- Ship wake terminal velocity consumes converted base drag only. Hull, profile,
+  and item `dragScale` continue to affect movement decay but, matching parent
+  `0eced674`, do not change wake onset or intensity.
 - Legacy `ship.drag` preset/scene aliases convert to half-life. Conflicting or
   invalid aliases throw instead of creating an ignored config property.
 - `src/content/tuning.js` is the sole ESM/CJS contract for conversion math,

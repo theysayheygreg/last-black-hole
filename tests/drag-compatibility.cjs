@@ -40,9 +40,8 @@ function legacyDragFactor(rawDrag, dragScale, dt) {
   return Math.pow(1 - effectiveDrag, dt * 60);
 }
 
-function legacyTerminalVelocity(thrustAccel, rawDrag, dragScale) {
-  const effectiveDrag = Math.max(0, Math.min(0.95, rawDrag * dragScale));
-  return thrustAccel / (effectiveDrag > 0 ? effectiveDrag : 0.03);
+function legacyTerminalVelocity(thrustAccel, rawDrag) {
+  return thrustAccel / (rawDrag > 0 ? rawDrag : 0.03);
 }
 
 function assertClose(label, actual, expected) {
@@ -75,7 +74,7 @@ function runLocalCase({ name, rawDrag, halfLife, thrustAccel, hullScale = 1, pro
     assertClose(
       `${name} wake terminal velocity`,
       ship.wakeTerminalVelocityWorld(),
-      legacyTerminalVelocity(thrustAccel, rawDrag, expectedScale)
+      legacyTerminalVelocity(thrustAccel, rawDrag)
     );
     compatibilityCases += 1;
     wakeRows += 1;

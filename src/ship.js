@@ -15,7 +15,7 @@ import {
   applyPlayerDriveAndFlow,
 } from './content/movement-step.js';
 import {
-  effectiveDragPerReferenceFrame,
+  dragPerReferenceFrameFromHalfLife,
   profileDragScaleFromUpgradeRank,
 } from './content/tuning.js';
 
@@ -155,10 +155,7 @@ export class Ship {
   }
 
   wakeTerminalVelocityWorld() {
-    const dragPerFrame = effectiveDragPerReferenceFrame(
-      CONFIG.ship.coastHalfLifeSeconds,
-      this.dragScale
-    );
+    const dragPerFrame = dragPerReferenceFrameFromHalfLife(CONFIG.ship.coastHalfLifeSeconds);
     return CONFIG.ship.thrustAccel / (dragPerFrame > 0 ? dragPerFrame : 0.03);
   }
 
