@@ -163,18 +163,39 @@ tooltip or more explanatory copy to compensate for a weak first read.
   rail. Future changes should preserve that scan path unless a better
   couch-readable structure replaces it wholesale.
 
-### Pre-Match / Map Select
+### Map Select / Survey Terminal
 
-- The map preview is the hero. It should show wells, portals, wrecks, route
-  risk, and signal pressure before text explains them.
-- The selected sector, risk, expected run shape, hull, and launch confirmation
-  are the couch-critical reads.
-- Map legends are useful but must not be required to distinguish route anchors,
-  danger, salvage, and anomaly colors.
-- Current v0.2 implementation frames this as a drop briefing: destinations,
-  route-preview table, and briefing panel. The route table can remain schematic;
-  it should not pretend to be an exact camera screenshot unless it is backed by
-  actual map/renderer truth.
+Map Select is a survey terminal, not a route planner and not an exact map. Its
+three-panel hierarchy is stable:
+
+- **Left rail:** the three playable map classes, followed by generic locked
+  sectors that advertise depth without naming or promising future content.
+- **Center:** the largest and fastest read, a seed-shaped `SURVEY
+  RECONSTRUCTION` made from broad basins, density, interference, open void, and
+  uncertainty. It communicates topology and approximate region scale without
+  drawing a route, path sequence, spawn marker, numbered anchor, or exact object
+  layout.
+- **Right rail:** selected map identity, scale class, broad risk band, a short
+  description, `POSSIBLE CONTACTS`, and `SURVEY CONFIDENCE`. Possible contacts
+  are families or ranges such as gravity wells, derelict fields, stellar
+  contacts, scavenger pressure, anomaly likelihood, or possible megastructures;
+  they are not promises about a particular run. Confidence is deliberately
+  incomplete and must communicate uncertainty rather than exact layout truth.
+
+The active presentation labels are `5x5` for Shallows, `15x15` for Expanse, and
+`25x25` for Deep Field. These are the player-facing scale labels; the separate
+W2-A4 authority-parity dependency remains the production source-of-truth gate.
+
+Valid rows show the survey reconstruction and a launch-ready right rail. Locked
+rows remain readable but switch the center to withheld/redacted data and the
+right rail to `DATA WITHHELD` / `???`. A locked row has no launch action and no
+fake input prompt. In reduced-motion mode, corruption is a static missing-tile,
+checksum-noise, broken-contour, or redaction treatment; the state never depends
+on flashing or motion.
+
+The map legend is supplementary. Do not use it to restore exact route anchors,
+well, portal, wreck, spawn, or signal-pressure claims that the survey terminal
+intentionally withholds.
 
 ### In-Match HUD
 
@@ -204,6 +225,26 @@ Generated frame parts are punctuation, not wallpaper. Use one complete generated
 
 At Deck size item signals resolve: **family silhouette → tier rail → selected/equipped/consumable state → optional identity hash**. Remove the hash when it aliases or competes with the family read. Tier and state need pattern/text alternatives and must survive grayscale, reduced motion, and keyboard/gamepad focus. Magenta is anomaly/Inhibitor-only except a documented mechanical-family exception.
 
+### Map Select Deck Geometry
+
+Apply the accepted active-device geometry contract to Map Select without adding a
+second button or prompt system:
+
+- headings are at least `32 px` high with their padding and gap;
+- playable and locked list rows are at least `48 px` high;
+- a valid launch command slab is at least `220 x 52 px` with a separate `28 px`
+  glyph area;
+- survey icon/art cells are at least `40 px`; detailed art cells, when used,
+  are at least `112 x 96 px`;
+- value/status blocks are at least `116 x 46 px`;
+- panel padding is at least `18 x 14 px` with `14 px` internal gaps.
+
+The active command glyph is graphical and device-family matched. Deck/controller
+surfaces show only the resolved controller glyph, never a raw keyboard fallback;
+keyboard mode may show keycaps. Supporting copy does not repeat the command
+label. Locked rows retain the list-row geometry for readable selection, but have
+no active command slab or action glyph.
+
 ## Component Language
 
 - **Panels:** translucent blue-black backing, thin cyan/role-color border,
@@ -214,9 +255,13 @@ At Deck size item signals resolve: **family silhouette → tier rail → selecte
   states change color and add pattern/label.
 - **Buttons:** large command slabs only for real actions. Small options stay as
   rows or tabs. The slab label is the action only (`BEGIN DROP`, `RETURN HOME`);
-  keyboard/controller affordances render as smaller support text below the
-  slab (`A begin drop`, `Space return home`). Never fuse prompts into the main
-  button label as `A BEGIN DROP` or `SPACE RETURN HOME`.
+  a shared graphical action glyph renders below it for the active input family.
+  Supporting copy may name a different verb, but never repeats the action
+  label. Deck/controller surfaces never show keyboard glyphs.
+- **Action glyphs:** face buttons, shoulder/trigger keycaps, View/Menu, D-pad,
+  and keyboard keycaps come from one structured action descriptor. Its binding
+  and optional origin id leave room for native Steam Input data without making
+  the browser call the SDK.
 - **Icons:** simple geometric/pixel glyphs aligned with entity categories.
 
 ## Required Review Matrix

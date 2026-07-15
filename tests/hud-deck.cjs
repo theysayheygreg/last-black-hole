@@ -20,8 +20,9 @@ async function run() {
   const bindings = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'input-bindings.js')).href);
   const hud = await import(pathToFileURL(path.join(ROOT, 'src', 'hud.js')).href);
 
-  assert.strictEqual(prompts.affordanceCaption('confirm', 'extract', { deck: true }), 'A extract');
-  assert.strictEqual(prompts.affordanceCaption('pulse', 'activate', { deck: true }), 'X activate');
+  assert(prompts.affordanceCaption('confirm', 'extract', { deck: true }).includes('ui-action-glyph-face'), 'Deck affordance must be a face-button glyph');
+  assert(!prompts.affordanceCaption('confirm', 'confirm', { deck: true }).includes('ui-action-copy'), 'Duplicate action verb must be suppressed');
+  assert(prompts.affordanceCaption('pulse', 'activate', { deck: true }).includes('X'), 'Deck affordance must retain fallback label data');
   assert.deepStrictEqual([...bindings.GAMEPAD_ACTION_BUTTONS.delete], [3]);
   assert.deepStrictEqual([...bindings.GAMEPAD_ACTION_BUTTONS.slingshot], [3]);
   assert.strictEqual(prompts.promptLabel('delete', { deck: true }), 'Y');
@@ -32,12 +33,9 @@ async function run() {
     detail: 'hold inside aperture',
     verb: 'extract',
   }, { deck: true });
-  assert.deepStrictEqual(interaction, {
-    action: 'confirm',
-    label: 'confirm extraction',
-    detail: 'hold inside aperture',
-    caption: 'A extract',
-  });
+  assert.strictEqual(interaction.action, 'confirm');
+  assert(interaction.caption.includes('data-input-family="deck"'), 'Interaction must select Deck glyph family');
+  assert(interaction.caption.includes('ui-action-copy'), 'Non-duplicate interaction verb should remain visible');
 
   const route = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },

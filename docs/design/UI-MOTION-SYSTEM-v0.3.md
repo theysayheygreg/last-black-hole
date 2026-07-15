@@ -28,6 +28,9 @@ in-match HUD is stable by default because the world already moves.
 - Pickup, damage, death, extraction, signal escalation, ability activation, and
   rewards animate from protocol events or authoritative state changes.
 - Animation completion never commits gameplay state.
+- Pause is a local presentation cover. The world continues: authority, network
+  health, snapshot intake, and covered event intake continue, and pause never
+  auto-unpauses.
 - Reconnecting, delayed, or rebased snapshots may settle presentation directly
   to the latest known state. Do not replay stale reward or danger fanfare.
 - One event ID/stamp should produce one presentation beat. Deduplicate across
@@ -182,10 +185,28 @@ improves reading and never lag authority materially.
 
 ### Pause
 
-The pause command panel becomes readable immediately. A short local dim may
-settle over `panel`; do not animate the frozen world to imply continued sim
-time. Resume clears the panel over `focus` or `wipe`. Abandon uses the separate
-destructive confirmation flow.
+The pause command panel becomes readable immediately over a local presentation
+cover. `WORLD CONTINUES` is the remote-authority read: authority, network health,
+snapshot intake, and covered event intake remain live, with no automatic
+unpause. A short local dim may settle over `panel`; the dim is not a simulation
+freeze. Abandon uses the separate destructive confirmation flow.
+
+Pause and resume follow this contract:
+
+- Entry neutralizes held and edge inputs exactly once, clears pending local
+  action flags, and leaves the authority run untouched.
+- While covered, presentation coalesces to the newest authority snapshot. It
+  discards intermediate presentation beats while retaining only a terminal
+  result eligible for the current authority run.
+- A short resume (under `1500ms` away) follows the current phase normally.
+- A long resume (`1500ms` or more) applies the newest authority truth
+  atomically, settles the camera and fluid anchor, snaps presentation, and
+  clears stale UI motion.
+- Terminal, phase, and run changes route directly from current authority truth.
+  Cached terminal events are exact-run scoped and cannot poison a later run.
+- The local debug/sandbox freeze is a separate mode. It may freeze client
+  simulation for debugging and must never be described as product authority
+  pause behavior.
 
 ### Results
 
@@ -266,6 +287,8 @@ with decisive state changes and local contrast.
 - Controller, keyboard, and pointer focus produce the same selected-state read.
 - Input prompts update immediately when the active input device changes; they
   do not type on or wait for a transition.
+- Deck/controller prompts use the shared graphical glyph descriptors from the
+  UI prompt contract; raw keyboard labels are not a fallback on Deck surfaces.
 - Audio feedback may reinforce a beat but cannot be the only confirmation.
 - Color, motion, and sound each have a static visual counterpart.
 - Motion never blocks navigation. A second input settles or skips entry motion

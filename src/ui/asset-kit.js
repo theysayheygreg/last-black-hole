@@ -1,4 +1,4 @@
-import { UI_COLORS, UI_SHADOWS, UI_TIERS } from './design-tokens.js';
+import { UI_COLORS, UI_DECK_GEOMETRY, UI_SHADOWS, UI_TIERS } from './design-tokens.js';
 
 const MANIFEST_URL = new URL('../../assets/visual/manifest.json', import.meta.url);
 const ITEM_TIER_NAMES = ['common', 'common', 'uncommon', 'rare', 'unique'];
@@ -157,8 +157,8 @@ export function drawItemIcon(ctx, item, rect, {
 } = {}) {
   const x = Number(rect?.x) || 0;
   const y = Number(rect?.y) || 0;
-  const w = Math.max(1, Number(rect?.w ?? rect?.width) || 1);
-  const h = Math.max(1, Number(rect?.h ?? rect?.height) || 1);
+  const w = Math.max(UI_DECK_GEOMETRY.iconCell.minWidth, Number(rect?.w ?? rect?.width) || 1);
+  const h = Math.max(UI_DECK_GEOMETRY.iconCell.minHeight, Number(rect?.h ?? rect?.height) || 1);
   const descriptor = itemAssetDescriptor(item);
   const image = descriptor ? itemImageCache.get(descriptor.catalogId) : null;
   const tierName = ITEM_TIER_NAMES[Math.max(1, Math.min(4, Number(item?.tier) || descriptor?.tier || 1))];

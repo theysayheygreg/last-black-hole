@@ -1,6 +1,7 @@
 import {
   UI_COLORS,
   UI_DECK,
+  UI_DECK_GEOMETRY,
   UI_SPACING,
   UI_TYPOGRAPHY,
 } from './design-tokens.js';
@@ -115,7 +116,7 @@ export function drawUiPanel(ctx, rect, {
   fillAlpha = 0.72,
   borderAlpha = 0.34,
   titleAlpha = 0.82,
-  padding = UI_SPACING.panelPaddingX,
+  padding = UI_DECK_GEOMETRY.panel.paddingX,
   cornerLength = 38,
 } = {}) {
   const r = normalizeRect(rect);
@@ -157,7 +158,8 @@ export function drawSelectedRow(ctx, rect, {
   borderAlpha = 0.54,
   railWidth = 3,
 } = {}) {
-  const r = normalizeRect(rect);
+  const source = normalizeRect(rect);
+  const r = { ...source, h: Math.max(source.h, UI_DECK_GEOMETRY.listRow.minHeight) };
   const a = clamp01(alpha);
   ctx.save();
   if (active) {
@@ -199,8 +201,126 @@ export function fitUiText(ctx, text, maxWidth, {
   return best;
 }
 
+function drawGlyphFrame(ctx, x, y, w, h, radius = 0) {
+  if (radius > 0 && typeof ctx.arcTo === 'function') {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+    return;
+  }
+  ctx.rect(x, y, w, h);
+}
+
+/** Draw the active input family glyph without embedding device logic in callers. */
+export function drawActionGlyph(ctx, descriptor, rect, { alpha = 1, color = null } = {}) {
+  const source = normalizeRect(rect);
+  const minGlyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight);
+  const size = Math.max(minGlyphSize, Math.min(source.w, source.h));
+  const x = source.x + (source.w - size) / 2;
+  const y = source.y + (source.h - size) / 2;
+  const kind = descriptor?.glyphKind || 'keycap';
+  const label = String(descriptor?.fallbackLabel || '').toUpperCase();
+  const glyphColor = color ? withAlpha(color, alpha) : roleColor('text', alpha);
+
+  ctx.save();
+  ctx.strokeStyle = glyphColor;
+  ctx.fillStyle = glyphColor;
+  ctx.lineWidth = 1.5;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = canvasFont(Math.max(10, Math.min(13, size * 0.38)), { weight: '700' });
+
+  if (kind === 'face') {
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillText(label.slice(0, 1), x + size / 2, y + size / 2 + 0.5);
+  } else if (kind === 'dpad') {
+    const arm = size * 0.28;
+    const center = size / 2 - arm / 2;
+    ctx.fillRect(x + center, y + 2, arm, size - 4);
+    ctx.fillRect(x + 2, y + center, size - 4, arm);
+    const direction = label.match(/\b(L|R|U|D)\b$/)?.[1];
+    if (direction) {
+      ctx.fillStyle = roleColor('void', alpha);
+      ctx.font = canvasFont(Math.max(8, Math.min(11, size * 0.28)), { weight: '700' });
+      ctx.fillText(direction, x + size / 2, y + size / 2);
+    }
+  } else if (kind === 'shoulder' || kind === 'trigger' || kind === 'system') {
+    ctx.beginPath();
+    drawGlyphFrame(ctx, x + 1, y + size * 0.2, size - 2, size * 0.6, 3);
+    ctx.stroke();
+    ctx.fillText(label, x + size / 2, y + size / 2 + 0.5);
+  } else {
+    ctx.beginPath();
+    drawGlyphFrame(ctx, x + 1, y + 2, size - 2, size - 4, 3);
+    ctx.stroke();
+    ctx.fillText(label, x + size / 2, y + size / 2 + 0.5);
+  }
+  ctx.restore();
+  return { x, y, w: size, h: size };
+}
+
+export function drawActionPrompt(ctx, rect, descriptor, { verb = '', actionLabel = '', alpha = 1, color = null } = {}) {
+  const source = normalizeRect(rect);
+  const minGlyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight);
+  const glyphSize = Math.max(minGlyphSize, Math.min(32, source.h));
+  const glyphRect = { x: source.x, y: source.y, w: glyphSize, h: source.h };
+  const copy = String(verb || '').trim();
+  const sameAction = copy && (
+    copy.toLowerCase() === String(descriptor?.actionId || '').toLowerCase()
+    || copy.toLowerCase() === String(descriptor?.fallbackLabel || '').toLowerCase()
+    || copy.toLowerCase() === String(actionLabel || '').trim().toLowerCase()
+  );
+  drawActionGlyph(ctx, descriptor, glyphRect, { alpha, color });
+  if (copy && !sameAction) {
+    ctx.save();
+    ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall, { weight: '700' });
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color ? withAlpha(color, alpha) : roleColor('muted', alpha);
+    ctx.fillText(copy.toUpperCase(), source.x + glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap, source.y + source.h / 2);
+    ctx.restore();
+  }
+  return { glyph: { x: glyphRect.x, y: glyphRect.y, w: glyphSize, h: glyphSize }, copy: !sameAction && Boolean(copy) };
+}
+
+export function drawActionFooter(ctx, x, y, actions, {
+  alpha = 1,
+  color = null,
+  gap = UI_DECK_GEOMETRY.panel.gap,
+  maxWidth = Infinity,
+  lineHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight + UI_DECK_GEOMETRY.panel.gap,
+} = {}) {
+  let cursor = Number(x) || 0;
+  const startX = cursor;
+  let top = Number(y) || 0;
+  for (const entry of Array.isArray(actions) ? actions : []) {
+    const descriptor = entry?.descriptor || entry;
+    const verb = entry?.verb || '';
+    const estimatedWidth = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, resultWidth(verb, descriptor)) + gap;
+    if (cursor > startX && cursor + estimatedWidth > startX + maxWidth) {
+      cursor = startX;
+      top += lineHeight;
+    }
+    const result = drawActionPrompt(ctx, { x: cursor, y: top, w: Math.max(estimatedWidth, UI_DECK_GEOMETRY.actionGlyph.minWidth), h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, descriptor, { verb, alpha, color });
+    cursor += estimatedWidth;
+  }
+}
+
+function resultWidth(verb, descriptor) {
+  const copy = String(verb || '').trim().toLowerCase();
+  const duplicate = copy === String(descriptor?.actionId || '').toLowerCase()
+    || copy === String(descriptor?.fallbackLabel || '').trim().toLowerCase();
+  return UI_DECK_GEOMETRY.actionGlyph.minWidth + (copy && !duplicate ? UI_DECK_GEOMETRY.actionGlyph.gap + copy.length * 8 : 0);
+}
+
 export function drawCommandButton(ctx, rect, label, {
-  hotkey = '',
+  action = null,
   prompt = '',
   role = 'flow',
   active = true,
@@ -208,12 +328,16 @@ export function drawCommandButton(ctx, rect, label, {
   alpha = 1,
   textColor,
 } = {}) {
-  const r = normalizeRect(rect);
+  const source = normalizeRect(rect);
+  const r = {
+    ...source,
+    w: Math.max(source.w, UI_DECK_GEOMETRY.button.minWidth),
+    h: Math.max(source.h, UI_DECK_GEOMETRY.button.minHeight),
+  };
   const a = clamp01(disabled ? alpha * 0.42 : alpha);
   const buttonRole = disabled ? 'muted' : role;
   const labelText = String(label ?? '').trim();
-  const hotkeyText = String(hotkey ?? '').trim();
-  const promptText = String(prompt || labelText || 'confirm').trim();
+  const promptText = String(prompt || '').trim();
 
   ctx.save();
   applyCanvasTextShadow(ctx);
@@ -231,16 +355,17 @@ export function drawCommandButton(ctx, rect, label, {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = textColor ? withAlpha(textColor, a) : roleColor(disabled ? 'muted' : 'text', a);
-  ctx.fillText(fitUiText(ctx, labelText.toUpperCase(), r.w - 18), r.x + r.w / 2, r.y + r.h / 2);
+  ctx.fillText(fitUiText(ctx, labelText.toUpperCase(), r.w - UI_DECK_GEOMETRY.button.paddingX * 2), r.x + r.w / 2, r.y + r.h / 2);
 
-  // Keep the command label clean; controller/keyboard affordances live as
-  // supporting prompt text so the action remains readable across input modes.
-  if (hotkeyText) {
-    ctx.font = canvasFont(Math.max(10, Math.min(UI_TYPOGRAPHY.couchSmall, r.h * 0.32)), { weight: '700' });
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = roleColor(buttonRole, 0.78 * a);
-    const subcopy = `${hotkeyText.toUpperCase()} ${promptText.toUpperCase()}`;
-    ctx.fillText(fitUiText(ctx, subcopy, r.w - 18), r.x + r.w / 2, r.y + r.h + 8);
+  // The action face owns the verb. The supporting affordance is a drawn glyph
+  // and only adds copy when it is not the same verb again.
+  if (action) {
+    drawActionPrompt(ctx, {
+      x: r.x + UI_DECK_GEOMETRY.button.paddingX,
+      y: r.y + r.h + UI_DECK_GEOMETRY.button.gap,
+      w: r.w - UI_DECK_GEOMETRY.button.paddingX * 2,
+      h: UI_DECK_GEOMETRY.actionGlyph.minHeight,
+    }, action, { verb: promptText, actionLabel: labelText, alpha: 0.78 * a, color: roleColor(buttonRole) });
   }
   ctx.restore();
 }
@@ -314,7 +439,7 @@ export function drawWarningStrip(ctx, rect, {
 export function drawStatusPill(ctx, rect, label, {
   role = 'flow',
   alpha = 1,
-  minWidth = 68,
+  minWidth = UI_DECK_GEOMETRY.valueBlock.minWidth,
 } = {}) {
   const source = String(label ?? '');
   const r = normalizeRect(rect);
@@ -324,7 +449,7 @@ export function drawStatusPill(ctx, rect, label, {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const width = Math.max(minWidth, r.w || ctx.measureText(source).width + 18);
-  const height = Math.max(r.h || 20, 24);
+  const height = Math.max(r.h || 20, UI_DECK_GEOMETRY.valueBlock.minHeight);
   const x = r.x - width / 2;
   const y = r.y - height / 2;
   ctx.fillStyle = roleColor(role, 0.14 * alpha);

@@ -12,7 +12,7 @@ import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
-import { affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
+import { actionCaptionMarkup, actionDescriptor, actionGlyphMarkup, affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
 import { itemIconMarkup, preloadInventoryIcons, preloadUiAssets } from './ui/asset-kit.js';
 
@@ -516,12 +516,13 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   if (inv) {
     const count = inv.cargoCount;
     const max = inv.cargoMax;
+    const inventoryCaption = affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions);
     _salvageCountEl.textContent = count > 0 ? `◈ cargo ${count}/${max}` : `◈ cargo 0/${max}`;
     if (count > 0) {
       const totalValue = inv.getCargoValue();
-      _salvageValueEl.innerHTML = `<span>value ${totalValue}</span><span class="hud-action-caption">${affordanceCaption('inventory', 'inventory', _promptOptions)}</span>`;
+      _salvageValueEl.innerHTML = `<span>value ${totalValue}</span><span class="hud-action-caption">${inventoryCaption}</span>`;
     } else {
-      _salvageValueEl.innerHTML = `<span>hold space for salvage</span><span class="hud-action-caption">${affordanceCaption('inventory', 'inventory', _promptOptions)}</span>`;
+      _salvageValueEl.innerHTML = `<span class="hud-action-caption">${inventoryCaption}</span>`;
     }
     // Warn when nearly full
     if (count >= max) {
@@ -958,12 +959,13 @@ function _renderInventoryPanel(inv) {
     const isSel = (sel === globalIdx);
     const item = inv.consumables[i];
     const rowStyle = inventorySelectionStyle(isSel);
-    const slotLabel = promptLabel(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
+    const slotAction = actionDescriptor(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
+    const slotGlyph = actionGlyphMarkup(slotAction);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'consumable', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${slotLabel} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'consumable', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${slotGlyph} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
     } else {
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotLabel} — empty —</span></div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotGlyph} — empty —</span></div>`;
     }
   }
   html += '</div>';
@@ -1000,6 +1002,12 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
       options.seed ?? `warning-${Date.now()}-${_warningsEl.children.length}`,
       { maxChars: options.maxChars ?? 96 }
     );
+  } else if (options.action) {
+    el.textContent = stripCombiningMarks(text);
+    el.insertAdjacentHTML('beforeend', ` ${actionCaptionMarkup(options.action.actionId, options.actionVerb, {
+      ...options.action,
+      mode: options.action.inputFamily,
+    })}`);
   } else {
     el.textContent = stripCombiningMarks(text);
   }

@@ -526,4 +526,17 @@ export class InputManager {
     ship.setThrustIntensity(this.thrustIntensity);
     ship.setBrakeIntensity(this.brakeIntensity);
   }
+
+  /** Clear presentation intent when a local overlay covers a live run. */
+  neutralizeForPause() {
+    this.facing = null;
+    this.moveX = 0;
+    this.moveY = 0;
+    this.thrustIntensity = 0;
+    this.brakeIntensity = 0;
+    this._isAiming = false;
+    this._belowExitSince = null;
+    this._lastAngle = 0;
+    return this;
+  }
 }

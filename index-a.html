@@ -96,6 +96,10 @@
       --lbh-hud-gap: 8px;
       --lbh-deck-panel-pad-y: 10px;
       --lbh-deck-panel-pad-x: 14px;
+      --lbh-deck-panel-gap: 14px;
+      --lbh-deck-row-min: 48px;
+      --lbh-deck-icon-min: 40px;
+      --lbh-deck-value-min: 46px;
     }
     * {
       margin: 0;
@@ -176,7 +180,7 @@
       background: var(--lbh-panel-bg);
       border: 1px solid var(--lbh-panel-border);
       border-radius: var(--lbh-panel-radius);
-      min-height: 48px;
+      min-height: var(--lbh-deck-value-min);
       backdrop-filter: blur(2px);
       box-shadow: var(--lbh-panel-shadow);
       text-shadow: var(--lbh-text-shadow);
@@ -207,8 +211,8 @@
       left: var(--lbh-edge-margin);
       width: 254px;
       display: grid;
-      gap: 10px;
-      padding: 12px 14px;
+      gap: var(--lbh-deck-panel-gap);
+      padding: 14px 18px;
       color: var(--lbh-text-primary);
       border-color: rgba(234, 247, 255, 0.2);
     }
@@ -409,8 +413,8 @@
       bottom: var(--lbh-edge-margin);
       width: 336px;
       display: grid;
-      gap: 10px;
-      padding: 12px 14px;
+      gap: var(--lbh-deck-panel-gap);
+      padding: 14px 18px;
       border-color: rgba(0, 226, 255, 0.2);
     }
     #hud-pulse {
@@ -447,8 +451,8 @@
       display: grid;
       grid-template-columns: 1fr;
       gap: 3px;
-      min-height: 78px;
-      padding-top: 9px;
+      min-height: 92px;
+      padding-top: 12px;
       border-top: 1px solid rgba(0, 226, 255, 0.12);
     }
     .hud-ability-line {
@@ -481,7 +485,7 @@
       text-overflow: ellipsis;
     }
     .hud-ability-meter {
-      height: 12px;
+      height: 16px;
       width: 100%;
       background: rgba(90,110,130,0.24);
       border: 1px solid rgba(234,247,255,0.12);
@@ -499,11 +503,56 @@
       font-weight: 500;
       line-height: 1.35;
     }
+    .ui-action-glyph {
+      display: inline-flex;
+      min-width: 28px;
+      min-height: 24px;
+      padding: 0 5px;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      color: var(--lbh-text-primary);
+      border: 1px solid rgba(234, 247, 255, 0.72);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      vertical-align: middle;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .ui-action-glyph-face {
+      min-width: 24px;
+      padding: 0;
+      border-radius: 50%;
+    }
+    .ui-action-glyph-dpad {
+      position: relative;
+      width: 28px;
+      padding: 0;
+      border: 0;
+      font-size: 0;
+    }
+    .ui-action-glyph-dpad::before,
+    .ui-action-glyph-dpad::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      background: var(--lbh-text-primary);
+      transform: translate(-50%, -50%);
+    }
+    .ui-action-glyph-dpad::before { width: 8px; height: 26px; }
+    .ui-action-glyph-dpad::after { width: 26px; height: 8px; }
+    .ui-action-glyph-shoulder,
+    .ui-action-glyph-trigger,
+    .ui-action-glyph-system,
+    .ui-action-glyph-keycap { border-radius: 2px; }
+    .ui-action-copy { vertical-align: middle; }
     #hud-interaction {
       left: 50%;
       bottom: 24px;
-      width: min(360px, calc(100vw - 600px));
-      min-width: 300px;
+      width: min(380px, calc(100vw - 520px));
+      min-width: 320px;
       transform: translateX(-50%);
       text-align: center;
       border-color: rgba(0, 226, 255, 0.5);
@@ -576,7 +625,7 @@
       background: rgba(0, 2, 10, 0.94);
       border: 1px solid rgba(0, 226, 255, 0.26);
       border-radius: 2px;
-      padding: 10px 14px;
+      padding: 14px 18px;
       width: min(420px, calc(100vw - 32px));
       min-width: min(360px, calc(100vw - 32px));
       max-width: 420px;
@@ -604,11 +653,12 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 3px 4px;
+      gap: 10px;
+      padding: 6px 8px;
       margin: 1px 0;
       border-radius: 1px;
       transition: background 0.1s;
-      min-height: 38px;
+      min-height: var(--lbh-deck-row-min);
     }
     #hud-inventory-panel .inv-item:hover {
       background: rgba(80, 100, 160, 0.12);
@@ -619,10 +669,10 @@
     }
     #hud-inventory-panel .inv-icon {
       position: relative;
-      flex: 0 0 32px;
-      width: 32px;
-      height: 32px;
-      margin-right: 9px;
+      flex: 0 0 var(--lbh-deck-icon-min);
+      width: var(--lbh-deck-icon-min);
+      height: var(--lbh-deck-icon-min);
+      margin-right: 0;
       overflow: hidden;
       background: rgba(0, 0, 8, 0.68);
       border: 1px solid rgba(234, 247, 255, 0.28);

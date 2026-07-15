@@ -19,7 +19,7 @@ It also has a second job: the Returnal application plan and the Echoes v1 spec (
 Five surfaces are currently rendered:
 1. **In-game HUD** (DOM panels in `index-a.html`)
 2. **Home screen / meta tabs** (canvas-rendered in `main.js`)
-3. **Map select + seed preview panel** (canvas-rendered)
+3. **Map Select survey terminal** (canvas-rendered)
 4. **End-of-run screen** (canvas-rendered, dead/escaped/collapsed)
 5. **Inventory panel** (DOM overlay)
 
@@ -58,12 +58,16 @@ Five concrete violations to fix:
 
 **Remaining fix (medium lift):** migrate home screens to DOM overlays or introduce a fuller `drawHUDText(ctx, { text, x, y, role })` helper for color/spacing roles. The font portion is centralized; layout and semantic color roles still need the next pass.
 
-**4. Map select seed preview panel has no canonical spec.** I wrote the preview panel fresh during the seed determinism work, and I made up the colors (`rgba(140, 175, 255, 0.7)` for labels, custom tier colors). Most of them happen to be close to the design system but not exact.
+**4. Map Select survey terminal now has a canonical spec.** The v0.3 style
+guide records the three-panel survey hierarchy, possible-contents language,
+incomplete confidence, valid/locked/redacted states, reduced-motion corruption,
+and the accepted graphical action-glyph and Deck geometry contracts. The center
+must not become an exact map or route preview; it does not promise wells,
+portals, wrecks, spawn, object layout, or signal pressure.
 
-**Fix:** re-audit the preview panel against the color tokens. Use the exact hex values from DESIGN-SYSTEM.md §2. Specifically:
-- Signature label should be inhibitor magenta `rgba(204, 26, 128, ...)` or accretion gold depending on whether we want "threat flavor" or "loot flavor" for signatures. I lean magenta — signatures are the universe's mood, not treasure.
-- Well names should be teal `rgba(0, 128, 128, 0.7)` — neutral spatial info.
-- Tier colors for sample loot should match the established tier palette (T3 gold, T4 magenta).
+**Status:** the style-guide consistency pass is complete. The player-facing
+`5x5` / `15x15` / `25x25` labels remain subject to the separately implemented
+and not integrated W2-A4 production authority-parity dependency.
 
 **5. End-of-run screen uses bespoke RGBA per case.** The death/extraction screen has its own color palette (`rgba(100, 255, 255, ...)` for escape, `rgba(255, 30, 30, ...)` for dead, `rgba(180, 80, 255, ...)` for collapsed). None of these are in DESIGN-SYSTEM.md. They're fine visually — the issue is that they're *invented*, which means the screen can't be re-themed if we shift palettes later.
 
@@ -121,7 +125,8 @@ In order:
 1. **Fix the inventory panel opacity** (1 hour). Drop `0.92` → `0.6`, tune text contrast. Single commit.
 2. **Normalize panel borders** (30 min). Global replace of non-canonical borders, add intentional-exception comments where needed.
 3. **Map end-of-run screen colors to canonical tokens** (1 hour). Gold/magenta/teal-dim, not bespoke.
-4. **Re-audit seed preview panel colors** (30 min). Specifically: signature label → magenta, well names → teal, tier colors → exact.
+4. **Done:** replace the old seed-preview guidance with the Map Select survey
+   terminal contract; retain the exact proof receipt in the v0.3 source plan.
 5. **Introduce `drawHUDText()` helper** (1-2 hours). Centralize canvas text calls, map roles to tokens.
 6. **Audit dimensional tear transition timings** against §8 (30 min).
 7. **Add hologram inspection mode to META-LOOP backlog** (trivial — just a note). Actual implementation is a later sprint.

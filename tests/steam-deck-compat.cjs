@@ -39,7 +39,8 @@ async function run() {
   assert.strictEqual(prompts.promptLabel("pulse", { deck: true }), "X");
   assert.strictEqual(prompts.promptLabel("inventory", { deck: true }), "View");
   assert.strictEqual(prompts.promptLabel("tabs", { deck: true }), "L1/R1");
-  assert(prompts.menuHint({ deck: true }).includes("D-pad select"), "Deck menu hint must prefer D-pad");
+  assert(prompts.menuHint({ deck: true }).includes('data-input-family="deck"'), "Deck menu hint must use Deck glyph descriptors");
+  assert(!prompts.menuHint({ deck: true }).includes('keycap'), "Deck menu hint must not use keyboard glyphs");
 
   const index = read("index-a.html");
   includes(index, "--lbh-couch-body: 15px", "HUD must keep a couch-readable body-size target");
@@ -59,10 +60,14 @@ async function run() {
     excludes(source, "space/A", "Player-facing code must use centralized prompt helpers");
     excludes(source, "[Tab]", "Player-facing code must not hardcode Tab inventory prompts");
   }
+  excludes(main, "tab to LAUNCH when ready", "Home launch prompt must not hardcode Tab copy");
+  excludes(hud, "hold space for salvage", "HUD salvage prompt must not hardcode Space copy");
+  includes(main, "actionDescriptor('tabs', homePromptOptions)", "Home launch prompt must use the active-device descriptor");
+  includes(hud, "affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)", "HUD salvage prompt must use one shared active-device caption");
   includes(main, "currentPromptOptions()", "Canvas overlays must route through prompt options");
   includes(hud, "affordanceCaption('inventory'", "HUD cargo prompt must use centralized input labels");
-  includes(results, "promptLabel('confirm'", "Results overlay must use centralized input labels");
-  includes(primitives, "r.y + r.h + 8", "Command button affordances must draw below the button label");
+  includes(results, "actionDescriptor('confirm'", "Results overlay must use centralized action descriptors");
+  includes(primitives, "r.y + r.h + UI_DECK_GEOMETRY.button.gap", "Command button glyphs must draw below the button label");
   excludes(primitives, "hotkey ? `${String(hotkey).toUpperCase()}  ${String(label).toUpperCase()}`", "Command labels must not fuse input affordances into the action label");
 
   const electronMain = read("desktop/electron-main.cjs");

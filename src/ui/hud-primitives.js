@@ -1,4 +1,4 @@
-import { UI_COLORS, UI_FONT_STACK, UI_TIERS, UI_CATEGORIES, UI_SHADOWS, UI_SPACING, UI_TYPOGRAPHY } from './design-tokens.js';
+import { UI_COLORS, UI_DECK_GEOMETRY, UI_FONT_STACK, UI_TIERS, UI_CATEGORIES, UI_SHADOWS, UI_SPACING, UI_TYPOGRAPHY } from './design-tokens.js';
 
 export function inventorySelectionStyle(selected) {
   if (!selected) return '';
@@ -17,11 +17,12 @@ export function terminalRowStyle({ selected = false, tone = 'default' } = {}) {
   return [
     'display: flex',
     'align-items: center',
-    `gap: ${UI_SPACING.terminalRowGap}px`,
-    `padding: ${UI_SPACING.terminalRowPaddingY}px ${UI_SPACING.terminalRowPaddingX}px`,
+    `gap: ${UI_DECK_GEOMETRY.listRow.gap}px`,
+    `min-height: ${UI_DECK_GEOMETRY.listRow.minHeight}px`,
+    `padding: ${UI_DECK_GEOMETRY.listRow.paddingY}px ${UI_DECK_GEOMETRY.listRow.paddingX}px`,
     `background: ${background}`,
     `border-left: 2px solid ${border}`,
-    `font: ${UI_TYPOGRAPHY.small}px ${UI_FONT_STACK}`,
+    `font: ${UI_TYPOGRAPHY.couchSmall}px ${UI_FONT_STACK}`,
   ].join('; ') + ';';
 }
 
@@ -29,8 +30,8 @@ export function terminalPillMarkup(label, { color = UI_COLORS.terminalPillText }
   return `<span class="hud-terminal-pill" style="
     display: inline-flex;
     align-items: center;
-    min-height: 13px;
-    padding: ${UI_SPACING.terminalPillPaddingY}px ${UI_SPACING.terminalPillPaddingX}px;
+    min-height: ${UI_DECK_GEOMETRY.valueBlock.minHeight / 2}px;
+    padding: 4px ${UI_DECK_GEOMETRY.valueBlock.paddingX}px;
     border: 1px solid ${UI_COLORS.terminalPillBorder};
     background: ${UI_COLORS.terminalPillBackground};
     color: ${color};

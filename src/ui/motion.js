@@ -384,8 +384,9 @@ export function drawCommandButtonMotion(ctx, rect, label, {
   alpha = 1,
   reducedMotion = false,
   commandPulse = 0.8,
+  disabled = false,
   textColor,
-  hotkey,
+  action,
   prompt,
   font = '16px "Mona Space", monospace',
 } = {}) {
@@ -393,7 +394,7 @@ export function drawCommandButtonMotion(ctx, rect, label, {
   if (p <= 0.001) return;
   ctx.save();
   ctx.globalAlpha = (ctx.globalAlpha ?? 1) * alpha * p;
-  drawCommandButton(ctx, rect, label, { role, active, alpha: 1, textColor, hotkey, prompt, font });
+  drawCommandButton(ctx, rect, label, { role, active, disabled, alpha: 1, textColor, action, prompt, font });
   if (!reducedMotion) {
     const pulse = 1 - motionProgress(pulseTime, { duration: commandPulse, ease: easeOutCubic });
     if (pulse > 0.001) {

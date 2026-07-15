@@ -9,7 +9,8 @@ import {
   roleColor,
   withAlpha,
 } from './ui/canvas-primitives.js';
-import { promptLabel } from './ui/input-prompts.js';
+import { actionDescriptor } from './ui/input-prompts.js';
+import { resultsSurfaceLayout } from './ui/layout-contract.js';
 import {
   drawCommandButtonMotion,
   drawMotionPanel,
@@ -134,6 +135,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   totalTime = 0,
   lingerDuration = 1.2,
   motionSettings = null,
+  promptOptions = {},
 } = {}) {
   if (!view) return;
   const motion = motionSettings || resolveMotionSettings();
@@ -168,11 +170,9 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   drawScanlines(ctx, w, h, 0.026);
-  const panelW = Math.min(840, w - 64);
-  const panelH = Math.min(540, h - 48);
-  const panelX = cx - panelW / 2;
-  const panelY = cy - panelH / 2;
-  const panelRect = { x: panelX, y: panelY, w: panelW, h: panelH };
+  const surface = resultsSurfaceLayout(w, h);
+  const { panel: panelRect, columnW, leftX, rightX, button, cargoRowH, cargoGap } = surface;
+  const { x: panelX, y: panelY, w: panelW, h: panelH } = panelRect;
   const panelReveal = motionProgress(reveal, {
     delay: 0.02,
     duration: motion.panelDuration,
@@ -213,8 +213,6 @@ export function drawRunResultsOverlay(ctx, canvas, {
     duration: motion.textDuration,
     reducedMotion: motion.reducedMotion,
   });
-  const leftX = panelX + 42;
-  const rightX = panelX + panelW / 2 + 42;
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
   drawStatusPill(ctx, { x: cx - 138, y: panelY + 114, w: 118, h: 26 }, mapLabel, { role, alpha: contentAlpha });
   drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
@@ -260,14 +258,14 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ry += 22;
   ctx.textAlign = 'left';
   ctx.font = canvasFont(13);
-  const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 6) : ['[ empty ]'];
+  const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 5) : ['[ empty ]'];
   for (let i = 0; i < cargoLines.length; i++) {
     const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
       delay: 0.82,
       stagger: motion.rowStagger,
       reducedMotion: motion.reducedMotion,
     }));
-    drawSelectedRow(ctx, { x: rightX - 6, y: ry - 13, w: panelW / 2 - 64, h: 18 }, {
+    drawSelectedRow(ctx, { x: rightX - 6, y: ry - 12, w: columnW + 6, h: cargoRowH }, {
       role: success ? 'salvage' : 'danger',
       active: cargoLines[i] !== '[ empty ]',
       alpha: rowAlpha,
@@ -276,18 +274,18 @@ export function drawRunResultsOverlay(ctx, canvas, {
       railWidth: 2,
     });
     ctx.fillStyle = success ? roleColor('text', 0.85 * rowAlpha) : roleColor('danger', 0.72 * rowAlpha);
-    ctx.fillText(fitUiText(ctx, cargoLines[i], panelW / 2 - 82), rightX, ry);
+    ctx.fillText(fitUiText(ctx, cargoLines[i], columnW - 20), rightX, ry + 8);
     if (!success && cargoLines[i] !== '[ empty ]') {
       ctx.strokeStyle = roleColor('danger', 0.45 * rowAlpha);
       ctx.beginPath();
-      ctx.moveTo(rightX, ry - 4);
-      ctx.lineTo(rightX + Math.min(panelW / 2 - 90, cargoLines[i].length * 7), ry - 4);
+      ctx.moveTo(rightX, ry + 4);
+      ctx.lineTo(rightX + Math.min(columnW - 20, cargoLines[i].length * 7), ry + 4);
       ctx.stroke();
     }
-    ry += 18;
+    ry += cargoRowH + cargoGap;
   }
 
-  ry += 14;
+  ry += cargoGap;
   const notableLines = [...view.notableLines];
   if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
   drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
@@ -315,12 +313,9 @@ export function drawRunResultsOverlay(ctx, canvas, {
   if (promptAlpha > 0) {
     const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.65;
     drawCommandButtonMotion(ctx, {
-      x: cx - 150,
-      y: panelY + panelH - 86,
-      w: 300,
-      h: 44,
+      ...button,
     }, continueLabel, {
-      hotkey: promptLabel('confirm'),
+      action: actionDescriptor('confirm', promptOptions),
       role: continueRole,
       active: true,
       alpha: promptAlpha * blink,

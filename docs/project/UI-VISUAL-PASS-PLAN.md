@@ -126,7 +126,7 @@ First bridge status:
 | Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | plain-left is the shipped v0.2 default; opposite-left remains a taste challenger for Greg's review |
 | Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | first motion pass shipped; danger/delete composition still needs stronger treatment |
 | Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first static composition slice shipped; next work is content density, profile/destructive-state polish, and Deck-specific prompt review |
-| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | first drop-briefing slice shipped with route preview, risk panel, seed/signature/hazard/salvage read; next work is richer route semantics and actual objective language |
+| Map Select / Survey Terminal | `src/main.js` | v0.3 approved valid/locked survey references | selected sector, topology reconstruction, broad risk, possible contents, confidence, launch or locked state | source vertical and accepted Deck proof are complete; W2-A4 authority-parity dependency remains, with physical Deck and Greg taste gates still open |
 | In-Match HUD | `index-a.html`, `src/hud.js` | `in-match-hud.png` | fuel, hull, signal, cargo, exits, warning, active ability | edge reads need stronger icon/bar hierarchy and better backing |
 | Pause | `src/main.js` | shared command overlay | paused state, resume, settings, abandon | first motion pass shipped; needs command-panel composition cleanup |
 | Results / Run Report | `src/run-results.js` | `post-match-results.png` | outcome, cause/reward, cargo accounting, earnings, continue | primitives and motion shipped; still needs final theatrical layout review |
@@ -170,14 +170,28 @@ small entity-style ship read; the right side holds secondary panels for cargo,
 EM, hull, or run prep; the bottom strip holds input prompts. Launch is the
 loudest command because it is the risk gate.
 
-### Pre-Match / Map Select
+### Map Select / Survey Terminal
 
-Map select is a briefing, not a spreadsheet. The map preview is the hero
-surface and should communicate route shape before the text explains it. Route
-colors reuse world roles: cyan for flow/player path, amber for value, red for
-danger, magenta/violet for anomaly, green for ecology/neutral life. The selected
-sector, expected pressure, current hull, and launch readiness are the only
-must-read items at distance. Legends and details can be smaller.
+Map Select is a survey terminal, not a route briefing or exact map. The center
+reconstruction is the hero surface: a vague, seed-shaped topology read built
+from broad basins, density, interference, open void, and uncertainty. It must
+not reveal player spawn, exact wells, portals, wrecks, object layout, a route
+line, or a path sequence.
+
+The left rail lists Shallows `5x5`, Expanse `15x15`, and Deep Field `25x25`, then
+generic locked sectors. The right rail explains what the selected survey may
+contain using broad families or ranges under `POSSIBLE CONTACTS`, plus a broad
+risk band and deliberately incomplete `SURVEY CONFIDENCE`. Possible contents
+are not guaranteed objects, and signal pressure is not a Map Select promise.
+
+Valid selections expose the launch command. Locked selections keep their row
+readable, corrupt the center into withheld/redacted data, redact the right rail,
+and expose no launch action or fake input prompt. Reduced motion uses a static
+corrupted frame rather than flashing.
+
+The W2-A4 branch `codex/v0.3-map-scale-5-15-25` remains the production
+authority-parity dependency for those scale labels. This branch's survey source
+does not claim branch-local runtime authority parity.
 
 ### In-Match HUD
 
@@ -381,38 +395,44 @@ Shipped slice:
 - Footer prompts are split into short lines so they remain legible instead of
   truncating inside the narrow right rail.
 
-## Pass 5 - Pre-Match / Map Select
+## Pass 5 - Map Select / Survey Terminal
 
-Status: first drop-briefing slice shipped on 2026-06-28; later route-language
-redesign still open.
+Status: v0.3 survey-terminal source and accepted visual proof complete on
+2026-07-15; style-guide consistency is recorded here. Production authority
+scale parity still depends on W2-A4, and physical Deck plus Greg taste review
+remain open.
 
 Tasks:
 
-- make the map preview the hero surface;
-- brighten the seed/loot/details panel before the full preview pass so selected
-  sector, risk, value, and launch readiness meet the existing contrast contract;
-- use route colors from the world role palette;
-- show risk, signal pressure, expected run shape, hull, cargo objective, and
-  launch readiness in a consistent hierarchy;
-- keep legends supplementary.
+- keep the survey reconstruction as the hero surface;
+- use aggregate topology, density, broad risk, possible contents, and incomplete
+  confidence without exposing exact layout facts;
+- keep `5x5`, `15x15`, and `25x25` as the active player-facing scale labels;
+- keep legends supplementary and preserve the shared graphical action-glyph
+  contract;
+- make valid and locked states distinct, with no action for locked rows and a
+  static corruption treatment in reduced motion.
 
 Acceptance:
 
-- the player can identify selected sector, risk, launch action, and major
-  route anchors at distance;
-- map preview colors match in-run semantics;
+- the player can identify the selected sector, topology read, broad risk,
+  possible contents, confidence, and launch-or-locked state at distance;
+- no route line, path sequence, spawn marker, exact well, portal, wreck, or
+  object layout appears in the player-facing survey;
 - controller focus does not disappear in dense map information;
-- route anchors remain distinguishable in a reduced couch-proxy screenshot.
+- locked state remains readable without motion or a fake action prompt.
 
-Shipped slice:
+Shipped survey-terminal slice:
 
-- Map Select is now a three-panel pre-match briefing: destinations, route
-  preview, and drop briefing.
-- The center preview plots existing map wells, stars, wrecks, and a tentative
-  cyan route path using the shared role palette.
-- The right panel promotes selected route risk, world size, seed, signature,
-  named hazards, sample salvage, remote/local authority state, and a large
-  `BEGIN DROP` command.
+- Map Select now uses a three-panel survey-terminal hierarchy: map-class
+  register, coarse `SURVEY RECONSTRUCTION`, and interpretation/readiness rail.
+- The center uses seed-shaped broad regions, density, and uncertainty; it does
+  not plot exact entities or a player-facing route.
+- The right rail uses possible-contents families/ranges, broad risk,
+  incomplete confidence, and the shared `BEGIN DROP` graphical glyph contract
+  for valid selections.
+- Locked rows show redacted/withheld center and right-rail data and expose no
+  launch action. Reduced motion holds the corruption as a static frame.
 
 ## Pass 6 - In-Match HUD
 
