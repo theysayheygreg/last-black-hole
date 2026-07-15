@@ -160,12 +160,11 @@ failure first. Tune only after the math, authority, and camera contracts agree.
 
 ### Codex Memory Checkpoint Protocol
 
-After any substantial LBH session, write a short Codex memory checkpoint note in
-`~/.codex/memories/extensions/ad_hoc/notes/`. Repo docs remain the source of
-truth; memory is the routing index that helps future Codex runs find the right
-current docs before falling back to fresh repo archaeology.
+Write a Codex memory checkpoint note only when Greg explicitly requests one.
+Use `~/.codex/memories/extensions/ad_hoc/notes/`; repo docs remain the source of
+truth, while memory is only a routing index for future Codex runs.
 
-Substantial means at least one of:
+When requested, a useful substantial checkpoint covers at least one of:
 
 - broad architecture, Three renderer, sim/client authority, platform, build, or
   deploy work;
