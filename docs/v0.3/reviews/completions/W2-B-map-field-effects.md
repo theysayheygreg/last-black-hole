@@ -7,6 +7,22 @@ Read with the [S9a/S9b review source](../v0.3.1-design-review.md), the
 [W2-B handoff](../v0.3.1-part1-handoff.md), and the
 [anomaly catalog contract](../../ANOMALY-CATALOG.md).
 
+## Completion status
+
+- **Outcome:** Done as a design-only W2-B sketch; no field is implemented.
+- **Evidence:** Source links resolve, the accepted/open/later boundary is
+  explicit, and the docs-only contradiction and diff checks pass.
+- **Deviations:** None from the accepted S9b boundary; no bespoke physics,
+  authority, per-player time, or gameplay implementation is introduced.
+- **Anchor Updates:** No anchor drift. S9a/S9b, W2-B, and the anomaly catalog
+  remain the review anchors.
+
+## Status boundary
+
+| Accepted constraints | Open Greg decisions | Later implementation |
+|---|---|---|
+| One map-wide field or none; preset vectors over existing authority contracts only; uniform effect; no bespoke physics or per-player time; Roil conditional on existing Conductor severity waves. All 50 encounters remain designed; only the ratified 15 are shipping scope. | Catalog eligibility, vector envelope, signal timing, and briefing tell remain in [Open Greg decisions](#open-greg-decisions). | Any field manifest, seeded selection, authority application, briefing/world presentation, tuning, or runtime evidence follows only after Greg decides. |
+
 ## Feel target
 
 The briefing should make a familiar map feel like a different universe before

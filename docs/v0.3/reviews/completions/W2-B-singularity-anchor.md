@@ -7,6 +7,23 @@ Read with the [S9a/S9b review source](../v0.3.1-design-review.md), the
 [W2-B handoff](../v0.3.1-part1-handoff.md), and the
 [anomaly catalog contract](../../ANOMALY-CATALOG.md).
 
+## Completion status
+
+- **Outcome:** Done as a design-only W2-B sketch; S9a remains open.
+- **Evidence:** Source links resolve, the accepted/open/later boundary is
+  explicit, and the docs-only contradiction and diff checks pass.
+- **Deviations:** The handoff's original guaranteed-supermassive wording is not
+  ratified; the reopened S9a decision is preserved instead. No other design
+  deviation or implementation is introduced.
+- **Anchor Updates:** No anchor drift. S9a/S9b, W2-B, and the anomaly catalog
+  remain the review anchors.
+
+## Status boundary
+
+| Accepted constraints | Open Greg decisions | Later implementation |
+|---|---|---|
+| Design-only; shipping trio ratified; no per-player time; persistent keys deferred; Roil conditional on existing Conductor severity waves. All 50 encounters remain designed; only the ratified 15 are shipping scope. | Presence, ownership split, art promise, and 5x5/trio presentation remain in [Open Greg decisions](#open-greg-decisions). | Any cast-rule change, endgame wiring, authoritative behavior, art production, tuning, or runtime evidence follows only after Greg decides. |
+
 ## Feel target
 
 The map should feel like a dying universe with a legible center of gravity,
