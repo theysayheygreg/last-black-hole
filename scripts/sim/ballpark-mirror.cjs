@@ -852,7 +852,6 @@ class BallparkMirror {
       data: {
         form: finiteNumber(inhibitor.form, 0),
         intensity: finiteNumber(inhibitor.intensity, 0),
-        pressure: finiteNumber(inhibitor.pressure, 0),
       },
     });
   }

@@ -22,7 +22,7 @@ function fakeRuntime() {
     waveRings: [
       { id: "alpha", sourceWX: 1.5, sourceWY: 1.5, radius: 0.4, amplitude: 0.2, initialAmplitude: 0.4, alive: true },
     ],
-    inhibitor: { form: 2, wx: 2.5, wy: 2.5, vx: 0, vy: 0, radius: 0.18, intensity: 0.7, pressure: 0.9 },
+    inhibitor: { form: 2, wx: 2.5, wy: 2.5, vx: 0, vy: 0, radius: 0.18, intensity: 0.7 },
     mapState: {
       worldScale: 4,
       wells: [{ id: "maw", wx: 2, wy: 2, mass: 2, killRadius: 0.12, ringOuter: 0.35 }],

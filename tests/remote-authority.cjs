@@ -379,8 +379,12 @@ async function run() {
       assert(ability.ability2 === null, "Expected drifter ability2 slot to be explicitly empty");
 
       const snapshot = await getSnapshot();
-      assert(typeof snapshot.inhibitor?.threshold === "number", "Expected inhibitor threshold in remote snapshot");
-      assert(typeof snapshot.inhibitor?.pressureFrac === "number", "Expected inhibitor pressureFrac in remote snapshot");
+      assert(snapshot.inhibitor?.phase === 0, "Expected the scheduled Inhibitor phase to begin at phase 0");
+      assert(snapshot.inhibitor?.waveId === "inhibitor:phase-0", "Expected the phase-0 Conductor identity in remote snapshot");
+      assert(!("pressure" in (snapshot.inhibitor || {})), "Remote snapshot must not expose Inhibitor pressure");
+      assert(!("pressureFrac" in (snapshot.inhibitor || {})), "Remote snapshot must not expose Inhibitor pressureFrac");
+      assert(!("threshold" in (snapshot.inhibitor || {})), "Remote snapshot must not expose Inhibitor threshold");
+      assert(Array.isArray(snapshot.inhibitor?.schedule?.severityWaves), "Expected scheduled Inhibitor severity waves");
     });
 
     await runner.run("Remote debug can force and reset authoritative inhibitor state", async () => {
@@ -392,8 +396,6 @@ async function run() {
         wy: ws * 0.47,
         radius: 0.25,
         intensity: 0.85,
-        pressure: 1,
-        threshold: 1,
         localTime: 12,
         swarmTargetX: ws * 0.5,
         swarmTargetY: ws * 0.5,
@@ -404,7 +406,6 @@ async function run() {
 
       const reset = await postDebugInhibitorState({
         form: 0,
-        pressure: 0,
         intensity: 0,
         radius: 0,
       });

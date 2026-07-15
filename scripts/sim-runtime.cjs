@@ -82,6 +82,7 @@ const {
   wrappedDistance,
   wrappedDelta,
 } = require("./sim/world-geometry.cjs");
+const { createConductor } = require("./sim/conductor.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 
@@ -290,19 +291,14 @@ const SIGNAL_CONFIG = {
 };
 
 const INHIBITOR_CONFIG = {
-  // Pressure accumulation
-  pressureFromSignal: 0.008,    // pressure/s per unit signal level
-  pressureFromTime: 0.0005,     // pressure/s from elapsed time (normalized)
-  pressureFromGrowth: 0.05,     // pressure per well growth event
-  // Form thresholds (fraction of wake threshold)
-  glitchFraction: 0.7,         // Form 1 at 70% of threshold
-  // Wake threshold randomized per run
-  thresholdMin: 0.82,
-  thresholdMax: 0.98,
+  // Provisional Conductor clock. Both values use the S12 tuning step of
+  // 0.5 minutes (30 seconds): grace 90s, then each phase 90s apart.
+  graceMinutes: 1.5,
+  phaseIntervalMinutes: 1.5,
+  phaseWaveBudgets: [0, 1, 2, 3],
   // Form 1: Glitch
   glitchRadius: 0.1,           // world-units
   glitchDriftSpeed: 0.02,      // wu/s toward last signal position
-  glitchDissipateTime: 10,     // seconds of silence before dissipating
   glitchSolidifySignal: 0.35,  // signal level that solidifies glitch
   glitchSolidifySpeed: 0.04,   // wu/s when solidified
   // Form 2: Swarm
@@ -335,10 +331,51 @@ const INHIBITOR_CONFIG = {
   vesselWellConsumeRadius: 0.06,
   vesselConsumeRadiusGrowth: 0.025,
   vesselConsumeGravityBonus: 0.03,
-  vesselTimeToForm: 90,        // seconds after Swarm, or instant if signal hits 1.0
   finalPortalDelay: 60,        // seconds after Vessel before guaranteed portal
   finalPortalLifespan: 15,
 };
+
+function inhibitorPhaseTime(phase) {
+  if (phase <= 0) return 0;
+  const graceSeconds = INHIBITOR_CONFIG.graceMinutes * 60;
+  const intervalSeconds = INHIBITOR_CONFIG.phaseIntervalMinutes * 60;
+  return graceSeconds + (phase - 1) * intervalSeconds;
+}
+
+function createInhibitorConductor(seed) {
+  const conductor = createConductor({ seed, offsetGuardSeconds: 0 });
+  conductor.registerEventFront({
+    id: "inhibitor:phase-0",
+    time: 0,
+    kind: "inhibitor.phase",
+    metadata: {
+      system: "inhibitor",
+      phase: 0,
+      tier: 0,
+      scheduledTime: 0,
+      budget: INHIBITOR_CONFIG.phaseWaveBudgets[0],
+    },
+  });
+
+  for (let phase = 1; phase <= 3; phase += 1) {
+    const scheduledTime = inhibitorPhaseTime(phase);
+    conductor.scheduleSeverityWaves({
+      waveIdPrefix: `inhibitor:phase-${phase}`,
+      startTime: scheduledTime,
+      cadence: INHIBITOR_CONFIG.phaseIntervalMinutes * 60,
+      count: 1,
+      budget: INHIBITOR_CONFIG.phaseWaveBudgets[phase],
+      tier: phase,
+      metadata: {
+        system: "inhibitor",
+        phase,
+        form: phase,
+        scheduledTime,
+      },
+    });
+  }
+  return conductor;
+}
 
 const FAUNA_CONFIG = {
   maxTotal: 60,
@@ -967,10 +1004,14 @@ const runtime = {
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
+  conductor: null,
+  inhibitorSchedule: null,
   inhibitor: {
-    pressure: 0,
-    threshold: 0.90,  // randomized per run
     form: 0,          // 0=inactive, 1=glitch, 2=swarm, 3=vessel
+    phase: 0,
+    waveId: "inhibitor:phase-0",
+    scheduledTime: 0,
+    waveBudget: 0,
     wx: 0, wy: 0,     // world position
     vx: 0, vy: 0,
     intensity: 0,      // 0-1, ramps during transitions
@@ -979,7 +1020,6 @@ const runtime = {
     swarmTrackTimer: 0,
     swarmTargetX: 0, swarmTargetY: 0,
     silenceTimer: 0,   // how long peak signal has been low
-    vesselTimer: 0,    // time since Form 2
     finalPortalSpawned: false,
     finalPortalExpired: false,
     formTimes: [null, null, null, null],
@@ -1357,17 +1397,21 @@ function startSession(config = {}) {
     waves: 0,
     field: 0,
   };
-  // Inhibitor: threshold per run, seeded for determinism
+  // The Conductor is one match-scoped authority built from the run seed.
+  runtime.conductor = createInhibitorConductor(runtime.session.seed);
+  runtime.inhibitorSchedule = runtime.conductor.getSchedule();
   const inh = INHIBITOR_CONFIG;
-  const inhRng = runtime.session.rng.rawStream('inhibitorInit');
+  const phaseZero = runtime.inhibitorSchedule.eventFronts.find((event) => event.id === "inhibitor:phase-0");
   runtime.inhibitor = {
-    pressure: 0,
-    threshold: inh.thresholdMin + inhRng() * (inh.thresholdMax - inh.thresholdMin),
     form: 0, wx: 0, wy: 0, vx: 0, vy: 0,
+    phase: 0,
+    waveId: phaseZero?.id || "inhibitor:phase-0",
+    scheduledTime: phaseZero?.time || 0,
+    waveBudget: phaseZero?.metadata?.budget ?? inh.phaseWaveBudgets[0],
     intensity: 0, radius: inh.glitchRadius,
     localTime: 0, swarmTrackTimer: 0,
     swarmTargetX: 0, swarmTargetY: 0,
-    silenceTimer: 0, vesselTimer: 0,
+    silenceTimer: 0,
     finalPortalSpawned: false,
     finalPortalExpired: false,
     formTimes: [null, null, null, null],
@@ -1375,7 +1419,7 @@ function startSession(config = {}) {
     lastSignalWY: 0,
     lastSignalAge: 0,
     swarmSearchTimer: 0,
-    swarmSearchAngle: inhRng() * Math.PI * 2,
+    swarmSearchAngle: runtime.session.rng.rawStream('inhibitorInit')() * Math.PI * 2,
     gravityBonus: 0,
   };
   runtime.players.clear();
@@ -1435,6 +1479,7 @@ function startSession(config = {}) {
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
+  publishInhibitorPhaseEvent(0, phaseZero, { startup: true });
   refreshBallparkMirror("session-started");
   persistSessionRegistry();
   restartTickLoop();
@@ -1690,19 +1735,19 @@ function buildSnapshotBody() {
     },
     inhibitor: {
       form: runtime.inhibitor.form,
+      phase: runtime.inhibitor.phase,
+      waveId: runtime.inhibitor.waveId,
+      scheduledTime: runtime.inhibitor.scheduledTime,
+      waveBudget: runtime.inhibitor.waveBudget,
       wx: runtime.inhibitor.wx,
       wy: runtime.inhibitor.wy,
       intensity: runtime.inhibitor.intensity,
       radius: runtime.inhibitor.radius,
-      threshold: runtime.inhibitor.threshold,
-      pressureFrac: runtime.inhibitor.threshold > 0
-        ? runtime.inhibitor.pressure / runtime.inhibitor.threshold
-        : 0,
-      pressure: runtime.inhibitor.pressure,
       localTime: runtime.inhibitor.localTime,
       formTimes: Array.isArray(runtime.inhibitor.formTimes)
         ? runtime.inhibitor.formTimes.slice(0, 4)
         : [null, null, null, null],
+      schedule: runtime.inhibitorSchedule,
       targetWX: runtime.inhibitor.swarmTargetX,
       targetWY: runtime.inhibitor.swarmTargetY,
       lastSignalWX: runtime.inhibitor.lastSignalWX,
@@ -2380,7 +2425,6 @@ function tickGrowth(dt) {
     well.mass += well.growthRate;
     well.killRadius = wellKillRadiusForMass(well);
     spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass);
-    runtime.inhibitor.pressure += INHIBITOR_CONFIG.pressureFromGrowth;
     publishEvent("well.grew", {
       wellId: well.id,
       mass: well.mass,
@@ -3351,17 +3395,14 @@ function applyDebugInhibitorState(body) {
   if (!inh) return null;
   let requestedForm = null;
 
-  // Harnesses need to render rare late-run forms without waiting through a
-  // full match clock; gameplay still owns normal pressure and transitions.
+  // Harnesses can render rare late-run forms without waiting through a full
+  // match clock; normal gameplay transitions still belong to the Conductor.
   if (Number.isFinite(Number(body.form))) requestedForm = Math.max(0, Math.min(3, Math.round(Number(body.form))));
   if (Number.isFinite(Number(body.wx))) inh.wx = wrapWorldPosition(Number(body.wx), ws);
   if (Number.isFinite(Number(body.wy))) inh.wy = wrapWorldPosition(Number(body.wy), ws);
-  if (Number.isFinite(Number(body.pressure))) inh.pressure = Math.max(0, Math.min(1.5, Number(body.pressure)));
-  if (Number.isFinite(Number(body.threshold))) inh.threshold = Math.max(0.01, Math.min(1.5, Number(body.threshold)));
   if (Number.isFinite(Number(body.intensity))) inh.intensity = Math.max(0, Math.min(1, Number(body.intensity)));
   if (Number.isFinite(Number(body.radius))) inh.radius = Math.max(0, Math.min(ws, Number(body.radius)));
   if (Number.isFinite(Number(body.localTime))) inh.localTime = Math.max(0, Number(body.localTime));
-  if (Number.isFinite(Number(body.vesselTimer))) inh.vesselTimer = Math.max(0, Number(body.vesselTimer));
   if (Number.isFinite(Number(body.swarmTrackTimer))) inh.swarmTrackTimer = Math.max(0, Number(body.swarmTrackTimer));
   if (Number.isFinite(Number(body.swarmTargetX))) inh.swarmTargetX = wrapWorldPosition(Number(body.swarmTargetX), ws);
   if (Number.isFinite(Number(body.swarmTargetY))) inh.swarmTargetY = wrapWorldPosition(Number(body.swarmTargetY), ws);
@@ -3870,8 +3911,8 @@ function runSystemAtRate(key, hz, baseDt, fn) {
 
 // --- Signal System ---
 // Signal is the core risk/reward meter. It rises from valuable actions (thrust,
-// loot, combat) and decays when quiet. Higher signal attracts fauna, escalates
-// scavenger behavior, and accumulates Inhibitor pressure.
+// loot, combat) and decays when quiet. Higher signal attracts fauna and
+// escalates scavenger behavior; it does not advance the Inhibitor clock.
 // Design: signal taxes ambition, never buys capability. See SIGNAL-DESIGN.md.
 // Signal is a 0-1 float per player. Rises from activity, decays when quiet.
 // Zone crossings publish events for client audio/visual feedback.
@@ -5349,12 +5390,11 @@ function tickFauna(dt) {
 }
 
 // --- Inhibitor System (Existential Tier) ---
-// Three-form escalation driven by signal pressure + time + well growth.
-// Form 1 (Glitch): 70% of threshold — drifting corruption zone, magenta pulse.
+// Three-form escalation is a deterministic match-scoped Conductor clock.
+// Form 1 (Glitch): drifting corruption zone, magenta pulse.
 // Form 2 (Swarm): irreversible wake — hunting mass, cargo drain, control debuff.
 // Form 3 (Vessel): geometric anti-fluid — instant kill, portal blocking, gravity pull.
-// Final portal guaranteed 60s after Vessel. See INHIBITOR.md.
-// Pressure builds from player signal + time + well growth.
+// Final portal guaranteed 60s after Vessel. Portal-window conversion is W1-F3.
 // Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
 
 function ensureInhibitorFormTimes(inh = runtime.inhibitor) {
@@ -5363,15 +5403,104 @@ function ensureInhibitorFormTimes(inh = runtime.inhibitor) {
   return inh.formTimes;
 }
 
-function setInhibitorForm(form, payload = {}) {
+function getScheduledInhibitorWave(phase) {
+  return runtime.inhibitorSchedule?.severityWaves?.find((wave) => wave.tier === phase) || null;
+}
+
+function publishInhibitorPhaseEvent(phase, wave, extra = {}) {
+  const event = wave || {};
+  const waveId = event.waveId || event.id || `inhibitor:phase-${phase}`;
+  const scheduledTime = event.time ?? event.metadata?.scheduledTime ?? 0;
+  const budget = event.budget ?? event.metadata?.budget ?? 0;
+  const payload = {
+    conductorId: "match-conductor",
+    waveId,
+    phase,
+    tier: event.tier ?? event.metadata?.tier ?? phase,
+    scheduledTime,
+    budget,
+    announced: extra.announced !== false,
+    ...extra,
+  };
+  publishEvent("inhibitor.waveAnnounced", payload);
+  publishEvent("inhibitor.phase", { ...payload, form: phase });
+  return payload;
+}
+
+function setInhibitorPhase(phase, wave, payload = {}) {
   const inh = runtime.inhibitor;
-  if (inh.form === form) return false;
-  inh.form = form;
+  if (inh.form === phase && inh.phase === phase && !payload.debug) return false;
+  inh.phase = phase;
+  inh.form = phase;
   const formTimes = ensureInhibitorFormTimes(inh);
-  if (form > 0 && formTimes[form] == null) formTimes[form] = runtime.simTime;
-  publishEvent("inhibitor.form", { form, pressure: inh.pressure, ...payload });
-  if (form === 2) publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy });
+  if (phase > 0 && formTimes[phase] == null) formTimes[phase] = runtime.simTime;
+  const event = wave || {
+    id: `inhibitor:debug:phase-${phase}`,
+    time: runtime.simTime,
+    tier: phase,
+    budget: INHIBITOR_CONFIG.phaseWaveBudgets[phase] ?? 0,
+  };
+  const eventPayload = publishInhibitorPhaseEvent(phase, event, {
+    ...payload,
+    announced: payload.announced !== undefined ? payload.announced : !payload.debug,
+  });
+  inh.waveId = eventPayload.waveId;
+  inh.scheduledTime = eventPayload.scheduledTime;
+  inh.waveBudget = eventPayload.budget;
+  publishEvent("inhibitor.form", { form: phase, ...eventPayload });
+  if (phase === 2) publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy, ...eventPayload });
   return true;
+}
+
+function setInhibitorForm(form, payload = {}) {
+  const phase = Math.max(0, Math.min(3, Math.round(Number(form) || 0)));
+  const debugPhaseZero = payload.debug && phase === 0
+    ? runtime.inhibitorSchedule?.eventFronts?.find((event) => event.id === "inhibitor:phase-0")
+    : null;
+  return setInhibitorPhase(phase, debugPhaseZero || (payload.debug ? null : getScheduledInhibitorWave(phase)), payload);
+}
+
+function configureInhibitorPhase(phase, signalSource, vesselTarget, ws) {
+  const inh = runtime.inhibitor;
+  const cfg = INHIBITOR_CONFIG;
+  if (phase === 1) {
+    inh.intensity = 0;
+    inh.radius = cfg.glitchRadius;
+    const spawnFrom = signalSource || vesselTarget;
+    if (spawnFrom) {
+      inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
+      inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
+      inh.lastSignalWX = spawnFrom.wx;
+      inh.lastSignalWY = spawnFrom.wy;
+    } else {
+      const rng = runtime.session?.rng?.rawStream("inhibitorSpawn") || Math.random;
+      inh.wx = rng() * ws;
+      inh.wy = rng() * ws;
+    }
+    inh.silenceTimer = 0;
+  } else if (phase === 2) {
+    inh.intensity = 0;
+    inh.radius = cfg.swarmRadius;
+    inh.swarmTrackTimer = 0;
+    inh.swarmSearchTimer = 0;
+    const target = signalSource || vesselTarget;
+    if (target) {
+      inh.swarmTargetX = target.wx;
+      inh.swarmTargetY = target.wy;
+    }
+  } else if (phase === 3) {
+    inh.intensity = 0;
+    inh.radius = Math.max(inh.radius || 0, cfg.swarmRadius * 1.5);
+  }
+}
+
+function advanceInhibitorClock({ signalSource, vesselTarget, ws } = {}) {
+  const inh = runtime.inhibitor;
+  for (const wave of runtime.inhibitorSchedule?.severityWaves || []) {
+    if (wave.time > runtime.simTime || wave.tier <= inh.phase) continue;
+    configureInhibitorPhase(wave.tier, signalSource, vesselTarget, ws);
+    setInhibitorPhase(wave.tier, wave);
+  }
 }
 
 function collectInhibitorSignalSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -5546,67 +5675,12 @@ function tickInhibitor(dt) {
   const vesselTarget = selectInhibitorSignalSource({ includeDecoys: false, includeZeroPlayers: true });
   const peakSignal = signalSource?.signal || 0;
   rememberInhibitorSignalSource(inh, signalSource, dt);
-
-  inh.pressure += peakSignal * cfg.pressureFromSignal * dt;
-  inh.pressure += (runtime.simTime / RUN_DURATION) * cfg.pressureFromTime * dt;
-  inh.pressure = Math.min(1.5, inh.pressure);
-
-  const glitchThreshold = inh.threshold * cfg.glitchFraction;
-
-  if (inh.form === 0 && inh.pressure >= glitchThreshold) {
-    inh.intensity = 0;
-    inh.radius = cfg.glitchRadius;
-    const spawnFrom = signalSource || vesselTarget;
-    if (spawnFrom) {
-      inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
-      inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
-      inh.lastSignalWX = spawnFrom.wx;
-      inh.lastSignalWY = spawnFrom.wy;
-    } else {
-      const rng = runtime.session?.rng?.rawStream('inhibitorSpawn') || Math.random;
-      inh.wx = rng() * ws;
-      inh.wy = rng() * ws;
-    }
-    inh.silenceTimer = 0;
-    setInhibitorForm(1);
-  }
-
-  if (inh.form === 1 && inh.pressure >= inh.threshold) {
-    inh.intensity = 0;
-    inh.radius = cfg.swarmRadius;
-    inh.vesselTimer = 0;
-    inh.swarmTrackTimer = 0;
-    inh.swarmSearchTimer = 0;
-    const target = signalSource || vesselTarget;
-    if (target) {
-      inh.swarmTargetX = target.wx;
-      inh.swarmTargetY = target.wy;
-    }
-    setInhibitorForm(2);
-  }
-
-  if (inh.form >= 2) inh.vesselTimer += dt;
-
-  if (inh.form === 2) {
-    if (inh.vesselTimer >= cfg.vesselTimeToForm || peakSignal >= 1.0) {
-      inh.intensity = 0;
-      inh.radius = Math.max(inh.radius || 0, cfg.swarmRadius * 1.5);
-      setInhibitorForm(3);
-    }
-  }
+  advanceInhibitorClock({ signalSource, vesselTarget, ws });
 
   if (inh.form === 1) {
     inh.intensity = Math.min(1, inh.intensity + dt * 0.5);
-    if (peakSignal < SIGNAL_CONFIG.ghostMax) {
-      inh.silenceTimer += dt;
-      if (inh.silenceTimer >= cfg.glitchDissipateTime) {
-        inh.intensity = 0;
-        inh.pressure = inh.threshold * cfg.glitchFraction * 0.5;
-        setInhibitorForm(0);
-      }
-    } else {
-      inh.silenceTimer = 0;
-    }
+    if (peakSignal < SIGNAL_CONFIG.ghostMax) inh.silenceTimer += dt;
+    else inh.silenceTimer = 0;
     const targetX = Number.isFinite(inh.lastSignalWX) ? inh.lastSignalWX : signalSource?.wx;
     const targetY = Number.isFinite(inh.lastSignalWY) ? inh.lastSignalWY : signalSource?.wy;
     if (Number.isFinite(targetX) && Number.isFinite(targetY)) {
