@@ -62,6 +62,17 @@ import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
+import {
+  PAUSE_LONG_AWAY_THRESHOLD_MS,
+  authoritativePausePhase,
+  createPauseResumeState,
+  enterPause,
+  markPauseInputNeutralized,
+  observePauseConnection,
+  observePauseEvents,
+  observePauseSnapshot,
+  reconcilePauseResume,
+} from './pause-resume-reconcile.js';
 import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
@@ -260,7 +271,7 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
+let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused' | 'recovery'
 let loadingStartTime = 0;
 let loadingMapName = '';
 let deathTimer = 0;
@@ -297,6 +308,8 @@ let remotePendingConsumeSlot = null;
 let remotePendingSlingshotEdges = [];
 let remoteNextSlingshotEdgeId = 1;
 let remoteShipPresentation = null;
+let pauseResumeState = createPauseResumeState();
+let remotePauseNeutralizationInFlight = false;
 let startingMasses = [];
 let mapSelectIndex = 0;
 
@@ -1620,6 +1633,8 @@ function transitionToTitle() {
  */
 function startGame(map, seed = null) {
   resetPhantomForNewSession();
+  pauseResumeState = createPauseResumeState();
+  remotePauseNeutralizationInFlight = false;
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
@@ -1746,6 +1761,12 @@ function syncRemoteNetworkPerfStats() {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
+  const covered = gamePhase === 'paused';
+  if (covered) {
+    const previousLatest = pauseResumeState.latestSnapshot;
+    pauseResumeState = observePauseSnapshot(pauseResumeState, snapshot);
+    if (previousLatest && previousLatest !== snapshot && pauseResumeState.latestSnapshot === previousLatest) return;
+  }
   syncRemoteNetworkPerfStats();
   const duplicateSnapshot = remoteSnapshot &&
     snapshot.tick === remoteSnapshot.tick &&
@@ -1802,32 +1823,46 @@ function applyRemoteSnapshot(snapshot) {
     inhibitorState = { ...snapshot.inhibitor };
   }
 
-  if (inputManager?.facing != null) {
+  if (!covered && inputManager?.facing != null) {
     ship.setFacingDirect(inputManager.facing);
   }
 
-  const liveEvents = simClient?.consumeEvents?.() || [];
-  if (liveEvents.length > 0) {
-    applyRemoteEvents(liveEvents);
-  } else if (!snapshot.snapshotId && Array.isArray(snapshot.recentEvents)) {
-    // Compatibility path for older local authority builds without event-window
-    // recovery. v0.3 snapshots carry snapshotId and use SimClient events.
-    applyRemoteEvents(snapshot.recentEvents);
+  if (covered) {
+    const runId = snapshot.runId || snapshot.session?.runId || null;
+    pauseResumeState = observePauseEvents(pauseResumeState, simClient?.consumeEvents?.() || [], {
+      clientId: simClient?.clientId,
+      runId,
+    });
   }
 
-  if (gamePhase === 'dead' && localPlayer.status === 'alive') {
-    gamePhase = 'playing';
-    deathTimer = 0;
-  } else if (gamePhase === 'playing' && localPlayer.status === 'dead') {
-    gamePhase = 'dead';
-    deathTimer = 0;
-    freezeRunEnd(simState);
-    ship.setThrust(false);
-  } else if (gamePhase === 'playing' && localPlayer.status === 'escaped') {
-    gamePhase = 'escaped';
-    escapeTimer = 0;
-    freezeRunEnd(simState);
-    ship.setThrust(false);
+  if (!covered) {
+    const liveEvents = simClient?.consumeEvents?.() || [];
+    if (liveEvents.length > 0) {
+      applyRemoteEvents(liveEvents);
+    } else if (!snapshot.snapshotId && Array.isArray(snapshot.recentEvents)) {
+      // Compatibility path for older local authority builds without event-window
+      // recovery. v0.3 snapshots carry snapshotId and use SimClient events.
+      applyRemoteEvents(snapshot.recentEvents);
+    }
+  }
+
+  if (!covered) {
+    const phase = authoritativePausePhase(snapshot, simClient?.clientId);
+    if (phase === 'playing' && (gamePhase === 'dead' || gamePhase === 'loading')) {
+      gamePhase = 'playing';
+      deathTimer = 0;
+      showHUD();
+    } else if (phase === 'dead' && gamePhase === 'playing') {
+      gamePhase = 'dead';
+      deathTimer = 0;
+      freezeRunEnd(simState);
+      ship.setThrust(false);
+    } else if (phase === 'escaped' && gamePhase === 'playing') {
+      gamePhase = 'escaped';
+      escapeTimer = 0;
+      freezeRunEnd(simState);
+      ship.setThrust(false);
+    }
   }
 }
 
@@ -1937,6 +1972,7 @@ async function refreshRemoteSessionHealth(force = false) {
       tick: health?.tick ?? null,
       simTime: health?.simTime ?? null,
     };
+    if (gamePhase === 'paused') pauseResumeState = observePauseConnection(pauseResumeState, true);
     return remoteSessionHealth;
   } catch (err) {
     remoteSessionHealth = {
@@ -1947,10 +1983,30 @@ async function refreshRemoteSessionHealth(force = false) {
       tick: null,
       simTime: null,
     };
+    if (gamePhase === 'paused') pauseResumeState = observePauseConnection(pauseResumeState, false);
     return remoteSessionHealth;
   } finally {
     remoteSessionRequestInFlight = false;
   }
+}
+
+function requestRemoteSnapshot() {
+  if (!remoteAuthorityActive || !simClient?.enabled || remoteSnapshotRequestInFlight) return;
+  remoteSnapshotRequestInFlight = true;
+  void simClient.pollSnapshot().then((snapshot) => {
+    pauseResumeState = observePauseConnection(pauseResumeState, true);
+    applyRemoteSnapshot(snapshot);
+  }).catch((err) => {
+    console.error('[LBH] remote snapshot failed:', err);
+    pauseResumeState = observePauseConnection(pauseResumeState, false);
+    remoteSessionHealth = {
+      ...(remoteSessionHealth || {}),
+      ok: false,
+      error: err.message,
+    };
+  }).finally(() => {
+    remoteSnapshotRequestInFlight = false;
+  });
 }
 
 function renderFauna(ctx, camX, camY, canvasW, canvasH, time) {
@@ -2475,6 +2531,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
 
   rendererFixtureActive = false;
   remoteAuthorityActive = true;
+  pauseResumeState = createPauseResumeState();
+  remotePauseNeutralizationInFlight = false;
   remoteAuthoritativeField = null;
   remoteMapId = targetMapEntry.id;
   remoteSnapshot = null;
@@ -2579,6 +2637,8 @@ async function leaveRemoteSessionToHome() {
     }
   }
   remoteAuthorityActive = false;
+  pauseResumeState = createPauseResumeState();
+  remotePauseNeutralizationInFlight = false;
   remoteMapId = null;
   remoteSnapshot = null;
   remotePlayers = [];
@@ -2701,13 +2761,156 @@ let _prevSeedReroll = false;
 let _prevPortalCount = -1;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
+function clearRemotePendingActions() {
+  remotePendingPulse = false;
+  remotePendingExtractConfirm = false;
+  remotePendingConsumeSlot = null;
+  remotePendingSlingshotEdges = [];
+}
+
+function neutralizeRemoteAuthorityInput() {
+  if (!remoteAuthorityActive || !simClient?.enabled || remotePauseNeutralizationInFlight) return;
+  remotePauseNeutralizationInFlight = true;
+  void simClient.sendInput({
+    moveX: 0,
+    moveY: 0,
+    thrust: 0,
+    brake: 0,
+    slingshot: false,
+    slingshotEdges: [],
+    pulse: false,
+    extractConfirm: false,
+    ability1: false,
+    ability2: false,
+    consumeSlot: null,
+  }).catch((err) => {
+    console.error('[LBH] pause input neutralization failed:', err);
+    pauseResumeState = observePauseConnection(pauseResumeState, false);
+  }).finally(() => {
+    remotePauseNeutralizationInFlight = false;
+  });
+}
+
+function settlePausePresentationMotion() {
+  transitionActive = false;
+  transitionTimer = 0;
+  transitionCallback = null;
+  transitionFired = false;
+  uiMotionPhase = gamePhase;
+  uiMotionTimer = 999;
+  uiFocusKey = currentUiFocusKey();
+  uiFocusPulseTimer = 999;
+}
+
+function snapRemotePresentationToAuthority(snapshot) {
+  const localPlayer = snapshot?.players?.find((player) => player.clientId === simClient?.clientId);
+  if (!localPlayer) return false;
+  const wx = Number(localPlayer.wx);
+  const wy = Number(localPlayer.wy);
+  if (!Number.isFinite(wx) || !Number.isFinite(wy)) return false;
+
+  remoteShipPresentation = {
+    wx,
+    wy,
+    vx: Number(localPlayer.vx) || 0,
+    vy: Number(localPlayer.vy) || 0,
+    receivedAt: performance.now(),
+    simTime: snapshot.simTime ?? 0,
+  };
+  ship.teleport(wx, wy);
+  ship.vx = remoteShipPresentation.vx;
+  ship.vy = remoteShipPresentation.vy;
+  camX = wrapWorld(wx);
+  camY = wrapWorld(wy);
+  setFluidCamera(camX, camY);
+  fluid?.clear();
+  return true;
+}
+
+function applyCoveredTerminalEvents(decision) {
+  if (decision?.terminalEvent) applyRemoteEvents([decision.terminalEvent]);
+  remoteLastEventSeq = Math.max(remoteLastEventSeq, decision?.eventWatermark || 0);
+}
+
+function applyPauseResumeDecision(decision) {
+  if (decision.phase === 'dead') {
+    gamePhase = 'dead';
+    deathTimer = 0;
+    freezeRunEnd(simState);
+    ship.setThrust(false);
+    return;
+  }
+  if (decision.phase === 'escaped') {
+    gamePhase = 'escaped';
+    escapeTimer = 0;
+    freezeRunEnd(simState);
+    ship.setThrust(false);
+    return;
+  }
+  if (decision.phase === 'recovery' || decision.rematched) {
+    gamePhase = 'recovery';
+    loadingMapName = 'authority recovery';
+    hideHUD();
+    return;
+  }
+
+  gamePhase = 'playing';
+  audioEngine.setContext('gameplay');
+  showHUD();
+}
+
+function resumeFromPause() {
+  if (!remoteAuthorityActive) {
+    pauseResumeState = {
+      ...pauseResumeState,
+      covered: false,
+      inputNeutralized: false,
+    };
+    gamePhase = 'playing';
+    return;
+  }
+
+  const result = reconcilePauseResume(pauseResumeState, {
+    now: performance.now(),
+    snapshot: remoteSnapshot,
+    playerId: simClient?.clientId,
+    connectionOk: remoteAuthorityActive
+      ? pauseResumeState.connectionOk !== false && remoteSessionHealth?.ok !== false
+      : true,
+    longAwayThresholdMs: PAUSE_LONG_AWAY_THRESHOLD_MS,
+  });
+  pauseResumeState = result.state;
+  const { decision } = result;
+
+  if (remoteAuthorityActive && decision.discardEvents) {
+    applyCoveredTerminalEvents(decision);
+  }
+  applyPauseResumeDecision(decision);
+
+  if (remoteAuthorityActive && decision.longAway) {
+    snapRemotePresentationToAuthority(decision.snapshot);
+    inputManager.neutralizeForPause();
+    settlePausePresentationMotion();
+  } else if (decision.phase !== 'playing' || decision.rematched) {
+    settlePausePresentationMotion();
+  }
+}
+
 function togglePause() {
   if (gamePhase === 'playing') {
+    pauseResumeState = enterPause(pauseResumeState, {
+      now: performance.now(),
+      snapshot: remoteSnapshot,
+    });
+    pauseResumeState = markPauseInputNeutralized(pauseResumeState);
+    clearRemotePendingActions();
+    inputManager.neutralizeForPause();
+    neutralizeRemoteAuthorityInput();
     gamePhase = 'paused';
     pauseMenuSelection = 0;  // default to "return to game"
     ship.setThrust(false);
   } else if (gamePhase === 'paused') {
-    gamePhase = 'playing';
+    resumeFromPause();
   }
 }
 
@@ -3727,8 +3930,11 @@ function gameLoop(now) {
     }
   }
 
-  // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
-  if (gamePhase !== 'paused') {
+  // Local sandbox pause freezes its client simulation for debugging. A remote
+  // authority pause keeps presentation and snapshot intake alive; it never
+  // pauses or claims to pause the server run.
+  const localSandboxPaused = gamePhase === 'paused' && !remoteAuthorityActive;
+  if (!localSandboxPaused) {
     const simStart = performance.now();
     simCore.update(simState, {
       frameDt: dt,
@@ -3982,7 +4188,15 @@ function gameLoop(now) {
     // --- Gameplay input ---
     if (pauseNow && !_prevPause) togglePause();
 
-    if (!transitionActive && confirmNow && !_prevConfirm) {
+    if (gamePhase === 'recovery' && backNow && !_prevBack) {
+      void leaveRemoteSessionToHome().finally(() => {
+        loadTitleScene();
+        gamePhase = 'home';
+        homeTab = 0;
+        homePhaseTimer = 0;
+        audioEngine.setContext('menu');
+      });
+    } else if (!transitionActive && confirmNow && !_prevConfirm) {
       // Unlock confirm only after the linger finishes plus a beat for
       // the title to register. Matches the DEATH_LINGER_DURATION used
       // in the end-screen render block.
@@ -4176,16 +4390,6 @@ function gameLoop(now) {
           });
         }
 
-        if (!remoteSnapshotRequestInFlight) {
-          remoteSnapshotRequestInFlight = true;
-          void simClient.pollSnapshot().then((snapshot) => {
-            applyRemoteSnapshot(snapshot);
-          }).catch((err) => {
-            console.error('[LBH] remote snapshot failed:', err);
-          }).finally(() => {
-            remoteSnapshotRequestInFlight = false;
-          });
-        }
       } else if (gamePhase === 'dead') {
         deathTimer += dt;
       } else if (gamePhase === 'escaped') {
@@ -4452,6 +4656,13 @@ function gameLoop(now) {
         transitionToTitle();
       }
     }
+  }
+
+  // Snapshot/connection intake is independent of the local command overlay.
+  // One in-flight request plus SimClient's latest snapshot is the only queue.
+  if (remoteAuthorityActive) {
+    requestRemoteSnapshot();
+    if (gamePhase === 'paused') void refreshRemoteSessionHealth(false);
   }
 
   updateTitleAttractScene();
@@ -6312,7 +6523,7 @@ function gameLoop(now) {
       reducedMotion: motion.reducedMotion,
     });
     const focusPulse = uiFocusPulseAmount();
-    const pausePanelRect = { x: cx - 180, y: cy - 150, w: 360, h: 260 };
+    const pausePanelRect = { x: cx - 210, y: cy - 170, w: 420, h: 300 };
     drawTerminalWindow(ctx, pausePanelRect, {
       state: windowState,
       origin: 'top-left',
@@ -6326,12 +6537,29 @@ function gameLoop(now) {
     // Title
     ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
     ctx.font = canvasFont(28, { role: 'display', weight: '700' });
-    ctx.fillText('PAUSED', cx, cy - 110);
+    ctx.fillText('PAUSED', cx, cy - 130);
+
+    const awaySeconds = pauseResumeState.enteredAt == null
+      ? 0
+      : Math.max(0, (performance.now() - pauseResumeState.enteredAt) / 1000);
+    const remotePause = remoteAuthorityActive;
+    ctx.fillStyle = remotePause ? 'rgba(157, 252, 255, 0.96)' : 'rgba(255, 217, 102, 0.92)';
+    ctx.font = canvasFont(14, { weight: '700' });
+    ctx.fillText(remotePause ? 'WORLD CONTINUES' : 'LOCAL SANDBOX // SIM FROZEN', cx, cy - 91);
+    ctx.fillStyle = 'rgba(150, 175, 195, 0.72)';
+    ctx.font = canvasFont(11);
+    const status = remotePause
+      ? `authority ${remoteSessionHealth?.ok === false ? 'disconnected' : 'connected'} // ${remoteSnapshot?.session?.status || 'unknown'}`
+      : 'client debug freeze // no product authority claim';
+    ctx.fillText(fitUiText(ctx, status, pausePanelRect.w - 36), cx, cy - 72);
+    if (remotePause) {
+      ctx.fillText(`run ${simState.runElapsedTime.toFixed(1)}s // away ${awaySeconds.toFixed(1)}s`, cx, cy - 56);
+    }
 
     // Menu buttons
     const buttons = ['return to game', 'exit to title'];
     for (let i = 0; i < buttons.length; i++) {
-      const y = cy - 40 + i * 50;
+      const y = cy - 18 + i * 44;
       const selected = i === pauseMenuSelection;
 
       if (selected) {
@@ -6347,8 +6575,8 @@ function gameLoop(now) {
       ctx.fillText(buttons[i], cx, y + 6);
     }
 
-    // Signature info on pause screen
-    if (currentSignature) {
+    // Signature stays secondary to live authority status.
+    if (currentSignature && !remotePause) {
       ctx.fillStyle = 'rgba(140, 170, 190, 0.7)';
       ctx.font = canvasFont(12);
       ctx.fillText(currentSignature.name, cx, cy + 55);
@@ -6357,18 +6585,44 @@ function gameLoop(now) {
       ctx.fillText(currentSignature.mechanical, cx, cy + 72);
     }
 
-    drawActionFooter(ctx, cx - 170, cy + 98, [
-      { descriptor: actionDescriptor('thrust', currentPromptOptions()), verb: 'thrust' },
-      { descriptor: actionDescriptor('brake', currentPromptOptions()), verb: 'brake' },
-      { descriptor: actionDescriptor('pulse', currentPromptOptions()), verb: 'pulse' },
-      { descriptor: actionDescriptor('tabs', currentPromptOptions()), verb: 'abilities' },
-    ], { alpha: 0.84, gap: 10 });
-    drawActionFooter(ctx, cx - 130, cy + 128, [
+    drawActionFooter(ctx, cx - 130, cy + 104, [
       { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'select' },
       { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'confirm' },
       { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'resume' },
-    ], { alpha: 0.72, gap: 10 });
+    ], { alpha: 0.78, gap: 12 });
 
+    ctx.restore();
+  }
+
+  if (!rendererFixtureActive && gamePhase === 'recovery') {
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+    const motion = currentUiMotionSettings();
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.78)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    drawTerminalWindow(ctx, { x: cx - 210, y: cy - 116, w: 420, h: 232 }, {
+      state: sampleTerminalWindow(uiMotionTimer, {
+        duration: motion.windowDuration,
+        reducedMotion: motion.reducedMotion,
+      }),
+      origin: 'top-left',
+      role: 'salvage',
+      fillAlpha: 0.92,
+      borderAlpha: 0.42,
+      cornerLength: 34,
+    });
+    ctx.textAlign = 'center';
+    ctx.fillStyle = roleColor('salvage', 0.96);
+    ctx.font = canvasFont(25, { role: 'display', weight: '700' });
+    ctx.fillText('AUTHORITY RECOVERY', cx, cy - 52);
+    ctx.fillStyle = roleColor('muted', 0.84);
+    ctx.font = canvasFont(13);
+    ctx.fillText('CURRENT RUN IS NO LONGER AVAILABLE', cx, cy - 20);
+    ctx.fillText('RETURN TO THE HOME SURFACE TO RECONNECT', cx, cy + 4);
+    drawActionFooter(ctx, cx - 105, cy + 70, [
+      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back' },
+    ], { alpha: 0.82 });
     ctx.restore();
   }
 
