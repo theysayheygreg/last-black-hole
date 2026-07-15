@@ -11,6 +11,14 @@ Keep the server's provisional `2.5` thrust baseline and tune through hull, rig,
 flow, brake, and delta-v coefficients. Replacing the integrator is not a v0.3
 release task.
 
+### Provisional Units Peg
+
+Use `1 sim unit = 1000 m` for v0.3.1 ruler/debug presentation. This keeps the
+existing `0.45` well slingshot capture radius readable as `450 m`, and pegs the
+fictional Drifter hull length at `12 m` (`0.012` sim units), matching S4's
+`25 m` step at roughly two hull lengths. The peg is provisional and changes no
+physics, collision, camera, or enlarged readability glyph dimensions.
+
 ### Teaching Route
 
 Shallows is the first-current route: movement/slingshot, salvage, signal

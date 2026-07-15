@@ -8,6 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { PRESETS, PRESET_NAMES, deepMerge } from './presets.js';
+import { snapToDeclaredStep } from './units.js';
 import { UI_FONT_STACK } from './ui/typography.js';
 
 // Deep-clone CONFIG at import time for reset
@@ -80,11 +81,11 @@ const CHOICE_HINTS = {
 
 // Slider range hints and tooltips per key.
 // V2 SIMPLIFICATION: matches collapsed CONFIG — no affordances, fewer ship knobs
-const RANGE_HINTS = {
-  'ship.thrustAccel':       { min: 0.5, max: 5, step: 0.1, tip: 'World-units/s² when thrusting. 2.5 = shared authority baseline.' },
-  'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, tip: '0 = ship ignores fluid. 1 = pure fluid rider. How much currents carry you.' },
+export const RANGE_HINTS = {
+  'ship.thrustAccel':       { min: 0.5, max: 5, step: 0.1, unit: 'sim units/s²', startBias: 'authority baseline', tip: 'World-units/s² when thrusting. 2.5 = shared authority baseline.' },
+  'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, unit: 'multiplier', startBias: 'authority baseline', tip: '0 = ship ignores fluid. 1 = pure fluid rider. How much currents carry you.' },
   'ship.turnRate':          { min: 60, max: 720, step: 5, tip: 'Degrees/sec rotation toward cursor. 360 = instant feel.' },
-  'ship.drag':              { min: 0, max: 0.2, step: 0.005, tip: 'Velocity damping per 60 Hz reference frame. Low = ice-skating. High = responsive stops.' },
+  'ship.drag':              { min: 0, max: 0.2, step: 0.005, unit: 'fraction/60Hz frame', startBias: 'authority baseline', tip: 'Velocity damping per 60 Hz reference frame. Low = ice-skating. High = responsive stops.' },
   'ship.size':              { min: 4, max: 30, step: 1, tip: 'Ship triangle radius in pixels' },
 
   'fluid.viscosity':        { min: 0, max: 0.01, step: 0.00005, tip: 'Fluid thickness. 0 = water. Higher = syrup. Damps small-scale motion' },
@@ -97,7 +98,7 @@ const RANGE_HINTS = {
   'wells.gravity':          { min: 0, max: 0.01, step: 0.0001, tip: 'How strongly wells pull the fluid. 0.0015 = default. Higher = faster currents' },
   'wells.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Gravity falloff. 1 = gentle, 1.5 = default, 2 = inverse-square, 3 = sharp' },
   'wells.orbitalStrength':  { min: 0, max: 1, step: 0.01, tip: 'Swirl strength. 0 = pure infall, 0.4 = default, 1.0 = strong whirlpools' },
-  'wells.shipPullStrength': { min: 0, max: 2, step: 0.05, tip: 'How hard wells pull the ship (world-units/s²). THIS is what traps you' },
+  'wells.shipPullStrength': { min: 0, max: 2, step: 0.05, unit: 'sim units/s²', startBias: 'authority baseline', tip: 'How hard wells pull the ship (world-units/s²). THIS is what traps you' },
   'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull falloff. 1.5 = default (softer than inverse-square)' },
   'wells.maxRange':         { min: 0.3, max: 2.0, step: 0.05, tip: 'Gravity reach in world-units — zero force beyond this' },
   'wells.killRadius':       { min: 0.01, max: 0.1, step: 0.005, tip: 'Death radius in world-units' },
@@ -106,7 +107,7 @@ const RANGE_HINTS = {
   'events.waveWidth':       { min: 0.03, max: 0.3, step: 0.01, tip: 'Wavefront thickness in world-units' },
   'events.waveDecay':       { min: 0.9, max: 1, step: 0.005, tip: 'Amplitude multiplier per frame. 0.97 = fades fast. 0.99 = rings travel far' },
   'events.waveMaxRadius':   { min: 0.5, max: 4, step: 0.25, tip: 'Ring death radius in world-units' },
-  'events.waveShipPush':    { min: 0.1, max: 3, step: 0.1, tip: 'Force on ship when a ring passes through (world-units/s²)' },
+  'events.waveShipPush':    { min: 0.1, max: 3, step: 0.1, unit: 'sim units/s²', startBias: 'authority baseline', tip: 'Force on ship when a ring passes through (world-units/s²)' },
   'events.growthInterval':  { min: 5, max: 120, step: 5, tip: 'Seconds between well growth events. 45 = slow. 5 = constant drama' },
   'events.growthAmount':    { min: 0.005, max: 0.1, step: 0.005, tip: 'Mass added to each well per growth event. Compounds over time.' },
   'events.growthWaveAmplitude':{ min: 0.1, max: 3, step: 0.1, tip: 'Initial amplitude of growth wave rings. 1.0 = standard. 2.0 = dramatic' },
@@ -230,6 +231,14 @@ const RANGE_HINTS = {
   'input.brakeThrustScale': { min: 0, max: 1, step: 0.05, tip: 'Reverse thrust strength as fraction of forward thrust' },
   'input.brakeFuelScale':   { min: 0, max: 1.5, step: 0.05, tip: 'Reverse thrust fuel cost as fraction of forward burn rate' },
 };
+
+export function controlMetadata(path, value = 0) {
+  return Object.freeze({ ...(RANGE_HINTS[path] || autoRange(value)) });
+}
+
+export function snapControlValue(path, value) {
+  return snapToDeclaredStep(value, controlMetadata(path, value));
+}
 
 /**
  * Guess a reasonable slider range for a numeric value with no hint.
@@ -682,7 +691,7 @@ function createSliderNested(obj, key, path) {
   row.dataset.configSearch = `${path} ${CONTROL_LABELS[path] || key}`.toLowerCase();
 
   const val = obj[key];
-  const hint = RANGE_HINTS[path] || autoRange(val);
+  const hint = controlMetadata(path, val);
 
   const label = document.createElement('span');
   label.style.width = '150px';
@@ -691,7 +700,13 @@ function createSliderNested(obj, key, path) {
   label.style.textOverflow = 'ellipsis';
   label.style.cursor = 'help';
   label.textContent = CONTROL_LABELS[path] || key;
-  label.title = hint.tip || path;
+  const contractDetails = [
+    hint.unit ? `unit ${hint.unit}` : null,
+    `range ${hint.min}..${hint.max}`,
+    `step ${hint.step}`,
+    hint.startBias ? `start ${hint.startBias}` : null,
+  ].filter(Boolean).join(' | ');
+  label.title = `${hint.tip || path}\n${contractDetails}`;
   row.dataset.configSearch += ` ${hint.tip || ''}`.toLowerCase();
 
   const slider = document.createElement('input');
@@ -708,17 +723,18 @@ function createSliderNested(obj, key, path) {
   display.style.textAlign = 'right';
   display.style.flexShrink = '0';
   display.style.color = '#8f8';
-  display.textContent = fmt(val);
+  display.textContent = hint.unit ? `${fmt(val)} ${hint.unit}` : fmt(val);
 
   slider.addEventListener('input', () => {
-    const v = parseFloat(slider.value);
+    const v = snapControlValue(path, parseFloat(slider.value));
+    slider.value = v;
     obj[key] = v;
-    display.textContent = fmt(v);
+    display.textContent = hint.unit ? `${fmt(v)} ${hint.unit}` : fmt(v);
   });
 
   slider._update = () => {
     slider.value = obj[key];
-    display.textContent = fmt(obj[key]);
+    display.textContent = hint.unit ? `${fmt(obj[key])} ${hint.unit}` : fmt(obj[key]);
   };
 
   row.appendChild(label);
