@@ -1166,6 +1166,7 @@ const runtime = {
   players: new Map(),
   playerAuthorities: new Map(),
   joinClaims: new Map(),
+  rematchHandoffs: new Map(),
   pendingHumanSeats: new Set(),
   privateRoomCode: null,
   retiredPrivateRoomCodeHashes: [],
@@ -1468,6 +1469,60 @@ function getCargoCount(player) {
   return player.cargo.filter(Boolean).length;
 }
 
+function captureRematchParty() {
+  return Array.from(runtime.players.values())
+    .filter((player) => !player.isAI)
+    .sort((left, right) => (left.seatNo ?? Number.MAX_SAFE_INTEGER) - (right.seatNo ?? Number.MAX_SAFE_INTEGER))
+    .map((player) => ({
+      clientId: player.clientId,
+      profileId: player.profileId || null,
+      name: player.name,
+      connected: player.connected === true,
+      seatNo: Number.isInteger(player.seatNo) ? player.seatNo : null,
+      hullType: player.hullType,
+      profileShipType: player.profileShipType || null,
+      profileUpgrades: player.profileUpgrades,
+      rigLevels: Array.isArray(player.rigLevels) ? player.rigLevels.slice() : null,
+      equipped: cloneLoadoutItems(player.equipped),
+      consumables: cloneLoadoutItems(player.consumables),
+    }));
+}
+
+function restoreRematchParty(preservedParty = [], previousAuthorities = new Map(), previousRunId = null) {
+  for (const seed of preservedParty) {
+    const previous = previousAuthorities.get(seed.clientId);
+    if (!previous || previous.runId !== previousRunId || !previous.commandCredential) {
+      throw new Error(`Rematch authority lineage is incomplete for ${seed.clientId}`);
+    }
+    const player = createPlayer(seed.clientId, seed.name, seed.hullType, {
+      profileShipType: seed.profileShipType,
+      profileUpgrades: seed.profileUpgrades,
+      rigLevels: seed.rigLevels,
+      equipped: seed.equipped,
+      consumables: seed.consumables,
+      seatNo: seed.seatNo,
+    });
+    player.profileId = seed.profileId;
+    player.connected = seed.connected;
+    player.ready = false;
+    player.status = "alive";
+    player.disconnectedAtSimTime = null;
+    player.reconnectDeadlineSimTime = null;
+    const spawn = findSafeSpawn(runtime.mapState);
+    player.wx = spawn.wx;
+    player.wy = spawn.wy;
+    refreshPlayerBrain(player);
+    refreshPlayerEffects(player);
+    runtime.players.set(player.clientId, player);
+    const authority = issuePlayerAuthority(player.clientId, previous, { rotateRun: true });
+    runtime.rematchHandoffs.set(player.clientId, {
+      previousRunId,
+      previousCredential: previous.commandCredential,
+      authority,
+    });
+  }
+}
+
 function startSession(config = {}) {
   if (runtime.session.status === "running" || runtime.session.status === "lobby") {
     if (runtime.session.status === "running") {
@@ -1633,6 +1688,7 @@ function startSession(config = {}) {
   runtime.players.clear();
   runtime.playerAuthorities.clear();
   runtime.joinClaims.clear();
+  runtime.rematchHandoffs.clear();
   runtime.eventJournal.startRun(runtime.session.runId);
   runtime.snapshotRing.startRun(runtime.session.runId);
   runtime.fieldRevision = 1;
@@ -1667,6 +1723,13 @@ function startSession(config = {}) {
     maxPlayers: runtime.session.maxPlayers,
   });
   applyOverloadProfile({ rebuildField: false });
+  if (Array.isArray(config.preserveParty?.players) && config.preserveParty.players.length > 0) {
+    restoreRematchParty(
+      config.preserveParty.players,
+      config.preserveParty.authorities,
+      config.preserveParty.previousRunId
+    );
+  }
   // Spawn AI players
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
@@ -1693,6 +1756,36 @@ function startSession(config = {}) {
   refreshBallparkMirror("session-started");
   persistSessionRegistry();
   restartTickLoop();
+}
+
+function beginRematchSession() {
+  const previousSession = runtime.session;
+  const previousRunId = previousSession.runId;
+  const hostClientId = previousSession.hostClientId;
+  const previousAuthorities = new Map(runtime.playerAuthorities);
+  const preservedParty = captureRematchParty();
+  startSession({
+    mapId: previousSession.mapId,
+    worldScale: previousSession.worldScale,
+    maxPlayers: previousSession.maxPlayers,
+    tickHz: previousSession.baseTickHz,
+    snapshotHz: previousSession.baseSnapshotHz,
+    requesterId: hostClientId,
+    requesterProfileId: previousSession.hostProfileId,
+    requesterName: previousSession.hostName,
+    startMode: "staged",
+    preserveParty: {
+      players: preservedParty,
+      authorities: previousAuthorities,
+      previousRunId,
+    },
+  });
+  return {
+    previousRunId,
+    hostClientId,
+    hostAuthority: runtime.playerAuthorities.get(hostClientId) || null,
+    party: preservedParty,
+  };
 }
 
 function assignHost(clientId, name) {
@@ -1759,11 +1852,12 @@ function issueJoinClaim(playerId) {
   return claim;
 }
 
-function issuePlayerAuthority(playerId, previous = null) {
+function issuePlayerAuthority(playerId, previous = null, { rotateRun = false } = {}) {
   const authority = createMembershipAuthority({
     runId: runtime.session.runId,
     playerId,
     previous,
+    rotateRun,
   });
   runtime.playerAuthorities.set(playerId, authority);
   return authority;
@@ -1887,6 +1981,25 @@ function ensureHostAuthority(req, body = {}) {
     return { ok: false, status: 403, code: "host-required", error: "Only the session host can do that" };
   }
   return auth;
+}
+
+function authorizeRematchHandoff(req, body = {}) {
+  const identity = requestIdentity(req, body);
+  if (identity.conflict) {
+    return { ok: false, status: 400, code: "conflicting-identity", error: "Header and body authority identity disagree" };
+  }
+  const handoff = runtime.rematchHandoffs.get(identity.playerId);
+  if (!handoff
+      || identity.runId !== handoff.previousRunId
+      || !secretsMatch(identity.commandCredential, handoff.previousCredential)) {
+    return { ok: false, status: 403, code: "invalid-rematch-handoff", error: "Rematch authority handoff rejected" };
+  }
+  const authority = runtime.playerAuthorities.get(identity.playerId);
+  const player = runtime.players.get(identity.playerId);
+  if (!authority || authority !== handoff.authority || !player || player.isAI) {
+    return { ok: false, status: 403, code: "invalid-rematch-handoff", error: "Rematch authority handoff rejected" };
+  }
+  return { ok: true, handoff, authority, player };
 }
 
 function promoteHostIfNeeded() {
@@ -2650,6 +2763,8 @@ function commitPlayerOutcome(player, outcome) {
   if (player.committedOutcome) return null;
   player.committedOutcome = outcome;
 
+  const settlementSessionId = runtime.session.id;
+  const settlementRunId = runtime.session.runId;
   const runResult = buildRunResult(player, outcome);
 
   // The first local result is deliberately marked pending. It lets the owner
@@ -2684,8 +2799,15 @@ function commitPlayerOutcome(player, outcome) {
         settlement,
       };
 
+      // A rematch can rotate the live event journal while this durable write
+      // is in flight. The ledger acknowledgement remains valid, but its
+      // owner-private projection belongs only to the run that produced it.
+      if (runtime.session.id !== settlementSessionId || runtime.session.runId !== settlementRunId) {
+        return settledRunResult;
+      }
+
       telemetry.info("player.outcomeCommitted", {
-        sessionId: runtime.session?.id || null,
+        sessionId: settlementSessionId,
         clientId: player.clientId,
         profileId: player.profileId,
         outcome,
@@ -2709,8 +2831,11 @@ function commitPlayerOutcome(player, outcome) {
     })
     .catch((error) => {
       const errorCode = String(error?.code || "SETTLEMENT_FAILED");
+      if (runtime.session.id !== settlementSessionId || runtime.session.runId !== settlementRunId) {
+        return null;
+      }
       telemetry.error("player.outcomeSettlementFailed", {
-        sessionId: runtime.session?.id || null,
+        sessionId: settlementSessionId,
         clientId: player.clientId,
         profileId: player.profileId,
         outcome,
@@ -7149,6 +7274,7 @@ function expireDisconnectedBodyReservations() {
     });
     runtime.players.delete(clientId);
     runtime.playerAuthorities.delete(clientId);
+    runtime.rematchHandoffs.delete(clientId);
     removedAny = true;
   }
   if (removedAny) {
@@ -7518,15 +7644,15 @@ function multiplayerActionDiagnostics() {
 // Command executors deliberately accept parsed data and return plain results so
 // HTTP and the future stream adapter share one authority/mutation path.
 function executeInputCommand({ body = {}, identity = {} } = {}) {
-  if (runtime.session.status !== "running") {
-    return commandResponse(409, { ok: false, error: "No active session", session: runtime.session });
-  }
   if (hasCallerIdentityConflict(body)) {
     return commandResponse(400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
   }
   const message = normalizeInputMessage(body);
   const auth = authorizePlayerIdentity(identity, message);
   if (!auth.ok) return authorityErrorResponse(auth);
+  if (runtime.session.status !== "running") {
+    return commandResponse(409, { ok: false, error: "No active session", session: runtime.session });
+  }
   acceptCommand(auth);
   const player = runtime.players.get(auth.authority.playerId);
   if (!player) {
@@ -7576,15 +7702,15 @@ function executeInputCommand({ body = {}, identity = {} } = {}) {
 }
 
 function executeInventoryActionCommand({ body = {}, identity = {} } = {}) {
-  if (runtime.session.status !== "running") {
-    return commandResponse(409, { ok: false, error: "No active session", session: runtime.session });
-  }
   if (hasCallerIdentityConflict(body)) {
     return commandResponse(400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
   }
   const message = normalizeInventoryAction(body);
   const auth = authorizePlayerIdentity(identity, message);
   if (!auth.ok) return authorityErrorResponse(auth);
+  if (runtime.session.status !== "running") {
+    return commandResponse(409, { ok: false, error: "No active session", session: runtime.session });
+  }
   acceptCommand(auth);
   const player = runtime.players.get(auth.authority.playerId);
   if (!player) {
@@ -7772,6 +7898,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url?.startsWith("/snapshot")) {
       const url = new URL(req.url, `http://${HOST}:${PORT}`);
       const runId = url.searchParams.get("runId") || null;
+      if (runId && runId !== runtime.session.runId) {
+        sendJson(res, 409, {
+          ok: false,
+          code: "stale-run",
+          error: "Snapshot does not belong to the active run",
+          activeRunId: runtime.session.runId || null,
+        });
+        return;
+      }
       const reader = authorizeSnapshotReader(req, runId);
       if (!reader.ok) {
         sendAuthorityError(res, reader);
@@ -8148,6 +8283,77 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/session/rematch") {
+      const body = await readJson(req);
+      const permission = ensureHostAuthority(req, {
+        ...body,
+        playerId: body.playerId || body.requesterId,
+      });
+      if (!permission.ok) {
+        sendAuthorityError(res, permission);
+        return;
+      }
+      if (runtime.session.status !== "ended" || !runtime.session.crewResult) {
+        sendJson(res, 409, {
+          ok: false,
+          code: "rematch-not-ended",
+          error: "Rematch is only available after the crew result is terminal",
+        });
+        return;
+      }
+      const host = permission.authority ? runtime.players.get(permission.authority.playerId) : null;
+      if (!permission.authority || !host || host.connected !== true) {
+        sendJson(res, 403, {
+          ok: false,
+          code: "host-required",
+          error: "Only the connected session host can start a rematch",
+        });
+        return;
+      }
+      acceptCommand(permission);
+      const rematch = beginRematchSession();
+      sendJson(res, 200, {
+        ok: true,
+        previousRunId: rematch.previousRunId,
+        session: publicLobbySessionSnapshot(),
+        roomCode: runtime.privateRoomCode,
+        authority: publicAuthority(rematch.hostAuthority),
+        party: Array.from(runtime.players.values())
+          .filter((player) => !player.isAI)
+          .map(publicLobbyPlayerSnapshot),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/session/rematch/claim") {
+      const body = await readJson(req);
+      if (runtime.session.status !== "lobby") {
+        sendJson(res, 409, {
+          ok: false,
+          code: "rematch-unavailable",
+          error: "No staged rematch is waiting for an authority handoff",
+        });
+        return;
+      }
+      const handoff = authorizeRematchHandoff(req, body);
+      if (!handoff.ok) {
+        sendJson(res, handoff.status, {
+          ok: false,
+          code: handoff.code,
+          error: handoff.error,
+        });
+        return;
+      }
+      runtime.rematchHandoffs.delete(handoff.player.clientId);
+      sendJson(res, 200, {
+        ok: true,
+        session: publicLobbySessionSnapshot(),
+        authority: publicAuthority(handoff.authority),
+        player: publicLobbyPlayerSnapshot(handoff.player),
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/session/reset") {
       const body = await readJson(req);
       const permission = ensureHostAuthority(req, {
@@ -8373,6 +8579,7 @@ const server = http.createServer(async (req, res) => {
       }
       runtime.players.delete(clientId);
       runtime.playerAuthorities.delete(clientId);
+      runtime.rematchHandoffs.delete(clientId);
       telemetry.info("player.left", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, status: player.status });
       publishEvent("player.left", {
         clientId,

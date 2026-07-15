@@ -11,13 +11,13 @@ function newAuthoritySecret() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-function createMembershipAuthority({ runId, playerId, previous = null }) {
+function createMembershipAuthority({ runId, playerId, previous = null, rotateRun = false }) {
   const normalizedRunId = String(runId || "").trim();
   const normalizedPlayerId = String(playerId || "").trim();
   if (!normalizedRunId) throw new Error("Membership authority requires a runId");
   if (!normalizedPlayerId) throw new Error("Membership authority requires a playerId");
 
-  if (previous && previous.runId !== normalizedRunId) {
+  if (previous && previous.runId !== normalizedRunId && !rotateRun) {
     throw new Error("Membership authority cannot cross run boundaries");
   }
   if (previous && previous.playerId !== normalizedPlayerId) {
@@ -32,10 +32,10 @@ function createMembershipAuthority({ runId, playerId, previous = null }) {
     connectionId: newOpaqueId("connection"),
     connectionEpoch: Math.max(0, Number(previous?.connectionEpoch) || 0) + 1,
     commandCredential: newAuthoritySecret(),
-    lastCommandSeq: Math.max(0, Number(previous?.lastCommandSeq) || 0),
-    lastActionSeq: Math.max(0, Number(previous?.lastActionSeq) || 0),
-    lastSlingshotEdgeId: Math.max(0, Number(previous?.lastSlingshotEdgeId) || 0),
-    actionReceiptState: createActionReceiptState(previous?.actionReceiptState),
+    lastCommandSeq: rotateRun ? 0 : Math.max(0, Number(previous?.lastCommandSeq) || 0),
+    lastActionSeq: rotateRun ? 0 : Math.max(0, Number(previous?.lastActionSeq) || 0),
+    lastSlingshotEdgeId: rotateRun ? 0 : Math.max(0, Number(previous?.lastSlingshotEdgeId) || 0),
+    actionReceiptState: createActionReceiptState(rotateRun ? null : previous?.actionReceiptState),
   };
 }
 

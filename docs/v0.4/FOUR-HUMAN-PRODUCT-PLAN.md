@@ -133,7 +133,7 @@ P5 closes in this order:
    authority alive while connected crew members are reviewing results. **Live.**
 4. **P5D rematch:** host proposes a rematch that preserves party, seats, and
    leader while rotating run lineage, credentials, snapshots, events, and
-   readiness. Old-run commands must fail closed.
+   readiness. Old-run commands must fail closed. **Live.**
 5. **P5E controls:** host sees Rematch, guests see Waiting For Leader, and every
    player has an explicit Leave To Home action.
 
@@ -153,9 +153,8 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Continue with P5D rematch and P5E controls. Do not build rematch on the
-legacy `/session/reset`: it destroys the party and grants only the host a new
-join claim. Preserve the party while
+Continue with P5E controls. Do not build rematch on the legacy `/session/reset`:
+it destroys the party and grants only the host a new join claim. Preserve the party while
 creating a fresh run lineage, and retain explicit leave-to-home. Do not reopen
 hosting, costing, or high-count work.
 
