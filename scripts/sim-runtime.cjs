@@ -1439,6 +1439,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       coyoteUntil: 0,
       coyoteActive: false,
       lockTick: -1,
+      lockUntil: 0,
       releaseGhostUntil: 0,
       releaseGhost: null,
       lastPayoff: null,
@@ -3700,6 +3701,7 @@ function applyDebugPlayerState(player, body) {
     state.coyoteUntil = 0;
     state.coyoteActive = false;
     state.lockTick = -1;
+    state.lockUntil = 0;
     state.releaseGhostUntil = 0;
     state.releaseGhost = null;
     state.lastPayoff = null;
@@ -4616,6 +4618,7 @@ function ensurePlayerSlingshot(player) {
     coyoteUntil: 0,
     coyoteActive: false,
     lockTick: -1,
+    lockUntil: 0,
     releaseGhostUntil: 0,
     releaseGhost: null,
     lastPayoff: null,
@@ -4787,14 +4790,6 @@ function slingshotHullMods(player) {
   };
 }
 
-function vectorAngleDegrees(a, b) {
-  const aMag = Math.hypot(a.x, a.y);
-  const bMag = Math.hypot(b.x, b.y);
-  if (aMag <= 1e-9 || bMag <= 1e-9) return 0;
-  const cosine = Math.max(-1, Math.min(1, (a.x * b.x + a.y * b.y) / (aMag * bMag)));
-  return Math.acos(cosine) * 180 / Math.PI;
-}
-
 function slingshotAnchorTelemetry(state, prefix = "anchor") {
   const field = (name) => prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
   const id = state[field("anchorId")];
@@ -4830,7 +4825,7 @@ function buildSlingshotTelegraph(player) {
       locked: { x: state.lockedVX || 0, y: state.lockedVY || 0 },
       bendDegrees: state.bendDegrees || 0,
     } : null,
-    ownedArc: state.engaged ? {
+    ownedArc: state.engaged && state.phase === "arc" ? {
       anchor: activeAnchor,
       orbitDir: state.orbitDir || 0,
       arcRadians: state.arcRadians || 0,
@@ -4949,6 +4944,7 @@ function engagePlayerSlingshot(player, currentTime) {
   state.orbitDir = orbitDir;
   state.phase = "lock";
   state.lockTick = runtime.tick;
+  state.lockUntil = currentTime + SLINGSHOT_INTERNAL.lockTelegraphDurationSeconds;
   state.bendDegrees = locked.bendDegrees;
   state.arcRadians = 0;
   state.previousRadialX = radialNX;
@@ -5113,7 +5109,7 @@ function applyPlayerSlingshotForces(player, dt, input) {
 
   const radialNX = dx / dist;
   const radialNY = dy / dist;
-  if (state.lockTick !== runtime.tick && state.phase === "lock") state.phase = "arc";
+  if (runtime.simTime >= state.lockUntil && state.phase === "lock") state.phase = "arc";
   if (Math.hypot(state.previousRadialX, state.previousRadialY) > 0.5) {
     const radialDelta = signedAngle(
       { x: state.previousRadialX, y: state.previousRadialY },
