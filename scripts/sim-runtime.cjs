@@ -83,6 +83,13 @@ const {
   wrappedDelta,
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
+const {
+  beginForceLedger,
+  finalizeForceLedger,
+  recordForceDeltaV,
+  recordForceMutation,
+  setForceLedgerDt,
+} = require("./sim/force-ledger.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 
@@ -1866,6 +1873,7 @@ function buildSnapshotBody() {
       deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
       deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
       deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
+      forceLedger: player.forceLedger || null,
       lastInputSeq: player.lastInput.seq,
       lastInputBrake: player.lastInput.brake || 0,
       pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
@@ -6025,8 +6033,14 @@ function tickSim() {
   maybeCollapseRun();
   if (runtime.session.status !== "running") return;
 
+  const forceLedgers = new Map();
+  for (const player of runtime.players.values()) {
+    if (player.status === "alive") forceLedgers.set(player, beginForceLedger(player, dt, runtime.tick));
+  }
+
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
+    const forceLedger = forceLedgers.get(player);
 
     if (player.effectState.pulseCooldownRemaining > 0) {
       player.effectState.pulseCooldownRemaining = Math.max(0, player.effectState.pulseCooldownRemaining - dt);
@@ -6066,13 +6080,14 @@ function tickSim() {
       player.effectState.timeSlowRemaining > 0
         ? dt * SERVER_COMBAT.timeSlowScale
         : dt;
+    setForceLedgerDt(forceLedger, playerDt);
     // Tick control debuff (Swarm contact → sluggish controls)
     if (player.controlDebuff > 0) {
       const debuffDecay = player.brain ? player.brain.controlDebuffResist : 1.0;
       player.controlDebuff = Math.max(0, player.controlDebuff - playerDt * debuffDecay);
     }
     // Tick hull abilities before physics
-    tickHullAbilities(player, playerDt);
+    recordForceMutation(forceLedger, "impulse", player, () => tickHullAbilities(player, playerDt));
 
     const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
     const b = player.brain || BRAIN_DEFAULTS;
@@ -6083,14 +6098,16 @@ function tickSim() {
       controlMult,
       flowSample,
     });
+    recordForceDeltaV(forceLedger, "thrust", driveStep.thrustDeltaV);
+    recordForceDeltaV(forceLedger, "coupling", driveStep.couplingDeltaV);
     player.lastDeliveredThrustIntensity = driveStep.thrustIntensity;
 
-    applyWellGravity(player, playerDt);
+    recordForceMutation(forceLedger, "gravity", player, () => applyWellGravity(player, playerDt));
     if (player.status !== "alive") continue;
-    tickPlayerSlingshot(player, playerDt, input);
-    applyStarPush(player, playerDt, relevance.stars);
-    applyPlanetoidPush(player, playerDt, relevance.planetoids);
-    applyWaveRingPush(player, playerDt);
+    recordForceMutation(forceLedger, "impulse", player, () => tickPlayerSlingshot(player, playerDt, input));
+    recordForceMutation(forceLedger, "gravity", player, () => applyStarPush(player, playerDt, relevance.stars));
+    recordForceMutation(forceLedger, "gravity", player, () => applyPlanetoidPush(player, playerDt, relevance.planetoids));
+    recordForceMutation(forceLedger, "wave", player, () => applyWaveRingPush(player, playerDt));
     const movementStartWX = player.wx;
     const movementStartWY = player.wy;
     const brakeStep = applyPlayerBrakeAndIntegrate(player, input, playerDt, {
@@ -6099,16 +6116,21 @@ function tickSim() {
       thrustIntensity: driveStep.thrustIntensity,
       worldScale: runtime.session.worldScale,
     });
+    recordForceDeltaV(forceLedger, "thrust", brakeStep.thrustDeltaV);
+    recordForceDeltaV(forceLedger, "drag", brakeStep.dragDeltaV);
     player.lastDeliveredBrakeIntensity = brakeStep.brakeIntensity;
     const sweep = movementSweep(movementStartWX, movementStartWY, player);
-    applySweptWellContacts(player, playerDt, sweep);
+    recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
     if (player.status !== "alive") continue;
-    applyScavengerBump(player, relevance.scavengers, sweep);
+    recordForceMutation(forceLedger, "impulse", player, () => applyScavengerBump(player, relevance.scavengers, sweep));
 
     tickPlayerPickups(player, relevance.wrecks, sweep);
     tickExtraction(player, extractConfirm);
     if (player.status !== "alive") continue;
     tickPlayerSignal(player, playerDt);
+  }
+  for (const [player, ledger] of forceLedgers) {
+    player.forceLedger = finalizeForceLedger(ledger, player);
   }
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");

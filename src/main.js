@@ -3568,6 +3568,9 @@ function getHullSlingshotMods() {
 }
 
 function collectThreeSceneState() {
+  const authorityPlayer = remoteAuthorityActive
+    ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+    : null;
   const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
@@ -3585,6 +3588,7 @@ function collectThreeSceneState() {
       facing: ship.facing,
       hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
       deltaVRatio: ship.getDeltaVRatio?.() ?? 1,
+      forceLedger: authorityPlayer?.forceLedger || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
     } : null,
     wells: (wellSystem?.wells || []).map((well, index) => ({

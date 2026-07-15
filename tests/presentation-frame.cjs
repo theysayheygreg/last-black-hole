@@ -25,7 +25,22 @@ async function run() {
       cameraView: 3,
       phase: 'playing',
       scene: {
-        ship: { id: 'pilot', wx: 2.95, wy: 0.2, vx: 1.2, vy: -0.4, facing: 0.25, deltaVRatio: 0.6, hullType: 'breacher', thrusting: true },
+        ship: {
+          id: 'pilot', wx: 2.95, wy: 0.2, vx: 1.2, vy: -0.4, facing: 0.25,
+          deltaVRatio: 0.6, hullType: 'breacher', thrusting: true,
+          forceLedger: {
+            tick: 42,
+            dt: 0.1,
+            unit: 'm/s^2',
+            vectors: {
+              thrust: { x: 2500, y: 0 }, coupling: { x: -400, y: 100 },
+              gravity: { x: -200, y: 300 }, wave: { x: 0, y: 0 },
+              impulse: { x: 0, y: 0 }, drag: { x: -50, y: 10 },
+            },
+            total: { x: 1850, y: 410 },
+            deltaV_mps: { x: 185, y: 41 },
+          },
+        },
         slingshot: {
           affordance: { wx: 0.05, wy: 0.2, range: 0.22, type: 'star' },
           engaged: null,
@@ -55,6 +70,11 @@ async function run() {
     assert(frame.localPlayer.movement.velocity.speed > 1.2, 'Expected renderer-neutral movement state');
     assert(frame.localPlayer.hull.type === 'breacher' && frame.localPlayer.movement.pathState === 'thrusting',
       'Expected normalized hull and path presentation state');
+    assert(frame.localPlayer.forceLedger.tick === 42, 'Expected authoritative force-ledger tick');
+    assert(frame.localPlayer.forceLedger.vectors.thrust.magnitude === 2500,
+      'Expected force vectors transported as presentation facts');
+    assert(frame.localPlayer.forceLedger.total.x === 1850 && frame.localPlayer.forceLedger.unit === 'm/s^2',
+      'Expected normalized force-ledger total and human unit');
     assert(frame.localPlayer.slingshot.affordance.kind === 'star', 'Expected slingshot affordance');
     assert(frame.world.wrecks[0].hint.category === 'salvage', 'Expected semantic wreck hint');
     assert(frame.world.portals[0].hint.roleColor === 'routeCyan', 'Expected cyan route hint');

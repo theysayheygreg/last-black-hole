@@ -3,6 +3,7 @@
 // gameplay callbacks, so Three and future native renderers share one boundary.
 
 import { CAMERA_VIEW } from '../coords.js';
+import { FORCE_LEDGER_CLASSES } from '../ruler-contract.js';
 import {
   PRESENTATION_PALETTE_ID,
   PRESENTATION_ROLE_HINTS,
@@ -55,6 +56,26 @@ function velocity(source = {}) {
   return Object.freeze({ x, y, speed: Math.hypot(x, y) });
 }
 
+function forceVector(source = {}) {
+  const x = finite(source.x);
+  const y = finite(source.y);
+  return Object.freeze({ x, y, magnitude: Math.hypot(x, y) });
+}
+
+function forceLedger(source = null) {
+  if (!source) return null;
+  const vectors = {};
+  for (const name of FORCE_LEDGER_CLASSES) vectors[name] = forceVector(source.vectors?.[name]);
+  return Object.freeze({
+    tick: Math.max(0, Math.floor(finite(source.tick))),
+    dt: Math.max(0, finite(source.dt)),
+    unit: text(source.unit, 'm/s^2'),
+    vectors: Object.freeze(vectors),
+    total: forceVector(source.total),
+    deltaV: forceVector(source.deltaV_mps),
+  });
+}
+
 function hull(source = {}) {
   return Object.freeze({
     type: text(source.hullType || source.shipType, 'drifter').toLowerCase(),
@@ -104,6 +125,7 @@ function normalizeLocalPlayer(source = null, scene = {}) {
       pathState: pathState(source, sling),
     }),
     hull: hull(source),
+    forceLedger: forceLedger(source.forceLedger),
     slingshot: Object.freeze({
       engaged: Boolean(source.slingshotEngaged || sling.engaged),
       affordance: anchor(sling.affordance),
