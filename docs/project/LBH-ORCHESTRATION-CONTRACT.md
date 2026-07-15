@@ -6,8 +6,10 @@ authority; the skill supplies the reusable producer workflow.
 
 Primary Sol also owns the installed LBH skill portfolio: Forge, harness,
 delegation, Three lifecycle, social screenshot, and public update passes. It
-routes them when useful, keeps them aligned with this contract, and avoids
-running overlapping passes as ceremony.
+may also invoke Maestro's production or quality-review specialist lane for
+coordinated visual, audio, copy, motion, and thematic judgment. It routes these
+lanes when useful, keeps them aligned with this contract, and avoids running
+overlapping passes as ceremony.
 
 Primary Sol owns cross-version merges and RC candidate selection. Workstream
 Sols produce commits; they do not promote or merge version lines independently.
@@ -53,6 +55,8 @@ Greg
             -> CI Lunas x0-3
        -> Orrery Review Intake x0-1
             -> finding receipts only
+       -> Maestro Specialist Intake x0-1
+            -> one deduplicated production or acceptance packet
        -> Primary Sol accept / defer / fix-forward routing
 ```
 
@@ -106,6 +110,7 @@ progress belongs in commits and task receipts, not status churn here.
 | v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from the stable product branch | Complete the bounded rematch/product slice and return a committed receipt |
 | v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3.1-movement-truth` in `/private/tmp/lbh-v031-movement-truth` | Integrate bounded movement-truth slices and return committed receipts |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
+| Maestro Specialist Intake | Primary Sol routes; Maestro executes | Pinned player-facing slices across version lines | Production and quality-review lanes are available from `#orb-assistant` message `1526773577079328930`; invoke only when a coherent slice warrants multi-craft judgment |
 
 Existing Orrery fix/review tasks under the v0.3 task remain descendants of the
 v0.3 workstream. They do not form a third implementation branch.
@@ -256,6 +261,51 @@ Primary Sol. Primary Sol presents a checkpoint to Greg in this task before
 acting. After that checkpoint, accepted low-risk findings may move forward;
 design/product choices wait for Greg. Unaccepted suggestions remain review
 input rather than silently becoming requirements.
+
+### Maestro Specialist Intake
+
+Primary Sol may invoke one of Maestro's two LBH specialist lanes against an
+exact repository, branch, commit, implemented slice, and optional artifact set:
+
+- `lbh-specialist-production-pass` finds only new visual, audio, copy, motion,
+  thematic, and cross-lane gaps introduced or exposed by the pinned delta.
+- `lbh-specialist-quality-review` judges the actual reachable implementation
+  with fresh reviewers and returns `pass`, `pass with fix-forward`, or
+  `reject/rework` with measurable evidence.
+
+The live invocation contract and validation receipt are in `#orb-assistant`,
+Discord message `1526773577079328930`. Use this packet:
+
+```text
+@Maestro invoke <lbh-specialist-production-pass | lbh-specialist-quality-review>
+Repo: /Users/theysayheygreg/clawd/projects/last-black-hole
+Branch: <exact branch>
+Commit: <exact SHA>
+Implemented slice: <short feature boundary>
+Artifacts: <optional paths>
+Return: one deduplicated implementation or acceptance packet to Forge.
+```
+
+Maestro discovers the governing MDs, then runs fresh Palette, Timbre,
+Troubadorb, and Orrery sessions; optional specialists require a delta-specific
+reason. Narrow specialist-owned fixes may land in isolated worktrees with
+committed evidence. Gameplay authority, persistence, networking, shared
+architecture, cross-lane integration, and final gates remain with Forge and
+the owning Workstream Sol.
+
+Use Maestro only for coherent player-facing slices where coordinated craft
+judgment changes the next step. Backend-only authority work, routine
+correctness, CI-only checkpoints, and tiny non-player-facing changes stay with
+the owning workstream. Do not dispatch a standalone Orrery packet over the same
+question while Maestro is active because both Maestro lanes already include a
+fresh Orrery synthesis. Standalone Orrery remains the E2/E3 route for strategic
+design forks, pillar or architecture tension, cross-version contracts, and
+other questions whose center is not multi-craft production quality.
+
+Primary Sol accepts, defers, or routes the returned packet before any finding
+becomes implementation work. Keep at most one live Maestro lane per workstream;
+production and quality review are useful checkpoints, not mandatory per-commit
+ceremony.
 
 ## Model And Token Routing
 

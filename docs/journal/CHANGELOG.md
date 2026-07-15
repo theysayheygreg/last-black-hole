@@ -13,6 +13,17 @@ Version changelogs:
 - [`v0.3`](../v0.3/CHANGELOG.md)
 - [`v0.4`](../v0.4/CHANGELOG.md) — current active multiplayer line
 
+## 2026-07-14 — Maestro specialist lanes joined Primary Sol routing
+
+- Added pinned production and quality-review specialist lanes for coordinated
+  Palette, Timbre, Troubadorb, and Orrery judgment over coherent player-facing
+  slices.
+- Kept narrow specialist fixes isolated while gameplay authority, persistence,
+  networking, shared architecture, integration, and final gates remain with
+  Forge and the owning workstream.
+- Prevented duplicate review ceremony: a Maestro lane already includes Orrery;
+  standalone Orrery stays reserved for distinct E2/E3 strategic questions.
+
 ## 2026-07-14 — asynchronous feature delivery and Primary Sol routing
 
 - Feature workers now run only changed-contract proof, commit a durable
