@@ -54,11 +54,16 @@ const path = require('path');
 
   assert(!main.includes('function prompt('), 'Legacy raw prompt helper must be removed');
   assert(!main.includes('ctaLabel('), 'Player-facing canvas code must not assemble raw CTA text');
-  const homeSource = main.slice(main.indexOf('// === SHIP subscreen ==='), main.indexOf('// === CHRONICLE subscreen ==='));
+  const homeSource = main.slice(main.indexOf('// === HOME SCREEN ==='), main.indexOf('// === MAP SELECT SCREEN ==='));
   assert(homeSource.includes("actionDescriptor('confirm', currentPromptOptions())"), 'Home loadout/vault actions must resolve shared descriptors');
   assert(homeSource.includes('drawActionPrompt('), 'Home loadout/vault/rig actions must draw shared graphical prompts');
+  assert(homeSource.includes("actionDescriptor('tabs', homePromptOptions)"), 'Home launch prompt must resolve the active-device descriptor');
+  assert(homeSource.includes('maxWidth: rightPanel.w - 48'), 'Home launch prompt must stay within the right panel width');
+  assert(!homeSource.includes('tab to LAUNCH when ready'), 'Home launch prompt must not emit raw Tab copy');
   assert(main.includes("action: actionDescriptor('inventory', currentPromptOptions())"), 'Cargo-full HUD must carry a shared inventory action');
   assert(hudSource.includes('actionCaptionMarkup(options.action.actionId'), 'HUD warning actions must render shared glyph markup');
+  assert(hudSource.includes("affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)"), 'HUD salvage prompt must use one active-device caption');
+  assert(!hudSource.includes('hold space for salvage'), 'HUD salvage prompt must not emit raw Space copy');
   const authority = main.slice(main.indexOf("const authorityY ="), main.indexOf('drawCommandButtonMotion(ctx, {', main.indexOf("const authorityY =")));
   assert(authority.includes('authorityActions'), 'Map authority prompt must build graphical actions');
   assert(authority.includes('drawActionFooter('), 'Map authority prompt must use the shared action footer');

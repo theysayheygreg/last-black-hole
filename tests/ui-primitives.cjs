@@ -79,6 +79,7 @@ async function run() {
   const sourcePath = path.join(ROOT, 'src', 'ui', 'canvas-primitives.js');
   const source = fs.readFileSync(sourcePath, 'utf8');
   const mod = await import(pathToFileURL(sourcePath).href);
+  const prompts = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'input-prompts.js')).href);
 
   await runner.run('Primitive module stays UI-only and stateless', async () => {
     assert(source.includes("from './design-tokens.js'"), 'Expected token import');
@@ -137,6 +138,22 @@ async function run() {
     assert(action, 'Expected clean button action label');
     assert(ctx.calls.some((call) => call[0] === 'arcTo' || (call[0] === 'rect' && call[3] >= 24)), 'Expected a drawn keycap glyph below the button');
     assert(!labels.some((call) => call[1] === 'SPACE CONTINUE'), 'Input prompt must be graphical, not plain fused text');
+  });
+
+  await runner.run('Action prompt primitive renders the resolved device glyph', async () => {
+    const deckContext = createRecordingContext();
+    const deckDescriptor = prompts.actionDescriptor('tabs', { deck: true });
+    mod.drawActionPrompt(deckContext, { x: 20, y: 10, w: 150, h: 28 }, deckDescriptor, { verb: 'launch when ready' });
+    const deckLabels = deckContext.calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
+    assert(deckLabels.includes('L1/R1'), 'Deck prompt must render the resolved controller glyph label');
+    assert(deckLabels.includes('LAUNCH WHEN READY'), 'Deck prompt copy must remain separate from the glyph');
+    assert(!deckLabels.includes('Q/E'), 'Deck prompt must not render the keyboard label');
+
+    const keyboardContext = createRecordingContext();
+    const keyboardDescriptor = prompts.actionDescriptor('tabs', { mode: 'keyboard' });
+    mod.drawActionPrompt(keyboardContext, { x: 20, y: 10, w: 150, h: 28 }, keyboardDescriptor, { verb: 'launch when ready' });
+    const keyboardLabels = keyboardContext.calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
+    assert(keyboardLabels.includes('Q/E'), 'Keyboard prompt must keep the shared descriptor label');
   });
 
   const allPassed = runner.summary();

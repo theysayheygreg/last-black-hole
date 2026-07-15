@@ -60,6 +60,10 @@ async function run() {
     excludes(source, "space/A", "Player-facing code must use centralized prompt helpers");
     excludes(source, "[Tab]", "Player-facing code must not hardcode Tab inventory prompts");
   }
+  excludes(main, "tab to LAUNCH when ready", "Home launch prompt must not hardcode Tab copy");
+  excludes(hud, "hold space for salvage", "HUD salvage prompt must not hardcode Space copy");
+  includes(main, "actionDescriptor('tabs', homePromptOptions)", "Home launch prompt must use the active-device descriptor");
+  includes(hud, "affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)", "HUD salvage prompt must use one shared active-device caption");
   includes(main, "currentPromptOptions()", "Canvas overlays must route through prompt options");
   includes(hud, "affordanceCaption('inventory'", "HUD cargo prompt must use centralized input labels");
   includes(results, "actionDescriptor('confirm'", "Results overlay must use centralized action descriptors");

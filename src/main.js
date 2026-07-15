@@ -6022,8 +6022,8 @@ function gameLoop(now) {
     } else {
       drawSectionLabel(ctx, 'next operation', rightPanel.x + 24, sideY + 8, { role: 'salvage', alpha: 0.82 });
       drawActionFooter(ctx, rightPanel.x + 24, sideY + 18, [
-        { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'to launch' },
-      ], { alpha: 0.78 });
+        { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'launch when ready' },
+      ], { alpha: 0.78, maxWidth: rightPanel.w - 48 });
     }
     sideY += 82;
     drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM`, sidebarX, sideY, { labelWidth: 136, valueRole: 'salvage' });
@@ -6054,9 +6054,11 @@ function gameLoop(now) {
       alpha: 0.86,
     });
     sideY += 52;
-    ctx.font = canvasFont(11);
-    ctx.fillStyle = roleColor('muted', 0.74);
-    ctx.fillText(fitUiText(ctx, launchActive ? 'map briefing opens on confirm' : 'tab to LAUNCH when ready', rightPanel.w - 42), sidebarX, sideY);
+    if (launchActive) {
+      ctx.font = canvasFont(11);
+      ctx.fillStyle = roleColor('muted', 0.74);
+      ctx.fillText(fitUiText(ctx, 'map briefing opens on confirm', rightPanel.w - 42), sidebarX, sideY);
+    }
     drawActionFooter(ctx, sidebarX, rightPanel.y + rightPanel.h - 72, [
       { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'tabs' },
       { descriptor: actionDescriptor('select', homePromptOptions), verb: 'select' },

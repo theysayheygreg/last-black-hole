@@ -516,12 +516,13 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   if (inv) {
     const count = inv.cargoCount;
     const max = inv.cargoMax;
+    const inventoryCaption = affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions);
     _salvageCountEl.textContent = count > 0 ? `◈ cargo ${count}/${max}` : `◈ cargo 0/${max}`;
     if (count > 0) {
       const totalValue = inv.getCargoValue();
-      _salvageValueEl.innerHTML = `<span>value ${totalValue}</span><span class="hud-action-caption">${affordanceCaption('inventory', 'inventory', _promptOptions)}</span>`;
+      _salvageValueEl.innerHTML = `<span>value ${totalValue}</span><span class="hud-action-caption">${inventoryCaption}</span>`;
     } else {
-      _salvageValueEl.innerHTML = `<span>hold space for salvage</span><span class="hud-action-caption">${affordanceCaption('inventory', 'inventory', _promptOptions)}</span>`;
+      _salvageValueEl.innerHTML = `<span class="hud-action-caption">${inventoryCaption}</span>`;
     }
     // Warn when nearly full
     if (count >= max) {
