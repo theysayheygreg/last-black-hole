@@ -263,6 +263,13 @@ input rather than silently becoming requirements.
 - No child promotes itself to Sol `high`, `xhigh`, `max`, or `ultra`, spawns
   another Sol, or otherwise exceeds Primary Sol's model/cost ceiling. Luna
   `xhigh` is the approved deep-reasoning child lane.
+- Every Codex task directly orchestrated by Primary Sol counts as delegation
+  depth 0, regardless of its UI parentage. A depth-0 task may spawn one parallel
+  worker layer at depth 1; depth-1 workers may not spawn again.
+- Workstream Sols use Luna `high` or the approved Luna `xhigh` risk lane for
+  depth-1 workers. A directly orchestrated Luna may spawn Luna at its own effort
+  level. Depth-1 scopes stay disjoint, and the depth-0 task owns integration and
+  the final receipt.
 - A Luna prompt names the exact outcome, branch/base, owned files, preserved
   boundaries, committed deliverable, focused proof, and stop conditions.
 - Do not ask a Luna to familiarize itself with the whole repo, write a broad
