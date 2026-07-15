@@ -29,7 +29,8 @@ const PRODUCTION_PARAMS = {
     zeroDistanceThreshold: 0.0001,
   },
   wreck: {
-    strength: 0.0045,
+    referenceDriftSpeed: 0.003,
+    dragRate: 1.5,
     referenceDistance: 1,
     minimumDistance: 0.02,
     falloff: 1.5,
@@ -44,7 +45,10 @@ function oldMagnitude(bodyClass, dist) {
   if (dist < params.zeroDistanceThreshold) return 0;
   if (params.rangeMode !== "unbounded" && dist > params.maxRange) return 0;
   const safeDist = Math.max(dist, params.minimumDistance);
-  const base = params.strength * WELL.mass
+  const strength = params.referenceDriftSpeed === undefined
+    ? params.strength
+    : params.referenceDriftSpeed * params.dragRate;
+  const base = strength * WELL.mass
     / Math.pow(safeDist / params.referenceDistance, params.falloff);
   return params.rangeMode === "linear"
     ? base * (1 - dist / params.maxRange)

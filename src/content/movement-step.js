@@ -1,7 +1,8 @@
 import { MOVEMENT } from './movement.js';
+import { dragFactorFromHalfLife } from './tuning.js';
 
 export const MOVEMENT_INPUT = Object.freeze({
-  baseDragPer60HzFrame: MOVEMENT.player.baseDragPer60HzFrame,
+  coastHalfLifeSeconds: MOVEMENT.player.coastHalfLifeSeconds,
   fluidCoupling: MOVEMENT.player.fluidCoupling,
   brakeThrustScale: MOVEMENT.player.brakeThrustScale,
   brakeFuelScale: MOVEMENT.player.brakeFuelScale,
@@ -112,8 +113,7 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   const beforeDragVY = player.vy;
   applyPlayerDeltaVRegen(player, dt, thrustIntensity > 0.01 || brakeIntensity > 0.01, inputConfig);
   const dragScale = Number(brain.dragScale) || 1;
-  const dragPerFrame = Math.max(0, Math.min(0.95, inputConfig.baseDragPer60HzFrame * dragScale));
-  const dragFactor = Math.pow(1 - dragPerFrame, dt * 60);
+  const dragFactor = dragFactorFromHalfLife(inputConfig.coastHalfLifeSeconds, dt, dragScale);
   player.vx *= dragFactor;
   player.vy *= dragFactor;
   clampPlayerSpeed(player, inputConfig);

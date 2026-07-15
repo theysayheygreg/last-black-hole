@@ -1778,21 +1778,14 @@ function startGame(map, seed = null) {
     scavengerSystem.spawn(sx, sy, archetype);
   }
 
-  // Apply upgrade multipliers from profile to CONFIG at run start.
-  // We mutate CONFIG directly (not ship properties) so all systems that read CONFIG
-  // see the upgraded values. CONFIG reverts to defaults via revertSceneOverrides()
-  // at the start of the next loadScene().
-  //
-  // Per-rank multipliers: 15% thrust per rank, 10% coupling, -12% drag (lower = less friction).
-  // These are intentionally modest — rank 3 gives ~45% thrust boost, not 2×.
+  // Apply the profile's client-visible movement multipliers at run start.
+  // Authority movement owns drag through the shared PlayerBrain contract.
   const prof = profileManager.active;
   if (prof) {
     const thrustMult = 1 + prof.upgrades.thrust * 0.15;
     CONFIG.ship.thrustAccel *= thrustMult;
     const couplingMult = 1 + prof.upgrades.coupling * 0.10;
     CONFIG.ship.fluidCoupling *= couplingMult;
-    const dragMult = 1 - prof.upgrades.drag * 0.12;
-    CONFIG.ship.drag *= dragMult;
   }
 
   gamePhase = 'playing';

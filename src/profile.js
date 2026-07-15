@@ -143,7 +143,7 @@ export const UPGRADE_TRACKS = {
   thrust:   { label: 'thrust',   desc: 'ship acceleration',          statKey: 'ship.thrustAccel', multPerRank: 0.15 },
   hull:     { label: 'hull',     desc: 'well contact grace period',  statKey: null,               multPerRank: 0 },
   coupling: { label: 'coupling', desc: 'fluid current influence',    statKey: 'ship.fluidCoupling', multPerRank: 0.10 },
-  drag:     { label: 'drag',     desc: 'velocity damping (lower)',   statKey: 'ship.drag',        multPerRank: -0.12 },
+  drag:     { label: 'drag',     desc: 'velocity damping (lower)',   statKey: null,              multPerRank: -0.12 },
   sensor:   { label: 'sensor',   desc: 'detection range',            statKey: null,               multPerRank: 0 },
   vault:    { label: 'vault',    desc: 'storage capacity',           statKey: null,               multPerRank: 0 },
 };

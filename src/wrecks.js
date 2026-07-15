@@ -7,6 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { gravityStrengthFromReferenceDriftSpeed } from './content/tuning.js';
 import { worldToFluidUV, worldToScreen, worldDistance, worldDirectionTo, shouldCull, uvScale, wrapWorld } from './coords.js';
 import { wellGravityVector } from './physics.js';
 import { applyWreckAgeValue, generateLoot, wreckAgeValueMultiplier } from './items.js';
@@ -118,7 +119,7 @@ export class WreckSystem {
           const direction = worldDirectionTo(wreck.wx, wreck.wy, well.wx, well.wy);
           const gravity = wellGravityVector('wreck', {
             direction,
-            strength: cfg.driftStrength,
+            strength: gravityStrengthFromReferenceDriftSpeed(cfg.referenceDriftSpeed, cfg.dragRate),
             mass: well.mass,
             falloff: cfg.driftFalloff ?? 1.5,
             maxRange: driftMaxRange,
@@ -138,7 +139,7 @@ export class WreckSystem {
         // Drift mode (1.5): lower drag so wrecks sustain slow drift toward wells.
         // Ejection mode (2.45): higher drag so dropped items decelerate quickly and
         // stop near where they were dropped (responsive "I put it here" feel).
-        const dragRate = cfg.driftEnabled ? (cfg.driftDrag ?? 1.5) : 2.45;
+        const dragRate = cfg.driftEnabled ? (cfg.dragRate ?? 1.5) : 2.45;
         const dragFactor = Math.exp(-dragRate * dt);
         wreck.vx *= dragFactor;
         wreck.vy *= dragFactor;

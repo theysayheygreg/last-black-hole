@@ -24,3 +24,7 @@
 ## 2026-07-15
 
 - X-D measured current cruise and Breacher Burn travel at live profile dt for the 5x5, 15x15, and 25x25 registry, including raw runs, authority read radii, and a derived decisions-per-minute proxy; no gameplay constants changed.
+- X-A completed the bounded config red-flag audit: movement drag, wreck drift,
+  and signal rates now use readable units with exact parity conversions; dead
+  client knobs were removed. The existing per-player `timeSlow` path remains
+  flagged for Greg under the durable "never per-player time" ruling.

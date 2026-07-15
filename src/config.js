@@ -37,21 +37,12 @@ export const CONFIG = {
   },
 
   ship: {
+    coastHalfLifeSeconds: MOVEMENT.player.coastHalfLifeSeconds, // Seconds for coasting speed to halve.
     thrustAccel: MOVEMENT.player.thrustAccel, // Canonical world-units/s² baseline.
     fluidCoupling: MOVEMENT.player.fluidCoupling, // Lerp rate toward fluid velocity (per second). 0 = ship ignores
                              // currents entirely. 1+ = fluid rider — currents carry you.
                              // Clamped to max 0.5 per frame to prevent velocity teleport.
     turnRate: 360,            // deg/s rotation toward mouse/stick. 360 = snappy, 120 = sluggish.
-    drag: MOVEMENT.player.baseDragPer60HzFrame, // Fraction removed per 60 Hz reference frame.
-                             // Applied as exponential damping so lower render/sim
-                             // cadences keep the same stopping feel.
-                             // Reduced from 0.06 — space drag should be near-zero
-                             // (no atmosphere, no gas, no friction). The remaining
-                             // 0.015 is a soft tax that keeps a player from
-                             // accelerating to infinity from currents/slingshots
-                             // alone, but coasting actually preserves momentum
-                             // long enough for conservation-of-speed to be
-                             // playable.
     maxSpeedWorld: MOVEMENT.player.maxSpeedWorld, // Hard cap in world-units/sec.
                              // Defensive — slingshot chains + favorable currents
                              // can otherwise compound into camera-breaking
@@ -176,7 +167,6 @@ export const CONFIG = {
     shimmer: 3.0,             // Quantum fluctuation probability. Controls what fraction of cells
                              // spontaneously blink per frame. Higher = more cells twinkle.
                              // 0 = dead static, 3 = rare sparkle, 6 = busy.
-    colorTemperature: 0.0,    // Unused. Reserved for global color shift.
     dirThreshold: 0.01,       // Speed below this = isotropic chars (world-equivalent units)
     dirBlendRange: 0.03,      // Speed range where directional glyphs emerge through shimmer.
   },
@@ -318,7 +308,6 @@ export const CONFIG = {
     gamepadBigAngle: 15,      // Degrees — changes above this get zero smoothing (instant flick).
                               // Between small and big: linear blend.
 
-    gamepadTurnRate: 360,     // Stick turn rate in deg/s (not currently used — facing is direct from stick).
     triggerThreshold: 0.05,   // Trigger activation threshold (0-1). Prevents ghost input.
     // Brake is now a reverse-thrust: instead of adding drag, it applies
     // thrust in the opposite-of-facing direction at brakeThrustScale of
@@ -341,10 +330,10 @@ export const CONFIG = {
     vaultGlow: [0.06, 0.05, 0.02],     // brighter gold for vaults
     // Drift — wrecks fall toward wells. See docs/design/DRIFT.md.
     driftEnabled: true,
-    driftStrength: 0.08,          // fraction of well pull strength (~10-15% of ship gravity)
+    referenceDriftSpeed: 0.05333333333333334, // world-units/s at 1 wu from a mass-1 well after drag
     driftFalloff: 1.5,            // inverse-power falloff (matches well gravity curve)
     driftMaxRange: 0.8,           // world-units — no drift beyond this distance
-    driftDrag: 1.5,               // velocity damping rate (higher = more sluggish)
+    dragRate: 1.5,                // per-second velocity decay rate (higher = more sluggish)
     driftTerminalSpeed: 0.04,     // world-units/s max drift speed
   },
 
@@ -419,13 +408,6 @@ export const CONFIG = {
     globalIntensity: 1.0,        // Master visual gain for event-driven Three effects.
     particleBudget: 350,         // Default budget from THREE-VFX-PASS-PLAN.md; rich/capture are opt-in.
     titleCorruption: true,       // Title glyph embers and scan splinters behind the clean wordmark.
-    shipMotion: true,            // Future: thrust/brake VFX. Placeholder keeps config shape stable.
-    portalSparks: true,          // Future: portal collapse/extraction VFX.
-    pickupGlints: true,          // Future: salvage/pickup VFX.
-    inhibitorFaults: true,       // Future: Inhibitor-owned screen faults.
-    nearCameraAtmosphere: true,  // Future: sparse foreground flecks.
-    debugBounds: false,
-    freezeSeed: false,
   },
 
   ui: {

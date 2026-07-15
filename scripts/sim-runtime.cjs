@@ -20,6 +20,9 @@ const {
   hashSeededSea,
 } = require("./sim/seeded-sea.cjs");
 const { decayWaveAmplitude, WAVE_HALF_LIFE_SECONDS } = require("./sim/event-wave.cjs");
+const {
+  signalFractionPerSecond,
+} = require("./sim/config-contracts.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PUBLIC_HULL_IDS,
@@ -324,7 +327,7 @@ const SLINGSHOT_SERVER = Object.freeze({
 });
 const SIGNAL_CONFIG = {
   // Generation rates (per second for continuous, instant for spikes)
-  thrustBaseRate: 0.005,
+  thrustBasePercentPerSecond: 0.5,
   thrustOppositionMult: 2.0,
   lootSpikeT1: 0.06,
   lootSpikeT2: 0.10,
@@ -336,14 +339,14 @@ const SIGNAL_CONFIG = {
   // have per-type bumpSignal values tuned to their gameplay role.
   // extractionRate removed — extraction is instant (no charge time), so continuous
   // signal generation during extraction never fires. If extraction gains a charge
-  // period, re-add at 0.003/s.
-  wellProximityRate: 0.002,
+  // period, re-add at 0.3%/s.
+  wellProximityPercentPerSecond: 0.2,
   wellProximityDist: 0.30,
-  coastRate: 0.001,
+  coastPercentPerSecond: 0.1,
   // Decay rates (per second)
-  decayBase: 0.025,
-  decayWreckWake: 0.040,
-  decayAccretionShadow: 0.050,
+  decayBasePercentPerSecond: 2.5,
+  decayWreckWakePercentPerSecond: 4.0,
+  decayAccretionShadowPercentPerSecond: 5.0,
   // Thresholds
   ghostMax: 0.15,
   whisperMax: 0.35,
@@ -3040,7 +3043,7 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
 
     wreck.vx += ax * dt;
     wreck.vy += ay * dt;
-    const dragFactor = Math.exp(-1.5 * dt);
+    const dragFactor = Math.exp(-WELL_GRAVITY_PARAMS.wreck.dragRate * dt);
     wreck.vx *= dragFactor;
     wreck.vy *= dragFactor;
 
@@ -4437,17 +4440,17 @@ function tickPlayerSignal(player, dt) {
       // alignment: -1 (fighting) to +1 (surfing). Scale opposition: 1.0 (surfing) to 3.0 (fighting)
       oppositionMult = 1.0 + Math.max(0, -alignment) * (cfg.thrustOppositionMult - 1.0);
     }
-    generation += cfg.thrustBaseRate * oppositionMult * deliveredThrust;
+    generation += signalFractionPerSecond(cfg.thrustBasePercentPerSecond) * oppositionMult * deliveredThrust;
   } else if (speed > 0.001) {
     // Coasting — minimal signal
-    generation += cfg.coastRate;
+    generation += signalFractionPerSecond(cfg.coastPercentPerSecond);
   }
 
   // Well proximity — near wells is noisy
   for (const well of runtime.mapState.wells) {
     const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
     if (dist < cfg.wellProximityDist) {
-      generation += cfg.wellProximityRate;
+      generation += signalFractionPerSecond(cfg.wellProximityPercentPerSecond);
       break; // only count once
     }
   }
@@ -4473,14 +4476,14 @@ function tickPlayerSignal(player, dt) {
   // --- Decay ---
   let decay = 0;
   if (!isThrusting) {
-    decay = cfg.decayBase;
+    decay = signalFractionPerSecond(cfg.decayBasePercentPerSecond);
 
     // Enhanced decay in wreck wake zones
     for (const wreck of runtime.mapState.wrecks) {
       if (wreck.looted) continue;
       const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
       if (dist < 0.15) {
-        decay = cfg.decayWreckWake;
+        decay = signalFractionPerSecond(cfg.decayWreckWakePercentPerSecond);
         break;
       }
     }
@@ -4489,7 +4492,7 @@ function tickPlayerSignal(player, dt) {
     for (const well of runtime.mapState.wells) {
       const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
       if (dist < 0.25) {
-        decay = Math.max(decay, cfg.decayAccretionShadow);
+        decay = Math.max(decay, signalFractionPerSecond(cfg.decayAccretionShadowPercentPerSecond));
         break;
       }
     }
