@@ -10,11 +10,8 @@ async function run() {
   const survey = await import(pathToFileURL(path.join(ROOT, 'src/ui/map-select-survey.js')).href);
   const layout = await import(pathToFileURL(path.join(ROOT, 'src/ui/layout-contract.js')).href);
   const tokens = await import(pathToFileURL(path.join(ROOT, 'src/ui/design-tokens.js')).href);
-  const maps = await Promise.all([
-    import(pathToFileURL(path.join(ROOT, 'src/maps/shallows-3x3.js')).href),
-    import(pathToFileURL(path.join(ROOT, 'src/maps/expanse-5x5.js')).href),
-    import(pathToFileURL(path.join(ROOT, 'src/maps/deep-field-10x10.js')).href),
-  ]);
+  const mapLoader = await import(pathToFileURL(path.join(ROOT, 'src/maps/playable-map-loader.js')).href);
+  const maps = mapLoader.PLAYABLE_MAPS.map(({ map }) => ({ MAP: map }));
 
   const briefing = { signature: { id: 'test-signal', name: 'Test Signal' } };
   const previews = maps.map(({ MAP }, index) => survey.buildSurveyPreview(MAP, briefing, 1000 + index));
