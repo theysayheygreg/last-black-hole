@@ -8,7 +8,7 @@
 import { CONFIG } from './config.js';
 import { worldPixelScale, worldToFluidUV, worldToScreen,
          worldDirectionTo, uvScale, WORLD_SCALE } from './coords.js';
-import { inversePowerForce, applyForceToShip } from './physics.js';
+import { applyForceToShip, wellGravityVector } from './physics.js';
 import {
   MOVEMENT_INPUT,
   applyPlayerBrakeAndIntegrate,
@@ -232,10 +232,16 @@ export class Ship {
       const maxRange = wellCfg.maxRange ?? 0.8;
       const pullScale = 1 / Math.max(0.1, this.wellResistScale);
       for (const well of wellSystem.wells) {
-        const { dist, nx, ny } = worldDirectionTo(this.wx, this.wy, well.wx, well.wy);
-        const accel = inversePowerForce(dist, wellCfg.shipPullStrength * pullScale, well.mass, wellCfg.shipPullFalloff, maxRange);
-        if (accel > 0) {
-          applyForceToShip(this, nx, ny, accel, dt);
+        const direction = worldDirectionTo(this.wx, this.wy, well.wx, well.wy);
+        const gravity = wellGravityVector('player', {
+          direction,
+          strength: wellCfg.shipPullStrength * pullScale,
+          mass: well.mass,
+          falloff: wellCfg.shipPullFalloff,
+          maxRange,
+        });
+        if (gravity.magnitude > 0) {
+          applyForceToShip(this, direction.nx, direction.ny, gravity.magnitude, dt);
         }
       }
     }

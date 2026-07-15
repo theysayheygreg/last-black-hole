@@ -8,6 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { worldToFluidUV, worldToScreen, worldDistance, worldDirectionTo, shouldCull, uvScale, wrapWorld } from './coords.js';
+import { wellGravityVector } from './physics.js';
 import { applyWreckAgeValue, generateLoot, wreckAgeValueMultiplier } from './items.js';
 import { canvasFont } from './ui/typography.js';
 
@@ -111,13 +112,18 @@ export class WreckSystem {
       if (cfg.driftEnabled && wellSystem) {
         const driftMaxRange = cfg.driftMaxRange ?? 0.8;
         for (const well of wellSystem.wells) {
-          const { dist, nx, ny } = worldDirectionTo(wreck.wx, wreck.wy, well.wx, well.wy);
-          if (dist > driftMaxRange || dist < 0.001) continue;
-          const pullStrength = cfg.driftStrength * well.mass;
-          const falloff = cfg.driftFalloff ?? 1.5;
-          const accel = pullStrength / Math.pow(Math.max(dist, 0.02), falloff);
-          wreck.vx += nx * accel * dt;
-          wreck.vy += ny * accel * dt;
+          const direction = worldDirectionTo(wreck.wx, wreck.wy, well.wx, well.wy);
+          const gravity = wellGravityVector('wreck', {
+            direction,
+            strength: cfg.driftStrength,
+            mass: well.mass,
+            falloff: cfg.driftFalloff ?? 1.5,
+            maxRange: driftMaxRange,
+          });
+          if (gravity.magnitude > 0) {
+            wreck.vx += gravity.x * dt;
+            wreck.vy += gravity.y * dt;
+          }
         }
       }
 

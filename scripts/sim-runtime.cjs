@@ -73,6 +73,11 @@ const {
   applyPlayerDriveAndFlow,
 } = require("./sim/player-movement-step.cjs");
 const {
+  WELL_GRAVITY_PARAMS,
+  wellGravityMagnitude,
+  wellGravityVector,
+} = require("./sim/well-gravity.cjs");
+const {
   sweptMovingCircleVsCircle,
   wrappedDistance,
   wrappedDelta,
@@ -216,9 +221,9 @@ const SERVER_COMBAT = {
   timeSlowDuration: 3.0,
 };
 const SERVER_WELLS = {
-  shipPullStrength: 0.6,
-  shipPullFalloff: 1.5,
-  maxRange: 1.2,
+  shipPullStrength: WELL_GRAVITY_PARAMS.player.strength,
+  shipPullFalloff: WELL_GRAVITY_PARAMS.player.falloff,
+  maxRange: WELL_GRAVITY_PARAMS.player.maxRange,
   currentStrength: 0.3,
   currentFalloff: 1.5,
   currentRange: 1.35,
@@ -430,7 +435,6 @@ const AI_PERSONALITIES = {
   },
 };
 
-const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
@@ -531,17 +535,16 @@ function worldDirection(ax, ay, bx, by, worldScale) {
   const dy = worldDisplacement(ay, by, worldScale);
   const dist = Math.hypot(dx, dy);
   if (dist < 0.000001) return { dist, nx: 0, ny: 0 };
-  return { dist, nx: dx / dist, ny: dy / dist };
+  return { dist, dx, dy, nx: dx / dist, ny: dy / dist };
 }
 
 function inversePowerForce(dist, strength, mass, falloff, maxRange) {
-  if (dist < 0.001 || dist > maxRange) return 0;
-  const safeDist = Math.max(dist, FORCE_MIN_DIST);
-  const normDist = safeDist / FORCE_REF_DIST;
-  const baseAccel = strength * mass / Math.pow(normDist, falloff);
-  const t = dist / maxRange;
-  const rangeFade = 1 - t;
-  return baseAccel * rangeFade;
+  return wellGravityMagnitude("player", dist, mass, {
+    strength,
+    falloff,
+    maxRange,
+    zeroDistanceThreshold: 0.001,
+  });
 }
 
 function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
@@ -2487,13 +2490,10 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
     let ax = 0;
     let ay = 0;
     for (const well of runtime.mapState.wells) {
-      const dx = worldDisplacement(wreck.wx, well.wx, ws);
-      const dy = worldDisplacement(wreck.wy, well.wy, ws);
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.8 || dist < 0.001) continue;
-      const accel = (0.0045 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.5);
-      ax += (dx / dist) * accel;
-      ay += (dy / dist) * accel;
+      const direction = worldDirection(wreck.wx, wreck.wy, well.wx, well.wy, ws);
+      const gravity = wellGravityVector("wreck", direction, well.mass);
+      ax += gravity.x;
+      ay += gravity.y;
     }
 
     let terminal = 0.05;
@@ -2814,19 +2814,10 @@ function applyWellGravity(player, dt) {
     pullY = field.gravity?.y ?? field.gravityY;
   } else {
     for (const { entity: well } of relevantWells) {
-      const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
-      const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
-      const dist = Math.hypot(dx, dy);
-      if (dist < 0.0001) continue;
-      const pull = inversePowerForce(
-        dist,
-        SERVER_WELLS.shipPullStrength,
-        well.mass,
-        SERVER_WELLS.shipPullFalloff,
-        SERVER_WELLS.maxRange
-      );
-      pullX += (dx / dist) * pull;
-      pullY += (dy / dist) * pull;
+      const direction = worldDirection(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
+      const gravity = wellGravityVector("player", direction, well.mass);
+      pullX += gravity.x;
+      pullY += gravity.y;
     }
   }
   let pullScale = 1;
@@ -3661,14 +3652,15 @@ function steerToward(entity, targetWX, targetWY, intensity = 1) {
   entity.thrustIntensity = intensity;
 }
 
-function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
+function applyWellGravityToEntity(entity, dt) {
   let ax = 0;
   let ay = 0;
   for (const well of runtime.mapState.wells) {
-    const dx = worldDisplacement(entity.wx, well.wx, runtime.session.worldScale);
-    const dy = worldDisplacement(entity.wy, well.wy, runtime.session.worldScale);
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.0001) continue;
+    const direction = worldDirection(entity.wx, entity.wy, well.wx, well.wy, runtime.session.worldScale);
+    if (direction.dist < WELL_GRAVITY_PARAMS.scavenger.zeroDistanceThreshold) continue;
+    const dx = direction.dx;
+    const dy = direction.dy;
+    const dist = direction.dist;
     if (dist < well.killRadius) {
       if (entity.state !== "dying") {
         entity.state = "dying";
@@ -3684,9 +3676,9 @@ function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
       }
       return false;
     }
-    const pull = (pullScale * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
-    ax += (dx / dist) * pull;
-    ay += (dy / dist) * pull;
+    const gravity = wellGravityVector("scavenger", direction, well.mass);
+    ax += gravity.x;
+    ay += gravity.y;
   }
   entity.vx += ax * dt;
   entity.vy += ay * dt;
@@ -3851,7 +3843,7 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
 
     scav.vx += Math.cos(scav.facing) * SCAVENGER_CONFIG.thrustAccel * scav.thrustIntensity * dt;
     scav.vy += Math.sin(scav.facing) * SCAVENGER_CONFIG.thrustAccel * scav.thrustIntensity * dt;
-    if (!applyWellGravityToEntity(scav, dt, 0.02)) continue;
+    if (!applyWellGravityToEntity(scav, dt)) continue;
 
     const dragFactor = Math.exp(-SCAVENGER_CONFIG.drag * dt * 60);
     scav.vx *= dragFactor;
