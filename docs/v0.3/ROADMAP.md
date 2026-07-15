@@ -11,11 +11,13 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** release candidate. The architecture, generated asset kit,
-two natural Shallows outcome journeys, no-retry automated gate, and clean
-hash-named package closure are green.
-Promotion still needs any available physical Steam Deck Gaming Mode check.
-Movement feel and visual taste remain Greg's final calls.
+**Current state:** consolidated v0.3.1 development candidate. Accepted W1/W2,
+5/15/25 map authority, Map Select, Deck UI, pause/resume, entity-visual, config,
+measurement, and design-versioning branches are integrated through `7a215537`.
+Focused merged-surface checks are green. Broad browser, visual, package, soak,
+platform, and physical Deck evidence remain asynchronous RC work rather than a
+feature-development blocker. Promotion into `main` remains closed until Greg's
+explicit version call; movement feel and visual taste remain Greg's final calls.
 
 ### Production Polish Candidate
 
