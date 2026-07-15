@@ -83,6 +83,7 @@ import {
   withAlpha,
 } from './ui/canvas-primitives.js';
 import {
+  advanceMotionClock,
   drawCommandButtonMotion,
   drawDirectionalWipe,
   drawTerminalWindow,
@@ -831,7 +832,7 @@ function getUiMotionStateForTest() {
 }
 
 function updateUiMotion(rawDt) {
-  const step = Math.max(0, Math.min(Number(rawDt) || 0, 0.25));
+  const nextClock = advanceMotionClock(0, rawDt);
   if (gamePhase !== uiMotionPhase) {
     uiMotionPhase = gamePhase;
     uiMotionTimer = 0;
@@ -839,13 +840,13 @@ function updateUiMotion(rawDt) {
     uiFocusPulseTimer = 0;
     return;
   }
-  uiMotionTimer += step;
+  uiMotionTimer += nextClock;
   const nextFocusKey = currentUiFocusKey();
   if (nextFocusKey !== uiFocusKey) {
     uiFocusKey = nextFocusKey;
     uiFocusPulseTimer = 0;
   } else {
-    uiFocusPulseTimer += step;
+    uiFocusPulseTimer += nextClock;
   }
 }
 
@@ -3904,7 +3905,7 @@ function gameLoop(now) {
 
   // Scene transition: tick timer, fire callback at midpoint, end when done
   if (transitionActive) {
-    transitionTimer += rawDt;  // use rawDt, not scaled dt
+    transitionTimer = advanceMotionClock(transitionTimer, rawDt, { maxStep: 1 / 15 });
     const timing = transitionTiming();
     // Fire scene swap at the midpoint (full corruption — scene invisible)
     if (!transitionFired && transitionTimer >= timing.handoff) {
@@ -4203,6 +4204,7 @@ function gameLoop(now) {
             });
           });
           _prevConfirm = confirmNow;
+          _prevExtract = extractNow;
           _prevPause = pauseNow;
           _prevBack = backNow;
           _prevUp = upNow;
@@ -4213,6 +4215,7 @@ function gameLoop(now) {
           _prevTabRight = inputManager.tabRightPressed;
           _prevDelete = inputManager.deletePressed;
           _prevPulse = pulseNow;
+          _prevSlingshot = slingshotNow;
           _prevInventory = inventoryNow;
           _prevConsumable1 = consumable1Now;
           _prevConsumable2 = consumable2Now;
@@ -4647,6 +4650,7 @@ function gameLoop(now) {
   }
 
   updateTitleAttractScene();
+  if (gamePhase === 'meta') metaPhaseTimer += dt;
   updateUiMotion(rawDt);
 
   _prevConfirm = confirmNow;
@@ -4700,6 +4704,15 @@ function gameLoop(now) {
   }
 
   // 6b. Audio update — spatial mixing based on game state
+  const authorityPlayer = remoteAuthorityActive
+    ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+    : null;
+  audioRouter?.movementState({
+    active: gamePhase === 'playing' && !inventoryOpen,
+    deliveredThrust: authorityPlayer?.deliveredThrust ?? ship.lastDeliveredThrustIntensity,
+    deliveredBrake: authorityPlayer?.deliveredBrake ?? ship.lastDeliveredBrakeIntensity,
+    speed: Math.hypot(ship.vx || 0, ship.vy || 0),
+  });
   if (!inMenu) {
     audioEngine.update(dt, wellSystem.wells, ship, camX, camY,
       overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime, CONFIG.universe.runDuration, inhibitorState);
@@ -6345,7 +6358,6 @@ function gameLoop(now) {
 
   // === META SCREEN (between runs) ===
   if (!rendererFixtureActive && gamePhase === 'meta') {
-    metaPhaseTimer += dt;
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
     const t = salvageReportDisplayTime();

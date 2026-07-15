@@ -84,6 +84,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AudioMovement",
+    file: "audio-movement.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "OverloadState",
     file: "overload-state.cjs",
     lanes: ["core", "static", "full"],
@@ -219,6 +225,12 @@ const SUITES = [
     name: "SimProtocolInput",
     file: "sim-protocol-input.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "SimInputTimeout",
+    file: "sim-input-timeout.cjs",
+    lanes: ["authority", "sim-structure", "full"],
     browser: false,
   },
   {

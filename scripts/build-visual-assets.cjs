@@ -22,6 +22,13 @@ const ATLASES = {
       'portal-extraction', 'portal-rift', 'sentry-fauna', 'well-instrument',
     ],
   },
+  threats: {
+    file: 'world-threats-atlas.png',
+    columns: 1,
+    rows: 1,
+    size: 128,
+    names: ['sentry-threat'],
+  },
   itemFamilies: {
     file: 'item-families-atlas.png',
     columns: 5,
@@ -79,9 +86,11 @@ async function chromaKeyCell(input, left, top, width, height) {
 async function writeAtlas(atlasKey, atlas) {
   const source = path.join(SOURCE_DIR, atlas.file);
   const metadata = await sharp(source).metadata();
-  const output = path.join(OUTPUT_DIR, atlasKey === 'itemFamilies' ? 'item-families' : atlasKey);
+  const outputName = atlasKey === 'itemFamilies' ? 'item-families' : atlasKey === 'threats' ? 'entities' : atlasKey;
+  const output = path.join(OUTPUT_DIR, outputName);
   // Generated directories are replaced as a unit so renamed cells cannot leave orphaned runtime art.
-  fs.rmSync(output, { recursive: true, force: true });
+  // Threats share the entity runtime directory but have their own source atlas.
+  if (atlasKey !== 'threats') fs.rmSync(output, { recursive: true, force: true });
   ensureDir(output);
 
   const written = [];

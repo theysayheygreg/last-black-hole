@@ -17,6 +17,28 @@ hash-named package closure are green.
 Promotion still needs any available physical Steam Deck Gaming Mode check.
 Movement feel and visual taste remain Greg's final calls.
 
+### Production Polish Candidate
+
+Branch `codex/v0.3-production-polish` carries a focused post-review batch over
+the green RC:
+
+- sentries use a distinct directional threat sprite instead of sharing fauna's
+  organic silhouette;
+- delivered thrust, braking, coast, and idle drive one bounded movement-audio
+  voice in both local and authoritative play;
+- portal residence uses centralized toroidal endpoint contact while swept
+  fly-throughs remain non-resident and cannot extract;
+- stale held human input expires after 750 ms so a silent client cannot thrust
+  forever;
+- meta progression is state-owned rather than render-owned, transition clocks
+  cannot skip after tab suspension, and remote result exits preserve all input
+  edge latches.
+
+Focused receipts passed on 2026-07-14: Three entity lifecycle 9/9, movement
+audio 10/10, swept authority 5/5, input timeout 1/1, movement golden 5/5, and
+meta flow 8/8. Broader candidate lanes remain asynchronous checkpoint work;
+this feature batch does not claim a new full release gate.
+
 v0.3 converts the successful game-jam stack into a small production-shaped
 game architecture without replacing the custom physics or ASCII-fluid visual
 identity. The server owns gameplay truth; Three, UI, VFX, and audio consume

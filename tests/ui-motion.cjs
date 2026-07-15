@@ -31,6 +31,7 @@ function makeRecordingContext() {
 
 (async () => {
   const {
+    advanceMotionClock,
     drawCommandButtonMotion,
     drawDirectionalWipe,
     drawMotionPanel,
@@ -48,6 +49,8 @@ function makeRecordingContext() {
   } = await import('../src/ui/motion.js');
 
   assert.strictEqual(motionProgress(0.1, { delay: 0.2, duration: 1 }), 0);
+  assert.strictEqual(advanceMotionClock(0.2, 5), 0.45, 'suspended tabs must not skip UI motion');
+  assert.strictEqual(advanceMotionClock(0.2, 5, { maxStep: 1 / 15 }), 0.2 + (1 / 15));
   assert.strictEqual(motionProgress(9, { delay: 0.2, duration: 1 }), 1);
   assert.strictEqual(motionProgress(0, { reducedMotion: true }), 1);
   assert(staggerProgress(0.3, 0, { duration: 1 }) > staggerProgress(0.3, 3, { duration: 1 }));

@@ -23,6 +23,14 @@ export function linear(value) {
   return clamp01(value);
 }
 
+/** Keep UI clocks moving without letting a suspended tab skip an animation. */
+export function advanceMotionClock(current, frameDelta, { maxStep = 0.25 } = {}) {
+  const clock = Math.max(0, Number(current) || 0);
+  const delta = Math.max(0, Number(frameDelta) || 0);
+  const cap = Math.max(0, Number(maxStep) || 0);
+  return clock + Math.min(delta, cap);
+}
+
 export function prefersReducedMotion(source = globalThis) {
   try {
     return source?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;

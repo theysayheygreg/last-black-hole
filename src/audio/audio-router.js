@@ -86,6 +86,15 @@ export class AudioRouter {
 
   setPhase(phase) { this.audio?.setContext?.(phase); }
 
+  /**
+   * Forward presentation-only movement state to the single bounded player
+   * voice. `deliveredThrust`/`deliveredBrake` keep input intent from sounding
+   * like motion when the authority rejects or gates a burn.
+   */
+  movementState(state = {}) {
+    return Boolean(this.audio?.updateMovementState?.(state));
+  }
+
   play(cue, payload = {}, context = {}) {
     const spec = cueSpec(cue);
     if (!spec) return false;

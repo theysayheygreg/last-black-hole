@@ -14,7 +14,8 @@ export const ENTITY_ASSET_MANIFEST = Object.freeze({
   starWarm: { path: 'assets/visual/entities/star-warm.png', classification: 'runtime' },
   portalExtraction: { path: 'assets/visual/entities/portal-extraction.png', classification: 'runtime' },
   portalRift: { path: 'assets/visual/entities/portal-rift.png', classification: 'runtime' },
-  sentryFauna: { path: 'assets/visual/entities/sentry-fauna.png', classification: 'runtime' },
+  faunaOrganic: { path: 'assets/visual/entities/sentry-fauna.png', classification: 'runtime' },
+  sentryThreat: { path: 'assets/visual/entities/sentry-threat.png', classification: 'runtime' },
   // Wells and Inhibitors stay procedural; these files are authored references, not runtime textures.
   wellInstrument: { path: 'assets/visual/entities/well-instrument.png', classification: 'reference' },
   inhibitorShard: { path: 'assets/visual/entities/inhibitor-shard.png', classification: 'reference' },
@@ -53,6 +54,14 @@ export function selectPlanetoidAsset(entity = {}) {
 
 export function selectScavengerAsset(entity = {}) {
   return /breach/i.test(entity.variant || '') ? 'scavengerBreacher' : 'scavengerRaider';
+}
+
+export function selectFaunaAsset() {
+  return 'faunaOrganic';
+}
+
+export function selectSentryAsset() {
+  return 'sentryThreat';
 }
 
 function configureTexture(texture, id) {

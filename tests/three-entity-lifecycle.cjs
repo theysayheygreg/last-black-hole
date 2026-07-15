@@ -183,6 +183,8 @@ async function run() {
     assert(assets.selectWreckAsset({ visualState: 'looted' }) === 'wreckLooted', 'Looted wreck selection failed');
     assert(assets.selectWreckAsset({ visualState: 'cluster' }) === 'wreckCluster', 'Cluster wreck selection failed');
     assert(assets.selectPortalAsset({ visualState: 'rift' }) === 'portalRift', 'Rift portal selection failed');
+    assert(assets.selectFaunaAsset({ variant: 'jelly' }) === 'faunaOrganic', 'Fauna must retain the organic sprite');
+    assert(assets.selectSentryAsset({ status: 'alert' }) === 'sentryThreat', 'Sentries must use the threat sprite');
     for (const relativePath of Object.values(assets.ENTITY_ASSET_PATHS)) {
       assert(require('fs').existsSync(path.join(ROOT, relativePath)), `Missing generated entity asset ${relativePath}`);
     }
@@ -266,13 +268,17 @@ async function run() {
         fauna: Array.from({ length: 4 }, (_, index) => worldEntity(`fauna-${index}`, index, { size: 2 })),
         sentries: Array.from({ length: 4 }, (_, index) => worldEntity(`sentry-${index}`, index)),
       },
-      style: { entityBudgets: { stars: 2, planetoids: 2, scavengers: 2, ecology: 2 } },
+      style: { entityBudgets: { stars: 2, planetoids: 2, scavengers: 2, ecology: 8 } },
     };
     const stats = family.update(frame, log.draw);
-    assert(stats.activeObjects === 8 && stats.droppedObjects === 15,
+    assert(stats.activeObjects === 14 && stats.droppedObjects === 9,
       `Ambient family exceeded its budgets: ${JSON.stringify(stats)}`);
     assert(log.calls.some((call) => call.type === 'sprite' && call.args[1] === 'comet'), 'Transit body should use comet art');
     assert(log.calls.some((call) => call.type === 'sprite' && call.args[1] === 'scavengerBreacher'), 'Breacher scavenger art missing');
+    assert(log.calls.some((call) => call.type === 'sprite' && call.args[6] === 'fauna' && call.args[1] === 'faunaOrganic'),
+      'Fauna should use its organic sprite family');
+    assert(log.calls.some((call) => call.type === 'sprite' && call.args[6] === 'sentries' && call.args[1] === 'sentryThreat'),
+      'Sentries should use the threat sprite family');
   });
 
   await runner.run('World projection keeps toroidal seams and square fluid alignment centralized', async () => {

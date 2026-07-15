@@ -74,6 +74,7 @@ const {
 } = require("./sim/player-movement-step.cjs");
 const {
   sweptMovingCircleVsCircle,
+  wrappedDistance,
   wrappedDelta,
 } = require("./sim/world-geometry.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
@@ -90,6 +91,9 @@ const PORTAL_CONFIG = {
     { time: 570, count: [1, 1], types: ["standard"], lifespan: 30 },
   ],
 };
+const AUTHORITY_INPUT_CONFIG = Object.freeze({
+  heldInputTimeoutMs: readNumber(process.env.LBH_SIM_HELD_INPUT_TIMEOUT_MS, 750, 1),
+});
 const PLAYER_CARGO_SLOTS = 8;
 const RUN_DURATION = 600;
 const MATCH_MAX_SIM_TIME = readNumber(process.env.LBH_SIM_MAX_SIM_TIME, RUN_DURATION, 1);
@@ -1169,6 +1173,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       ability2: false,
       consumeSlot: null,
       timestamp: Date.now(),
+      receivedAt: Date.now(),
     },
     status: "alive",
     cargo: new Array(brain.cargoSlots).fill(null),
@@ -1656,6 +1661,8 @@ function buildSnapshotBody() {
       deltaV: player.deltaV,
       deltaVMax: player.deltaVMax,
       deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
+      deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
+      deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
       lastInputSeq: player.lastInput.seq,
       lastInputBrake: player.lastInput.brake || 0,
       pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
@@ -2623,6 +2630,43 @@ function sweptEntityContact(sweep, entity, radius) {
   return result.hit ? result : null;
 }
 
+function portalEndpointDistance(player, portal) {
+  return wrappedDistance(
+    player.wx,
+    player.wy,
+    portal.wx,
+    portal.wy,
+    runtime.session.worldScale
+  );
+}
+
+function expireHeldInput(player, now = Date.now()) {
+  if (player.isAI || !player.lastInput) return player.lastInput;
+  const receivedAt = Number(player.lastInput.receivedAt);
+  if (!Number.isFinite(receivedAt) || now - receivedAt < AUTHORITY_INPUT_CONFIG.heldInputTimeoutMs) {
+    return player.lastInput;
+  }
+
+  const input = player.lastInput;
+  if (input.moveX === 0 && input.moveY === 0 && input.thrust === 0 && input.brake === 0
+    && !input.slingshot && !input.ability1 && !input.ability2) {
+    return input;
+  }
+
+  // Receipt time is authoritative; client timestamps are only transport metadata.
+  player.lastInput = {
+    ...input,
+    moveX: 0,
+    moveY: 0,
+    thrust: 0,
+    brake: 0,
+    slingshot: false,
+    ability1: false,
+    ability2: false,
+  };
+  return player.lastInput;
+}
+
 function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sweep = null) {
   for (const scav of scavengers) {
     if (scav.alive === false || scav.state === "dying") continue;
@@ -2866,7 +2910,7 @@ function collectPortalExtractionCandidates(player, portals, captureDist, limit) 
     ranked.push({
       entity: portal,
       handle: mirror.getHandleById(hit.id),
-      dist: worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale),
+      dist: portalEndpointDistance(player, portal),
     });
   }
   ranked.sort((a, b) => a.dist - b.dist);
@@ -2965,7 +3009,7 @@ function tickExtraction(player, confirmRequested = false) {
   const maxCaptureDist = portals.reduce((best, portal) => {
     if (!isPortalAvailable(portal)) return best;
     return Math.max(best, portalCaptureRadius(portal));
-  }, 0.08);
+  }, PORTAL_CONFIG.captureRadius);
   const limit = clampBudgetCount(runtime.session.maxPortalChecksPerPlayer || portals.length || 1, portals.length || 1);
   const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
   const portalHit = endpointCandidates
@@ -5723,7 +5767,7 @@ function tickSim() {
       }
     }
 
-    let input = player.lastInput;
+    let input = expireHeldInput(player);
     if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
       applyConsumable(player, input.consumeSlot);
       player.lastInput = { ...player.lastInput, consumeSlot: null };
@@ -5773,12 +5817,13 @@ function tickSim() {
     applyWaveRingPush(player, playerDt);
     const movementStartWX = player.wx;
     const movementStartWY = player.wy;
-    applyPlayerBrakeAndIntegrate(player, input, playerDt, {
+    const brakeStep = applyPlayerBrakeAndIntegrate(player, input, playerDt, {
       brain: b,
       controlMult,
       thrustIntensity: driveStep.thrustIntensity,
       worldScale: runtime.session.worldScale,
     });
+    player.lastDeliveredBrakeIntensity = brakeStep.brakeIntensity;
     const sweep = movementSweep(movementStartWX, movementStartWY, player);
     applySweptWellContacts(player, playerDt, sweep);
     if (player.status !== "alive") continue;
@@ -6287,6 +6332,7 @@ const server = http.createServer(async (req, res) => {
       const { commandCredential: _commandCredential, ...inputState } = message;
       player.lastInput = {
         ...inputState,
+        receivedAt: Date.now(),
         slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
         pulse: Boolean(player.lastInput.pulse || message.pulse),
         extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),

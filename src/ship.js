@@ -29,6 +29,8 @@ export class Ship {
     this.thrusting = false;
     this.thrustIntensity = 0;
     this.brakeIntensity = 0;
+    this.lastDeliveredThrustIntensity = 0;
+    this.lastDeliveredBrakeIntensity = 0;
 
     // Fluid readback for HUD
     this.lastFluidVel = { x: 0, y: 0 };
@@ -214,6 +216,9 @@ export class Ship {
       this.vx -= Math.cos(this.facing) * reverseAccel * dt;
       this.vy -= Math.sin(this.facing) * reverseAccel * dt;
     }
+    // Presentation consumes delivered output so empty fuel never sounds active.
+    this.lastDeliveredThrustIntensity = effectiveIntensity;
+    this.lastDeliveredBrakeIntensity = effectiveBrakeIntensity;
     // Track time since last meaningful burn (forward OR reverse) for
     // regen-delay logic.
     if (effectiveIntensity > 0.01 || effectiveBrakeIntensity > 0.01) {
