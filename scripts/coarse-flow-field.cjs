@@ -2,6 +2,7 @@ const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
 const { wrapPosition, wrappedDelta } = require("./sim/world-geometry.cjs");
 const { AMBIENT_FLOOR, BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
+const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
 const FORCE_MIN_DIST = 0.15;
 
 function wrapWorld(value, worldScale) {
@@ -43,11 +44,17 @@ function buildCoarseFlowField({
   waveShipPush = 0.8,
   waveWidth = 0.1,
   collapseParameters = {},
+  maxCells = Infinity,
 }) {
   const safeCellSize = Math.max(0.05, Number(cellSize) || 0.25);
   const columns = Math.max(1, Math.ceil(worldScale / safeCellSize));
   const rows = Math.max(1, Math.ceil(worldScale / safeCellSize));
-  const cells = new Array(columns * rows);
+  const cellCount = columns * rows;
+  const cellLimit = Number(maxCells);
+  if (Number.isFinite(cellLimit) && cellCount > cellLimit) {
+    throw new RangeError(`Coarse field requires ${cellCount} cells, exceeding the ${cellLimit}-cell budget`);
+  }
+  const cells = new Array(cellCount);
   const seededSeaAmbientMultiplier = Number.isFinite(Number(collapseParameters.seededSeaAmbientMultiplier))
     ? Number(collapseParameters.seededSeaAmbientMultiplier)
     : 1;
@@ -194,15 +201,19 @@ function buildCoarseFlowField({
   };
 }
 
-function serializeCoarseFlowField(field, tick = null) {
+function serializeCoarseFlowField(field, tick = null, { maxCells = Infinity, maxBytes = Infinity } = {}) {
   if (!field) return null;
+  const cellLimit = Number(maxCells);
+  if (Number.isFinite(cellLimit) && field.cells.length > cellLimit) {
+    throw new RangeError(`Coarse field packet has ${field.cells.length} cells, exceeding the ${cellLimit}-cell budget`);
+  }
   const packed = Buffer.allocUnsafe(field.cells.length * 8);
   for (let index = 0; index < field.cells.length; index += 1) {
     const cell = field.cells[index];
     packed.writeFloatLE(Number(cell.currentX) || 0, index * 8);
     packed.writeFloatLE(Number(cell.currentY) || 0, index * 8 + 4);
   }
-  return {
+  const packet = {
     schemaVersion: 1,
     tick: Number.isInteger(tick) ? tick : null,
     encoding: "float32le-current-y-down-row-major-v1",
@@ -214,6 +225,10 @@ function serializeCoarseFlowField(field, tick = null) {
     cellCount: field.cells.length,
     data: packed.toString("base64"),
   };
+  if (Number.isFinite(Number(maxBytes))) {
+    assertSerializedJsonBudget(packet, maxBytes, { label: "Coarse field packet" });
+  }
+  return packet;
 }
 
 function sampleCoarseFlowField(field, wx, wy) {

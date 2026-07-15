@@ -1914,7 +1914,12 @@ function getAuthorityFieldPacket() {
     && runtime.authorityFieldPacket.tick === runtime.tick) {
     return runtime.authorityFieldPacket.payload;
   }
-  const payload = serializeCoarseFlowField(runtime.coarseField, runtime.tick);
+  const payload = serializeCoarseFlowField(runtime.coarseField, runtime.tick, {
+    maxCells: runtime.session.useCoarseField
+      ? runtime.session.maxCoarseFieldCells
+      : Infinity,
+    maxBytes: runtime.session.snapshotBudgetBytes,
+  });
   runtime.authorityFieldPacket = { field: runtime.coarseField, tick: runtime.tick, payload };
   return payload;
 }
@@ -2089,6 +2094,8 @@ function snapshotBody({ force = false } = {}) {
     bodySchemaVersion: BODY_SCHEMA_VERSION,
     snapshotSchemaVersion: 2,
     lastEventSeq,
+    maxBytes: runtime.session.snapshotBudgetBytes,
+    budgetLabel: `${runtime.session.mapId || "unknown"} snapshot`,
   });
 }
 
@@ -5301,6 +5308,9 @@ function rebuildAuthoritativeField() {
     waveShipPush: WAVE_SERVER.waveShipPush,
     waveWidth: WAVE_SERVER.waveWidth,
     collapseParameters: runtime.collapseEpochState?.parameterVector,
+    maxCells: runtime.session.useCoarseField
+      ? runtime.session.maxCoarseFieldCells
+      : Infinity,
   });
 }
 

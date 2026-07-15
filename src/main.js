@@ -57,16 +57,13 @@ import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js'
 import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
-import { MAP as MAP_SHALLOWS } from './maps/shallows-5x5.js';
-import { MAP as MAP_EXPANSE } from './maps/expanse-15x15.js';
-import { MAP as MAP_DEEP } from './maps/deep-field-25x25.js';
+import { DEFAULT_PLAYABLE_MAP, MAP_LIST, PLAYABLE_MAPS } from './maps/playable-map-loader.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
-import { MAP_SCALE_REGISTRY, PLAYABLE_MAP_IDS } from './content/map-scales.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -110,19 +107,6 @@ function reportBootFailure(message, detail) {
   window.__LBH_SHOW_BOOT_ERROR__?.(message, formattedDetail);
   console.error(`[LBH boot] ${message}`, formattedDetail);
 }
-
-const MAP_MODULES = Object.freeze({
-  shallows: MAP_SHALLOWS,
-  expanse: MAP_EXPANSE,
-  'deep-field': MAP_DEEP,
-});
-const PLAYABLE_MAPS = PLAYABLE_MAP_IDS.map((id) => {
-  const map = MAP_MODULES[id];
-  const registry = MAP_SCALE_REGISTRY[id];
-  if (!map || !registry) throw new Error(`Missing canonical map module: ${id}`);
-  return { id, map, ...registry };
-});
-const MAP_LIST = PLAYABLE_MAPS.map((entry) => entry.map);
 
 function getPlayableMapEntryById(id) {
   return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
@@ -267,7 +251,7 @@ let camX = 1.5;
 let camY = 1.5;
 
 // Map state
-let currentMap = MAP_SHALLOWS;
+let currentMap = DEFAULT_PLAYABLE_MAP;
 let remoteAuthorityActive = false;
 let remoteMapId = null;
 let remoteSnapshot = null;

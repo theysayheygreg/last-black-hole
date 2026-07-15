@@ -35,8 +35,26 @@
     "travel": {
       "minimumRouteLegWorldUnits": 0.75,
       "maximumRouteLegFraction": 0.7,
-      "minimumTravelSeconds": 0.4,
-      "maximumTravelSeconds": 4.5
+      "model": "canonical-direct-no-flow-baseline-v1",
+      "integrationHz": 60,
+      "sufficientDeltaV": true,
+      "tiers": {
+        "shallows": {
+          "floorSeconds": 1.4,
+          "ceilingSeconds": 1.6,
+          "observedLegSeconds": [1.48]
+        },
+        "expanse": {
+          "floorSeconds": 1.1,
+          "ceilingSeconds": 8.75,
+          "observedLegSeconds": [1.55, 8.52, 1.22]
+        },
+        "deep-field": {
+          "floorSeconds": 1.9,
+          "ceilingSeconds": 14.5,
+          "observedLegSeconds": [1.98, 14.22]
+        }
+      }
     }
   }
 }

@@ -10,4 +10,13 @@
   fields, and fixed local render resources consume the canonical tiers.
 - Added density/travel floor and ceiling proofs and bounded 25x25 coarse-field
   and snapshot/resource proofs. No authored population correction was needed.
+- Corrected the travel proof to integrate canonical drag and zero-flow
+  coupling: authored observations are `1.48 / 1.55 / 8.52 / 1.22 / 1.98 /
+  14.22` seconds, with tier-aware bounds rather than the invalid `0.4` to
+  `4.5` range. No movement constants changed.
+- Repaired validation to consume the shared loader and canonical filenames,
+  moved the static browser module table into `src/maps/playable-map-loader.js`,
+  and made coarse-field and snapshot byte ceilings fail closed. Deep Field is
+  `3136/4096` cells and an observed `323430/500000` snapshot bytes; client
+  resources remain `192` fluid, `3` world units local, and `64` coarse.
 - Deferred the broader S24 population catalog to a later decision.

@@ -68,8 +68,12 @@ async function run() {
       wells,
       waveRings: [],
       seededSea: sea,
+      maxCells: profile.maxCoarseFieldCells,
     });
-    const packet = serializeCoarseFlowField(field, 12);
+    const packet = serializeCoarseFlowField(field, 12, {
+      maxCells: profile.maxCoarseFieldCells,
+      maxBytes: profile.snapshotBudgetBytes,
+    });
     const bytes = Buffer.byteLength(JSON.stringify(packet));
     assert(packet.encoding === "float32le-current-y-down-row-major-v1", "Expected packed field encoding");
     assert(packet.cellCount === 3136, `Expected 3136 cells, got ${packet.cellCount}`);

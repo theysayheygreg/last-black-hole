@@ -22,6 +22,7 @@ function migrateAuthoredMap(authoredMap, mapId) {
     id: definition.mapId,
     mapClass: definition.mapClass,
     profileId: definition.profileId,
+    sourceFile: definition.sourceFile,
     dimensions: { ...target },
     worldScale: target.width,
     migration: {

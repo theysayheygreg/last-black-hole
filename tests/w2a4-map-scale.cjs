@@ -9,18 +9,14 @@ const { TestRunner } = require("./helpers.cjs");
 const serverScales = require("../scripts/content/map-scales.cjs");
 const { loadAuthoredMaps, loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
 const { MOVEMENT } = require("../scripts/content/movement.cjs");
+const { stepPlayerMovementCore } = require("../scripts/sim/player-movement-step.cjs");
+const { SimSnapshotRing } = require("../scripts/sim-snapshot-ring.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const POSITION_FAMILIES = ["wells", "stars", "wrecks"];
 
 async function loadClientMaps() {
-  const maps = {};
-  for (const mapId of serverScales.PLAYABLE_MAP_IDS) {
-    const definition = serverScales.getMapScaleDefinition(mapId);
-    const module = await import(`file://${path.join(ROOT, "src", "maps", definition.sourceFile)}?w2a4=${mapId}`);
-    maps[mapId] = module;
-  }
-  return maps;
+  return import(`file://${path.join(ROOT, "src", "maps", "playable-map-loader.js")}?w2a4=loader`);
 }
 
 function assertPointInBounds(point, dimensions, label) {
@@ -57,17 +53,42 @@ function routeAnchors(map) {
     });
 }
 
-function travelSeconds(distance, acceleration, maxSpeed) {
-  const timeToCap = maxSpeed / acceleration;
-  const distanceToCap = 0.5 * acceleration * timeToCap * timeToCap;
-  if (distance <= distanceToCap) return Math.sqrt((2 * distance) / acceleration);
-  return timeToCap + (distance - distanceToCap) / maxSpeed;
+function directNoFlowTravelSeconds(distance, integrationHz) {
+  const dt = 1 / integrationHz;
+  const player = {
+    wx: 0,
+    wy: 0,
+    vx: 0,
+    vy: 0,
+    deltaV: 1e9,
+    deltaVMax: 1e9,
+    deltaVBurnRate: MOVEMENT.player.deltaVBurnRate,
+    deltaVBurnEff: 1,
+    deltaVRegen: 0,
+    deltaVRegenBoost: 0,
+    timeSinceThrust: 0,
+    brain: { thrustScale: 1, dragScale: 1, currentCoupling: 1 },
+  };
+  let traveled = 0;
+  let steps = 0;
+  while (traveled < distance && steps < integrationHz * 30) {
+    stepPlayerMovementCore(player, { moveX: 1, moveY: 0, thrust: 1, brake: 0 }, dt, {
+      brain: player.brain,
+      flowSample: { current: { x: 0, y: 0 } },
+      worldScale: 1000,
+    });
+    traveled += Math.hypot(player.vx, player.vy) * dt;
+    steps += 1;
+  }
+  assert(traveled >= distance, `Canonical movement did not cover ${distance} world units`);
+  return steps * dt;
 }
 
 async function run() {
   const runner = new TestRunner("W2A4MapScale");
   const clientScales = await import(`file://${path.join(ROOT, "src", "content", "map-scales.js")}?w2a4=registry`);
-  const clientMaps = await loadClientMaps();
+  const clientMapLoader = await loadClientMaps();
+  const clientMaps = clientMapLoader.MAP_MODULES;
   const authoredMaps = loadAuthoredMaps();
   const playableMaps = loadPlayableMaps();
 
@@ -80,17 +101,21 @@ async function run() {
       serverScales.PLAYABLE_MAP_IDS.map((id) => serverScales.MAP_SCALE_REGISTRY[id].dimensions.width),
       [5, 15, 25],
     );
+    assert.strictEqual(clientMapLoader.assertPlayableMapModulesParity(), true);
+    assert.deepStrictEqual(Object.keys(clientMapLoader.MAP_MODULES), serverScales.PLAYABLE_MAP_IDS);
   });
 
   await runner.run("ESM and CJS map exports share registry identity and bounded positions", () => {
     for (const mapId of serverScales.PLAYABLE_MAP_IDS) {
       const definition = serverScales.getMapScaleDefinition(mapId);
-      const esmMap = clientMaps[mapId].MAP;
+      const esmMap = clientMaps[mapId];
       const cjsMap = playableMaps[mapId];
       assert.strictEqual(esmMap.id, mapId);
       assert.strictEqual(esmMap.mapClass, definition.mapClass);
       assert.deepStrictEqual(esmMap.dimensions, definition.dimensions);
       assert.strictEqual(esmMap.profileId, definition.profileId);
+      assert.strictEqual(esmMap.sourceFile, definition.sourceFile);
+      assert.strictEqual(cjsMap.sourceFile, definition.sourceFile);
       assert.strictEqual(esmMap.worldScale, definition.dimensions.width);
       assert.strictEqual(cjsMap.worldScale, definition.dimensions.width);
       assert.deepStrictEqual(cjsMap.dimensions, definition.dimensions);
@@ -112,7 +137,7 @@ async function run() {
     for (const mapId of serverScales.PLAYABLE_MAP_IDS) {
       const definition = serverScales.getMapScaleDefinition(mapId);
       const authored = authoredMaps[mapId];
-      const migrated = clientMaps[mapId].MAP;
+      const migrated = clientMaps[mapId];
       for (const family of POSITION_FAMILIES) {
         for (let index = 0; index < authored[family].length; index += 1) {
           const before = authored[family][index];
@@ -141,10 +166,9 @@ async function run() {
   await runner.run("authored density and movement stay inside the declared contract", () => {
     const densityContract = serverScales.AUTHORED_MAP_CONTRACT.densityPerWorldUnit;
     const travelContract = serverScales.AUTHORED_MAP_CONTRACT.travel;
-    const movement = MOVEMENT.player;
     for (const mapId of serverScales.PLAYABLE_MAP_IDS) {
       const definition = serverScales.getMapScaleDefinition(mapId);
-      const map = clientMaps[mapId].MAP;
+      const map = clientMaps[mapId];
       const scale = definition.dimensions.width;
       for (const family of ["wells", "stars", "wrecks", "planetoids"]) {
         const density = map[family].length / scale;
@@ -155,22 +179,27 @@ async function run() {
 
       const anchors = routeAnchors(map);
       const legs = anchors.slice(1).map((point, index) => torusDistance(anchors[index], point, scale));
+      const observedSeconds = [];
       assert(legs.length > 0, `${mapId}: authored route has no movement legs`);
       for (const leg of legs) {
         assert(leg >= travelContract.minimumRouteLegWorldUnits,
           `${mapId}: route leg ${leg} below movement floor`);
         assert(leg <= scale * travelContract.maximumRouteLegFraction,
           `${mapId}: route leg ${leg} exceeds scale fraction`);
-        const seconds = travelSeconds(leg, movement.thrustAccel, movement.maxSpeedWorld);
-        assert(seconds >= travelContract.minimumTravelSeconds && seconds <= travelContract.maximumTravelSeconds,
-          `${mapId}: route leg ${leg} takes ${seconds}s outside travel bounds`);
+        const seconds = directNoFlowTravelSeconds(leg, travelContract.integrationHz);
+        const tierContract = travelContract.tiers[mapId];
+        assert(seconds >= tierContract.floorSeconds && seconds <= tierContract.ceilingSeconds,
+          `${mapId}: direct no-flow leg ${leg} takes ${seconds}s outside ${tierContract.floorSeconds}-${tierContract.ceilingSeconds}s`);
+        observedSeconds.push(Number(seconds.toFixed(2)));
       }
+      assert.deepStrictEqual(observedSeconds, travelContract.tiers[mapId].observedLegSeconds,
+        `${mapId}: canonical no-flow observations changed`);
     }
   });
 
   await runner.run("same seed and route identity stay truthful across all tiers", () => {
     for (const mapId of serverScales.PLAYABLE_MAP_IDS) {
-      const map = clientMaps[mapId].MAP;
+      const map = clientMaps[mapId];
       const firstCast = selectAnomalyCast({
         mapId,
         seed: 424242,
@@ -201,8 +230,12 @@ async function run() {
       wells: map.wells,
       waveRings: [],
       seededSea: null,
+      maxCells: profile.maxCoarseFieldCells,
     });
-    const serialized = serializeCoarseFlowField(field, 1);
+    const serialized = serializeCoarseFlowField(field, 1, {
+      maxCells: profile.maxCoarseFieldCells,
+      maxBytes: profile.snapshotBudgetBytes,
+    });
     const fieldBytes = Buffer.from(serialized.data, "base64").byteLength;
     assert(profile.useCoarseField === true, "Deep Field must use the coarse field");
     assert(field.cells.length <= profile.maxCoarseFieldCells,
@@ -212,6 +245,24 @@ async function run() {
     assert(fixedGrid.fluidResolution === 192, "Fixed local fluid allocation changed");
     assert(fixedGrid.localWindowWorldUnits === 3, "Fixed local fluid window changed");
     assert(fixedGrid.coarseTextureResolution === 64, "Fixed coarse texture allocation changed");
+    assert.throws(() => buildCoarseFlowField({
+      worldScale: map.worldScale,
+      cellSize: profile.flowFieldCellSize,
+      wells: map.wells,
+      waveRings: [],
+      seededSea: null,
+      maxCells: field.cells.length - 1,
+    }), /exceeding the 3135-cell budget/, "Coarse-field construction must fail closed");
+    assert.throws(() => serializeCoarseFlowField(field, 1, {
+      maxCells: field.cells.length - 1,
+      maxBytes: profile.snapshotBudgetBytes,
+    }), /exceeding the 3135-cell budget/, "Coarse-field serialization must fail closed");
+    const ring = new SimSnapshotRing({ runId: "w2a4-budget-proof" });
+    assert.throws(() => ring.append({ payload: "x".repeat(512) }, {
+      maxBytes: 128,
+      budgetLabel: "W2-A4 snapshot proof",
+    }), /exceeding the 128-byte budget/, "Snapshot serialization must fail closed");
+    assert.strictEqual(ring.describe().retainedCount, 0, "Rejected snapshot must not enter the ring");
     const configSource = fs.readFileSync(path.join(ROOT, "src", "config.js"), "utf8");
     const coordsSource = fs.readFileSync(path.join(ROOT, "src", "coords.js"), "utf8");
     const fluidSource = fs.readFileSync(path.join(ROOT, "src", "fluid.js"), "utf8");

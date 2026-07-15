@@ -97,7 +97,7 @@ let _lastSignature = null;
  * Roll a cosmic signature appropriate for the given map scale.
  * Streak protection: never the same signature twice in a row.
  *
- * @param {number} mapScale — WORLD_SCALE of the map (3, 5, or 10)
+ * @param {string|number} mapIdOrScale — canonical map id or registry dimension
  * @returns {{ name, flavor, mechanical, config, layout }}
  */
 export function rollSignature(mapIdOrScale, rng = Math.random) {

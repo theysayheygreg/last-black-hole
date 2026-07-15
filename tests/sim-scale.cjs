@@ -16,8 +16,9 @@ const LARGE_PROFILE = SESSION_PROFILES.large;
 
 async function getJson(path, options) {
   const response = await fetch(`${SIM_URL}${path}`, options);
-  const body = await response.json();
-  return { status: response.status, body };
+  const text = await response.text();
+  const body = JSON.parse(text);
+  return { status: response.status, body, bytes: Buffer.byteLength(text) };
 }
 
 async function restartFreshSim() {
@@ -120,6 +121,7 @@ async function run() {
           mapId: "deep-field",
           requesterId: "sim-scale-test",
           requesterName: "Scale Test",
+          seed: 424242,
         }),
       });
       assert(status === 200, `Expected /session/start 200, got ${status}`);
@@ -164,6 +166,10 @@ async function run() {
         "Expected large-map coarse-field cell ceiling");
       assert(body.session.snapshotBudgetBytes === LARGE_PROFILE.snapshotBudgetBytes,
         "Expected large-map snapshot budget");
+      const snapshot = await getJson("/snapshot");
+      assert(snapshot.status === 200, `Expected /snapshot 200, got ${snapshot.status}`);
+      assert(snapshot.bytes <= LARGE_PROFILE.snapshotBudgetBytes,
+        `Deep Field snapshot exceeds budget: ${snapshot.bytes}/${LARGE_PROFILE.snapshotBudgetBytes}`);
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {

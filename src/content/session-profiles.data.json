@@ -101,7 +101,7 @@
       "maxPickupChecksPerPlayer": 3,
       "maxPortalChecksPerPlayer": 3,
       "clientPerfProfile": "fixedGrid",
-      "maxCoarseFieldCells": 1024,
+      "maxCoarseFieldCells": 2304,
       "snapshotBudgetBytes": 350000,
       "snapshotBudgetBytesPerSecond": 2800000,
       "ballparkSyncBudgetMs": 10
