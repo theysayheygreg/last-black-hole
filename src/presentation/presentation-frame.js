@@ -76,6 +76,32 @@ function forceLedger(source = null) {
   });
 }
 
+function normalizeParameterVector(source = null) {
+  if (!source || typeof source !== 'object') return Object.freeze({});
+  const vector = {};
+  for (const key of ['seededSeaAmbientMultiplier', 'liveWavePushMultiplier']) {
+    const value = optionalFinite(source[key]);
+    if (value !== undefined) vector[key] = value;
+  }
+  return Object.freeze(vector);
+}
+
+function normalizeCollapseEpoch(source = null) {
+  if (!source || typeof source !== 'object' || !source.epochId) return null;
+  return Object.freeze({
+    epochId: id(source.epochId, 'collapse-epoch-unknown'),
+    epochIndex: Math.max(0, Math.floor(finite(source.epochIndex))),
+    scheduledTime: Math.max(0, finite(source.scheduledTime)),
+    transitionCount: Math.max(0, Math.floor(finite(source.transitionCount))),
+    parameterVector: normalizeParameterVector(source.parameterVector),
+  });
+}
+
+function normalizeCollapseEpochSchedule(source = []) {
+  if (!Array.isArray(source)) return Object.freeze([]);
+  return Object.freeze(source.map((entry) => normalizeCollapseEpoch(entry)).filter(Boolean));
+}
+
 function rulerFacts(source = null) {
   const sling = source?.slingshot;
   if (!sling) return null;
@@ -237,6 +263,9 @@ function normalizeEntity(family, source, index) {
     case 'wells':
       return Object.freeze({
         ...base,
+        catalogId: id(source.catalogId, 'base-well'),
+        behaviorId: id(source.behaviorId, 'base-well'),
+        mass: Math.max(0, finite(source.mass, 1)),
         visual: Object.freeze({
           coreRadius: Math.max(0.001, finite(source.killRadius, 0.04)),
           contourRadius: Math.max(0.001, finite(source.ringOuter, 0.1)),
@@ -352,11 +381,14 @@ function normalizeWorld(scene = {}) {
       signalShadow: finite(scene.semanticField.shipSample.signalShadow),
     }) : null,
   });
+  world.collapseEpoch = normalizeCollapseEpoch(scene.collapseEpoch);
+  world.collapseEpochSchedule = normalizeCollapseEpochSchedule(scene.collapseEpochSchedule);
   return Object.freeze(world);
 }
 
 function normalizeEvent(source, index) {
   if (!source || !source.type) return null;
+  const details = source.payload && typeof source.payload === 'object' ? source.payload : source;
   const eventId = id(source.eventId || source.id || source.seq, `presentation-event-${index}`);
   const event = {
     eventId,
@@ -375,9 +407,26 @@ function normalizeEvent(source, index) {
   for (const key of ['glyph', 'cleanGlyph', 'seed', 'role', 'variant']) {
     if (source[key] != null) event[key] = text(source[key]);
   }
+  for (const key of ['wellId', 'catalogId', 'behaviorId', 'waveId', 'tellId', 'epochId', 'sourceEntityId']) {
+    if (source[key] != null || details[key] != null) event[key] = text(source[key] ?? details[key]);
+  }
+  if (details.source != null) event.growthSource = text(details.source);
+  if (details.reason != null) event.growthReason = text(details.reason);
+  for (const key of ['scheduledTime', 'eventTime']) {
+    const value = optionalFinite(source[key] ?? details[key]);
+    if (value !== undefined) event[key] = Math.max(0, value);
+  }
+  for (const key of ['before', 'after']) {
+    if (details[key] && typeof details[key] === 'object') {
+      event[key] = Object.freeze({
+        mass: Math.max(0, finite(details[key].mass)),
+        killRadius: Math.max(0, finite(details[key].killRadius)),
+      });
+    }
+  }
   if (source.heavy === true) event.heavy = true;
-  if (Number.isFinite(Number(source.wx)) && Number.isFinite(Number(source.wy))) {
-    event.world = point(source);
+  if (Number.isFinite(Number(source.wx ?? details.wx)) && Number.isFinite(Number(source.wy ?? details.wy))) {
+    event.world = point({ wx: source.wx ?? details.wx, wy: source.wy ?? details.wy });
   }
   return Object.freeze(event);
 }

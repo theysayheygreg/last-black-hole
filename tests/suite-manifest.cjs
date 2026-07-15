@@ -306,6 +306,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SimGrowthEpochs",
+    file: "sim-growth-epochs.cjs",
+    lanes: ["fast", "core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "AuthorityBudget",
     file: "authority-budget.cjs",
     lanes: ["authority", "sim-structure", "full"],

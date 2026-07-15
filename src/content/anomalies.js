@@ -6,3 +6,5 @@ export const ANOMALY_CATALOG_DATA = data;
 export const ANOMALY_CATALOG = data.catalog;
 export const ANOMALY_MAP_POLICIES = data.mapPolicies;
 export const ANOMALY_TUNABLE_CONTRACT = data.tunableContract;
+export const ANOMALY_EVENT_CONTRACTS = data.eventContracts;
+export const ANOMALY_COLLAPSE_EPOCH_CONTRACT = data.collapseEpochContract;

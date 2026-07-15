@@ -116,6 +116,12 @@ const {
 } = require("./sim/slingshot-contract.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
+const {
+  createCollapseEpochSchedule,
+  createCollapseEpochState,
+  advanceCollapseEpochs,
+} = require("./sim/collapse-epochs.cjs");
+const { calculateWellGrowth, createWellGrowthEvent } = require("./sim/well-growth.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = Object.freeze({
@@ -1192,6 +1198,8 @@ const runtime = {
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
   authorityFieldPacket: null,
+  collapseEpochSchedule: [],
+  collapseEpochState: null,
   conductor: null,
   inhibitorSchedule: null,
   portalSchedule: null,
@@ -1696,6 +1704,11 @@ function startSession(config = {}) {
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
+  runtime.collapseEpochSchedule = createCollapseEpochSchedule({ matchDurationSeconds: MATCH_MAX_SIM_TIME });
+  runtime.collapseEpochState = createCollapseEpochState(runtime.collapseEpochSchedule);
+  runtime.conductor.scheduleCollapseEpochs(runtime.collapseEpochSchedule);
+  runtime.inhibitorSchedule = runtime.conductor.getSchedule();
+  runtime.portalSchedule = runtime.inhibitorSchedule;
   runtime._wreckWaveIndex = 0;
   runtime._wreckWaveRepeatTimer = 0;
   runtime._wreckRepeatWaveCount = 0;
@@ -2005,6 +2018,14 @@ function buildSnapshotBody() {
         initialAmplitude: ring.initialAmplitude,
         alive: ring.alive !== false,
       })),
+      collapseEpoch: runtime.collapseEpochState ? {
+        epochId: runtime.collapseEpochState.epochId,
+        epochIndex: runtime.collapseEpochState.epochIndex,
+        scheduledTime: runtime.collapseEpochState.scheduledTime,
+        transitionCount: runtime.collapseEpochState.transitionCount,
+        parameterVector: { ...runtime.collapseEpochState.parameterVector },
+      } : null,
+      collapseEpochSchedule: runtime.collapseEpochSchedule,
       authoritativeField: getAuthorityFieldPacket(),
     },
     inhibitor: {
@@ -2523,7 +2544,7 @@ function commitPlayerOutcome(player, outcome) {
 }
 
 function spawnWaveRing(wx, wy, amplitude) {
-  runtime.waveRings.push({
+  const ring = {
     id: nextSeededToken(`wave-${runtime.tick}`, "waveIds"),
     sourceWX: wx,
     sourceWY: wy,
@@ -2531,8 +2552,10 @@ function spawnWaveRing(wx, wy, amplitude) {
     amplitude,
     initialAmplitude: amplitude,
     alive: true,
-  });
+  };
+  runtime.waveRings.push(ring);
   if (runtime.session?.status === "running") rebuildAuthoritativeField();
+  return ring;
 }
 
 function tickWells(dt) {
@@ -2797,17 +2820,63 @@ function tickGrowth(dt) {
     runtime.growthIndex = idx + 1;
     const well = runtime.mapState.wells[idx];
     if (!well) break;
-    well.mass += well.growthRate;
-    well.killRadius = wellKillRadiusForMass(well);
-    spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass);
-    publishEvent("well.grew", {
-      wellId: well.id,
-      mass: well.mass,
-      killRadius: well.killRadius,
-      wx: well.wx,
-      wy: well.wy,
+    const scheduledTime = runtime.simTime - runtime.growthTimer;
+    applyWellGrowth(well, {
+      massDelta: well.growthRate,
+      source: "schedule",
+      reason: "normal-schedule",
+      scheduledTime,
+      waveAmplitude: WAVE_SERVER.growthWaveAmplitude * (well.mass + well.growthRate),
     });
   }
+}
+
+function tickCollapseEpochs() {
+  if (!runtime.collapseEpochState || runtime.collapseEpochSchedule.length === 0) return;
+  const advanced = advanceCollapseEpochs(
+    runtime.collapseEpochState,
+    runtime.collapseEpochSchedule,
+    runtime.simTime,
+  );
+  runtime.collapseEpochState = advanced.state;
+  for (const transition of advanced.transitions) {
+    publishEvent("collapse.epochTransition", {
+      ...transition,
+      source: "collapse-schedule",
+      reason: "match-progress",
+    });
+  }
+}
+
+function applyWellGrowth(well, {
+  massDelta,
+  source,
+  reason,
+  sourceEntityId = null,
+  sourceEntityType = null,
+  scheduledTime = null,
+  waveAmplitude,
+} = {}) {
+  const growth = calculateWellGrowth({
+    well,
+    massDelta,
+    killRadiusForMass: wellKillRadiusForMass,
+  });
+  well.mass = growth.after.mass;
+  well.killRadius = growth.after.killRadius;
+  const ring = spawnWaveRing(well.wx, well.wy, waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass);
+  return publishEvent("well.grew", createWellGrowthEvent({
+    well,
+    source,
+    reason,
+    sourceEntityId,
+    sourceEntityType,
+    scheduledTime,
+    eventTime: runtime.simTime,
+    waveId: ring.id,
+    before: growth.before,
+    after: growth.after,
+  }));
 }
 
 function tickWaveRings(dt) {
@@ -2854,8 +2923,14 @@ function tickStars(dt, stars = runtime.mapState.stars) {
       const dist = worldDistance(star.wx, star.wy, well.wx, well.wy, runtime.session.worldScale);
       if (dist < well.killRadius) {
         star.alive = false;
-        well.mass += (star.mass || 1) * 0.5;
-        well.killRadius = wellKillRadiusForMass(well);
+        const growthEvent = applyWellGrowth(well, {
+          massDelta: (star.mass || 1) * 0.5,
+          source: "star-consumption",
+          reason: "star-consumed",
+          sourceEntityId: star.id,
+          sourceEntityType: "star",
+          waveAmplitude: (star.mass || 1) * 3,
+        });
         const angle = currentRNG('starRemnant')() * Math.PI * 2;
         const ejectDist = 0.08;
         const ejectSpeed = 0.4;
@@ -2885,6 +2960,7 @@ function tickStars(dt, stars = runtime.mapState.stars) {
           wx: well.wx,
           wy: well.wy,
           remnantWreckId: remnant.id,
+          wellGrowthEventSeq: growthEvent.seq,
         });
         break;
       }
@@ -5199,6 +5275,7 @@ function rebuildAuthoritativeField() {
     wellCurrentMaxRange: SERVER_WELLS.currentRange,
     waveShipPush: WAVE_SERVER.waveShipPush,
     waveWidth: WAVE_SERVER.waveWidth,
+    collapseParameters: runtime.collapseEpochState?.parameterVector,
   });
 }
 
@@ -6363,6 +6440,7 @@ function tickSim() {
   const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
+  tickCollapseEpochs();
   const relevance = buildRelevanceView();
 
   runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {

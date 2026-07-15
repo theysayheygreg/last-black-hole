@@ -2479,6 +2479,9 @@ function syncRemoteWorldState(world) {
       local.wx = remote.wx;
       local.wy = remote.wy;
       local.mass = remote.mass;
+      if (remote.catalogId) local.catalogId = remote.catalogId;
+      if (remote.behaviorId) local.behaviorId = remote.behaviorId;
+      if (remote.catalogActivation) local.catalogActivation = remote.catalogActivation;
       if (remote.killRadius) local.killRadius = remote.killRadius;
       if (remote.name) local.name = remote.name;
     }
@@ -3606,6 +3609,8 @@ function collectThreeSceneState() {
     } : null,
     wells: (wellSystem?.wells || []).map((well, index) => ({
       id: well.id || well.name || `well-${index}`,
+      catalogId: well.catalogId || 'base-well',
+      behaviorId: well.behaviorId || 'base-well',
       wx: well.wx,
       wy: well.wy,
       mass: well.mass || 1,
@@ -3703,6 +3708,8 @@ function collectThreeSceneState() {
       wy: s.wy,
       state: s.state || 'patrol',
     })),
+    collapseEpoch: remoteSnapshot?.world?.collapseEpoch || null,
+    collapseEpochSchedule: remoteSnapshot?.world?.collapseEpochSchedule || [],
     slingshot: {
       phase: authoritySlingshot?.phase || ship.slingshotPhase || (ship.slingshotEngaged ? 'arc' : 'idle'),
       affordance: authoritySlingshot?.aim ? {
@@ -4710,7 +4717,10 @@ function gameLoop(now) {
     runId: remoteSnapshot?.session?.runId || null,
     frameId: remoteSnapshot?.snapshotId || Math.floor(totalTime * 60),
     scene: collectThreeSceneState(),
-    vfxEvents,
+    events: [
+      ...(remoteSnapshot?.recentEvents || []),
+      ...vfxEvents,
+    ],
     vfxConfig: CONFIG.vfx,
   }, { qualityTier: rendererBackend?.renderQuality });
   const composerStart = performance.now();

@@ -377,6 +377,7 @@ class Conductor {
     this.events = new EventFrontRegistry({ offsetGuardSeconds });
     this._severityWaves = [];
     this._windows = [];
+    this._collapseEpochs = [];
   }
 
   registerEventFront(front) {
@@ -431,6 +432,34 @@ class Conductor {
     return windows;
   }
 
+  scheduleCollapseEpochs(epochs) {
+    if (!Array.isArray(epochs) || epochs.length === 0) throw new TypeError("collapse epochs must be a non-empty array");
+    const ids = new Set();
+    const normalized = epochs.map((epoch, index) => {
+      const id = String(epoch.epochId || "").trim();
+      if (!id) throw new TypeError(`collapse epoch ${index} requires an epochId`);
+      if (ids.has(id)) throw new RangeError(`collapse epoch id already scheduled: ${id}`);
+      ids.add(id);
+      const time = nonNegativeNumber(epoch.scheduledTime, `collapse epoch ${id} scheduledTime`);
+      const progress = finiteNumber(epoch.progress, `collapse epoch ${id} progress`);
+      if (progress < 0 || progress > 1) throw new RangeError(`collapse epoch ${id} progress must be in [0, 1]`);
+      return stableClone({
+        epochId: id,
+        epochIndex: integerAtLeast(epoch.epochIndex, `collapse epoch ${id} epochIndex`),
+        progress,
+        scheduledTime: time,
+        parameterVector: epoch.parameterVector || {},
+      }, `collapse epoch ${id}`);
+    });
+    for (let index = 1; index < normalized.length; index += 1) {
+      if (normalized[index].scheduledTime < normalized[index - 1].scheduledTime) {
+        throw new RangeError("collapse epochs must be ordered by scheduledTime");
+      }
+    }
+    this._collapseEpochs = normalized;
+    return this._collapseEpochs.slice();
+  }
+
   selectToroidalSpawn(options = {}) {
     return selectToroidalSpawn({
       ...options,
@@ -446,6 +475,7 @@ class Conductor {
       eventFronts: this.events.ordered(),
       severityWaves: this._severityWaves.slice().sort(compareTimedRecords),
       windows: this._windows.slice().sort((a, b) => a.openTime - b.openTime),
+      collapseEpochs: this._collapseEpochs.slice(),
     }, "schedule");
   }
 

@@ -75,6 +75,69 @@
       }
     }
   },
+  "eventContracts": {
+    "wellGrowth": {
+      "type": "well.grew",
+      "tellId": "well-growth",
+      "waveFamily": "growth"
+    }
+  },
+  "collapseEpochContract": {
+    "schemaVersion": 1,
+    "status": "provisional",
+    "boundaryMode": "match-progress",
+    "durationSource": "MATCH_MAX_SIM_TIME",
+    "parameterVectors": {
+      "seededSeaAmbientMultiplier": {
+        "unit": "x seeded ambient field term",
+        "range": [1, 1.25],
+        "step": 0.05,
+        "startBias": "identity until first collapse epoch",
+        "source": "scripts/sim/seeded-sea.cjs:sampleSeededSea"
+      },
+      "liveWavePushMultiplier": {
+        "unit": "x live wave field term",
+        "range": [1, 1.2],
+        "step": 0.05,
+        "startBias": "identity until first collapse epoch",
+        "source": "scripts/coarse-flow-field.cjs:waveShipPush"
+      }
+    },
+    "boundaries": [
+      {
+        "id": "collapse-epoch-0",
+        "progress": 0,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1,
+          "liveWavePushMultiplier": 1
+        }
+      },
+      {
+        "id": "collapse-epoch-1",
+        "progress": 0.25,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1.08,
+          "liveWavePushMultiplier": 1.05
+        }
+      },
+      {
+        "id": "collapse-epoch-2",
+        "progress": 0.5,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1.16,
+          "liveWavePushMultiplier": 1.1
+        }
+      },
+      {
+        "id": "collapse-epoch-3",
+        "progress": 0.65,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1.24,
+          "liveWavePushMultiplier": 1.15
+        }
+      }
+    ]
+  },
   "catalog": {
     "base-well": {
       "id": "base-well",

@@ -37,11 +37,18 @@ function buildCoarseFlowField({
   seededSea = null,
   waveShipPush = 0.8,
   waveWidth = 0.1,
+  collapseParameters = {},
 }) {
   const safeCellSize = Math.max(0.05, Number(cellSize) || 0.25);
   const columns = Math.max(1, Math.ceil(worldScale / safeCellSize));
   const rows = Math.max(1, Math.ceil(worldScale / safeCellSize));
   const cells = new Array(columns * rows);
+  const seededSeaAmbientMultiplier = Number.isFinite(Number(collapseParameters.seededSeaAmbientMultiplier))
+    ? Number(collapseParameters.seededSeaAmbientMultiplier)
+    : 1;
+  const liveWavePushMultiplier = Number.isFinite(Number(collapseParameters.liveWavePushMultiplier))
+    ? Number(collapseParameters.liveWavePushMultiplier)
+    : 1;
 
   for (let row = 0; row < rows; row++) {
     const wy = wrapWorld((row + 0.5) * safeCellSize, worldScale);
@@ -109,7 +116,9 @@ function buildCoarseFlowField({
         }
       }
 
-      const ambient = sampleSeededSea(seededSea, wx, wy);
+      const ambient = sampleSeededSea(seededSea, wx, wy, {
+        ambientMultiplier: seededSeaAmbientMultiplier,
+      });
       ambientX = ambient.x;
       ambientY = ambient.y;
       currentX += ambientX;
@@ -129,7 +138,7 @@ function buildCoarseFlowField({
         if (dist < 0.001 || distFromFront > halfWidth) continue;
         const bandPosition = distFromFront / halfWidth;
         const profile = Math.cos(bandPosition * Math.PI * 0.5);
-        const accel = waveShipPush * (ring.amplitude || 0) * profile;
+        const accel = waveShipPush * liveWavePushMultiplier * (ring.amplitude || 0) * profile;
         waveX += (dx / dist) * accel;
         waveY += (dy / dist) * accel;
         hazard = Math.max(hazard, clamp01(accel));

@@ -113,13 +113,14 @@ function advanceSeededSea(sea, dt) {
   };
 }
 
-function sampleSeededSea(sea, wx, wy) {
+function sampleSeededSea(sea, wx, wy, { ambientMultiplier = 1 } = {}) {
   if (!sea || !Array.isArray(sea.trains) || sea.trains.length === 0) {
     return { x: 0, y: 0, magnitude: 0, sourceWellId: null, wellInfluence: 0 };
   }
 
   const worldScale = Math.max(0.01, finite(sea.worldScale, 1));
   const ambientCeiling = Math.max(0, Math.min(AMBIENT_FLOOR, finite(sea.ambientFloor, AMBIENT_FLOOR)));
+  const ambientScale = Math.max(0, finite(ambientMultiplier, 1));
   let x = 0;
   let y = 0;
   let sourceWellId = null;
@@ -140,6 +141,7 @@ function sampleSeededSea(sea, wx, wy) {
     const phase = finite(train.phase) + (TAU * longitudinalDistance / wavelength);
     const contribution = BASE_THRUST_ACCEL
       * ambientCeiling
+      * ambientScale
       * Math.max(0, finite(train.amplitude))
       * attenuation
       * Math.sin(phase);
@@ -154,7 +156,7 @@ function sampleSeededSea(sea, wx, wy) {
   }
 
   const magnitude = Math.hypot(x, y);
-  const maxMagnitude = BASE_THRUST_ACCEL * ambientCeiling;
+  const maxMagnitude = BASE_THRUST_ACCEL * ambientCeiling * ambientScale;
   if (magnitude > maxMagnitude && magnitude > 0) {
     const scale = maxMagnitude / magnitude;
     x *= scale;

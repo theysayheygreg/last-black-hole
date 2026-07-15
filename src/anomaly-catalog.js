@@ -62,6 +62,22 @@ function catalogErrors(data) {
     if (!requiredString(field.startBias)) errors.push(`${prefix}.startBias is required`);
     if (!requiredString(field.source)) errors.push(`${prefix}.source is required`);
   }
+  const growthEvent = data.eventContracts?.wellGrowth;
+  if (!hasObject(growthEvent) || !requiredString(growthEvent.type)
+    || !requiredString(growthEvent.tellId) || !requiredString(growthEvent.waveFamily)) {
+    errors.push('eventContracts.wellGrowth must declare type, tellId, and waveFamily');
+  }
+  const epochContract = data.collapseEpochContract;
+  if (!hasObject(epochContract) || epochContract.schemaVersion !== 1
+    || epochContract.status !== 'provisional' || epochContract.boundaryMode !== 'match-progress') {
+    errors.push('collapseEpochContract must declare provisional match-progress schema version 1');
+  }
+  if (!hasObject(epochContract?.parameterVectors) || Object.keys(epochContract.parameterVectors).length === 0) {
+    errors.push('collapseEpochContract.parameterVectors must be non-empty');
+  }
+  if (!Array.isArray(epochContract?.boundaries) || epochContract.boundaries.length < 2) {
+    errors.push('collapseEpochContract.boundaries must contain at least two entries');
+  }
   for (const [mapId, policy] of Object.entries(data.mapPolicies || {})) {
     const prefix = `mapPolicies.${mapId}`;
     if (!hasObject(policy)) {
