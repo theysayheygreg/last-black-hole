@@ -12,7 +12,7 @@ import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
-import { actionDescriptor, actionGlyphMarkup, affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
+import { actionCaptionMarkup, actionDescriptor, actionGlyphMarkup, affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
 import { itemIconMarkup, preloadInventoryIcons, preloadUiAssets } from './ui/asset-kit.js';
 
@@ -1001,6 +1001,12 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
       options.seed ?? `warning-${Date.now()}-${_warningsEl.children.length}`,
       { maxChars: options.maxChars ?? 96 }
     );
+  } else if (options.action) {
+    el.textContent = stripCombiningMarks(text);
+    el.insertAdjacentHTML('beforeend', ` ${actionCaptionMarkup(options.action.actionId, options.actionVerb, {
+      ...options.action,
+      mode: options.action.inputFamily,
+    })}`);
   } else {
     el.textContent = stripCombiningMarks(text);
   }

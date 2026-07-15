@@ -79,6 +79,7 @@ import {
   drawStatusPill,
   drawUiPanel,
   drawScanlines as drawUiScanlines,
+  drawActionPrompt,
   drawActionFooter,
   fitUiText,
   roleColor,
@@ -96,9 +97,9 @@ import {
   staggerProgress,
   typeOnText,
 } from './ui/motion.js';
-import { actionDescriptor, ctaLabel, isDeckMode, promptLabel } from './ui/input-prompts.js';
+import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
 import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
-import { deckPanelLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
+import { deckPanelLayout, itemCompoundLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
 
@@ -403,10 +404,6 @@ function currentPromptOptions() {
     deck: isDeckMode(),
     lastInputSource: inputManager?.lastInputSource,
   };
-}
-
-function prompt(action, label = '', options = currentPromptOptions()) {
-  return ctaLabel(action, label, options).toLowerCase();
 }
 
 function profileRunRecords(profile) {
@@ -4435,7 +4432,10 @@ function gameLoop(now) {
           w.alive && !w.looted && worldDistance(ship.wx, ship.wy, w.wx, w.wy) < CONFIG.wrecks.pickupRadius * 1.5
         );
         if (nearWreck && !inventorySystem._fullWarningShown) {
-          showWarning(`cargo full — ${prompt('inventory', 'inventory')} to drop`, 'rgba(255, 100, 80, 0.9)', 3000);
+          showWarning('cargo full —', 'rgba(255, 100, 80, 0.9)', 3000, {
+            action: actionDescriptor('inventory', currentPromptOptions()),
+            actionVerb: 'inventory to drop',
+          });
           inventorySystem._fullWarningShown = true;
         }
         if (!nearWreck) inventorySystem._fullWarningShown = false;
@@ -5727,7 +5727,10 @@ function gameLoop(now) {
       }
       ctx.font = canvasFont(9);
       ctx.fillStyle = roleColor('muted', 0.64);
-      ctx.fillText(`${prompt('hullPrev', 'previous hull')}  //  ${prompt('hullNext', 'next hull')}`.toUpperCase(), centerX, sy + 2);
+      drawActionFooter(ctx, centerX, sy - 12, [
+        { descriptor: actionDescriptor('hullPrev', currentPromptOptions()), verb: 'previous hull' },
+        { descriptor: actionDescriptor('hullNext', currentPromptOptions()), verb: 'next hull' },
+      ], { alpha: 0.64, gap: 10, maxWidth: centerTextW * 0.72 });
       sy += 20;
 
       const rigDefinitions = Object.values(RIG_TRACKS[hullType] || {});
@@ -5757,9 +5760,11 @@ function gameLoop(now) {
           railWidth: sel ? 4 : 2,
         });
         ctx.fillStyle = eq ? roleColor('salvage', 0.9) : roleColor('muted', 0.48);
-        const action = (sel && eq) ? `  [${prompt('confirm', 'unequip')}]` : '';
+        const action = sel && eq ? { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'unequip' } : null;
         if (eq) drawItemIcon(ctx, eq, { x: centerX, y: sy + 4, w: UI_DECK_GEOMETRY.iconCell.minWidth, h: UI_DECK_GEOMETRY.iconCell.minHeight }, { state: 'equipped', selected: sel });
-        ctx.fillText(fitUiText(ctx, `equip ${i + 1}: ${eq ? eq.name : '- empty -'}${action}`, row.w - 58), centerX + 54, sy + 29);
+        const actionX = row.x + row.w - 94;
+        ctx.fillText(fitUiText(ctx, `equip ${i + 1}: ${eq ? eq.name : '- empty -'}`, Math.max(48, (action ? actionX : row.x + row.w) - (centerX + 54) - 8)), centerX + 54, sy + 29);
+        if (action) drawActionPrompt(ctx, { x: actionX, y: sy + 10, w: 90, h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, action.descriptor, { verb: action.verb, alpha: 0.82, color: roleColor('salvage') });
         sy += loadoutRowH + loadoutRowGap;
       }
       for (let i = 0; i < 2; i++) {
@@ -5775,9 +5780,11 @@ function gameLoop(now) {
           railWidth: sel ? 4 : 2,
         });
         ctx.fillStyle = con ? roleColor('anomaly', 0.86) : roleColor('muted', 0.48);
-        const action = (sel && con) ? `  [${prompt('confirm', 'remove')}]` : '';
+        const action = sel && con ? { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'remove' } : null;
         if (con) drawItemIcon(ctx, con, { x: centerX, y: sy + 4, w: UI_DECK_GEOMETRY.iconCell.minWidth, h: UI_DECK_GEOMETRY.iconCell.minHeight }, { state: 'consumable', selected: sel });
-        ctx.fillText(fitUiText(ctx, `hotbar ${i + 1}: ${con ? con.name : '- empty -'}${action}`, row.w - 58), centerX + 54, sy + 29);
+        const actionX = row.x + row.w - 94;
+        ctx.fillText(fitUiText(ctx, `hotbar ${i + 1}: ${con ? con.name : '- empty -'}`, Math.max(48, (action ? actionX : row.x + row.w) - (centerX + 54) - 8)), centerX + 54, sy + 29);
+        if (action) drawActionPrompt(ctx, { x: actionX, y: sy + 10, w: 90, h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, action.descriptor, { verb: action.verb, alpha: 0.82, color: roleColor('anomaly') });
         sy += loadoutRowH + loadoutRowGap;
       }
 
@@ -5817,7 +5824,12 @@ function gameLoop(now) {
           if (item.subcategory === 'equippable') action = 'equip';
           else if (item.subcategory === 'consumable') action = 'load';
           ctx.fillStyle = roleColor('salvage', 0.86);
-          ctx.fillText(`[${prompt('confirm', action)}]`, centerX + centerTextW - 220, vy + 24);
+          drawActionPrompt(ctx, {
+            x: centerX + centerTextW - 220,
+            y: vy + 4,
+            w: 96,
+            h: UI_DECK_GEOMETRY.actionGlyph.minHeight,
+          }, actionDescriptor('confirm', currentPromptOptions()), { verb: action, alpha: 0.86, color: roleColor('salvage') });
         }
         vy += UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation;
       }
@@ -5877,8 +5889,10 @@ function gameLoop(now) {
 
         if (cost) {
           ctx.fillStyle = canAfford ? roleColor('ecology', 0.78) : roleColor('danger', 0.58);
-          const action = selected ? (canAfford ? `  [${prompt('confirm', 'buy')}]` : '  [need EM]') : '';
-          ctx.fillText(fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM${action}`, centerTextW - 26), centerX + 22, uy + 31);
+          const action = selected && canAfford ? { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'buy' } : null;
+          const actionX = centerX + centerTextW - 98;
+          ctx.fillText(fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM`, Math.max(56, (action ? actionX : centerX + centerTextW) - (centerX + 22) - 8)), centerX + 22, uy + 31);
+          if (action) drawActionPrompt(ctx, { x: actionX, y: uy + 3, w: 90, h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, action.descriptor, { verb: action.verb, alpha: 0.82, color: roleColor('flow') });
         } else {
           ctx.fillStyle = roleColor('salvage', 0.72);
           ctx.fillText(maxLevel < MAX_RIG_LEVEL ? 'CURRENT CAP' : 'MAX', centerX + 22, uy + 31);
@@ -6197,6 +6211,7 @@ function gameLoop(now) {
     ctx.fillStyle = roleColor('muted', 0.72);
     let authorityLine = 'local run will host selected map';
     let authorityLine2 = 'selected route ready';
+    let authorityActions = [];
     if (remoteControl?.enabled) {
       if (remoteControl.error) {
         authorityLine = `remote sim unavailable: ${remoteControl.error}`;
@@ -6208,12 +6223,20 @@ function gameLoop(now) {
         const hostLabel = remoteControl.hostName || 'unknown host';
         authorityLine = `live ${remoteControl.sessionMapName} // ${hostLabel} // ${remoteControl.sessionPlayerCount} players`;
         authorityLine2 = remoteControl.selectedDiffersFromLive
-          ? (remoteControl.canHostReset
-            ? `${promptLabel('confirm', promptOptions)} join live // ${promptLabel('delete', promptOptions)} reset host`
-            : `${promptLabel('confirm', promptOptions)} join live // host owns reset`)
-          : (remoteControl.canHostReset
-            ? `${promptLabel('confirm', promptOptions)} join // ${promptLabel('delete', promptOptions)} host reset`
-            : `${promptLabel('confirm', promptOptions)} join live`);
+          ? 'live cycle differs from selected route'
+          : 'live cycle matches selected route';
+        authorityActions = [{
+          descriptor: actionDescriptor('confirm', promptOptions),
+          verb: remoteControl.selectedDiffersFromLive ? 'join live' : 'join',
+        }];
+        if (remoteControl.canHostReset) {
+          authorityActions.push({
+            descriptor: actionDescriptor('delete', promptOptions),
+            verb: remoteControl.selectedDiffersFromLive ? 'reset host' : 'host reset',
+          });
+        } else if (remoteControl.selectedDiffersFromLive) {
+          authorityLine2 += ' // host owns reset';
+        }
       } else {
         authorityLine = 'no live cycle detected';
         authorityLine2 = 'this client will host selected map';
@@ -6221,6 +6244,13 @@ function gameLoop(now) {
     }
     ctx.fillText(fitUiText(ctx, authorityLine, briefPanel.w - 44), briefX, authorityY + 22);
     ctx.fillText(fitUiText(ctx, authorityLine2, briefPanel.w - 44), briefX, authorityY + 38);
+    if (authorityActions.length > 0) {
+      drawActionFooter(ctx, briefX, authorityY + 44, authorityActions, {
+        alpha: 0.84,
+        gap: 10,
+        maxWidth: briefPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2,
+      });
+    }
 
     drawCommandButtonMotion(ctx, {
       x: briefX,
@@ -6304,19 +6334,20 @@ function gameLoop(now) {
         const item = metaExtractedItems[i];
         const a = Math.min((t - 0.5 - i * 0.1) * 3, 1);
         if (a <= 0) continue;
-        drawItemIcon(ctx, item, { x: cx - 172, y: itemY - 16, w: 22, h: 22 }, { state: 'vault', alpha: a });
+        const row = itemCompoundLayout({ x: cx - 172, y: itemY - 24, textWidth: 306, textHeight: 18 });
+        drawItemIcon(ctx, item, row.icon, { state: 'vault', alpha: a });
         const color = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
         ctx.fillStyle = color.replace(/[\d.]+\)$/, `${a})`);
         const category = item.category || item.subcategory || item.type || 'salvage';
         ctx.textAlign = 'left';
-        ctx.fillText(fitUiText(ctx, `${item.name} [${category}] - ${item.value}`, 306), cx - 142, itemY);
+        ctx.fillText(fitUiText(ctx, `${item.name} [${category}] - ${item.value}`, 306), row.text.x, row.text.y);
         ctx.textAlign = 'center';
-        itemY += 20;
+        itemY += row.advance;
       }
       if (metaExtractedItems.length > 8) {
         ctx.fillStyle = `rgba(150, 150, 170, ${Math.min((t - 1.3) * 2, 0.6)})`;
         ctx.fillText(`...and ${metaExtractedItems.length - 8} more`, cx, itemY);
-        itemY += 20;
+        itemY += UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation;
       }
     }
 

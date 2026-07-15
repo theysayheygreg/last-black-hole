@@ -1,9 +1,13 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 
 (async () => {
   const tokens = await import('../src/ui/design-tokens.js');
   const prompts = await import('../src/ui/input-prompts.js');
   const layout = await import('../src/ui/layout-contract.js');
+  const main = fs.readFileSync(path.resolve(__dirname, '../src/main.js'), 'utf8');
+  const hudSource = fs.readFileSync(path.resolve(__dirname, '../src/hud.js'), 'utf8');
 
   const geometry = tokens.UI_DECK_GEOMETRY;
   const separated = (a, b, gap = geometry.separation) => (
@@ -48,9 +52,33 @@ const assert = require('assert');
   assert.strictEqual(prompts.resolveSteamInputOrigin(deck), null, 'Browser descriptor must not claim native SDK integration');
   assert.strictEqual(prompts.resolveSteamInputOrigin(deck, ({ actionId }) => `origin:${actionId}`), 'origin:confirm', 'Origin adapter boundary must remain callable');
 
+  assert(!main.includes('function prompt('), 'Legacy raw prompt helper must be removed');
+  assert(!main.includes('ctaLabel('), 'Player-facing canvas code must not assemble raw CTA text');
+  const homeSource = main.slice(main.indexOf('// === SHIP subscreen ==='), main.indexOf('// === CHRONICLE subscreen ==='));
+  assert(homeSource.includes("actionDescriptor('confirm', currentPromptOptions())"), 'Home loadout/vault actions must resolve shared descriptors');
+  assert(homeSource.includes('drawActionPrompt('), 'Home loadout/vault/rig actions must draw shared graphical prompts');
+  assert(main.includes("action: actionDescriptor('inventory', currentPromptOptions())"), 'Cargo-full HUD must carry a shared inventory action');
+  assert(hudSource.includes('actionCaptionMarkup(options.action.actionId'), 'HUD warning actions must render shared glyph markup');
+  const authority = main.slice(main.indexOf("const authorityY ="), main.indexOf('drawCommandButtonMotion(ctx, {', main.indexOf("const authorityY =")));
+  assert(authority.includes('authorityActions'), 'Map authority prompt must build graphical actions');
+  assert(authority.includes('drawActionFooter('), 'Map authority prompt must use the shared action footer');
+  assert(!authority.includes('promptLabel('), 'Map authority prompt must not emit raw device labels');
+
+  const salvage = main.slice(main.indexOf('// Extracted items'), main.indexOf('// Vault summary'));
+  assert(salvage.includes('itemCompoundLayout('), 'Salvage rows must use the shared compound layout');
+  assert(salvage.includes('drawItemIcon(ctx, item, row.icon'), 'Salvage icon must use the compound row footprint');
+  assert(salvage.includes('itemY += row.advance'), 'Salvage rows must advance from measured geometry');
+  assert(!salvage.includes('w: 22, h: 22'), 'Salvage must not request a sub-minimum icon');
+  assert(!salvage.includes('itemY += 20'), 'Salvage rows must not use the old 20px advance');
+  assert(!salvage.includes('cx - 142'), 'Salvage text must not use the old 30px icon offset');
+
   const compound = layout.sizeCompound({ textWidth: 100, artWidth: geometry.artCell.minWidth, valueWidth: geometry.valueBlock.minWidth, textHeight: 18, artHeight: geometry.artCell.minHeight, valueHeight: geometry.valueBlock.minHeight });
   assert(compound.w >= 100 + geometry.artCell.minWidth + geometry.valueBlock.minWidth, 'compound row width ignored content');
   assert(compound.h >= geometry.artCell.minHeight + geometry.listRow.paddingY * 2, 'compound row height ignored art footprint');
+  const itemRow = layout.itemCompoundLayout({ x: 10, y: 20, textWidth: 306, textHeight: 18 });
+  assert.strictEqual(itemRow.icon.w, geometry.iconCell.minWidth, 'item row icon width must honor the shared minimum');
+  assert(itemRow.text.x >= itemRow.icon.x + itemRow.icon.w + geometry.listRow.gap, 'item row text must clear the icon footprint');
+  assert(itemRow.advance >= itemRow.row.h + geometry.separation, 'item row advance must clear the full compound row');
   const buttonPrompt = layout.glyphBounds({ x: 40, y: 120, w: geometry.button.minWidth, h: geometry.actionGlyph.minHeight });
   assert(buttonPrompt.w >= geometry.actionGlyph.minWidth && buttonPrompt.h >= geometry.actionGlyph.minHeight, 'glyph bounds fell below minimum geometry');
   assert(layout.rectContains({ x: 40, y: 120, w: geometry.button.minWidth, h: geometry.actionGlyph.minHeight }, buttonPrompt), 'glyph escaped prompt bounds');
@@ -67,7 +95,7 @@ const assert = require('assert');
   const hud = layout.hudSurfaceLayout(960, 720);
   assertSurface('HUD surfaces', [hud.vitals, hud.portals, hud.actions, hud.interaction]);
 
-  console.log(`UILayout: ${prompts.PLAYER_ACTION_IDS.length} action ids, 5 device/geometry assertions passed.`);
+  console.log(`UILayout: ${prompts.PLAYER_ACTION_IDS.length} action ids, focused prompt/compound-row assertions passed.`);
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exit(1);

@@ -48,6 +48,34 @@ export function sizeCompound({
   };
 }
 
+export function itemCompoundLayout({
+  x = 0,
+  y = 0,
+  textWidth = 0,
+  textHeight = 18,
+} = {}) {
+  const iconSize = Math.max(UI_DECK_GEOMETRY.iconCell.minWidth, UI_DECK_GEOMETRY.iconCell.minHeight);
+  const row = sizeCompound({
+    textWidth,
+    artWidth: iconSize,
+    textHeight,
+    artHeight: iconSize,
+    minHeight: UI_DECK_GEOMETRY.listRow.minHeight,
+    paddingY: Math.max(0, (UI_DECK_GEOMETRY.listRow.minHeight - iconSize) / 2),
+  });
+  const rowRect = rect(x, y, row.contentWidth, row.h);
+  const icon = rect(rowRect.x, rowRect.y + (rowRect.h - iconSize) / 2, iconSize, iconSize);
+  return {
+    row: rowRect,
+    icon,
+    text: {
+      x: icon.x + icon.w + UI_DECK_GEOMETRY.listRow.gap,
+      y: rowRect.y + rowRect.h / 2 + Number(textHeight || 18) / 2 - 1,
+    },
+    advance: rowRect.h + UI_DECK_GEOMETRY.separation,
+  };
+}
+
 export function glyphBounds(container, size = UI_DECK_GEOMETRY.actionGlyph.minHeight) {
   const source = rect(container?.x, container?.y, container?.w, container?.h);
   const glyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight, Number(size) || 0);
