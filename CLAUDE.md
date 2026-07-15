@@ -27,7 +27,7 @@ planning, release, or conflict resolution.
 For the current v0.3 line, read `docs/v0.3/README.md` and then
 `docs/v0.3/DESIGN-INDEX.md`; for the public v0.2 line, use `docs/v0.2/`.
 Older jam-era and v0.2 design bodies are preserved under the versioned history
-indexes and the stable `docs/design/` paths now contain pointers only.
+indexes, and the eight moved stable `docs/design/` paths now contain pointers only.
 
 ## Design Pillars (decision lenses, in priority order)
 
