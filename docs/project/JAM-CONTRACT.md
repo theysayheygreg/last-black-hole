@@ -1,6 +1,6 @@
 # Game Jam Contract: Shifts, Checkpoints, and Agent Orchestration
 
-> Status: v0.2/v0.3 branch process contract. This began as the 7-day jam
+> Status: v0.2/v0.3/v0.4 branch process contract. This began as the 7-day jam
 > coordination doc; keep that historical context, but current agent work is
 > centered on the Three renderer, authoritative sim, platform targets,
 > next-version branch work, and periodic architecture hygiene.
@@ -271,24 +271,25 @@ At the end of a night shift, the working agent writes `docs/journal/reports/YYYY
 ## Branching And Version-Line Protocol
 
 Detailed policy lives in `docs/project/BRANCHING-AND-RELEASE-LINES.md`. This
-section is the quick operating version.
+section is a quick operating summary; the detailed file wins if this historical
+jam contract drifts.
 
-The project now has two active kinds of work:
+The project has three version lines:
 
-1. **Current public/demo line** — small fixes and polish that make the current
-   build more demoable.
-2. **Next-version line** — bigger systems work that should not destabilize the
-   public demo while it is still being shown.
+1. **`main` / v0.2** — current public/demo fixes and cross-version governance.
+2. **v0.3** — next features and release-candidate lineage.
+3. **v0.4** — experimental multiplayer product work.
 
-Treat these as separate release trains.
+Treat them as separate release trains that merge only forward.
 
 ### Branch Roles
 
 | Branch | Role | Allowed Work | Not Allowed |
 |--------|------|--------------|-------------|
-| `main` | Current v0.2 demo/public build line | Small fixes, playability polish, Deck deploy fixes, README/play instructions, build-status updates, v0.2 release artifacts | Large refactors, new architecture kernels, speculative renderer rewrites, broad harness migrations |
+| `main` | Current v0.2 demo/public and governance line | Small fixes, playability polish, deploy/release work, README, project roadmap/decisions, process policy | Later-version features or casual promotion |
 | `codex/v0.3-ballpark-roadmap` | Current v0.3 integration branch | Ballpark authority, ECS-ready data shape, event/snapshot spine, renderer contracts, structural harness work, next-version docs | Weekend demo fixes that should ship immediately on v0.2 |
 | `codex/v0.3/<slice>` or equivalent | Optional child branch | One risky/overlapping v0.3 slice with a clear owner | Long-lived drift or mixed unrelated work |
+| `codex/v0.4-multiplayer-product` | Current v0.4 product branch | Multiplayer authority, networking, crew flow, results, rematch, multiplayer UX | Backward shortcuts into v0.3 or `main` |
 
 Greg can rename or replace the active next-version branch. Until then, agents
 should treat `codex/v0.3-ballpark-roadmap` as the v0.3 integration branch.
@@ -304,6 +305,8 @@ should treat `codex/v0.3-ballpark-roadmap` as the v0.3 integration branch.
   first when practical, then merge forward.
 - Do not merge next-version work back to `main` until Greg explicitly calls the
   v0.3 promotion.
+- Do not merge v0.4 backward into v0.3. Primary Sol merges compatible v0.3
+  checkpoints forward into v0.4.
 
 This is the new normal: **big changes go forward, small demo fixes stay
 public.**
@@ -511,7 +514,11 @@ docs/
 
 **`DEVLOG.md`** — Reverse-chronological narrative of the jam. One entry per day (or per shift if a lot happened). Covers what was built, what was cut, design pivots, memorable moments, playtest reactions. The high-level story of the project.
 
-**`DECISION-LOG.md`** — Full decision trees for every significant design fork. Tracks: the question, all options considered, who advocated what, where it landed, and whether the door is still open. When we revisit a decision, we add a new dated entry — never overwrite. This is the record of our thinking, including the roads not taken.
+**`DECISION-LOG.md`** — Durable cross-version rules and one summarized entry
+when a version promotes. Detailed design forks belong in the owning version's
+decision sources named by its `README.md`; v0.3 uses `OPEN-DECISIONS.md`, while
+v0.4 uses `DECISIONS.md` and `OPEN-DECISIONS.md`. Never copy those files
+backward merely to update the project journal.
 
 **`CHANGELOG.md`** — Project-wide release, promotion, and large-revision
 history. Git is authoritative. Version branches may keep their own detailed
@@ -572,18 +579,22 @@ The remote repo must stay current. This is a shared workspace — other agents, 
   public train, current hash build version, and whether the all-target artifact
   exists. Treat a missing artifact as expected during normal coding and as a
   handoff blocker before push.
-- **Use the pre-push guard for public/candidate publication.** The tracked hook
-  still invokes release preparation for origin pushes. For an intentional
-  development-branch or docs/process push that does not publish a build, use
-  `LBH_SKIP_RELEASE_PREP=1 git push ...`; do not build an all-target artifact.
+- **Use the pre-push guard for public publication.** The tracked hook invokes
+  release preparation only for an `origin/main` update. Version-branch pushes
+  stay cheap. For an intentional main-line docs/process push that does not
+  publish a build, use `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
 - **Public version bumps are Greg calls.** `npm run release:public` advances the
   third number (`0.2.x`). Commit that bump, then build. Large decisive `0.3` or
   `1.0` moves are by Greg's explicit call only.
-- **Keep README.md current** — update it when features, architecture, or setup instructions change. The README is the first thing anyone reads.
+- **Keep README.md current through Primary Sol.** Workstreams propose root
+  README changes in their receipt; Primary Sol applies them on `main` when the
+  public or cross-version truth changes.
 - **Tag versions** — public checkpoint tags use the public train (`v0.2.x`);
   build artifacts use `v0.2.x.<hash>`. Update `package.json` only when the
   public train changes.
-- **Build instructions must be correct** — if you add a new server, script, or dependency, update the README setup section in the same commit or the next one.
+- **Build instructions must be correct.** If a version branch adds a server,
+  script, or dependency, update its branch-local docs and flag the root README
+  change for Primary Sol before promotion.
 
 ---
 

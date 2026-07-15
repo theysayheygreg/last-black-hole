@@ -11,6 +11,11 @@ running overlapping passes as ceremony.
 
 Primary Sol owns cross-version merges and RC candidate selection. Workstream
 Sols produce commits; they do not promote or merge version lines independently.
+Primary Sol also owns the main-line governance surfaces: root `README.md`,
+`docs/project/ROADMAP.md`, `docs/journal/DECISION-LOG.md`,
+`docs/project/BRANCHING-AND-RELEASE-LINES.md`, and the `origin/main` push
+contract. Version workstreams may propose changes but do not edit or publish
+those surfaces independently.
 
 > Status: active. Effective 2026-07-14.
 >
@@ -84,10 +89,10 @@ shared contract is affected.
 
 `codex/lbh-ci-policy` was created above history that later proved to contain
 v0.3.1 review commits on the v0.4 architecture line. Never merge that source
-branch wholesale into `main`. `codex/lbh-ci-policy-main` is the clean
-main-based integration branch containing only shared process-file diffs; v0.4
-prompt/changelog artifacts remain on v0.4. Once accepted, merge the clean
-shared commit forward through `main`, v0.3, and v0.4 in hierarchy order.
+branch wholesale into `main`. Its clean process changes were reconstructed on
+`codex/lbh-ci-policy-main` and accepted onto `main`; both policy branches are
+now historical anchors. New shared governance changes land on `main`, then
+merge forward through v0.3 and v0.4 in hierarchy order.
 
 ## Live Assignment Register
 
@@ -96,10 +101,10 @@ progress belongs in commits and task receipts, not status churn here.
 
 | Role | Codex task | Owned line | Current assignment |
 |---|---|---|---|
-| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `codex/lbh-ci-policy-main` shared process integration and cross-workstream routing | Own this contract, route goals and CI, synthesize status for Greg; preserve `codex/lbh-ci-policy` as source history only |
-| v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Stalled in the pre-contract P5 turn after `372be4e`; preserve it and do not depend on its uncommitted context |
-| v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from stable product commit `2d52341` | P5B/P5C accepted and fast-forwarded; P5D party-preserving rematch routed through Luna xhigh |
-| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3.1-movement-truth` in `/private/tmp/lbh-v031-movement-truth` | W1-A1 accepted at `45331aa`; W1-A2 shared gravity family routed through one Luna xhigh |
+| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `main` governance, cross-workstream routing, forward merges, and RC selection | Keep the project moving; preserve both policy branches as history only |
+| v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Integrate bounded multiplayer product slices on the v0.4 line |
+| v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from the stable product branch | Complete the bounded rematch/product slice and return a committed receipt |
+| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3.1-movement-truth` in `/private/tmp/lbh-v031-movement-truth` | Integrate bounded movement-truth slices and return committed receipts |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
 
 Existing Orrery fix/review tasks under the v0.3 task remain descendants of the
@@ -160,7 +165,10 @@ to need the decision asynchronously. Routine LBH receipts, Forge status posts,
 review handoffs, and completions go to that channel. Only Primary Sol may send
 Greg an LBH Forge DM, and only when a design choice, blocker, release decision,
 or comparable issue actually needs his attention. Child tasks never send
-routine LBH DMs. Do not let a child thread keep working around an unresolved
+routine LBH DMs. Workstream Sols must repeat this override in every Luna prompt;
+depth-1 workers normally return receipts to their parent instead of posting to
+Discord at all. This rule overrides generic completion-notification guidance.
+Do not let a child thread keep working around an unresolved
 human decision, and do not ping repeatedly for the same question.
 
 ### Workstream Sol

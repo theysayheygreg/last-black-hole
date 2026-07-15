@@ -1,5 +1,30 @@
 # Decision Log
 
+## 2026-07-14 — Main is the cross-version governance line
+
+**Decision:** Primary Sol owns the root README, project roadmap, durable
+decision journal, branch/release contract, and `origin/main` push policy.
+Version-specific implementation and decisions remain on their owning lines:
+v0.3 uses its branch-local `README.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`, and
+`RC-GATE.md`; v0.4 uses its branch-local `README.md`, `ROADMAP.md`,
+`DECISIONS.md`, `OPEN-DECISIONS.md`, and four-human product plan. Those files
+are summarized here only when a choice is genuinely cross-version or Greg
+promotes the version.
+
+**Why:** Two forward merges are approaching, and copying later-version truth
+backward would make `main` look authoritative for work it does not yet ship.
+A small main-owned governance surface gives every workstream one routing map
+without turning the journal into a duplicate of branch-local decisions.
+
+**Where it landed:** root `README.md`, `docs/project/ROADMAP.md`,
+`docs/project/BRANCHING-AND-RELEASE-LINES.md`,
+`docs/project/LBH-ORCHESTRATION-CONTRACT.md`, `.githooks/pre-push`, and this
+decision log.
+
+**Door status:** Closed for casual backward copying or merging of v0.3/v0.4
+decision docs. Open for explicit promotion summaries and genuinely durable
+cross-version policy.
+
 ## 2026-07-08 — Cloudflare Drop is a temporary sandbox share lane
 
 **Decision:** Add a dedicated Cloudflare Drop build target for quick links to

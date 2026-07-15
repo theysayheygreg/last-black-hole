@@ -22,6 +22,9 @@
   workers use Luna/high or the narrow Luna/xhigh risk lane. Routine LBH Forge
   traffic goes to `#last-black-hole`; only Primary may DM Greg when attention
   is actually required.
+- Main now owns the cross-version README, roadmap, durable decision journal,
+  branch/release contract, and push policy. The pre-push release gate runs only
+  for `origin/main`; v0.3/v0.4 pushes no longer trigger release preparation.
 
 ## 2026-07-08 — Cloudflare Drop share build target
 
