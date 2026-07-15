@@ -80,8 +80,11 @@ main (v0.2 current/live public)
   the next release-candidate lineage.
 - v0.4 owns experimental multiplayer authority, networking, crew flow, and
   multiplayer product work. It is not a shortcut into v0.3 or `main`.
-- Primary Sol merges v0.2 fixes forward into v0.3 and compatible v0.3 progress
-  forward into v0.4 at explicit checkpoints.
+- No actor merges, cherry-picks, rebases, or promotes work across version lines
+  without Greg's explicit approval for that specific operation. Primary Sol
+  may report readiness and propose exact source/target SHAs, but approval is
+  the merge trigger. Settled branches, RC selection, or a shared dependency
+  are reasons to ask Greg, not implied authorization.
 - Never merge v0.4 backward into v0.3 or `main` for convenience. Promotion of
   any version requires Greg's explicit call.
 
@@ -95,8 +98,8 @@ shared contract is affected.
 v0.3.1 review commits on the v0.4 architecture line. Never merge that source
 branch wholesale into `main`. Its clean process changes were reconstructed on
 `codex/lbh-ci-policy-main` and accepted onto `main`; both policy branches are
-now historical anchors. New shared governance changes land on `main`, then
-merge forward through v0.3 and v0.4 in hierarchy order.
+now historical anchors. New shared governance changes land on `main`; they
+remain there until Greg explicitly approves a hierarchy-ordered forward merge.
 
 ## Live Assignment Register
 

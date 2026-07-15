@@ -19,7 +19,9 @@
 Work and documentation move forward `main -> v0.3 -> v0.4`. Version-local
 roadmaps do not move backward merely to make `main` look complete. Primary Sol
 owns merge checkpoints and selects immutable v0.3 RC candidates; Greg owns
-promotion and release calls.
+promotion and release calls. Active lines are not kept continuously in sync,
+and no cross-version merge, cherry-pick, rebase, or promotion occurs without
+Greg explicitly approving that operation.
 
 ## Current v0.2 Status (2026-07-06)
 

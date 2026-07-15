@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-14 — cross-version merges require Greg's approval
+
+- Primary no longer maintains continuous `main -> v0.3 -> v0.4` ancestry while
+  feature workstreams are moving.
+- Every merge, cross-version cherry-pick, rebase, or promotion now requires
+  Greg to approve the exact operation. Approved merges run as dedicated
+  high-effort tasks; post-merge validation remains asynchronous.
+
 ## 2026-07-14 — Maestro specialist lanes joined Primary Sol routing
 
 - Added pinned production and quality-review specialist lanes for coordinated

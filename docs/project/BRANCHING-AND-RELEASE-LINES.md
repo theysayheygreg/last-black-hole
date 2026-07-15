@@ -60,18 +60,20 @@ Chat or agent memory is not a handoff.
 Workstream Sols integrate child commits inside their own version. Primary Sol
 alone performs cross-version merges and release-candidate selection.
 
-At the next clean checkpoint:
+No branch merge, cross-version cherry-pick, rebase, or promotion occurs without
+Greg explicitly approving the specific source, target, and intent. A settled
+checkpoint, RC/release candidate, or concrete shared dependency is a reason for
+Primary Sol to ask; it is never automatic permission. Until approval, let v0.3
+and v0.4 advance independently and record handoffs in commits.
 
-1. Commit and push the main governance checkpoint.
-2. Let the v0.3 Workstream Sol finish and integrate its accepted child slice.
-3. Primary Sol merges current `main` into `codex/v0.3-ballpark-roadmap` and
-   resolves conflicts on v0.3.
-4. After that v0.3 checkpoint is coherent, Primary Sol merges the compatible
-   v0.3/main lineage forward into `codex/v0.4-multiplayer-product` and resolves
-   conflicts on v0.4.
+After approval, execute the operation as a dedicated high-effort bounded task
+using the Primary Sol skill or a high-effort merge subagent. Pin source and
+target SHAs, preserve branch direction, review conflicts as product contracts,
+validate the resulting candidate asynchronously, and return one merge receipt.
+Do not fold merge work into routine orchestration or run speculative merge CI.
 
-Never resolve next-version conflict noise by editing `main`. Never merge all of
-v0.4 into v0.3 or all of v0.3 into `main` without Greg's promotion call.
+Never resolve next-version conflict noise by editing `main`. Greg's approval of
+one operation does not authorize later synchronization or promotion.
 
 ## Validation By Checkpoint
 

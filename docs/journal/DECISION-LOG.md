@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-07-14 — Cross-version operations require Greg's approval
+
+**Decision:** No actor may merge, cross-version cherry-pick, rebase, or promote
+LBH branches without Greg explicitly approving that specific source, target,
+and intent. Primary Sol may report readiness and recommend an operation, but
+settled branches, RC selection, dependencies, and ancestry drift do not grant
+permission.
+
+**Why:** Repeatedly reconciling moving targets spends orchestration and review
+tokens on conflicts that later work will immediately invalidate. Committed
+artifacts already provide durable handoffs while the lines advance
+independently.
+
+**Execution:** Once approved, use the Primary Sol skill or a dedicated
+high-effort merge subagent with pinned SHAs, conflict-contract review, focused
+proof, and one merge receipt. Approval does not carry forward to later merges.
+
+**Door status:** Closed until Greg approves the exact operation.
+
 ## 2026-07-14 — Main is the cross-version governance line
 
 **Decision:** Primary Sol owns the root README, project roadmap, durable
