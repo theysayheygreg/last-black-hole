@@ -50,6 +50,9 @@ A later read never wins by harming an earlier one. Fabric is the medium; sprites
   exposes a stable telegraph or countdown.
 - Interpolation may smooth known state. It must not manufacture a successful
   pickup, hit, escape, ability activation, or route.
+- Pause is a local presentation overlay, not a server pause. The remote world
+  continues underneath it while authority, network, snapshot, and covered-event
+  intake remain live; no automatic unpause is implied.
 - All coordinate conversion goes through `src/coords.js`.
 
 ## Scene Stack
@@ -257,6 +260,8 @@ shows the same state without motion.
 - Numbers align tabularly. Units and labels remain visually subordinate.
 - Microtext is texture only; it cannot carry a required decision or state.
 - Do not simulate corruption by replacing required words with unreadable text.
+- Deck/controller prompts use the accepted graphical glyph family at Deck scale;
+  raw keyboard fallback copy is not part of the Deck contract.
 
 Every major surface gets a 25 percent couch proxy and a Steam Deck capture. At
 that scale a reviewer must identify the screen, selected action, primary status
@@ -296,9 +301,16 @@ for a brief life-critical center beat.
 
 ### Pause
 
-Freeze the command hierarchy immediately. Use one command panel and a modest
-scene dim, preserving enough world context to confirm the paused run. Resume is
-the default; destructive abandon is separated and confirmed.
+Cover the command hierarchy immediately with one command panel and a modest
+scene dim, preserving enough world context to confirm the covered run. The
+remote authority world continues; the overlay must communicate `WORLD
+CONTINUES`, not a frozen server. Entry neutralizes held and edge inputs once.
+Covered presentation coalesces to the latest authority truth. Short resume is
+ordinary follow; at `1500ms` or longer, resume settles camera, fluid, and
+presentation and clears stale UI motion. Terminal, phase, and run changes route
+directly from authority truth, with cached terminal events scoped to the exact
+run. Local debug/sandbox freeze is a separate presentation mode. Resume is the
+default; destructive abandon is separated and confirmed.
 
 ### Results
 
@@ -318,6 +330,8 @@ from visual proximity; display the sim-provided result and event record.
   glyphs or small text become unstable.
 - Support reduced motion, high-contrast local backing, remappable prompts, and
   text alternatives for icon-only status.
+- Reduced motion keeps pause, recovery, terminal, and resume copy settled and
+  readable; it removes displacement and decorative timing, not state.
 - Preserve information under common color-vision simulations and grayscale.
 - Do not encode danger through flashing alone. Avoid rapid full-frame flashes.
 

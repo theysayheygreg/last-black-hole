@@ -2,6 +2,17 @@
 
 ## 2026-07-15
 
+- **Pause/resume reconciliation:** accepted the local-overlay contract: remote
+  authority and snapshot intake continue under pause, held/edge input is
+  neutralized once on entry, covered presentation coalesces to newest authority
+  truth, short resume follows normally, and `1500ms` long resume settles
+  camera/fluid/presentation and clears stale UI motion. Terminal, phase, and run
+  changes route directly, with cached terminal events scoped to the exact run;
+  local sandbox freeze remains separate.
+- **Acceptance boundary:** accepted source commits are `59b1646b` plus the
+  run-scoping correction `341268b1`; focused proof is `PauseResume 49/49` with
+  syntax/diff clean. No headed or visual proof is required for this docs
+  acceptance; visual feel remains deferred.
 - **Map Select survey terminal:** documented the shipped three-panel hierarchy:
   map-class register, uncertain `SURVEY RECONSTRUCTION`, and possible-contents /
   confidence rail. Player-facing route anchors, path sequence, exact wells,
