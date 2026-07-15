@@ -50,6 +50,14 @@ import { InventorySystem } from './inventory.js';
 import { ProfileManager, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { buildRunResultsViewModel, drawRunResultsOverlay } from './run-results.js';
+import {
+  LOCKED_SECTOR_REGISTRY,
+  buildLockedSurveySelection,
+  buildValidSurveySelection,
+  drawLockedSurveyTopology,
+  drawSurveyTopology,
+  surveyScaleForMap,
+} from './ui/map-select-survey.js';
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
@@ -99,7 +107,7 @@ import {
 } from './ui/motion.js';
 import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
 import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
-import { deckPanelLayout, itemCompoundLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
+import { deckPanelLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
 
@@ -120,6 +128,10 @@ const PLAYABLE_MAPS = [
   { id: 'deep-field', map: MAP_DEEP },
 ];
 const MAP_LIST = PLAYABLE_MAPS.map((entry) => entry.map);
+const MAP_SELECT_ENTRIES = [
+  ...PLAYABLE_MAPS.map((entry) => ({ ...entry, available: true })),
+  ...LOCKED_SECTOR_REGISTRY,
+];
 
 function getPlayableMapEntryById(id) {
   return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
@@ -300,6 +312,16 @@ function computeSeedPreview(map, seed) {
   if (previewCache && previewCache.seed === seed && previewCache.mapId === mapId) return previewCache;
   previewCache = buildRunBriefing(map, seed);
   return previewCache;
+}
+
+function currentMapSelectEntry() {
+  return MAP_SELECT_ENTRIES[mapSelectIndex] || MAP_SELECT_ENTRIES[0];
+}
+
+function currentMapSelectSurvey() {
+  const entry = currentMapSelectEntry();
+  if (!entry?.available) return buildLockedSurveySelection(entry);
+  return buildValidSurveySelection(entry, computeSeedPreview(entry.map, previewSeed), previewSeed);
 }
 
 function rerollPreviewSeed() {
@@ -613,131 +635,6 @@ function drawHomeShipSilhouette(ctx, x, y, {
   ctx.restore();
 }
 
-function drawMapRoutePreview(ctx, map, rect, {
-  alpha = 1,
-  seedLabel = '',
-} = {}) {
-  const r = rect;
-  const scale = Number(map?.worldScale) || 1;
-  const pad = 22;
-  const plot = {
-    x: r.x + pad,
-    y: r.y + 38,
-    w: r.w - pad * 2,
-    h: r.h - 58,
-  };
-  const toPx = (point) => [
-    plot.x + (Number(point.x) / scale) * plot.w,
-    plot.y + (Number(point.y) / scale) * plot.h,
-  ];
-
-  ctx.save();
-  ctx.globalAlpha *= alpha;
-  drawUiPanel(ctx, r, { role: 'flow', title: 'route preview', fillAlpha: 0.62, borderAlpha: 0.32, cornerLength: 34 });
-  ctx.fillStyle = withAlpha('#000421', 0.46);
-  ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
-  ctx.strokeStyle = roleColor('flow', 0.12);
-  ctx.lineWidth = 1;
-  for (let i = 1; i < scale; i++) {
-    const gx = plot.x + (i / scale) * plot.w;
-    const gy = plot.y + (i / scale) * plot.h;
-    ctx.beginPath();
-    ctx.moveTo(gx, plot.y); ctx.lineTo(gx, plot.y + plot.h);
-    ctx.moveTo(plot.x, gy); ctx.lineTo(plot.x + plot.w, gy);
-    ctx.stroke();
-  }
-
-  const stars = Array.isArray(map?.stars) ? map.stars : [];
-  const wrecks = Array.isArray(map?.wrecks) ? map.wrecks : [];
-  const wells = Array.isArray(map?.wells) ? map.wells : [];
-  const routePoints = (map?.route?.stages || []).map((stage) => {
-    const anchor = stage?.anchor;
-    if (!anchor || !Number.isInteger(anchor.index)) return null;
-    const source = anchor.entity === 'well'
-      ? wells
-      : anchor.entity === 'wreck'
-        ? wrecks
-        : anchor.entity === 'star'
-          ? stars
-          : [];
-    const point = source[anchor.index];
-    return point ? { ...point, stage } : null;
-  }).filter(Boolean);
-  if (routePoints.length > 1) {
-    ctx.strokeStyle = roleColor('flow', 0.46);
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    routePoints.forEach((point, index) => {
-      const [px, py] = toPx(point);
-      if (index === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  for (const well of wells) {
-    const [px, py] = toPx(well);
-    const rr = Math.max(5, Math.min(12, (Number(well.killRadius) || 0.04) / scale * plot.w * 4));
-    ctx.fillStyle = roleColor('danger', 0.12);
-    ctx.beginPath();
-    ctx.arc(px, py, rr * 1.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = roleColor('danger', 0.58);
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.arc(px, py, rr, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  for (const star of stars.slice(0, 10)) {
-    const [px, py] = toPx(star);
-    ctx.fillStyle = roleColor('salvage', 0.86);
-    ctx.beginPath();
-    ctx.moveTo(px, py - 5);
-    ctx.lineTo(px + 5, py);
-    ctx.lineTo(px, py + 5);
-    ctx.lineTo(px - 5, py);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  for (const wreck of wrecks.slice(0, 16)) {
-    const [px, py] = toPx(wreck);
-    const role = wreck.type === 'vault' ? 'salvage' : 'muted';
-    ctx.strokeStyle = roleColor(role, wreck.type === 'vault' ? 0.82 : 0.62);
-    ctx.lineWidth = wreck.type === 'vault' ? 2 : 1.2;
-    ctx.strokeRect(px - 4, py - 4, 8, 8);
-  }
-
-  // Numbered route anchors sit above the map symbols so the teaching path is
-  // readable without pretending the eventual portal has a fixed position.
-  routePoints.forEach((point, index) => {
-    const [px, py] = toPx(point);
-    ctx.fillStyle = roleColor('void', 0.88);
-    ctx.strokeStyle = roleColor('flow', 0.92);
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(px, py, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = roleColor('text', 0.94);
-    ctx.font = canvasFont(9, { weight: '700' });
-    ctx.textAlign = 'center';
-    ctx.fillText(String(index + 1), px, py + 3);
-  });
-
-  ctx.textAlign = 'left';
-  ctx.font = canvasFont(10, { weight: '700' });
-  ctx.fillStyle = roleColor('muted', 0.78);
-  ctx.fillText(`seed ${seedLabel || 'local'} // ${scale}x${scale}`, plot.x, r.y + r.h - 12);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = roleColor(mapRiskRole(map), 0.86);
-  ctx.fillText(mapRiskLabel(map).toUpperCase(), plot.x + plot.w, r.y + r.h - 12);
-  ctx.restore();
-}
-
 function currentUiMotionSettings() {
   return resolveMotionSettings(CONFIG.ui?.motion);
 }
@@ -811,7 +708,9 @@ function getUiMotionStateForTest() {
     salvageReport: { timer: metaPhaseTimer, displayTime: salvageReportDisplayTime(), ready: isSalvageReportReady(), ...salvageReportTiming() },
     profilePrompt: gamePhase === 'profileSelect' ? profilePromptText() : null,
     layout: (gamePhase === 'home' || gamePhase === 'mapSelect')
-      ? threePanelLayout(overlayCanvas.width, overlayCanvas.height, gamePhase === 'home' ? 'home' : 'map', window.innerWidth)
+      ? gamePhase === 'mapSelect'
+        ? mapSelectSurfaceLayout(overlayCanvas.width, overlayCanvas.height, window.innerWidth, MAP_SELECT_ENTRIES.length)
+        : threePanelLayout(overlayCanvas.width, overlayCanvas.height, 'home', window.innerWidth)
       : null,
   };
 }
@@ -1196,6 +1095,13 @@ function init() {
       restart: () => { restart(); },
       currentMap,
       mapList: MAP_LIST,
+      mapSelectEntries: MAP_SELECT_ENTRIES.map((entry) => ({
+        id: entry.id,
+        available: entry.available !== false,
+        label: entry.available === false ? entry.label : surveyScaleForMap(entry.id)?.label || entry.map?.name,
+        scaleLabel: entry.available === false ? null : surveyScaleForMap(entry.id)?.scale.label || null,
+      })),
+      getMapSelectSurveyForTest: () => currentMapSelectSurvey(),
       startGame,
       setMap: (map) => { startGame(map); },
       setOverlayVisible: (visible) => {
@@ -1279,7 +1185,7 @@ function init() {
         return homeTab;
       },
       setMapSelectIndexForTest: (index) => {
-        const count = MAP_LIST.length || 1;
+        const count = MAP_SELECT_ENTRIES.length || 1;
         mapSelectIndex = ((Math.round(Number(index) || 0) % count) + count) % count;
         return mapSelectIndex;
       },
@@ -1990,7 +1896,7 @@ function updateRemoteShipPresentation(dt) {
 }
 
 function currentRemoteControlState() {
-  const selectedEntry = PLAYABLE_MAPS[mapSelectIndex] || PLAYABLE_MAPS[0] || null;
+  const selectedEntry = currentMapSelectEntry()?.available ? currentMapSelectEntry() : null;
   const session = remoteSessionHealth?.session ?? null;
   const hasLiveSession = session?.status === 'running';
   const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
@@ -4029,30 +3935,32 @@ function gameLoop(now) {
 
   } else if (gamePhase === 'mapSelect') {
     if (simClient?.enabled) void refreshRemoteSessionHealth(false);
-    if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
-    if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
+    if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_SELECT_ENTRIES.length) % MAP_SELECT_ENTRIES.length; audioEngine.playEvent('menuMove'); }
+    if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_SELECT_ENTRIES.length; audioEngine.playEvent('menuMove'); }
     if (inputManager.rerollPressed && !_prevSeedReroll) {
       rerollPreviewSeed();
       audioEngine.playEvent('menuMove');
     }
     _prevSeedReroll = inputManager.rerollPressed;
     if (!transitionActive && confirmNow && !_prevConfirm) {
-      audioEngine.init();
-      audioEngine.playEvent('launch');
-      // Load loadout from profile before entering run
-      const p = profileManager.active;
-      if (p) {
-        inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
-        inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
+      const selectedEntry = currentMapSelectEntry();
+      if (selectedEntry?.available) {
+        audioEngine.init();
+        audioEngine.playEvent('launch');
+        // Load loadout from profile before entering run
+        const p = profileManager.active;
+        if (p) {
+          inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
+          inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
+        }
+        if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
+        else transitionToGame(selectedEntry.map, previewSeed);
       }
-      const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
-      if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
-      else transitionToGame(selectedEntry.map, previewSeed);
     }
     if (!transitionActive && inputManager.deletePressed && !_prevDelete && simClient?.enabled) {
-      const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
+      const selectedEntry = currentMapSelectEntry();
       const remoteControl = currentRemoteControlState();
-      if (remoteControl.canHostReset) {
+      if (selectedEntry?.available && remoteControl.canHostReset) {
         audioEngine.init();
         audioEngine.playEvent('launch');
         const p = profileManager.active;
@@ -6073,9 +5981,10 @@ function gameLoop(now) {
   if (!rendererFixtureActive && gamePhase === 'mapSelect') {
     const remoteControl = simClient?.enabled ? currentRemoteControlState() : null;
     const w = overlayCanvas.width, h = overlayCanvas.height;
-    const selectedMap = MAP_LIST[mapSelectIndex] || MAP_LIST[0];
-    const preview = computeSeedPreview(selectedMap, previewSeed);
-    const routeRole = mapRiskRole(selectedMap);
+    const selection = currentMapSelectSurvey();
+    const preview = selection.surveyPreview;
+    const locked = selection.state === 'locked';
+    const surveyRole = locked ? 'danger' : preview.riskBand === 'HIGH' ? 'danger' : preview.riskBand === 'MEDIUM' ? 'salvage' : 'flow';
     const promptOptions = currentPromptOptions();
 
     ctx.save();
@@ -6088,12 +5997,12 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const panelLayout = threePanelLayout(w, h, 'map', window.innerWidth);
+    const panelLayout = mapSelectSurfaceLayout(w, h, window.innerWidth, MAP_SELECT_ENTRIES.length);
     const { left: listPanel, center: previewPanel, right: briefPanel } = panelLayout;
 
     drawTerminalWindow(ctx, listPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-left', role: routeRole, fillAlpha: 0.90, borderAlpha: 0.30, cornerLength: 34,
+      origin: 'top-left', role: surveyRole, fillAlpha: 0.90, borderAlpha: 0.30, cornerLength: 34,
     });
     drawTerminalWindow(ctx, previewPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { delay: 0.05, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
@@ -6103,172 +6012,156 @@ function gameLoop(now) {
       state: sampleTerminalWindow(uiMotionTimer, { delay: 0.10, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
       origin: 'top-right', role: 'salvage', fillAlpha: 0.90, borderAlpha: 0.34, cornerLength: 34,
     });
-    drawMapRoutePreview(ctx, selectedMap, previewPanel, { alpha: contentReveal, seedLabel: previewSeed });
     ctx.globalAlpha *= contentReveal;
 
+    const pad = panelLayout.pad;
+    drawSectionLabel(ctx, 'destination', listPanel.x + pad, listPanel.y + 31, { role: surveyRole, alpha: 0.86 });
     ctx.textAlign = 'left';
-    let listY = listPanel.y + 54;
-    for (let i = 0; i < MAP_LIST.length; i++) {
-      const map = MAP_LIST[i];
+    for (let i = 0; i < MAP_SELECT_ENTRIES.length; i++) {
+      const entry = MAP_SELECT_ENTRIES[i];
       const selected = i === mapSelectIndex;
-      const role = mapRiskRole(map);
+      const registry = entry.available === false ? null : surveyScaleForMap(entry.id);
+      const role = entry.available === false ? 'muted' : registry?.riskBand === 'HIGH' ? 'danger' : registry?.riskBand === 'MEDIUM' ? 'salvage' : 'flow';
       const rowReveal = staggerProgress(uiMotionTimer, i, {
         delay: 0.2,
         stagger: motion.rowStagger,
         reducedMotion: motion.reducedMotion,
       });
-      const row = { x: listPanel.x + UI_DECK_GEOMETRY.panel.paddingX, y: listY - 18, w: listPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, h: 64 };
+      const row = panelLayout.rows[i];
       ctx.save();
       ctx.globalAlpha *= rowReveal;
       drawSelectedRow(ctx, row, {
         role,
         active: true,
-        alpha: selected ? 0.92 + focusPulse * 0.08 : 0.30,
-        fillAlpha: selected ? 0.18 + focusPulse * 0.05 : 0.045,
-        borderAlpha: selected ? 0.66 + focusPulse * 0.12 : 0.12,
+        alpha: selected ? (entry.available === false ? 0.82 : 0.92 + focusPulse * 0.08) : 0.30,
+        fillAlpha: selected ? (entry.available === false ? 0.10 : 0.18 + focusPulse * 0.05) : 0.045,
+        borderAlpha: selected ? (entry.available === false ? 0.72 : 0.66 + focusPulse * 0.12) : 0.12,
         railWidth: selected ? 5 : 2,
       });
-      ctx.font = canvasFont(selected ? 17 : 15, { role: selected ? 'display' : 'body', weight: selected ? '700' : '600' });
-      ctx.fillStyle = selected ? roleColor('text', 0.96) : roleColor('muted', 0.72);
-      ctx.fillText(fitUiText(ctx, map.name.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 25);
-
-      const stats = `${map.worldScale}x${map.worldScale} // ${map.wells.length} wells // ${(map.wrecks || []).length} wrecks`;
-      ctx.font = canvasFont(12);
-      ctx.fillStyle = roleColor(role, selected ? 0.78 : 0.42);
-      ctx.fillText(fitUiText(ctx, stats.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 47);
+      const iconX = row.x + UI_DECK_GEOMETRY.listRow.paddingX + 19;
+      const iconY = row.y + row.h / 2;
+      ctx.strokeStyle = roleColor(entry.available === false ? 'muted' : role, selected ? 0.78 : 0.38);
+      ctx.fillStyle = roleColor(entry.available === false ? 'muted' : role, selected ? 0.36 : 0.18);
+      ctx.lineWidth = selected ? 1.5 : 1;
+      ctx.strokeRect(iconX - 15, iconY - 15, 30, 30);
+      const glyphCells = entry.available === false ? 4 : registry.topology.miniGlyphCells;
+      for (let gy = 0; gy < glyphCells; gy++) {
+        for (let gx = 0; gx < glyphCells; gx++) {
+          if ((gx * 7 + gy * 11 + i * 5) % (entry.available === false ? 3 : 4) === 0) continue;
+          ctx.fillRect(iconX - 10 + gx * (20 / glyphCells), iconY - 10 + gy * (20 / glyphCells), 2, 2);
+        }
+      }
+      if (entry.available === false) {
+        ctx.strokeStyle = roleColor(selected ? 'danger' : 'muted', selected ? 0.92 : 0.54);
+        ctx.beginPath();
+        ctx.arc(iconX, iconY - 4, 5, Math.PI, 0);
+        ctx.stroke();
+        ctx.strokeRect(iconX - 6, iconY - 4, 12, 10);
+      }
+      const textX = row.x + UI_DECK_GEOMETRY.listRow.paddingX + 54;
+      ctx.font = canvasFont(selected ? 16 : 14, { role: selected ? 'display' : 'body', weight: selected ? '700' : '600' });
+      ctx.fillStyle = selected ? roleColor(entry.available === false ? 'danger' : 'text', 0.96) : roleColor('muted', 0.72);
+      const rowLabel = entry.available === false ? entry.label : registry.label;
+      ctx.fillText(fitUiText(ctx, rowLabel, row.w - 78), textX, row.y + row.h * 0.44);
+      ctx.font = canvasFont(11, { weight: '700' });
+      ctx.fillStyle = roleColor(entry.available === false ? (selected ? 'danger' : 'muted') : role, selected ? 0.82 : 0.46);
+      const rowStatus = entry.available === false ? entry.status : `${registry.scale.label} // AVAILABLE`;
+      ctx.fillText(fitUiText(ctx, rowStatus, row.w - 78), textX, row.y + row.h * 0.72);
       ctx.restore();
-      listY += row.h + UI_DECK_GEOMETRY.separation;
     }
 
-    ctx.font = canvasFont(11);
-    ctx.fillStyle = roleColor('muted', 0.72);
-    drawActionFooter(ctx, listPanel.x + UI_DECK_GEOMETRY.panel.paddingX, listPanel.y + listPanel.h - 58, [
+    drawActionFooter(ctx, listPanel.x + pad, listPanel.y + listPanel.h - 54, [
       { descriptor: actionDescriptor('select', promptOptions), verb: 'select' },
-      { descriptor: actionDescriptor('confirm', promptOptions), verb: 'launch' },
       { descriptor: actionDescriptor('reroll', promptOptions), verb: 'reroll' },
       { descriptor: actionDescriptor('back', promptOptions), verb: 'back' },
-    ], { alpha: 0.72, gap: 10, maxWidth: listPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2 });
+    ], { alpha: 0.72, gap: 10, maxWidth: listPanel.w - pad * 2 });
 
-    const briefX = briefPanel.x + UI_DECK_GEOMETRY.panel.paddingX;
-    let by = briefPanel.y + 58;
+    const centerX = previewPanel.x + pad;
     ctx.font = canvasFont(21, { role: 'display', weight: '800' });
     ctx.fillStyle = roleColor('text', 0.96);
-    ctx.fillText(fitUiText(ctx, selectedMap.name.toUpperCase(), briefPanel.w - 40), briefX, by);
-    by += 34;
-    const pillY = by - 6;
-    const statusGap = UI_DECK_GEOMETRY.valueBlock.gap;
-    const statusW = (briefPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2 - statusGap) / 2;
-    drawStatusPill(ctx, { x: briefX + statusW / 2, y: pillY, w: statusW, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, mapRiskLabel(selectedMap), { role: routeRole, alpha: 0.92, minWidth: statusW });
-    drawStatusPill(ctx, { x: briefX + statusW + statusGap + statusW / 2, y: pillY, w: statusW, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, `${selectedMap.worldScale}x${selectedMap.worldScale}`, { role: 'flow', alpha: 0.82, minWidth: statusW });
-    by += 34;
-
-    drawKeyValueRow(ctx, 'seed', String(previewSeed), briefX, by, { labelWidth: 94, valueRole: 'flow' });
-    by += 22;
-    drawKeyValueRow(ctx, 'signature', preview.signature?.name || 'unknown', briefX, by, { labelWidth: 94, valueRole: 'anomaly' });
-    by += 22;
-    drawKeyValueRow(ctx, 'wells', String(selectedMap.wells.length), briefX, by, { labelWidth: 94, valueRole: routeRole });
-    by += 22;
-    drawKeyValueRow(ctx, 'salvage', `${(selectedMap.wrecks || []).length} contacts`, briefX, by, { labelWidth: 94, valueRole: 'salvage' });
-    by += 36;
-
-    drawSectionLabel(ctx, 'fabric read', briefX, by, { role: 'anomaly', alpha: 0.86 });
-    by += 22;
-    ctx.font = canvasFont(11);
-    ctx.fillStyle = roleColor('muted', 0.76);
-    ctx.fillText(fitUiText(ctx, preview.signature?.mechanical || 'nominal fabric response', briefPanel.w - 44), briefX, by);
-    by += 25;
-
-    drawSectionLabel(ctx, preview.route?.name || 'route objective', briefX, by, { role: 'flow', alpha: 0.86 });
-    by += 22;
-    for (const line of (preview.route?.briefing || [preview.objective]).slice(0, 2)) {
-      ctx.fillStyle = roleColor('muted', 0.76);
-      ctx.font = canvasFont(11);
-      ctx.fillText(fitUiText(ctx, line, briefPanel.w - 44), briefX, by);
-      by += 17;
+    ctx.fillText('SURVEY RECONSTRUCTION', centerX, previewPanel.y + 34);
+    if (locked) {
+      drawLockedSurveyTopology(ctx, previewPanel, { alpha: 0.96, motionTime: uiMotionTimer, reducedMotion: motion.reducedMotion });
+    } else {
+      drawSurveyTopology(ctx, previewPanel, preview, { alpha: 0.96, motionTime: uiMotionTimer, reducedMotion: motion.reducedMotion });
+      drawSegmentedGauge(ctx, { x: centerX, y: previewPanel.y + previewPanel.h - 25, w: Math.max(96, previewPanel.w * 0.30), h: 10 }, { value: preview.density.value, max: 1, segments: 8, role: 'flow', label: 'density', alpha: 0.82 });
+      drawSegmentedGauge(ctx, { x: centerX + Math.max(118, previewPanel.w * 0.36), y: previewPanel.y + previewPanel.h - 25, w: Math.max(96, previewPanel.w * 0.30), h: 10 }, { value: preview.uncertainty.value, max: 1, segments: 8, role: 'anomaly', label: 'uncertainty', alpha: 0.82 });
     }
 
-    by += 10;
-    drawSectionLabel(ctx, 'route sequence', briefX, by, { role: 'flow', alpha: 0.86 });
-    by += 22;
-    for (const [index, stage] of (preview.route?.stages || []).slice(0, 5).entries()) {
-      ctx.fillStyle = roleColor(stage.kind === 'salvage' ? 'salvage' : 'flow', 0.78);
-      ctx.font = canvasFont(10, { weight: '600' });
-      ctx.fillText(fitUiText(ctx, `${index + 1}. ${stage.label}`, briefPanel.w - 44), briefX, by);
-      by += 15;
-    }
-
-    by += 10;
-    drawSectionLabel(ctx, 'named hazards', briefX, by, { role: routeRole, alpha: 0.86 });
-    by += 22;
-    for (const name of preview.wellNames.slice(0, 2)) {
-      ctx.fillStyle = roleColor(routeRole, 0.72);
-      ctx.font = canvasFont(10);
-      ctx.fillText(fitUiText(ctx, name, briefPanel.w - 44), briefX, by);
-      by += 15;
-    }
-
-    const authorityY = briefPanel.y + briefPanel.h - 138;
-    drawSectionLabel(ctx, 'authority', briefX, authorityY, { role: simClient?.enabled ? 'flow' : 'muted', alpha: 0.84 });
-    ctx.font = canvasFont(10);
-    ctx.fillStyle = roleColor('muted', 0.72);
-    let authorityLine = 'local run will host selected map';
-    let authorityLine2 = 'selected route ready';
-    let authorityActions = [];
-    if (remoteControl?.enabled) {
-      if (remoteControl.error) {
-        authorityLine = `remote sim unavailable: ${remoteControl.error}`;
-        authorityLine2 = 'falling back to local readiness';
-      } else if (remoteControl.loading && !remoteControl.hasLiveSession) {
-        authorityLine = 'checking live authority...';
-        authorityLine2 = 'stand by';
-      } else if (remoteControl.hasLiveSession) {
-        const hostLabel = remoteControl.hostName || 'unknown host';
-        authorityLine = `live ${remoteControl.sessionMapName} // ${hostLabel} // ${remoteControl.sessionPlayerCount} players`;
-        authorityLine2 = remoteControl.selectedDiffersFromLive
-          ? 'live cycle differs from selected route'
-          : 'live cycle matches selected route';
-        authorityActions = [{
-          descriptor: actionDescriptor('confirm', promptOptions),
-          verb: remoteControl.selectedDiffersFromLive ? 'join live' : 'join',
-        }];
-        if (remoteControl.canHostReset) {
-          authorityActions.push({
-            descriptor: actionDescriptor('delete', promptOptions),
-            verb: remoteControl.selectedDiffersFromLive ? 'reset host' : 'host reset',
-          });
-        } else if (remoteControl.selectedDiffersFromLive) {
-          authorityLine2 += ' // host owns reset';
-        }
-      } else {
-        authorityLine = 'no live cycle detected';
-        authorityLine2 = 'this client will host selected map';
+    const briefX = briefPanel.x + pad;
+    const briefW = briefPanel.w - pad * 2;
+    const commandY = panelLayout.command.y;
+    if (locked) {
+      ctx.font = canvasFont(20, { role: 'display', weight: '800' });
+      ctx.fillStyle = roleColor('danger', 0.96);
+      ctx.fillText('DATA WITHHELD', briefX, briefPanel.y + 58);
+      ctx.font = canvasFont(11, { weight: '700' });
+      for (let i = 0; i < 6; i++) {
+        const y = briefPanel.y + 98 + i * 40;
+        ctx.fillStyle = roleColor('text', 0.78);
+        ctx.fillText('???', briefX, y);
+        ctx.fillStyle = roleColor('danger', 0.62);
+        ctx.fillRect(briefX + 42, y - 10, briefW - 42, 12);
       }
-    }
-    ctx.fillText(fitUiText(ctx, authorityLine, briefPanel.w - 44), briefX, authorityY + 22);
-    ctx.fillText(fitUiText(ctx, authorityLine2, briefPanel.w - 44), briefX, authorityY + 38);
-    if (authorityActions.length > 0) {
-      drawActionFooter(ctx, briefX, authorityY + 44, authorityActions, {
-        alpha: 0.84,
-        gap: 10,
-        maxWidth: briefPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2,
+      drawSectionLabel(ctx, 'survey confidence', briefX, briefPanel.y + briefPanel.h - 210, { role: 'danger', alpha: 0.88 });
+      ctx.font = canvasFont(28, { role: 'display', weight: '800' });
+      ctx.fillStyle = roleColor('danger', 0.96);
+      ctx.fillText('0%', briefX, briefPanel.y + briefPanel.h - 174);
+      drawSectionLabel(ctx, 'checksum', briefX, briefPanel.y + briefPanel.h - 124, { role: 'danger', alpha: 0.82 });
+      ctx.font = canvasFont(15, { weight: '700' });
+      ctx.fillStyle = roleColor('danger', 0.90);
+      ctx.fillText('INVALID', briefX, briefPanel.y + briefPanel.h - 100);
+      drawCommandButtonMotion(ctx, { x: briefX, y: commandY, w: briefW, h: UI_DECK_GEOMETRY.button.minHeight }, 'sector locked', {
+        role: 'muted', active: false, disabled: true, alpha: 0.94, progress: contentReveal, reducedMotion: motion.reducedMotion,
+      });
+    } else {
+      ctx.font = canvasFont(20, { role: 'display', weight: '800' });
+      ctx.fillStyle = roleColor('text', 0.96);
+      ctx.fillText(fitUiText(ctx, preview.mapClass.label, briefW), briefX, briefPanel.y + 58);
+      drawStatusPill(ctx, { x: briefX + briefW * 0.27, y: briefPanel.y + 86, w: briefW * 0.48, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, preview.scale.label, { role: 'flow', alpha: 0.88, minWidth: briefW * 0.48 });
+      drawStatusPill(ctx, { x: briefX + briefW * 0.78, y: briefPanel.y + 86, w: briefW * 0.40, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, preview.riskBand, { role: surveyRole, alpha: 0.88, minWidth: briefW * 0.40 });
+      drawKeyValueRow(ctx, 'signature', preview.signature.name, briefX, briefPanel.y + 128, { labelWidth: 88, valueRole: 'anomaly' });
+      ctx.font = canvasFont(10);
+      ctx.fillStyle = roleColor('muted', 0.74);
+      ctx.fillText(fitUiText(ctx, 'A coarse fabric read. Exact contacts remain unresolved.', briefW), briefX, briefPanel.y + 151);
+      drawSectionLabel(ctx, 'possible contacts', briefX, briefPanel.y + 180, { role: 'flow', alpha: 0.86 });
+      const contactY = briefPanel.y + 204;
+      for (const [index, family] of preview.possibleContactFamilies.entries()) {
+        const y = contactY + index * 35;
+        ctx.font = canvasFont(10, { weight: '700' });
+        ctx.fillStyle = roleColor(family.role, 0.84);
+        ctx.fillText(fitUiText(ctx, family.label, briefW - 76), briefX, y);
+        ctx.fillStyle = roleColor('muted', 0.72);
+        ctx.fillText(`${family.range.min}-${family.range.max}`, briefX + briefW - 62, y);
+        drawSegmentedGauge(ctx, { x: briefX, y: y + 7, w: briefW, h: 7 }, { value: family.range.max, max: family.range.max || 1, segments: 8, role: family.role, alpha: 0.72 });
+      }
+      const authorityY = commandY - 116;
+      const authorityActions = remoteControl?.canHostReset ? [{
+        descriptor: actionDescriptor('delete', promptOptions),
+        verb: 'host reset',
+      }] : [];
+      const authorityLine = remoteControl?.hasLiveSession
+        ? `live cycle // ${remoteControl.sessionPlayerCount} players`
+        : remoteControl?.loading ? 'checking live authority...' : 'local authority ready';
+      drawSectionLabel(ctx, 'authority', briefX, authorityY, { role: simClient?.enabled ? 'flow' : 'muted', alpha: 0.82 });
+      ctx.font = canvasFont(9);
+      ctx.fillStyle = roleColor('muted', 0.72);
+      ctx.fillText(fitUiText(ctx, authorityLine, briefW), briefX, authorityY + 20);
+      if (authorityActions.length > 0) {
+        drawActionFooter(ctx, briefX, authorityY + 28, authorityActions, {
+          alpha: 0.82, gap: 10, maxWidth: briefW,
+        });
+      }
+      drawSectionLabel(ctx, 'survey confidence', briefX, commandY - 56, { role: 'flow', alpha: 0.86 });
+      ctx.font = canvasFont(26, { role: 'display', weight: '800' });
+      ctx.fillStyle = roleColor('flow', 0.96);
+      ctx.fillText(`${preview.confidence}%`, briefX, commandY - 22);
+      drawCommandButtonMotion(ctx, { x: briefX, y: commandY, w: briefW, h: UI_DECK_GEOMETRY.button.minHeight }, remoteControl?.hasLiveSession ? 'join live cycle' : 'begin drop', {
+        action: actionDescriptor('confirm', promptOptions), role: surveyRole === 'danger' ? 'salvage' : surveyRole,
+        active: true, alpha: 0.96, progress: contentReveal, pulseTime: (totalTime % 1.45) / 1.45,
+        reducedMotion: motion.reducedMotion, commandPulse: motion.commandPulse,
       });
     }
-
-    drawCommandButtonMotion(ctx, {
-      x: briefX,
-      y: briefPanel.y + briefPanel.h - UI_DECK_GEOMETRY.button.minHeight - UI_DECK_GEOMETRY.button.gap,
-      w: briefPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2,
-      h: UI_DECK_GEOMETRY.button.minHeight,
-    }, 'begin drop', {
-        action: actionDescriptor('confirm', promptOptions),
-      role: routeRole === 'danger' ? 'salvage' : routeRole,
-      active: true,
-      alpha: 0.96,
-      progress: contentReveal,
-      pulseTime: (totalTime % 1.45) / 1.45,
-      reducedMotion: motion.reducedMotion,
-      commandPulse: motion.commandPulse,
-    });
 
     ctx.restore();
   }

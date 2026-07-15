@@ -109,6 +109,32 @@ export function deckPanelLayout(width, height, kind = 'home', viewportWidth = wi
   return { compact, width: w, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH, left, center, right };
 }
 
+export function mapSelectSurfaceLayout(width, height, viewportWidth = width, entryCount = 6) {
+  const panels = deckPanelLayout(width, height, 'map', viewportWidth);
+  const pad = UI_DECK_GEOMETRY.panel.paddingX;
+  const count = Math.max(1, Math.floor(Number(entryCount) || 1));
+  const rowH = Math.max(58, Math.min(68, (panels.left.h - 160) / count));
+  const rows = Array.from({ length: count }, (_, index) => rect(
+    panels.left.x + pad,
+    panels.left.y + 52 + index * (rowH + UI_DECK_GEOMETRY.separation),
+    panels.left.w - pad * 2,
+    rowH,
+  ));
+  const command = rect(
+    panels.right.x + pad,
+    panels.right.y + panels.right.h - UI_DECK_GEOMETRY.button.minHeight - UI_DECK_GEOMETRY.button.gap - UI_DECK_GEOMETRY.actionGlyph.minHeight - 4,
+    panels.right.w - pad * 2,
+    UI_DECK_GEOMETRY.button.minHeight,
+  );
+  return {
+    ...panels,
+    pad,
+    rows,
+    footer: rect(panels.left.x + pad, panels.left.y + panels.left.h - 54, panels.left.w - pad * 2, UI_DECK_GEOMETRY.actionGlyph.minHeight),
+    command,
+  };
+}
+
 export function profileSurfaceLayout(width, height) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
