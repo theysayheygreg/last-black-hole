@@ -7,7 +7,20 @@
 
 import { setWorldScale } from './coords.js';
 import { selectAnomalyCast } from './anomaly-catalog.js';
-import { assertMapDefinitionParity } from './content/map-scales.js';
+import { assertMapDefinitionParity, PLAYABLE_MAP_IDS } from './content/map-scales.js';
+
+function resolveMapDefinition(map) {
+  if (map?.id) return assertMapDefinitionParity(map);
+  if (!map || !Number.isFinite(map.worldScale)) return assertMapDefinitionParity(map);
+
+  // Title and renderer compositions are presentation fixtures, not playable
+  // maps. Keep their authored dimensions while routing catalog selection
+  // through a valid canonical playable id.
+  return {
+    mapId: PLAYABLE_MAP_IDS[0],
+    dimensions: { width: map.worldScale, height: map.worldScale },
+  };
+}
 
 function applyPlanetoidOverrides(planetoid, data = {}) {
   if (!planetoid) return planetoid;
@@ -36,7 +49,7 @@ function applyPlanetoidOverrides(planetoid, data = {}) {
  */
 export function loadMap(map, systems, { seed = 1 } = {}) {
   const { wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid } = systems;
-  const mapDefinition = assertMapDefinitionParity(map);
+  const mapDefinition = resolveMapDefinition(map);
 
   // 1. Set world scale (live binding — all importers see the new value)
   setWorldScale(mapDefinition.dimensions.width);
@@ -57,7 +70,7 @@ export function loadMap(map, systems, { seed = 1 } = {}) {
   // 4. Spawn wells through the catalog migration seam. The selected entry
   // only supplies identity in phase 1; current-well fields remain untouched.
   const anomalyCatalog = selectAnomalyCast({
-    mapId: map.id,
+    mapId: mapDefinition.mapId,
     seed,
     wellCount: map.wells.length,
   });
