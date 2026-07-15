@@ -1,13 +1,6 @@
 # W1-F3 Portal Clock Completion
 
-Status: red/WIP checkpoint. The implementation is preserved, but focused
-proof is not accepted yet.
-
-The latest `node tests/portal-clock.cjs` rerun was interrupted after the
-commit-before-rerun checkpoint rule was violated. No conclusion from that
-interrupted run is used as closure evidence. The first unproven contract is
-the real server final-exfil transition at the guard-valid 10-20 second test
-schedule.
+Status: complete for the bounded W1-F3 portal-clock authority slice.
 
 ## Delivered
 
@@ -57,9 +50,17 @@ Inhibitor blocking and optional thinning.
 The portal contract covers stable multi-seed schedule data, guarded fronts,
 open/close IDs and order, no pre-window portal state, deterministic late
 thinning/shortening, declared final spawn bands, and the main-timer/final-close
-transition. Its short guard-valid server declaration proves the real open,
-spawn, close, and session transition without waiting through the production
-`600s/60s` window. No browser or broad suite was used.
+transition. The one allowed `node tests/portal-clock.cjs` run started the real
+server with `LBH_SIM_MAX_SIM_TIME=10`,
+`LBH_SIM_FINAL_EXFIL_DURATION=10`, and a joined human client. It observed no
+final portal in a running snapshot at `5 <= simTime < 10`; at
+`10 <= simTime < 20` it observed the live `portal-final-exfil` with
+`windowId=portal:final-exfil:1`, scheduled fronts `10/20`, and session status
+`running`. The event journal contained the matching `portal.windowOpened` and
+`portal.spawned` events with `conductorId=match-conductor`. At `simTime >= 20`
+the real session was `ended` with `endReason=run-timeout`, zero active humans,
+and matching `portal.windowClosed` and `portal.expired` events; the close event
+carried the paired `:close` identity. No browser or broad suite was used.
 
 ## Deferred
 
