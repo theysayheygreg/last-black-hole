@@ -73,3 +73,26 @@ image model invented some labels, currencies, and IDs that are not game canon.
 Implementation should preserve the mood, hierarchy, and readability while using
 the real LBH terms and mechanics.
 
+## Map Select Survey-Terminal Target
+
+The accepted Map Select direction is a survey terminal with a strict scan path:
+
+1. The left register establishes the three playable scales, then generic locked
+   sectors.
+2. The center reconstruction is the hero: broad, uncertain topology with
+   incomplete scan tiles and no exact entity placement.
+3. The right rail interprets the selected survey through possible contents,
+   broad risk, and incomplete confidence.
+
+Use language such as `POSSIBLE CONTACTS`, ranges, and `SURVEY CONFIDENCE`.
+Avoid guaranteed-object language and never turn the center into a route map:
+player spawn, exact wells, portals, wrecks, object layout, path sequence, and
+signal pressure are not player-facing Map Select information. Valid and locked
+states share the terminal frame language, while locked content becomes
+withheld/redacted and removes the launch action. Reduced motion keeps that state
+as a static corruption treatment.
+
+The active-device affordance is part of the visual target. A valid launch uses
+the shared graphical controller glyph contract at Deck scale; a locked row has
+no action prompt. Deck/controller captures must not fall back to raw keyboard
+text or duplicate the command label.
