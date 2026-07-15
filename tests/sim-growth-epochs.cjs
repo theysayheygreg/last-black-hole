@@ -212,6 +212,24 @@ async function run() {
     assert(runtime.includes("applyWellGrowth(well"), "authority must route both growth causes through the shared helper");
   });
 
+  await runner.run("star consumption emits exactly one associated growth wave", () => {
+    const runtime = fs.readFileSync(path.join(__dirname, "../scripts/sim-runtime.cjs"), "utf8");
+    const helperStart = runtime.indexOf("function applyWellGrowth(");
+    const helperEnd = runtime.indexOf("function tickWaveRings(", helperStart);
+    const starStart = runtime.indexOf("function tickStars(");
+    const starEnd = runtime.indexOf("function tickWrecks(", starStart);
+    const growthHelper = runtime.slice(helperStart, helperEnd);
+    const starConsumption = runtime.slice(starStart, starEnd);
+    const waveSpawns = (source) => (source.match(/\bspawnWaveRing\(/g) || []).length;
+
+    assert.strictEqual(waveSpawns(growthHelper), 1, "well growth must create the associated wave");
+    assert.strictEqual(waveSpawns(starConsumption), 0, "star consumption must not create a second wave");
+    const growthCall = starConsumption.indexOf("const growthEvent = applyWellGrowth(well");
+    const consumedEvent = starConsumption.indexOf('publishEvent("star.consumed"');
+    assert(growthCall >= 0 && growthCall < consumedEvent, "well.grew must publish before star.consumed");
+    assert(starConsumption.includes("wellGrowthEventSeq: growthEvent.seq"), "star.consumed must carry the growth event sequence");
+  });
+
   const passed = runner.summary();
   console.log(`SimGrowthEpochs: ${passed ? "focused proof passed" : "focused proof failed"}`);
   process.exit(passed ? 0 : 1);

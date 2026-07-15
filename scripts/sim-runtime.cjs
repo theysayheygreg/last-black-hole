@@ -2950,7 +2950,6 @@ function tickStars(dt, stars = runtime.mapState.stars) {
           name: `Remnant of ${star.name}`,
         };
         runtime.mapState.wrecks.push(remnant);
-        spawnWaveRing(well.wx, well.wy, (star.mass || 1) * 3);
         publishEvent("star.consumed", {
           starId: star.id,
           starName: star.name,
