@@ -151,6 +151,53 @@ function anchor(source = {}) {
   });
 }
 
+function telegraph(source = null) {
+  if (!source) return null;
+  const normalizeAnchor = (value) => anchor({
+    wx: value?.wx,
+    wy: value?.wy,
+    range: value?.range,
+    type: value?.type,
+    energy: value?.energy,
+    chainCount: value?.chainCount,
+  });
+  const lock = source.lock;
+  const ownedArc = source.ownedArc;
+  const ghost = source.releaseGhost;
+  return Object.freeze({
+    phase: text(source.phase, 'idle'),
+    aimCue: source.aimCue ? Object.freeze({
+      anchor: normalizeAnchor(source.aimCue.anchor),
+      distance: Math.max(0, finite(source.aimCue.distance)),
+      coyoteActive: source.aimCue.coyoteActive === true,
+      coyoteRemainingMs: Math.max(0, finite(source.aimCue.coyoteRemainingMs)),
+    }) : null,
+    lock: lock ? Object.freeze({
+      anchor: normalizeAnchor(lock.anchor),
+      entry: forceVector(lock.entry),
+      locked: forceVector(lock.locked),
+      bendDegrees: Math.max(0, finite(lock.bendDegrees)),
+    }) : null,
+    ownedArc: ownedArc ? Object.freeze({
+      anchor: normalizeAnchor(ownedArc.anchor),
+      orbitDir: finite(ownedArc.orbitDir),
+      arcRadians: finite(ownedArc.arcRadians),
+      quarterTurns: Math.max(0, finite(ownedArc.quarterTurns)),
+      energy: Math.max(0, finite(ownedArc.energy)),
+      chainCount: Math.max(0, Math.floor(finite(ownedArc.chainCount))),
+    }) : null,
+    releaseGhost: ghost ? Object.freeze({
+      anchor: normalizeAnchor(ghost.anchor),
+      entry: forceVector(ghost.entry),
+      exit: forceVector(ghost.exit),
+      direction: forceVector(ghost.direction),
+      speedCap: Math.max(0, finite(ghost.speedCap)),
+      quarterTurns: Math.max(0, finite(ghost.quarterTurns)),
+      remainingMs: Math.max(0, finite(ghost.remainingMs)),
+    }) : null,
+  });
+}
+
 function normalizeLocalPlayer(source = null, scene = {}) {
   if (!source) return null;
   const motion = velocity(source);
@@ -173,6 +220,8 @@ function normalizeLocalPlayer(source = null, scene = {}) {
       engaged: Boolean(source.slingshotEngaged || sling.engaged),
       affordance: anchor(sling.affordance),
       anchor: anchor(sling.engaged || source.slingshotAnchor),
+      phase: text(sling.phase, source.slingshotPhase || 'idle'),
+      telegraph: telegraph(sling.telegraph),
     }),
     status: text(source.status, 'alive'),
     hint: hint('player'),

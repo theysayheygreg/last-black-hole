@@ -91,6 +91,18 @@ const {
   recordForceMutation,
   setForceLedgerDt,
 } = require("./sim/force-ledger.cjs");
+const {
+  INTERNAL: SLINGSHOT_INTERNAL,
+  SLINGSHOT_VALUES,
+  boundedReleaseDelta,
+  captureRadiusWorld,
+  coyoteWindowOpen,
+  quarterTurnsFromArc,
+  releaseSpeedCap,
+  resolveChainCount,
+  rotateToward,
+  signedAngle,
+} = require("./sim/slingshot-contract.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 
@@ -272,18 +284,17 @@ const WAVE_SERVER = {
   waveShipPush: 0.8,
   growthWaveAmplitude: 1.0,
 };
-const SLINGSHOT_SERVER = {
-  range: { well: 0.45, star: 0.30, planetoid: 0.18 },
-  massWeight: { well: 1.0, star: 0.6, planetoid: 0.3 },
-  energyAccrualRate: 3.5,
-  releaseMultiplier: 4.5,
-  gravityCancelFraction: 0.95,
-  tangentialForce: 1.5,
-  chainWindowSeconds: 1.2,
-  chainMultiplier: 1.4,
-  minTangentialSpeed: 0.05,
-  maxChainCount: 6,
-};
+const SLINGSHOT_SERVER = Object.freeze({
+  // Exactly five player-facing gameplay knobs. The values/ranges/steps live
+  // in slingshot-contract.cjs; the remaining fields are implementation-only.
+  captureRadius: SLINGSHOT_VALUES.captureRadius,
+  magnetism: SLINGSHOT_VALUES.magnetism,
+  coyoteTime: SLINGSHOT_VALUES.coyoteTime,
+  payoffCurve: SLINGSHOT_VALUES.payoffCurve,
+  chainWindow: SLINGSHOT_VALUES.chainWindow,
+  internal: SLINGSHOT_INTERNAL,
+  massWeight: Object.freeze({ well: 1.0, star: 0.6, planetoid: 0.3 }),
+});
 const SIGNAL_CONFIG = {
   // Generation rates (per second for continuous, instant for spikes)
   thrustBaseRate: 0.005,
@@ -1395,6 +1406,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     controlDebuff: 0,
     portalInteraction: null,
     slingshot: {
+      phase: "idle",
       engaged: false,
       anchorId: null,
       anchorType: null,
@@ -1412,6 +1424,23 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       entryVY: 0,
       lockedVX: 0,
       lockedVY: 0,
+      bendDegrees: 0,
+      arcRadians: 0,
+      previousRadialX: 0,
+      previousRadialY: 0,
+      aimAnchorKey: null,
+      aimAnchorId: null,
+      aimAnchorType: null,
+      aimAnchorWX: null,
+      aimAnchorWY: null,
+      aimAnchorRange: 0,
+      aimDistance: 0,
+      lastAimSeenTime: -Infinity,
+      coyoteUntil: 0,
+      coyoteActive: false,
+      lockTick: -1,
+      releaseGhostUntil: 0,
+      releaseGhost: null,
       lastPayoff: null,
     },
     committedOutcome: null,
@@ -1863,6 +1892,7 @@ function buildSnapshotBody() {
       vx: player.vx,
       vy: player.vy,
       slingshot: player.slingshot ? {
+        phase: player.slingshot.phase || "idle",
         engaged: Boolean(player.slingshot.engaged),
         anchorId: player.slingshot.anchorId ?? null,
         anchorType: player.slingshot.anchorType ?? null,
@@ -1873,6 +1903,19 @@ function buildSnapshotBody() {
         chainCount: player.slingshot.chainCount || 0,
         engageRadius: player.slingshot.engageRadius || 0,
         orbitDir: player.slingshot.orbitDir || 0,
+        bendDegrees: player.slingshot.bendDegrees || 0,
+        arcRadians: player.slingshot.arcRadians || 0,
+        aim: player.slingshot.aimAnchorKey ? {
+          anchorId: player.slingshot.aimAnchorId,
+          anchorType: player.slingshot.aimAnchorType,
+          anchorWX: player.slingshot.aimAnchorWX,
+          anchorWY: player.slingshot.aimAnchorWY,
+          anchorRange: player.slingshot.aimAnchorRange,
+          distance: player.slingshot.aimDistance,
+          coyoteActive: Boolean(player.slingshot.coyoteActive),
+          coyoteRemainingMs: Math.max(0, (player.slingshot.coyoteUntil - runtime.simTime) * 1000),
+        } : null,
+        telegraph: buildSlingshotTelegraph(player),
       } : null,
       deltaV: player.deltaV,
       deltaVMax: player.deltaVMax,
@@ -3624,6 +3667,7 @@ function applyDebugPlayerState(player, body) {
   if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
   if (body.resetSlingshot === true) {
     const state = ensurePlayerSlingshot(player);
+    state.phase = "idle";
     state.engaged = false;
     state.anchorId = null;
     state.anchorType = null;
@@ -3641,6 +3685,23 @@ function applyDebugPlayerState(player, body) {
     state.entryVY = 0;
     state.lockedVX = 0;
     state.lockedVY = 0;
+    state.bendDegrees = 0;
+    state.arcRadians = 0;
+    state.previousRadialX = 0;
+    state.previousRadialY = 0;
+    state.aimAnchorKey = null;
+    state.aimAnchorId = null;
+    state.aimAnchorType = null;
+    state.aimAnchorWX = null;
+    state.aimAnchorWY = null;
+    state.aimAnchorRange = 0;
+    state.aimDistance = 0;
+    state.lastAimSeenTime = -Infinity;
+    state.coyoteUntil = 0;
+    state.coyoteActive = false;
+    state.lockTick = -1;
+    state.releaseGhostUntil = 0;
+    state.releaseGhost = null;
     state.lastPayoff = null;
     state.consumedEdgeIds = [];
     if (player.lastInput) player.lastInput.slingshotEdges = [];
@@ -4522,6 +4583,7 @@ function estimateFlow(wx, wy) {
 function ensurePlayerSlingshot(player) {
   if (player.slingshot) return player.slingshot;
   player.slingshot = {
+    phase: "idle",
     engaged: false,
     anchorId: null,
     anchorType: null,
@@ -4539,6 +4601,23 @@ function ensurePlayerSlingshot(player) {
     entryVY: 0,
     lockedVX: 0,
     lockedVY: 0,
+    bendDegrees: 0,
+    arcRadians: 0,
+    previousRadialX: 0,
+    previousRadialY: 0,
+    aimAnchorKey: null,
+    aimAnchorId: null,
+    aimAnchorType: null,
+    aimAnchorWX: null,
+    aimAnchorWY: null,
+    aimAnchorRange: 0,
+    aimDistance: 0,
+    lastAimSeenTime: -Infinity,
+    coyoteUntil: 0,
+    coyoteActive: false,
+    lockTick: -1,
+    releaseGhostUntil: 0,
+    releaseGhost: null,
     lastPayoff: null,
   };
   return player.slingshot;
@@ -4562,7 +4641,7 @@ function collectSlingshotAnchors() {
       pullStrength: SERVER_WELLS.shipPullStrength,
       pullFalloff: SERVER_WELLS.shipPullFalloff,
       pullRange: SERVER_WELLS.maxRange,
-      range: SLINGSHOT_SERVER.range.well,
+      range: captureRadiusWorld("well", SLINGSHOT_SERVER.captureRadius),
     });
   });
   runtime.mapState.stars.forEach((star, index) => {
@@ -4578,7 +4657,7 @@ function collectSlingshotAnchors() {
       pullStrength: STAR_SERVER.shipPushStrength,
       pullFalloff: STAR_SERVER.shipPushFalloff,
       pullRange: STAR_SERVER.maxRange,
-      range: SLINGSHOT_SERVER.range.star,
+      range: captureRadiusWorld("star", SLINGSHOT_SERVER.captureRadius),
     });
   });
   runtime.mapState.planetoids.forEach((planetoid, index) => {
@@ -4594,7 +4673,7 @@ function collectSlingshotAnchors() {
       pullStrength: PLANETOID_SERVER.shipPushStrength,
       pullFalloff: 1,
       pullRange: PLANETOID_SERVER.shipPushRadius,
-      range: SLINGSHOT_SERVER.range.planetoid,
+      range: captureRadiusWorld("planetoid", SLINGSHOT_SERVER.captureRadius),
     });
   });
   return anchors;
@@ -4626,20 +4705,78 @@ function slingshotOrbitDirection(player, anchor) {
   return (player.vx * tx + player.vy * ty) >= 0 ? 1 : -1;
 }
 
-function findSlingshotAffordance(player) {
+function findNearestSlingshotAffordance(player) {
   let best = null;
   let bestDist = Infinity;
   for (const anchor of collectSlingshotAnchors()) {
     const dist = worldDistance(player.wx, player.wy, anchor.wx, anchor.wy, runtime.session.worldScale);
-    if (dist <= anchor.range && slingshotTangentialSpeed(player, anchor) < SLINGSHOT_SERVER.minTangentialSpeed) {
-      continue;
-    }
     if (dist <= anchor.range && dist < bestDist) {
       best = { anchor, distance: dist };
       bestDist = dist;
     }
   }
   return best;
+}
+
+function updateSlingshotAim(player, currentTime) {
+  const state = ensurePlayerSlingshot(player);
+  if (state.engaged) return null;
+  const current = findNearestSlingshotAffordance(player);
+  if (current) {
+    const key = slingshotAnchorKey(current.anchor);
+    state.phase = "aim";
+    state.aimAnchorKey = key;
+    state.aimAnchorId = current.anchor.id;
+    state.aimAnchorType = current.anchor.type;
+    state.aimAnchorWX = current.anchor.wx;
+    state.aimAnchorWY = current.anchor.wy;
+    state.aimAnchorRange = current.anchor.range;
+    state.aimDistance = current.distance;
+    state.lastAimSeenTime = currentTime;
+    state.coyoteUntil = currentTime + Math.max(0, SLINGSHOT_SERVER.coyoteTime) / 1000;
+    state.coyoteActive = false;
+    return current;
+  }
+
+  const canCoyote = state.aimAnchorKey && coyoteWindowOpen(
+    currentTime,
+    state.lastAimSeenTime,
+    SLINGSHOT_SERVER.coyoteTime,
+  );
+  if (canCoyote) {
+    state.phase = "aim";
+    state.coyoteActive = true;
+    return findSlingshotAnchorByState({
+      anchorId: state.aimAnchorId,
+      anchorType: state.aimAnchorType,
+    });
+  }
+
+  state.phase = "idle";
+  state.aimAnchorKey = null;
+  state.aimAnchorId = null;
+  state.aimAnchorType = null;
+  state.aimAnchorWX = null;
+  state.aimAnchorWY = null;
+  state.aimAnchorRange = 0;
+  state.aimDistance = 0;
+  state.coyoteActive = false;
+  state.coyoteUntil = 0;
+  return null;
+}
+
+function findSlingshotAffordance(player, currentTime = runtime.simTime) {
+  const normal = findNearestSlingshotAffordance(player);
+  if (normal) return normal;
+  const state = ensurePlayerSlingshot(player);
+  if (!state.aimAnchorKey || !coyoteWindowOpen(currentTime, state.lastAimSeenTime, SLINGSHOT_SERVER.coyoteTime)) {
+    return null;
+  }
+  const anchor = findSlingshotAnchorByState({ anchorId: state.aimAnchorId, anchorType: state.aimAnchorType });
+  if (!anchor) return null;
+  const distance = worldDistance(player.wx, player.wy, anchor.wx, anchor.wy, runtime.session.worldScale);
+  if (distance > anchor.range * SLINGSHOT_INTERNAL.rangeBreakGraceFactor) return null;
+  return { anchor, distance, coyote: true };
 }
 
 function slingshotHullMods(player) {
@@ -4658,23 +4795,74 @@ function vectorAngleDegrees(a, b) {
   return Math.acos(cosine) * 180 / Math.PI;
 }
 
+function slingshotAnchorTelemetry(state, prefix = "anchor") {
+  const field = (name) => prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
+  const id = state[field("anchorId")];
+  if (!id) return null;
+  return {
+    id,
+    type: state[field("anchorType")],
+    wx: state[field("anchorWX")],
+    wy: state[field("anchorWY")],
+    range: state[field("anchorRange")] || 0,
+  };
+}
+
+function buildSlingshotTelegraph(player) {
+  const state = ensurePlayerSlingshot(player);
+  const aimAnchor = slingshotAnchorTelemetry(state, "aim");
+  const activeAnchor = slingshotAnchorTelemetry(state, "");
+  const releaseGhost = state.releaseGhost ? {
+    ...state.releaseGhost,
+    remainingMs: Math.max(0, (state.releaseGhostUntil - runtime.simTime) * 1000),
+  } : null;
+  return {
+    phase: state.phase || "idle",
+    aimCue: aimAnchor ? {
+      anchor: aimAnchor,
+      distance: state.aimDistance || 0,
+      coyoteActive: Boolean(state.coyoteActive),
+      coyoteRemainingMs: Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000),
+    } : null,
+    lock: state.engaged || state.phase === "lock" ? {
+      anchor: activeAnchor,
+      entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+      locked: { x: state.lockedVX || 0, y: state.lockedVY || 0 },
+      bendDegrees: state.bendDegrees || 0,
+    } : null,
+    ownedArc: state.engaged ? {
+      anchor: activeAnchor,
+      orbitDir: state.orbitDir || 0,
+      arcRadians: state.arcRadians || 0,
+      quarterTurns: quarterTurnsFromArc(state.arcRadians, state.chainCount),
+      energy: state.energy || 0,
+      chainCount: state.chainCount || 0,
+    } : null,
+    releaseGhost,
+  };
+}
+
 function buildPlayerRulerFacts(player) {
   const state = ensurePlayerSlingshot(player);
   const mods = slingshotHullMods(player);
-  const effectiveChainWindow = SLINGSHOT_SERVER.chainWindowSeconds * mods.chainWindowMult;
+  const effectiveChainWindow = SLINGSHOT_SERVER.chainWindow * mods.chainWindowMult;
   const chainElapsed = runtime.simTime - (state.lastReleaseTime ?? -Infinity);
   const chainRemaining = Number.isFinite(chainElapsed)
     ? Math.max(0, effectiveChainWindow - chainElapsed)
     : 0;
   const releaseDirection = slingshotReleaseDirection(player);
-  const chainMult = Math.pow(SLINGSHOT_SERVER.chainMultiplier, Math.max(0, (state.chainCount || 1) - 1));
-  const projectedBoost = (state.energy || 0) * chainMult * SLINGSHOT_SERVER.releaseMultiplier * mods.energyMult;
+  const projectedBoost = (state.energy || 0) * SLINGSHOT_INTERNAL.releaseFillMultiplier * mods.energyMult;
   const livePayoff = state.engaged ? {
     entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
-    exit: {
-      x: player.vx + releaseDirection.x * projectedBoost,
-      y: player.vy + releaseDirection.y * projectedBoost,
-    },
+    exit: boundedReleaseDelta({
+      velocity: { x: player.vx, y: player.vy },
+      direction: releaseDirection,
+      entrySpeed: Math.hypot(state.entryVX || 0, state.entryVY || 0),
+      arcRadians: state.arcRadians,
+      payoffCurve: SLINGSHOT_SERVER.payoffCurve,
+      chainCount: state.chainCount,
+      desiredBoost: projectedBoost,
+    }).exit,
   } : state.lastPayoff;
   const entrySpeed = Math.hypot(livePayoff?.entry?.x || 0, livePayoff?.entry?.y || 0);
   const exitSpeed = Math.hypot(livePayoff?.exit?.x || 0, livePayoff?.exit?.y || 0);
@@ -4682,20 +4870,21 @@ function buildPlayerRulerFacts(player) {
     source: "authority",
     slingshot: {
       captureRadius_m: {
-        well: simUnitsToMeters(SLINGSHOT_SERVER.range.well),
-        star: simUnitsToMeters(SLINGSHOT_SERVER.range.star),
-        planetoid: simUnitsToMeters(SLINGSHOT_SERVER.range.planetoid),
+        well: SLINGSHOT_SERVER.captureRadius,
+        star: SLINGSHOT_SERVER.captureRadius * (2 / 3),
+        planetoid: SLINGSHOT_SERVER.captureRadius * 0.4,
       },
       magnetism: {
-        active: Boolean(state.engaged),
+        active: Boolean(state.engaged || state.phase === "lock"),
         entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
         locked: { x: state.lockedVX || 0, y: state.lockedVY || 0 },
-        bend_deg: vectorAngleDegrees(
-          { x: state.entryVX || 0, y: state.entryVY || 0 },
-          { x: state.lockedVX || 0, y: state.lockedVY || 0 }
-        ),
+        bend_deg: state.bendDegrees || 0,
       },
-      coyoteTime: { implemented: false, duration_ms: 0, remaining_ms: 0 },
+      coyoteTime: {
+        implemented: SLINGSHOT_SERVER.coyoteTime > 0,
+        duration_ms: SLINGSHOT_SERVER.coyoteTime,
+        remaining_ms: Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000),
+      },
       payoffCurve: {
         active: Boolean(livePayoff),
         entry: livePayoff?.entry || { x: 0, y: 0 },
@@ -4714,20 +4903,22 @@ function buildPlayerRulerFacts(player) {
 function engagePlayerSlingshot(player, currentTime) {
   const state = ensurePlayerSlingshot(player);
   if (state.engaged) return false;
-  const affordance = findSlingshotAffordance(player);
+  const affordance = findSlingshotAffordance(player, currentTime);
   const anchor = affordance?.anchor;
   if (!anchor) return false;
   const tanSpeed = slingshotTangentialSpeed(player, anchor);
-  if (tanSpeed < SLINGSHOT_SERVER.minTangentialSpeed) return false;
+  if (tanSpeed < SLINGSHOT_INTERNAL.minimumTangentialSpeed) return false;
 
   const mods = slingshotHullMods(player);
-  const sinceRelease = currentTime - (state.lastReleaseTime ?? -Infinity);
-  const chainWindow = SLINGSHOT_SERVER.chainWindowSeconds * mods.chainWindowMult;
   const anchorKey = slingshotAnchorKey(anchor);
-  const chained = sinceRelease <= chainWindow && state.lastReleasedAnchorKey && state.lastReleasedAnchorKey !== anchorKey;
-  const chainCount = chained
-    ? Math.min((state.chainCount || 1) + 1, SLINGSHOT_SERVER.maxChainCount)
-    : 1;
+  const chainCount = resolveChainCount({
+    nowSeconds: currentTime,
+    lastReleaseSeconds: state.lastReleaseTime,
+    chainWindowSeconds: SLINGSHOT_SERVER.chainWindow * mods.chainWindowMult,
+    lastAnchorKey: state.lastReleasedAnchorKey,
+    anchorKey,
+    previousCount: state.chainCount,
+  });
 
   const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
   const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
@@ -4738,6 +4929,11 @@ function engagePlayerSlingshot(player, currentTime) {
   const tangentNX = -radialNY * orbitDir;
   const tangentNY = radialNX * orbitDir;
   const speed = Math.hypot(player.vx, player.vy);
+  const locked = rotateToward(
+    { x: player.vx, y: player.vy },
+    { x: tangentNX * speed, y: tangentNY * speed },
+    SLINGSHOT_SERVER.magnetism,
+  );
   state.entryVX = player.vx;
   state.entryVY = player.vy;
 
@@ -4751,8 +4947,15 @@ function engagePlayerSlingshot(player, currentTime) {
   state.chainCount = chainCount;
   state.engageRadius = affordance.distance;
   state.orbitDir = orbitDir;
-  player.vx = tangentNX * speed;
-  player.vy = tangentNY * speed;
+  state.phase = "lock";
+  state.lockTick = runtime.tick;
+  state.bendDegrees = locked.bendDegrees;
+  state.arcRadians = 0;
+  state.previousRadialX = radialNX;
+  state.previousRadialY = radialNY;
+  state.coyoteActive = false;
+  player.vx = locked.vector.x;
+  player.vy = locked.vector.y;
   state.lockedVX = player.vx;
   state.lockedVY = player.vy;
 
@@ -4761,6 +4964,8 @@ function engagePlayerSlingshot(player, currentTime) {
     anchorId: anchor.id,
     anchorType: anchor.type,
     chainCount,
+    phase: state.phase,
+    bendDegrees: state.bendDegrees,
   });
   return true;
 }
@@ -4778,20 +4983,36 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   if (!state.engaged) return null;
   const mods = slingshotHullMods(player);
   const baseEnergy = state.energy || 0;
-  const chainMult = Math.pow(SLINGSHOT_SERVER.chainMultiplier, Math.max(0, (state.chainCount || 1) - 1));
-  const totalEnergy = baseEnergy * chainMult * SLINGSHOT_SERVER.releaseMultiplier * mods.energyMult;
+  const entrySpeed = Math.hypot(state.entryVX || 0, state.entryVY || 0);
+  const requestedBoost = baseEnergy * SLINGSHOT_INTERNAL.releaseFillMultiplier * mods.energyMult;
   const dir = slingshotReleaseDirection(player, input);
   const beforeRelease = { x: player.vx, y: player.vy };
+  const speedCap = releaseSpeedCap(
+    entrySpeed,
+    state.arcRadians,
+    SLINGSHOT_SERVER.payoffCurve,
+    state.chainCount,
+  );
+  const release = boundedReleaseDelta({
+    velocity: beforeRelease,
+    direction: dir,
+    entrySpeed,
+    arcRadians: state.arcRadians,
+    payoffCurve: SLINGSHOT_SERVER.payoffCurve,
+    chainCount: state.chainCount,
+    desiredBoost: requestedBoost,
+  });
   state.lastPayoff = {
     entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
-    exit: {
-      x: beforeRelease.x + (applyBoost ? dir.x * totalEnergy : 0),
-      y: beforeRelease.y + (applyBoost ? dir.y * totalEnergy : 0),
-    },
+    exit: applyBoost ? release.exit : beforeRelease,
+    direction: { x: dir.x, y: dir.y },
+    speedCap,
+    arcRadians: state.arcRadians,
+    quarterTurns: quarterTurnsFromArc(state.arcRadians, state.chainCount),
   };
   if (applyBoost) {
-    player.vx += dir.x * totalEnergy;
-    player.vy += dir.y * totalEnergy;
+    player.vx = release.exit.x;
+    player.vy = release.exit.y;
   }
   const previousAnchorId = state.anchorId;
   const previousAnchorType = state.anchorType;
@@ -4806,6 +5027,25 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   state.energy = 0;
   state.engageRadius = 0;
   state.orbitDir = 0;
+  state.arcRadians = 0;
+  state.previousRadialX = 0;
+  state.previousRadialY = 0;
+  state.phase = "release-ghost";
+  state.releaseGhostUntil = currentTime + SLINGSHOT_INTERNAL.releaseGhostDurationSeconds;
+  state.releaseGhost = {
+    anchor: {
+      id: previousAnchorId,
+      type: previousAnchorType,
+      wx: state.aimAnchorWX,
+      wy: state.aimAnchorWY,
+      range: state.aimAnchorRange,
+    },
+    entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+    exit: applyBoost ? release.exit : beforeRelease,
+    direction: { x: dir.x, y: dir.y },
+    speedCap,
+    quarterTurns: state.lastPayoff.quarterTurns,
+  };
 
   publishEvent("player.slingshotReleased", {
     clientId: player.clientId,
@@ -4813,10 +5053,12 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
     anchorType: previousAnchorType,
     reason,
     energyBanked: baseEnergy,
-    totalEnergyAwarded: applyBoost ? totalEnergy : 0,
+    totalEnergyAwarded: applyBoost ? Math.hypot(release.delta.x, release.delta.y) : 0,
     chainCount: state.chainCount || 1,
+    speedCap,
+    exitSpeed: Math.hypot(player.vx, player.vy),
   });
-  return { totalEnergy, baseEnergy, chainCount: state.chainCount || 1 };
+  return { totalEnergy: Math.hypot(release.delta.x, release.delta.y), baseEnergy, chainCount: state.chainCount || 1 };
 }
 
 function rememberConsumedSlingshotEdge(state, edgeId) {
@@ -4871,12 +5113,22 @@ function applyPlayerSlingshotForces(player, dt, input) {
 
   const radialNX = dx / dist;
   const radialNY = dy / dist;
+  if (state.lockTick !== runtime.tick && state.phase === "lock") state.phase = "arc";
+  if (Math.hypot(state.previousRadialX, state.previousRadialY) > 0.5) {
+    const radialDelta = signedAngle(
+      { x: state.previousRadialX, y: state.previousRadialY },
+      { x: radialNX, y: radialNY },
+    ) * (state.orbitDir || 1);
+    if (radialDelta > 0) state.arcRadians += radialDelta;
+  }
+  state.previousRadialX = radialNX;
+  state.previousRadialY = radialNY;
   const orbitDir = state.orbitDir || 1;
   const tangentNX = -radialNY * orbitDir;
   const tangentNY = radialNX * orbitDir;
   const tanSpeed = player.vx * tangentNX + player.vy * tangentNY;
   const proximity = Math.max(0, 1 - dist / Math.max(anchor.range, 1e-4));
-  state.energy += SLINGSHOT_SERVER.energyAccrualRate
+  state.energy += SLINGSHOT_INTERNAL.energyAccrualRate
     * Math.max(0, tanSpeed)
     * anchor.massWeight
     * proximity
@@ -4891,13 +5143,18 @@ function applyPlayerSlingshotForces(player, dt, input) {
     anchor.pullFalloff,
     anchor.pullRange
   );
-  const cancelMag = radialPull * SLINGSHOT_SERVER.gravityCancelFraction;
-  player.vx += (-radialNX * cancelMag + tangentNX * SLINGSHOT_SERVER.tangentialForce) * dt;
-  player.vy += (-radialNY * cancelMag + tangentNY * SLINGSHOT_SERVER.tangentialForce) * dt;
+  const cancelMag = radialPull * SLINGSHOT_INTERNAL.gravityCancelFraction;
+  player.vx += (-radialNX * cancelMag + tangentNX * SLINGSHOT_INTERNAL.tangentialForce) * dt;
+  player.vy += (-radialNY * cancelMag + tangentNY * SLINGSHOT_INTERNAL.tangentialForce) * dt;
 }
 
 function tickPlayerSlingshot(player, dt, input) {
   const state = ensurePlayerSlingshot(player);
+  if (!state.engaged && state.phase === "release-ghost" && runtime.simTime >= state.releaseGhostUntil) {
+    state.phase = "idle";
+    state.releaseGhost = null;
+  }
+  if (!state.engaged) updateSlingshotAim(player, runtime.simTime);
   const pendingEdges = Array.isArray(input?.slingshotEdges) ? input.slingshotEdges : [];
   const edgeId = pendingEdges.shift();
   if (edgeId !== undefined) {

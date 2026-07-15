@@ -39,9 +39,9 @@ function fallbackRulerFacts() {
         planetoid: simUnitsToMeters(0.18),
       },
       magnetism: { active: false, entry: { x: 0, y: 0 }, locked: { x: 0, y: 0 }, bendDegrees: 0 },
-      coyoteTime: { implemented: false, durationMs: 0, remainingMs: 0 },
+      coyoteTime: { implemented: true, durationMs: 50, remainingMs: 0 },
       payoffCurve: { active: false, entry: { x: 0, y: 0 }, exit: { x: 0, y: 0 }, ratio: 0 },
-      chainWindow: { active: false, durationSeconds: 1.2, remainingSeconds: 0 },
+      chainWindow: { active: false, durationSeconds: 0.5, remainingSeconds: 0 },
     },
   };
 }

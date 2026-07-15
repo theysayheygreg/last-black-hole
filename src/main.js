@@ -1937,6 +1937,8 @@ function applyRemoteSnapshot(snapshot) {
 
 function applyRemoteSlingshotState(state) {
   if (!remoteAuthorityActive || !state) return;
+  ship.slingshotPhase = state.phase || state.telegraph?.phase || 'idle';
+  ship.slingshotTelegraph = state.telegraph || null;
   ship.slingshotEngaged = Boolean(state.engaged);
   ship.slingshotEnergy = state.energy || 0;
   ship.slingshotChainCount = state.chainCount || 0;
@@ -3574,6 +3576,7 @@ function collectThreeSceneState() {
   const authorityPlayer = remoteAuthorityActive
     ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
     : null;
+  const authoritySlingshot = authorityPlayer?.slingshot || null;
   const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
@@ -3695,13 +3698,26 @@ function collectThreeSceneState() {
       state: s.state || 'patrol',
     })),
     slingshot: {
-      affordance: slingshotAffordance ? {
+      phase: authoritySlingshot?.phase || ship.slingshotPhase || (ship.slingshotEngaged ? 'arc' : 'idle'),
+      affordance: authoritySlingshot?.aim ? {
+        wx: authoritySlingshot.aim.anchorWX,
+        wy: authoritySlingshot.aim.anchorWY,
+        range: authoritySlingshot.aim.anchorRange,
+        type: authoritySlingshot.aim.anchorType,
+      } : slingshotAffordance ? {
         wx: slingshotAffordance.anchor.wx,
         wy: slingshotAffordance.anchor.wy,
         range: slingshotAffordance.anchor.range,
         type: slingshotAffordance.anchor.type,
       } : null,
-      engaged: ship.slingshotEngaged && ship.slingshotAnchor ? {
+      engaged: authoritySlingshot?.engaged ? {
+        wx: authoritySlingshot.anchorWX,
+        wy: authoritySlingshot.anchorWY,
+        range: authoritySlingshot.anchorRange,
+        type: authoritySlingshot.anchorType,
+        energy: authoritySlingshot.energy || 0,
+        chainCount: authoritySlingshot.chainCount || 0,
+      } : ship.slingshotEngaged && ship.slingshotAnchor ? {
         wx: ship.slingshotAnchor.wx,
         wy: ship.slingshotAnchor.wy,
         range: ship.slingshotAnchor.range,
@@ -3709,6 +3725,7 @@ function collectThreeSceneState() {
         energy: ship.slingshotEnergy || 0,
         chainCount: ship.slingshotChainCount || 0,
       } : null,
+      telegraph: authoritySlingshot?.telegraph || ship.slingshotTelegraph || null,
     },
     semanticField: {
       shipSample: fieldSample ? {
