@@ -33,3 +33,7 @@
   now share the canonical half-life seam with parent-literal parity fixtures.
 - Restored the parent wake boundary: Ship wake terminal velocity uses converted
   base drag only; composed `dragScale` remains movement-only.
+- X-B froze the bounded jam/v0.2 design family into versioned history archives,
+  retained stable pointer paths, and added `DESIGN-INDEX.md` as the living
+  v0.3/v0.3.1 ownership route. See
+  [`X-B completion`](reviews/completions/X-B-design-doc-versioning.md).

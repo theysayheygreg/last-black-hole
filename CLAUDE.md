@@ -24,9 +24,10 @@ changed contract. Read `docs/project/BUILD-STATUS.md` for runtime or
 playability work. Load broad roadmaps and historical design docs only for
 planning, release, or conflict resolution.
 
-Older jam-era docs in `docs/design/` and `docs/project/` are still valuable idea
-mines, but when they conflict with `docs/v0.2/`, prefer the v0.2 docs unless a
-newer decision-log entry says otherwise.
+For the current v0.3 line, read `docs/v0.3/README.md` and then
+`docs/v0.3/DESIGN-INDEX.md`; for the public v0.2 line, use `docs/v0.2/`.
+Older jam-era and v0.2 design bodies are preserved under the versioned history
+indexes and the stable `docs/design/` paths now contain pointers only.
 
 ## Design Pillars (decision lenses, in priority order)
 
@@ -37,13 +38,15 @@ newer decision-log entry says otherwise.
 5. **Dread Over Difficulty** — tension from atmosphere, not punishment
 6. **Run It Twice** — when unsure, prototype both and compare
 
-See `docs/design/PILLARS.md` for full descriptions and tests.
+See `docs/v0.3/DESIGN-INDEX.md#pillars-and-product-identity` for current
+v0.3 design ownership and the historical archive routes.
 
 ## Important Constraints
 
 - **Art Is Product is non-negotiable** — Three.js deepens the ASCII-fluid identity; it does not replace it with generic 3D space
 - **Forge is the architectural brake** — route concerns through review docs or checkpoint receipts; do not create mandatory night-report ceremony
-- **Signal does NOT buy capability** — see SIGNAL-DESIGN.md
+- **Signal does NOT buy capability** — see
+  `docs/v0.3/DESIGN-INDEX.md#signal`
 - **Layer boundaries need Greg's sign-off** — especially when changing movement, sim authority, progression, or platform contracts
 - **Target 60fps** — performance is a hard constraint, not a nice-to-have
 - **Sim authority stays explicit** — local/remote clients consume authoritative state; do not move simulation truth into renderer objects

@@ -47,7 +47,8 @@ promotion summary.
 
 Important current anchors:
 
-- `docs/design/PILLARS.md`
+- `docs/v0.3/DESIGN-INDEX.md` — living next-line design ownership; the v0.2
+  product snapshot remains `DESIGN.md` and `DESIGN-CODE-DELTA.md`
 - `docs/journal/DECISION-LOG.md`
 - `docs/project/LOCAL-PROTOCOL.md`
 - `docs/project/BUILD-STATUS.md`
