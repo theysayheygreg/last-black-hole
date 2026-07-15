@@ -15,6 +15,10 @@
 
 import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
 import { PUBLIC_HULL_IDS, RIG_TRACKS as HULL_RIG_TRACKS } from './content/hulls.js';
+import {
+  TUNING_CONTRACTS,
+  normalizeProfileDragUpgradeRank,
+} from './content/tuning.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -121,7 +125,10 @@ function normalizeRigLevels(rigLevels = []) {
 }
 
 function normalizeProfileShape(profile = {}) {
-  const next = { ...createDefaultProfile(profile.name), ...profile };
+  const defaults = createDefaultProfile(profile.name);
+  const next = { ...defaults, ...profile };
+  next.upgrades = { ...defaults.upgrades, ...(profile.upgrades || {}) };
+  next.upgrades.drag = normalizeProfileDragUpgradeRank(next.upgrades.drag);
   next.hullType = normalizeHullType(profile.hullType, profile.shipType);
   next.shipType = next.hullType;
   next.rigLevels = normalizeRigLevels(profile.rigLevels);
@@ -143,7 +150,7 @@ export const UPGRADE_TRACKS = {
   thrust:   { label: 'thrust',   desc: 'ship acceleration',          statKey: 'ship.thrustAccel', multPerRank: 0.15 },
   hull:     { label: 'hull',     desc: 'well contact grace period',  statKey: null,               multPerRank: 0 },
   coupling: { label: 'coupling', desc: 'fluid current influence',    statKey: 'ship.fluidCoupling', multPerRank: 0.10 },
-  drag:     { label: 'drag',     desc: 'velocity damping (lower)',   statKey: null,              multPerRank: -0.12 },
+  drag:     { label: 'drag',     desc: 'velocity damping (lower)',   statKey: null,              multPerRank: -TUNING_CONTRACTS.profileDragUpgrade.reductionPerRank },
   sensor:   { label: 'sensor',   desc: 'detection range',            statKey: null,               multPerRank: 0 },
   vault:    { label: 'vault',    desc: 'storage capacity',           statKey: null,               multPerRank: 0 },
 };

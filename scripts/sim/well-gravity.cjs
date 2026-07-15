@@ -1,7 +1,7 @@
 // Authority adapter for the shared cross-runtime gravity family. Each body
 // keeps its accepted production tuning here; the formula lives in src/content.
 const sharedGravity = require("../../src/content/well-gravity.js");
-const { wreckGravityStrengthFromReferenceSpeed } = require("./config-contracts.cjs");
+const { gravityStrengthFromReferenceDriftSpeed } = require("../../src/content/tuning.js");
 
 const WELL_GRAVITY_PARAMS = Object.freeze({
   player: Object.freeze({
@@ -39,7 +39,7 @@ function resolveParams(bodyClass, overrides = {}) {
   if (!profile) throw new Error(`Unknown authoritative well-gravity body class: ${bodyClass}`);
   const params = { ...profile, ...overrides };
   if (params.referenceDriftSpeed !== undefined) {
-    params.strength = wreckGravityStrengthFromReferenceSpeed(params.referenceDriftSpeed, params.dragRate);
+    params.strength = gravityStrengthFromReferenceDriftSpeed(params.referenceDriftSpeed, params.dragRate);
   }
   return params;
 }

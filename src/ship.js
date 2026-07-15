@@ -14,7 +14,10 @@ import {
   applyPlayerBrakeAndIntegrate,
   applyPlayerDriveAndFlow,
 } from './content/movement-step.js';
-import { dragPerReferenceFrameFromHalfLife } from './content/tuning.js';
+import {
+  effectiveDragPerReferenceFrame,
+  profileDragScaleFromUpgradeRank,
+} from './content/tuning.js';
 
 export class Ship {
   constructor(canvasWidth, canvasHeight) {
@@ -142,9 +145,21 @@ export class Ship {
     this.wellResistScale *= wellResistScale;
   }
 
+  applyProfileDragUpgrade(rank) {
+    this.dragScale *= profileDragScaleFromUpgradeRank(rank);
+  }
+
   /** Refill fuel by an absolute amount (used by fuelCell consumable). */
   refillDeltaV(amount) {
     this.deltaV = Math.min(this.deltaVMax, this.deltaV + amount);
+  }
+
+  wakeTerminalVelocityWorld() {
+    const dragPerFrame = effectiveDragPerReferenceFrame(
+      CONFIG.ship.coastHalfLifeSeconds,
+      this.dragScale
+    );
+    return CONFIG.ship.thrustAccel / (dragPerFrame > 0 ? dragPerFrame : 0.03);
   }
 
   /** Fraction 0..1 for HUD gauge consumers. */
@@ -264,8 +279,7 @@ export class Ship {
     if (fluid) {
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
       // Terminal velocity = thrust / drag. Fallback 0.03 prevents division by zero if drag is 0.
-      const dragPerFrame = dragPerReferenceFrameFromHalfLife(CONFIG.ship.coastHalfLifeSeconds);
-      const terminalVelWorld = cfg.thrustAccel / (dragPerFrame > 0 ? dragPerFrame : 0.03);
+      const terminalVelWorld = this.wakeTerminalVelocityWorld();
       const speedFraction = speed / terminalVelWorld;
       const wake = cfg.wake;
 

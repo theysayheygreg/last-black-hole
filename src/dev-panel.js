@@ -10,6 +10,7 @@ import { CONFIG } from './config.js';
 import { PRESETS, PRESET_NAMES, deepMerge } from './presets.js';
 import { snapToDeclaredStep } from './units.js';
 import { UI_FONT_STACK } from './ui/typography.js';
+import { CLIENT_TUNABLE_CONTRACTS } from './content/tuning.js';
 
 // Deep-clone CONFIG at import time for reset
 const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
@@ -84,7 +85,7 @@ const CHOICE_HINTS = {
 // Slider range hints and tooltips per key.
 // V2 SIMPLIFICATION: matches collapsed CONFIG — no affordances, fewer ship knobs
 export const RANGE_HINTS = {
-  'ship.coastHalfLifeSeconds': { min: 0.25, max: 4, step: 0.05, unit: 's half-life', startBias: 'authority baseline', tip: 'Seconds for coasting speed to halve. Longer = more glide.' },
+  ...CLIENT_TUNABLE_CONTRACTS,
   'ship.thrustAccel':       { min: 0.5, max: 5, step: 0.1, unit: 'sim units/s²', startBias: 'authority baseline', tip: 'World-units/s² when thrusting. 2.5 = shared authority baseline.' },
   'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, unit: 'multiplier', startBias: 'authority baseline', tip: '0 = ship ignores fluid. 1 = pure fluid rider. How much currents carry you.' },
   'ship.turnRate':          { min: 60, max: 720, step: 5, tip: 'Degrees/sec rotation toward cursor. 360 = instant feel.' },
@@ -167,8 +168,6 @@ export const RANGE_HINTS = {
   'scavengers.sensorRange': { min: 0.1, max: 1, step: 0.05, tip: 'Detection range in world-units' },
 
   // Wreck drift
-  'wrecks.referenceDriftSpeed': { min: 0, max: 0.2, step: 0.005, unit: 'world-units/s', startBias: 'quiet drift', tip: 'Steady drift speed at 1 wu from a mass-1 well.' },
-  'wrecks.dragRate':          { min: 0.5, max: 5, step: 0.25, unit: '1/s', startBias: 'standard damping', tip: 'Drift velocity decay rate. Higher = more sluggish.' },
   'wrecks.driftTerminalSpeed':{ min: 0.01, max: 0.15, step: 0.005, tip: 'Max drift speed in world-units/s' },
   'wrecks.driftMaxRange':     { min: 0.3, max: 2, step: 0.1, tip: 'Drift pull range in world-units' },
 

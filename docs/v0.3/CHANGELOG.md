@@ -28,3 +28,6 @@
   and signal rates now use readable units with exact parity conversions; dead
   client knobs were removed. The existing per-player `timeSlow` path remains
   flagged for Greg under the durable "never per-player time" ruling.
+- Corrected X-A compatibility coverage: Spacecraft/Surfer preset drag, saved
+  profile drag ranks, all hull/item drag scales, and Ship wake terminal velocity
+  now share the canonical half-life seam with parent-literal parity fixtures.

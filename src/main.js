@@ -3768,6 +3768,7 @@ function applyHullToShip({ refill = true } = {}) {
     wellResistScale: hullDef.wellResistScale ?? 1.0,
     refill,
   });
+  ship.applyProfileDragUpgrade(profileManager.active?.upgrades?.drag);
   if (inventorySystem) {
     ship.applyMovementItemBonus(inventorySystem.getMovementStats());
     ship.applyDeltaVItemBonus(inventorySystem.getDeltaVStats());

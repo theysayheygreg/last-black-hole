@@ -56,7 +56,9 @@ panel ranges and steps. They were not behaviorally changed.
 
 ## Focused Proof
 
-- `node tests/config-red-flags.cjs`: 5 passed, 0 failed.
+- `node tests/drag-compatibility.cjs`: 6 passed; 15 compatibility cases,
+  60 trajectory rows, and 15 Ship wake-terminal rows.
+- `node tests/config-red-flags.cjs`: 6 passed, 0 failed.
 - `node tests/movement-contract.cjs`: 2 passed.
 - `node tests/movement-trajectory-parity.cjs`: 1 passed.
 - `node tests/gravity-family.cjs`: 4 passed; 30 matrix rows and 3 wrap rows.
@@ -68,6 +70,26 @@ panel ranges and steps. They were not behaviorally changed.
 - Deleted-name scan: no stale runtime or dev-panel names; remaining old-form
   literals are parity assertions and test evidence only.
 - No browser, broad CI, package, gameplay-tuning, merge, or push work was run.
+
+## P1 Compatibility Correction
+
+The follow-up correction preserves the parent `0eced674` drag behavior across
+all surviving compatibility paths:
+
+- Spacecraft `0.05` and Surfer `0.02` preset drag now convert to exact
+  half-lives through the canonical seam instead of disappearing.
+- Saved `upgrades.drag` ranks use one conversion in local `Ship` and authority
+  `PlayerBrain`; hull and item `dragScale` composition remains multiplicative.
+- Ship wake terminal velocity now consumes the same effective drag coefficient
+  as movement, including hull, profile, and item scales.
+- Legacy `ship.drag` preset/scene aliases convert to half-life. Conflicting or
+  invalid aliases throw instead of creating an ignored config property.
+- `src/content/tuning.js` is the sole ESM/CJS contract for conversion math,
+  ranges, steps, units, and start bias. The duplicated server contract module
+  was deleted and dev-panel metadata references the canonical objects.
+- The gravity parity oracle retains literal pre-migration `strength: 0.0045`
+  and the old inverse-power formula; it does not derive expected output from
+  the migrated speed-times-damping representation.
 
 ## Greg Decision
 

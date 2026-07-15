@@ -2,7 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const { TestRunner, assert } = require("./helpers.cjs");
 const { MOVEMENT } = require("../scripts/content/movement.cjs");
-const { SERVER_TUNABLE_CONTRACTS, signalFractionPerSecond, wreckGravityStrengthFromReferenceSpeed } = require("../scripts/sim/config-contracts.cjs");
+const {
+  CLIENT_TUNABLE_CONTRACTS,
+  TUNING_CONTRACTS,
+  gravityStrengthFromReferenceDriftSpeed,
+  signalFractionPerSecond,
+} = require("../src/content/tuning.js");
 const { WELL_GRAVITY_PARAMS, wellGravityMagnitude } = require("../scripts/sim/well-gravity.cjs");
 
 const ROOT = path.join(__dirname, "..");
@@ -39,7 +44,7 @@ async function run() {
       assert(Math.abs(wellGravityMagnitude("wreck", distance, 1) - expected) <= EPSILON,
         `wreck gravity changed at ${distance}`);
     }
-    assert(wreckGravityStrengthFromReferenceSpeed(0.08 / 1.5, 1.5) === 0.08,
+    assert(gravityStrengthFromReferenceDriftSpeed(0.08 / 1.5, 1.5) === 0.08,
       "local wreck drift conversion must preserve its legacy acceleration");
   });
 
@@ -47,13 +52,13 @@ async function run() {
     assert(signalFractionPerSecond(0.5) === 0.005, "0.5%/s must equal the old 0.005 fraction/s");
     assert(signalFractionPerSecond(0.2) === 0.002, "0.2%/s must equal the old 0.002 fraction/s");
     assert(signalFractionPerSecond(0.1) === 0.001, "0.1%/s must equal the old 0.001 fraction/s");
-    assert(SERVER_TUNABLE_CONTRACTS.signal.thrustBasePercentPerSecond.step === 0.5,
+    assert(TUNING_CONTRACTS.signal.thrustBasePercentPerSecond.step === 0.5,
       "signal schema must declare a whole perceptual step");
-    assert(SERVER_TUNABLE_CONTRACTS.signal.decayBasePercentPerSecond.step === 0.5,
+    assert(TUNING_CONTRACTS.signal.decayBasePercentPerSecond.step === 0.5,
       "signal decay schema must declare a whole perceptual step");
-    assert(SERVER_TUNABLE_CONTRACTS.wreckDrift.dragRate.step === 0.25,
+    assert(TUNING_CONTRACTS.wreckDrift.dragRate.step === 0.25,
       "wreck damping schema must declare a meaningful step");
-    assert(SERVER_TUNABLE_CONTRACTS.wreckDrift.referenceDriftSpeed.step === 0.001,
+    assert(TUNING_CONTRACTS.wreckDrift.referenceDriftSpeed.step === 0.001,
       "wreck drift schema must declare a meaningful spatial step");
   });
 
@@ -63,6 +68,24 @@ async function run() {
     assert(metadata.step === 0.05, "half-life schema must declare a temporal step");
     assert(devPanel.snapControlValue("ship.coastHalfLifeSeconds", 0.77) === 0.75,
       "dev panel must snap to the declared step");
+  });
+
+  await runner.run("ESM CJS and dev panel consume canonical tuning metadata", async () => {
+    const esm = await import("../src/content/tuning.js");
+    const devPanel = await import("../src/dev-panel.js");
+    assert(esm.TUNING_CONTRACTS === TUNING_CONTRACTS, "ESM and CJS loaded different tuning contracts");
+    for (const [configPath, contract] of Object.entries(CLIENT_TUNABLE_CONTRACTS)) {
+      assert(JSON.stringify(devPanel.controlMetadata(configPath)) === JSON.stringify(contract),
+        `${configPath} dev metadata drifted from canonical contract`);
+    }
+    assert(!fs.existsSync(path.join(ROOT, "scripts/sim/config-contracts.cjs")),
+      "duplicated CJS tuning contract must stay deleted");
+    assert(source("scripts/sim/well-gravity.cjs").includes('require("../../src/content/tuning.js")'),
+      "authority gravity must consume the canonical tuning module");
+    assert(source("scripts/sim-runtime.cjs").includes('require("../src/content/tuning.js")'),
+      "authority signal must consume the canonical tuning module");
+    assert(source("src/dev-panel.js").includes("CLIENT_TUNABLE_CONTRACTS"),
+      "dev panel must consume canonical client metadata");
   });
 
   await runner.run("unused config names are absent", async () => {

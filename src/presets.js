@@ -4,6 +4,11 @@
  * All values in world-units. thrustAccel is world-units/s² (no px conversion).
  */
 
+import {
+  halfLifeSecondsFromDragPerReferenceFrame,
+  normalizeTuningOverrideAliases,
+} from './content/tuning.js';
+
 export const PRESETS = {
   Default: null, // signals "restore DEFAULTS" — handled by caller
 
@@ -17,7 +22,8 @@ export const PRESETS = {
   },
 
   Spacecraft: {
-    ship:   { thrustAccel: 4.0, fluidCoupling: 0.3, turnRate: 540, size: 10 },
+    ship:   { thrustAccel: 4.0, fluidCoupling: 0.3, turnRate: 540,
+              coastHalfLifeSeconds: halfLifeSecondsFromDragPerReferenceFrame(0.05), size: 10 },
     wells:  { gravity: 0.001, orbitalStrength: 0.2, shipPullStrength: 0.9, shipPullFalloff: 2.0,
               accretionRate: 0.005, accretionRadius: 0.013, accretionSpinRate: 1.2 },
     fluid:  { dissipation: 0.996, curl: 0.2, viscosity: 0.0002,
@@ -26,7 +32,8 @@ export const PRESETS = {
   },
 
   Surfer: {
-    ship:   { thrustAccel: 2.0, fluidCoupling: 0.75, turnRate: 360, size: 12 },
+    ship:   { thrustAccel: 2.0, fluidCoupling: 0.75, turnRate: 360,
+              coastHalfLifeSeconds: halfLifeSecondsFromDragPerReferenceFrame(0.02), size: 12 },
     wells:  { gravity: 0.0018, orbitalStrength: 0.55, shipPullStrength: 0.45, shipPullFalloff: 1.5,
               accretionRate: 0.008, accretionRadius: 0.02, accretionSpinRate: 0.8 },
     fluid:  { dissipation: 0.999, curl: 0.35, viscosity: 0.00008,
@@ -41,10 +48,14 @@ export const PRESET_NAMES = Object.keys(PRESETS);
  * Deep-merge source into target — only overwrites leaves that exist in source.
  */
 export function deepMerge(target, source) {
+  return deepMergeNormalized(target, normalizeTuningOverrideAliases(source, 'preset/config merge'));
+}
+
+function deepMergeNormalized(target, source) {
   for (const k of Object.keys(source)) {
     if (source[k] !== null && typeof source[k] === 'object' && !Array.isArray(source[k])) {
       if (target[k] && typeof target[k] === 'object') {
-        deepMerge(target[k], source[k]);
+        deepMergeNormalized(target[k], source[k]);
       }
     } else if (Array.isArray(source[k])) {
       for (let i = 0; i < source[k].length; i++) {
@@ -54,4 +65,5 @@ export function deepMerge(target, source) {
       target[k] = source[k];
     }
   }
+  return target;
 }

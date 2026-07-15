@@ -4,6 +4,7 @@ const {
   HULL_DEFINITIONS,
 } = require('./content/hulls.cjs');
 const { MOVEMENT } = require('./content/movement.cjs');
+const { profileDragScaleFromUpgradeRank } = require('../src/content/tuning.js');
 
 // Default rig state: 3 tracks at level 0 for a given hull
 function defaultRigLevels(hullType) {
@@ -170,7 +171,7 @@ function applyProfileUpgrades(brain, profileUpgrades = null) {
     brain.currentCoupling *= 1 + upgrades.coupling * 0.10;
   }
   if (upgrades.drag > 0) {
-    brain.dragScale *= Math.max(0.1, 1 - upgrades.drag * 0.12);
+    brain.dragScale *= profileDragScaleFromUpgradeRank(upgrades.drag);
   }
   if (upgrades.sensor > 0) {
     brain.sensorRange *= SENSOR_RANGE_MULTIPLIERS[upgrades.sensor] || SENSOR_RANGE_MULTIPLIERS[SENSOR_RANGE_MULTIPLIERS.length - 1];

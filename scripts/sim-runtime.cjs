@@ -22,7 +22,7 @@ const {
 const { decayWaveAmplitude, WAVE_HALF_LIFE_SECONDS } = require("./sim/event-wave.cjs");
 const {
   signalFractionPerSecond,
-} = require("./sim/config-contracts.cjs");
+} = require("../src/content/tuning.js");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PUBLIC_HULL_IDS,
