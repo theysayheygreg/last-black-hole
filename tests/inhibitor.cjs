@@ -136,7 +136,10 @@ async function run() {
       ), `Expected announced tiered waves, got ${JSON.stringify(waves)}`);
       assert(JSON.stringify(waves.map((wave) => wave.time)) === JSON.stringify([90, 180, 270]),
         `Expected 90-second grace and even 90-second phases, got ${waves.map((wave) => wave.time)}`);
-      assert(waves[2].time + 60 < 600, "Expected the provisional phase-3 plus final-portal delay to stay inside RUN_DURATION");
+      const portalSchedule = first.portalSchedule;
+      const finalWindow = portalSchedule?.windows?.find((window) => window.metadata?.finalExfil);
+      assert(finalWindow?.openTime === 600 && finalWindow?.closeTime === 660,
+        "Expected the guaranteed final exfil to be declared at the main timer with a 60-second window");
       assert(waves.every((wave, index) => index === 0 || wave.time > waves[index - 1].time),
         "Expected strictly ordered wave times");
       assert(waves.every((wave) => Number.isFinite(wave.budget) && wave.budget > 0),
@@ -160,38 +163,16 @@ async function run() {
         "Expected a restarted match to return to phase 0/form 0");
     });
 
-    await runner.run("form times drive Vessel final portal timing", async () => {
+    await runner.run("Vessel timing cannot advance or replace the scheduled final exfil", async () => {
       await startRun({ seed: 1001 });
       await postDebugPlayerState({ wx: 0.7, wy: 0.7, signalLevel: 0.25 });
-
-      const form1 = await postDebugInhibitorState({ form: 1, wx: 4.2, wy: 4.2 });
-      assert(form1.snapshot.inhibitor.formTimes[1] != null, "Form 1 should record first-seen sim time");
-
-      const form2 = await postDebugInhibitorState({ form: 2, wx: 4.2, wy: 4.2 });
-      assert(form2.snapshot.inhibitor.formTimes[2] != null, "Form 2 should record first-seen sim time");
-
-      const snap = await getSnapshot();
-      await postDebugInhibitorState({
-        form: 3,
-        wx: 4.2,
-        wy: 4.2,
-        formTimes: [null, form1.snapshot.inhibitor.formTimes[1], form2.snapshot.inhibitor.formTimes[2], snap.simTime - 61],
-        finalPortalSpawned: false,
-      });
-
-      const spawned = await waitForSnapshot((snapshot) =>
-        snapshot.inhibitor.finalPortalSpawned === true &&
-        snapshot.world.portals.some((portal) => portal.finalInhibitor && portal.alive !== false)
-      );
-      const finalPortal = spawned.world.portals.find((portal) => portal.finalInhibitor);
-      assert(finalPortal.blockedByInhibitor !== true, "Guaranteed final portal must start usable");
-      const ws = spawned.session?.worldScale || 5;
-      const nearestWellClearance = spawned.world.wells.reduce((nearest, well) => {
-        const clearance = worldDistance(well.wx, well.wy, finalPortal.wx, finalPortal.wy, ws) - (Number(well.killRadius) || 0);
-        return Math.min(nearest, clearance);
-      }, Infinity);
-      assert(nearestWellClearance >= 0.18,
-        `Guaranteed final portal must clear lethal well space, got clearance ${nearestWellClearance.toFixed(3)}`);
+      const before = await getSnapshot();
+      const finalWindow = before.portalSchedule.windows.find((window) => window.metadata?.finalExfil);
+      assert(finalWindow.openTime === 600, "Expected final exfil schedule front at the main timer");
+      await postDebugInhibitorState({ form: 3, wx: 4.2, wy: 4.2 });
+      const after = await getSnapshot();
+      assert(after.inhibitor.finalPortalSpawned === false,
+        "Vessel arrival must not spawn the final exfil before its Conductor front");
     });
 
     await runner.run("Vessel blocks and unblocks portals without destroying them", async () => {

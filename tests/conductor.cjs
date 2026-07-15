@@ -120,6 +120,45 @@ async function run() {
     assert(JSON.stringify(wave.metadata) === JSON.stringify({ reason: "test" }), "Expected custom wave metadata");
   });
 
+  await runner.run("paired windows register stable open and close fronts under the guard", async () => {
+    const conductor = new Conductor({ seed: 11, conductorId: "match-conductor", offsetGuardSeconds: 10 });
+    conductor.registerEventFront({ id: "inhibitor:phase-1", time: 90, kind: "inhibitor.phase" });
+    const windows = conductor.scheduleWindows({
+      idPrefix: "portal:optional",
+      startTime: 45,
+      cadence: 120,
+      count: 2,
+      durations: [90, 75],
+      metadata: [{ kind: "optional", windowIndex: 0 }, { kind: "optional", windowIndex: 1 }],
+    });
+    assert(windows[0].windowId === "portal:optional:1", "Expected stable window identity");
+    assert(windows[0].openId === "portal:optional:1:open" && windows[0].closeId === "portal:optional:1:close",
+      "Expected paired stable open/close identities");
+    assert(windows[0].openTime === 45 && windows[0].closeTime === 135, "Expected first window timing");
+    assert(windows[1].openTime === 165 && windows[1].closeTime === 240, "Expected second window timing");
+    const schedule = conductor.getSchedule();
+    assert(schedule.conductorId === "match-conductor" && schedule.offsetGuardSeconds === 10,
+      "Expected conductor identity and guard in schedule data");
+    assert(schedule.windows.length === 2 && schedule.eventFronts
+      .filter((front) => front.kind === "window.open" || front.kind === "window.close")
+      .every((front) => front.metadata.conductorId === "match-conductor"),
+      "Expected window fronts to carry conductor identity");
+    assert(schedule.eventFronts.every((front, index, fronts) => index === 0 || front.time - fronts[index - 1].time >= 10),
+      "Expected every registered front to satisfy the offset guard");
+  });
+
+  await runner.run("window declarations reject an impossible close/open overlap", async () => {
+    const conductor = new Conductor({ seed: 12, offsetGuardSeconds: 10 });
+    expectThrows(() => conductor.scheduleWindows({
+      idPrefix: "portal:invalid",
+      startTime: 45,
+      cadence: 20,
+      count: 2,
+      durations: [30, 5],
+    }), "must be at least 10 seconds apart");
+    assert(conductor.getSchedule().eventFronts.length === 0, "Expected failed window registration to leave the conductor unchanged");
+  });
+
   await runner.run("severity budgets reject any generated sequence below zero", async () => {
     const error = expectThrows(() => createSeverityWaveSchedule({
       id: "bad-budget",

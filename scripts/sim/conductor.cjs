@@ -115,6 +115,48 @@ class EventFrontRegistry {
   }
 }
 
+function resolveWindowDuration(durations, index) {
+  const value = Array.isArray(durations) ? durations[index] : durations;
+  return positiveNumber(value, `window ${index + 1} duration`);
+}
+
+function createTimedWindowSchedule({
+  idPrefix,
+  startTime,
+  cadence,
+  count,
+  durations,
+  metadata = [],
+} = {}) {
+  const prefix = String(idPrefix || "").trim();
+  if (!prefix) throw new TypeError("window idPrefix must not be empty");
+  const start = nonNegativeNumber(startTime, "window startTime");
+  const interval = positiveNumber(cadence, "window cadence");
+  const total = integerAtLeast(count, "window count", 1);
+  if (Array.isArray(durations) && durations.length !== total) {
+    throw new RangeError(`window durations must contain exactly ${total} values`);
+  }
+  if (Array.isArray(metadata) && metadata.length !== 0 && metadata.length !== total) {
+    throw new RangeError(`window metadata must contain exactly ${total} values`);
+  }
+
+  return Object.freeze(Array.from({ length: total }, (_, index) => {
+    const windowId = `${prefix}:${index + 1}`;
+    const openTime = start + interval * index;
+    const duration = resolveWindowDuration(durations, index);
+    const closeTime = openTime + duration;
+    return stableClone({
+      windowId,
+      openId: `${windowId}:open`,
+      closeId: `${windowId}:close`,
+      openTime,
+      closeTime,
+      duration,
+      metadata: Array.isArray(metadata) ? (metadata[index] || {}) : metadata,
+    }, `window ${index + 1}`);
+  }));
+}
+
 function createThresholdField({ thresholdSeconds, thresholdTime } = {}) {
   const rawThreshold = thresholdSeconds === undefined ? thresholdTime : thresholdSeconds;
   const threshold = nonNegativeNumber(rawThreshold, "thresholdSeconds");
@@ -290,6 +332,8 @@ function selectToroidalSpawn({
   worldScale,
   minRadius,
   maxRadius,
+  angle: requestedAngle,
+  radius: requestedRadius,
 } = {}) {
   const scale = positiveNumber(worldScale, "worldScale");
   const point = resolveOrigin({ origin, anchor, originX, originY });
@@ -304,8 +348,13 @@ function selectToroidalSpawn({
   if (!streams || typeof streams.angle !== "function" || typeof streams.range !== "function") {
     throw new TypeError("rngStreams must expose named angle and range methods");
   }
-  const angle = streams.angle(streamName);
-  const radius = streams.range(streamName, minimum, maximum);
+  const angle = requestedAngle === undefined
+    ? streams.angle(streamName)
+    : finiteNumber(requestedAngle, "angle");
+  const radius = requestedRadius === undefined
+    ? streams.range(streamName, minimum, maximum)
+    : finiteNumber(requestedRadius, "radius");
+  if (radius < minimum || radius > maximum) throw new RangeError("radius must stay inside the declared radius band");
   const wx = wrapPosition(point.x + Math.cos(angle) * radius, scale);
   const wy = wrapPosition(point.y + Math.sin(angle) * radius, scale);
   return stableClone({
@@ -319,12 +368,15 @@ function selectToroidalSpawn({
 }
 
 class Conductor {
-  constructor({ seed = 1, offsetGuardSeconds = 0, worldScale } = {}) {
+  constructor({ seed = 1, conductorId = "match-conductor", offsetGuardSeconds = 0, worldScale } = {}) {
     this.rngStreams = createRNGStreams(seed);
     this.seed = this.rngStreams.seed;
+    this.id = String(conductorId || "").trim();
+    if (!this.id) throw new TypeError("conductorId must not be empty");
     this.worldScale = worldScale === undefined ? undefined : positiveNumber(worldScale, "worldScale");
     this.events = new EventFrontRegistry({ offsetGuardSeconds });
     this._severityWaves = [];
+    this._windows = [];
   }
 
   registerEventFront(front) {
@@ -343,6 +395,42 @@ class Conductor {
     return waves;
   }
 
+  scheduleWindows(declaration) {
+    const windows = createTimedWindowSchedule(declaration);
+    this.events.registerMany(windows.flatMap((window) => [
+      {
+        id: window.openId,
+        time: window.openTime,
+        kind: "window.open",
+        metadata: {
+          conductorId: this.id,
+          windowId: window.windowId,
+          openId: window.openId,
+          closeId: window.closeId,
+          scheduledOpenTime: window.openTime,
+          scheduledCloseTime: window.closeTime,
+          portalMetadata: window.metadata,
+        },
+      },
+      {
+        id: window.closeId,
+        time: window.closeTime,
+        kind: "window.close",
+        metadata: {
+          conductorId: this.id,
+          windowId: window.windowId,
+          openId: window.openId,
+          closeId: window.closeId,
+          scheduledOpenTime: window.openTime,
+          scheduledCloseTime: window.closeTime,
+          portalMetadata: window.metadata,
+        },
+      },
+    ]));
+    this._windows.push(...windows);
+    return windows;
+  }
+
   selectToroidalSpawn(options = {}) {
     return selectToroidalSpawn({
       ...options,
@@ -353,8 +441,11 @@ class Conductor {
 
   orderedScheduleData() {
     return stableClone({
+      conductorId: this.id,
+      offsetGuardSeconds: this.events.offsetGuardSeconds,
       eventFronts: this.events.ordered(),
       severityWaves: this._severityWaves.slice().sort(compareTimedRecords),
+      windows: this._windows.slice().sort((a, b) => a.openTime - b.openTime),
     }, "schedule");
   }
 
@@ -377,6 +468,7 @@ module.exports = {
   createIntervalLerp,
   createSeverityWaveSchedule,
   createSeverityWaves: createSeverityWaveSchedule,
+  createTimedWindowSchedule,
   createThresholdField,
   selectToroidalSpawn,
 };

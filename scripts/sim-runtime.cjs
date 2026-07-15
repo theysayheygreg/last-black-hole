@@ -87,16 +87,34 @@ const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
-const PORTAL_CONFIG = {
+const PORTAL_CONFIG = Object.freeze({
   captureRadius: 0.08,
-  waves: [
-    { time: 45, count: [2, 3], types: ["standard"], lifespan: 90 },
-    { time: 180, count: [1, 2], types: ["standard", "unstable"], lifespan: 75 },
-    { time: 330, count: [1, 2], types: ["standard", "rift"], lifespan: 60 },
-    { time: 450, count: [1, 1], types: ["unstable"], lifespan: 45 },
-    { time: 570, count: [1, 1], types: ["standard"], lifespan: 30 },
-  ],
-};
+  schedule: Object.freeze({
+    graceSeconds: 45,
+    cadenceSeconds: 120,
+    offsetGuardSeconds: 10,
+    optionalWindows: Object.freeze([
+      { count: [2, 3], types: ["standard"], durationSeconds: 90 },
+      { count: [1, 2], types: ["standard", "unstable"], durationSeconds: 75 },
+      { count: [1, 2], types: ["standard", "rift"], durationSeconds: 60 },
+      { count: [1, 1], types: ["unstable"], durationSeconds: 45 },
+      { count: [1, 1], types: ["standard"], durationSeconds: 30 },
+    ]),
+    latePhaseRules: Object.freeze([
+      { minInhibitorPhase: 2, countMultiplier: 0.5, durationMultiplier: 0.8 },
+      { minInhibitorPhase: 3, countMultiplier: 0, durationMultiplier: 0.6 },
+    ]),
+    spawnRadiusBands: Object.freeze({
+      standard: { anchor: "map-center", minRadius: 0.45, maxRadius: 1.25, minWellDistance: 0.45 },
+      unstable: { anchor: "map-center", minRadius: 0.30, maxRadius: 1.35, minWellDistance: 0.12 },
+      rift: { anchor: "map-center", minRadius: 0.20, maxRadius: 1.30, minWellDistance: 0.18, maxWellDistance: 0.70 },
+      finalExfil: { anchor: "map-center", minRadius: 0.70, maxRadius: 1.35, minWellClearance: 0.22 },
+    }),
+    finalExfilDuration: 60,
+    placementAttempts: 128,
+    minPortalSpacing: 0.30,
+  }),
+});
 const AUTHORITY_INPUT_CONFIG = Object.freeze({
   heldInputTimeoutMs: readNumber(process.env.LBH_SIM_HELD_INPUT_TIMEOUT_MS, 750, 1),
 });
@@ -331,8 +349,6 @@ const INHIBITOR_CONFIG = {
   vesselWellConsumeRadius: 0.06,
   vesselConsumeRadiusGrowth: 0.025,
   vesselConsumeGravityBonus: 0.03,
-  finalPortalDelay: 60,        // seconds after Vessel before guaranteed portal
-  finalPortalLifespan: 15,
 };
 
 function inhibitorPhaseTime(phase) {
@@ -342,8 +358,52 @@ function inhibitorPhaseTime(phase) {
   return graceSeconds + (phase - 1) * intervalSeconds;
 }
 
+function inhibitorPhaseAtTime(time) {
+  for (let phase = 3; phase >= 1; phase -= 1) {
+    if (time >= inhibitorPhaseTime(phase)) return phase;
+  }
+  return 0;
+}
+
+function latePortalRuleForPhase(phase) {
+  return PORTAL_CONFIG.schedule.latePhaseRules.reduce((selected, rule) => {
+    return phase >= rule.minInhibitorPhase ? rule : selected;
+  }, { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 });
+}
+
+function scalePortalCountRange(countRange, multiplier) {
+  if (multiplier <= 0) return [0, 0];
+  const min = Math.max(0, Math.ceil(countRange[0] * multiplier));
+  const max = Math.max(min, Math.floor(countRange[1] * multiplier));
+  return [min, max];
+}
+
+function portalWindowMetadata(declaration, index, phase) {
+  const lateRule = latePortalRuleForPhase(phase);
+  return {
+    system: "portals",
+    kind: "optional",
+    windowIndex: index,
+    phaseAtOpen: phase,
+    countRange: declaration.count.slice(),
+    effectiveCountRange: scalePortalCountRange(declaration.count, lateRule.countMultiplier),
+    types: declaration.types.slice(),
+    baseDurationSeconds: declaration.durationSeconds,
+    durationMultiplier: lateRule.durationMultiplier,
+    durationSeconds: declaration.durationSeconds * lateRule.durationMultiplier,
+    latePhaseRule: lateRule,
+    spawnRadiusBands: PORTAL_CONFIG.schedule.spawnRadiusBands,
+    minPortalSpacing: PORTAL_CONFIG.schedule.minPortalSpacing,
+    finalExfil: false,
+  };
+}
+
 function createInhibitorConductor(seed) {
-  const conductor = createConductor({ seed, offsetGuardSeconds: 0 });
+  const conductor = createConductor({
+    seed,
+    conductorId: "match-conductor",
+    offsetGuardSeconds: PORTAL_CONFIG.schedule.offsetGuardSeconds,
+  });
   conductor.registerEventFront({
     id: "inhibitor:phase-0",
     time: 0,
@@ -374,6 +434,47 @@ function createInhibitorConductor(seed) {
       },
     });
   }
+
+  const optionalWindows = PORTAL_CONFIG.schedule.optionalWindows.map((declaration, index) => {
+    const openTime = PORTAL_CONFIG.schedule.graceSeconds + PORTAL_CONFIG.schedule.cadenceSeconds * index;
+    const phase = inhibitorPhaseAtTime(openTime);
+    const metadata = portalWindowMetadata(declaration, index, phase);
+    return {
+      durationSeconds: metadata.durationSeconds,
+      metadata,
+    };
+  });
+  conductor.scheduleWindows({
+    idPrefix: "portal:optional",
+    startTime: PORTAL_CONFIG.schedule.graceSeconds,
+    cadence: PORTAL_CONFIG.schedule.cadenceSeconds,
+    count: optionalWindows.length,
+    durations: optionalWindows.map((window) => window.durationSeconds),
+    metadata: optionalWindows.map((window) => window.metadata),
+  });
+  conductor.scheduleWindows({
+    idPrefix: "portal:final-exfil",
+    startTime: MATCH_MAX_SIM_TIME,
+    cadence: 1,
+    count: 1,
+    durations: PORTAL_CONFIG.schedule.finalExfilDuration,
+    metadata: {
+      system: "portals",
+      kind: "final-exfil",
+      windowIndex: optionalWindows.length,
+      phaseAtOpen: inhibitorPhaseAtTime(MATCH_MAX_SIM_TIME),
+      countRange: [1, 1],
+      effectiveCountRange: [1, 1],
+      types: ["standard"],
+      baseDurationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
+      durationMultiplier: 1,
+      durationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
+      latePhaseRule: { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 },
+      spawnRadiusBands: PORTAL_CONFIG.schedule.spawnRadiusBands,
+      minPortalSpacing: PORTAL_CONFIG.schedule.minPortalSpacing,
+      finalExfil: true,
+    },
+  });
   return conductor;
 }
 
@@ -774,6 +875,7 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     wrecks,
     planetoids,
     portals: [],
+    nextPortalWindowIndex: 0,
     nextPortalWaveIndex: 0,
     scavengers: [],
   };
@@ -882,46 +984,91 @@ function spawnServerScavengers(mapState, session) {
   return scavengers;
 }
 
-function findPortalSpawnPosition(portalType) {
+function portalSpawnAnchor(anchorName, worldScale) {
+  if (anchorName === "map-center") return { wx: worldScale / 2, wy: worldScale / 2 };
+  throw new RangeError(`Unknown portal spawn anchor: ${anchorName}`);
+}
+
+function portalSpawnBand(portalType, finalExfil = false) {
+  const bands = PORTAL_CONFIG.schedule.spawnRadiusBands;
+  const band = finalExfil ? bands.finalExfil : bands[portalType];
+  if (!band) throw new RangeError(`No portal spawn radius band for ${portalType}`);
+  return band;
+}
+
+function portalPlacementIsValid(position, portalType, band, { finalExfil = false } = {}) {
   const worldScale = runtime.session.worldScale;
-  const minPortalSpacing = 0.3;
-  const dangerBias = portalType === "rift" ? 0.2 : portalType === "unstable" ? 0.1 : 0.45;
-  const rng = runtime.session?.rng?.rawStream('portalPos') || Math.random;
+  const epsilon = 1e-9;
+  if (position.distance < band.minRadius - epsilon || position.distance > band.maxRadius + epsilon) return false;
 
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const wx = rng() * worldScale;
-    const wy = rng() * worldScale;
-
-    let nearestPortal = Infinity;
-    for (const portal of runtime.mapState.portals) {
-      if (portal.alive === false) continue;
-      nearestPortal = Math.min(
-        nearestPortal,
-        worldDistance(wx, wy, portal.wx, portal.wy, worldScale)
-      );
-    }
-    if (nearestPortal < minPortalSpacing) continue;
-
-    let nearestWell = Infinity;
-    for (const well of runtime.mapState.wells) {
-      nearestWell = Math.min(nearestWell, worldDistance(wx, wy, well.wx, well.wy, worldScale));
-    }
-
-    if (portalType === "rift") {
-      if (nearestWell < 0.18 || nearestWell > 0.5) continue;
-    } else if (portalType === "unstable") {
-      if (nearestWell < 0.12 || nearestWell > 0.7) continue;
-    } else {
-      if (nearestWell < dangerBias) continue;
-    }
-
-    return { wx, wy };
+  if (!finalExfil) {
+    const nearestPortal = runtime.mapState.portals.reduce((nearest, portal) => {
+      if (portal.alive === false) return nearest;
+      return Math.min(nearest, worldDistance(position.wx, position.wy, portal.wx, portal.wy, worldScale));
+    }, Infinity);
+    if (nearestPortal < (band.minPortalSpacing || PORTAL_CONFIG.schedule.minPortalSpacing)) return false;
   }
 
-  return {
-    wx: rng() * worldScale,
-    wy: rng() * worldScale,
-  };
+  const nearestWell = runtime.mapState.wells.reduce((nearest, well) => {
+    return Math.min(nearest, worldDistance(position.wx, position.wy, well.wx, well.wy, worldScale));
+  }, Infinity);
+  const nearestWellClearance = runtime.mapState.wells.reduce((nearest, well) => {
+    if (well.consumedByInhibitor) return nearest;
+    const clearance = worldDistance(position.wx, position.wy, well.wx, well.wy, worldScale)
+      - Math.max(0, Number(well.killRadius) || 0);
+    return Math.min(nearest, clearance);
+  }, Infinity);
+  if (finalExfil) return nearestWellClearance >= band.minWellClearance;
+  if (band.minWellDistance !== undefined && nearestWell < band.minWellDistance) return false;
+  if (band.maxWellDistance !== undefined && nearestWell > band.maxWellDistance) return false;
+  return true;
+}
+
+function findPortalSpawnPosition(portalType, window, portalIndex, { finalExfil = false } = {}) {
+  const worldScale = runtime.session.worldScale;
+  const band = portalSpawnBand(portalType, finalExfil);
+  const anchor = portalSpawnAnchor(band.anchor, worldScale);
+  const windowId = window.windowId;
+  const attemptCount = PORTAL_CONFIG.schedule.placementAttempts;
+  for (let attempt = 0; attempt < attemptCount; attempt += 1) {
+    const position = runtime.conductor.selectToroidalSpawn({
+      streamName: `portal.spawn.${windowId}.${portalIndex}.attempt-${attempt}`,
+      anchor,
+      worldScale,
+      minRadius: band.minRadius,
+      maxRadius: band.maxRadius,
+    });
+    if (portalPlacementIsValid(position, portalType, band, { finalExfil })) {
+      return { ...position, anchorName: band.anchor, minRadius: band.minRadius, maxRadius: band.maxRadius };
+    }
+  }
+
+  // The seeded attempts carry normal placement variation. The final exfil
+  // also gets a bounded angular/radial scan so a bad roll cannot erase its
+  // guarantee or escape the declared radius band.
+  const fallbackRings = finalExfil ? 8 : 2;
+  const fallbackAngles = finalExfil ? 256 : 64;
+  for (let ring = 0; ring < fallbackRings; ring += 1) {
+    const radius = band.minRadius + (band.maxRadius - band.minRadius) * ((ring + 0.5) / fallbackRings);
+    for (let angleIndex = 0; angleIndex < fallbackAngles; angleIndex += 1) {
+      const position = runtime.conductor.selectToroidalSpawn({
+        streamName: `portal.spawn.${windowId}.${portalIndex}.fallback-${ring}-${angleIndex}`,
+        anchor,
+        worldScale,
+        minRadius: band.minRadius,
+        maxRadius: band.maxRadius,
+        angle: (Math.PI * 2 * angleIndex) / fallbackAngles,
+        radius,
+      });
+      if (portalPlacementIsValid(position, portalType, band, { finalExfil })) {
+        return { ...position, anchorName: band.anchor, minRadius: band.minRadius, maxRadius: band.maxRadius };
+      }
+    }
+  }
+  throw new RangeError(
+    `No valid ${finalExfil ? "final exfil" : portalType} portal position in declared radius band `
+    + `[${band.minRadius}, ${band.maxRadius}] for ${windowId}`
+  );
 }
 const args = parseArgs(process.argv.slice(2));
 const HOST = args.host || "127.0.0.1";
@@ -1006,6 +1153,8 @@ const runtime = {
   coarseField: null,
   conductor: null,
   inhibitorSchedule: null,
+  portalSchedule: null,
+  portalClock: null,
   inhibitor: {
     form: 0,          // 0=inactive, 1=glitch, 2=swarm, 3=vessel
     phase: 0,
@@ -1040,6 +1189,7 @@ const runtime = {
     wrecks: [],
     planetoids: [],
     portals: [],
+    nextPortalWindowIndex: 0,
   },
   overload: null,
   keepAlive: KEEP_ALIVE,
@@ -1400,6 +1550,13 @@ function startSession(config = {}) {
   // The Conductor is one match-scoped authority built from the run seed.
   runtime.conductor = createInhibitorConductor(runtime.session.seed);
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
+  runtime.portalSchedule = runtime.inhibitorSchedule;
+  runtime.portalClock = {
+    openedWindowIds: new Set(),
+    closedWindowIds: new Set(),
+    finalOpen: false,
+    finalClosed: false,
+  };
   const inh = INHIBITOR_CONFIG;
   const phaseZero = runtime.inhibitorSchedule.eventFronts.find((event) => event.id === "inhibitor:phase-0");
   runtime.inhibitor = {
@@ -1728,6 +1885,8 @@ function buildSnapshotBody() {
       wrecks: runtime.mapState.wrecks,
       planetoids: runtime.mapState.planetoids,
       portals: runtime.mapState.portals,
+      portalSchedule: runtime.portalSchedule,
+      nextPortalWindowIndex: runtime.mapState.nextPortalWindowIndex,
       nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
       scavengers: runtime.mapState.scavengers,
       fauna: runtime.mapState.fauna,
@@ -1756,6 +1915,7 @@ function buildSnapshotBody() {
       finalPortalExpired: Boolean(runtime.inhibitor.finalPortalExpired),
       gravityBonus: runtime.inhibitor.gravityBonus || 0,
     },
+    portalSchedule: runtime.portalSchedule,
     // Snapshot baselines are shared and cacheable. Player-local events are
     // recovered through the authenticated event stream instead.
     recentEvents: filterEventsForPlayer(runtime.recentEvents.slice(-32), null),
@@ -1923,9 +2083,13 @@ function killActiveHumanPlayers(cause) {
 
 function maybeEnforceMatchLifetime() {
   if (runtime.session.status !== "running") return false;
-  if (runtime.simTime < MATCH_MAX_SIM_TIME) return false;
+  if (!runtime.portalClock?.finalClosed) return false;
   const killedCount = killActiveHumanPlayers("run-timeout");
-  return endSession("run-timeout", { killedCount, maxSimTime: MATCH_MAX_SIM_TIME });
+  return endSession("run-timeout", {
+    killedCount,
+    maxSimTime: MATCH_MAX_SIM_TIME,
+    finalExfilCloseTime: runtime.portalSchedule?.windows?.find((window) => window.metadata?.finalExfil)?.closeTime,
+  });
 }
 
 function maybeEndTerminalSession(reason = "terminal-players") {
@@ -2260,47 +2424,144 @@ function tickWells(dt) {
   }
 }
 
-function tickPortals(dt) {
-  const schedule = PORTAL_CONFIG.waves;
-  const rng = runtime.session?.rng?.rawStream('portals') || Math.random;
-  while (runtime.mapState.nextPortalWaveIndex < schedule.length) {
-    const wave = schedule[runtime.mapState.nextPortalWaveIndex];
-    if (runtime.simTime < wave.time) break;
+function portalEventPayload(window, extra = {}) {
+  return {
+    conductorId: runtime.conductor?.id || "match-conductor",
+    windowId: window.windowId,
+    openId: window.openId,
+    closeId: window.closeId,
+    scheduledOpenTime: window.openTime,
+    scheduledCloseTime: window.closeTime,
+    portalMetadata: window.metadata,
+    ...extra,
+  };
+}
 
-    const spawnCount = wave.count[0] + Math.floor(rng() * (wave.count[1] - wave.count[0] + 1));
-    for (let i = 0; i < spawnCount; i++) {
-      const type = wave.types[Math.floor(rng() * wave.types.length)];
-      const pos = findPortalSpawnPosition(type);
-      const lifespan = type === "unstable"
-        ? wave.lifespan + (rng() - 0.5) * wave.lifespan * 0.4
-        : wave.lifespan;
-      const portal = {
-        id: `portal-${runtime.mapState.nextPortalWaveIndex + 1}-${i + 1}-${runtime.tick}`,
-        wx: pos.wx,
-        wy: pos.wy,
-        type,
-        wave: runtime.mapState.nextPortalWaveIndex + 1,
-        spawnTime: runtime.simTime,
-        lifespan,
-        alive: true,
-        opacity: 1,
-      };
-      runtime.mapState.portals.push(portal);
-      publishEvent("portal.spawned", {
-        portalId: portal.id,
-        type: portal.type,
-        wx: portal.wx,
-        wy: portal.wy,
-        wave: portal.wave,
-      });
+function portalWindowIdLabel(window) {
+  return window.metadata?.finalExfil ? "final-exfil" : `optional-${window.metadata?.windowIndex + 1}`;
+}
+
+function spawnPortalForWindow(window, type, index, { finalExfil = false } = {}) {
+  const position = findPortalSpawnPosition(type, window, index, { finalExfil });
+  const label = portalWindowIdLabel(window);
+  const portal = {
+    id: finalExfil ? "portal-final-exfil" : `portal-${label}-${index + 1}`,
+    wx: position.wx,
+    wy: position.wy,
+    type,
+    wave: finalExfil ? 99 : window.metadata.windowIndex + 1,
+    spawnTime: window.openTime,
+    lifespan: window.duration,
+    scheduledOpenTime: window.openTime,
+    scheduledCloseTime: window.closeTime,
+    windowId: window.windowId,
+    openId: window.openId,
+    closeId: window.closeId,
+    spawnAnchor: position.anchorName,
+    spawnRadius: position.radius,
+    spawnRadiusBand: { minRadius: position.minRadius, maxRadius: position.maxRadius },
+    alive: true,
+    opacity: 1,
+    finalInhibitor: finalExfil,
+    guaranteedFinalExfil: finalExfil,
+    blockedByInhibitor: false,
+  };
+  runtime.mapState.portals.push(portal);
+  publishEvent("portal.spawned", portalEventPayload(window, {
+    portalId: portal.id,
+    type: portal.type,
+    wx: portal.wx,
+    wy: portal.wy,
+    wave: portal.wave,
+    finalExfil,
+    spawnAnchor: portal.spawnAnchor,
+    spawnRadius: portal.spawnRadius,
+    spawnRadiusBand: portal.spawnRadiusBand,
+  }));
+  return portal;
+}
+
+function openPortalWindow(window) {
+  if (runtime.portalClock.openedWindowIds.has(window.windowId)) return;
+  runtime.portalClock.openedWindowIds.add(window.windowId);
+  const finalExfil = Boolean(window.metadata?.finalExfil);
+  const countRange = window.metadata?.effectiveCountRange || [0, 0];
+  const count = finalExfil
+    ? 1
+    : runtime.session.rng.int(`portal.window.count.${window.windowId}`, countRange[0], countRange[1]);
+  publishEvent("portal.windowOpened", portalEventPayload(window, {
+    finalExfil,
+    portalCount: count,
+    portalTypes: window.metadata?.types || [],
+  }));
+
+  for (let index = 0; index < count; index += 1) {
+    const type = finalExfil
+      ? "standard"
+      : runtime.session.rng.pick(`portal.window.type.${window.windowId}.${index}`, window.metadata.types);
+    spawnPortalForWindow(window, type, index, { finalExfil });
+  }
+
+  if (window.metadata?.finalExfil) {
+    runtime.portalClock.finalOpen = true;
+    runtime.inhibitor.finalPortalSpawned = true;
+    const finalPortal = runtime.mapState.portals.find((portal) => portal.windowId === window.windowId);
+    publishEvent("inhibitor.finalPortal", portalEventPayload(window, {
+      portalId: finalPortal?.id || null,
+      wx: finalPortal?.wx,
+      wy: finalPortal?.wy,
+      finalExfil: true,
+    }));
+  } else {
+    runtime.mapState.nextPortalWindowIndex = window.metadata.windowIndex + 1;
+    runtime.mapState.nextPortalWaveIndex = runtime.mapState.nextPortalWindowIndex;
+  }
+}
+
+function closePortalWindow(window) {
+  if (!runtime.portalClock.openedWindowIds.has(window.windowId) ||
+      runtime.portalClock.closedWindowIds.has(window.windowId)) return;
+  runtime.portalClock.closedWindowIds.add(window.windowId);
+  const finalExfil = Boolean(window.metadata?.finalExfil);
+  const closingPortals = runtime.mapState.portals.filter((portal) =>
+    portal.windowId === window.windowId && portal.alive !== false
+  );
+  publishEvent("portal.windowClosed", portalEventPayload(window, {
+    finalExfil,
+    portalIds: closingPortals.map((portal) => portal.id),
+  }));
+  for (const portal of closingPortals) {
+    portal.alive = false;
+    portal.opacity = 0;
+    const handle = runtime.ballparkMirror?.getHandleById(`portal:${portal.id}`);
+    if (handle) runtime.ballparkMirror.setLifecycle(handle, "dead", { tick: runtime.tick });
+    publishEvent("portal.expired", portalEventPayload(window, {
+      portalId: portal.id,
+      type: portal.type,
+      finalExfil,
+    }));
+  }
+  if (finalExfil) {
+    runtime.portalClock.finalClosed = true;
+    runtime.inhibitor.finalPortalExpired = true;
+  }
+}
+
+function tickPortals(dt) {
+  const windows = runtime.portalSchedule?.windows || [];
+  for (const window of windows) {
+    if (runtime.simTime >= window.openTime && !runtime.portalClock.openedWindowIds.has(window.windowId)) {
+      openPortalWindow(window);
     }
-    runtime.mapState.nextPortalWaveIndex += 1;
+    if (runtime.simTime >= window.closeTime && !runtime.portalClock.closedWindowIds.has(window.windowId)) {
+      closePortalWindow(window);
+    }
   }
 
   for (const portal of runtime.mapState.portals) {
     if (portal.alive === false) continue;
-    const remaining = portal.spawnTime + portal.lifespan - runtime.simTime;
-    if (remaining <= 0) {
+    if (!portal.windowId && Number.isFinite(portal.spawnTime) && Number.isFinite(portal.lifespan) &&
+        runtime.simTime >= portal.spawnTime + portal.lifespan) {
       portal.alive = false;
       portal.opacity = 0;
       const handle = runtime.ballparkMirror?.getHandleById(`portal:${portal.id}`);
@@ -2308,14 +2569,11 @@ function tickPortals(dt) {
       publishEvent("portal.expired", {
         portalId: portal.id,
         type: portal.type,
+        source: "unscheduled",
       });
-      if (portal.finalInhibitor) {
-        runtime.inhibitor.finalPortalExpired = true;
-        const killedCount = killActiveHumanPlayers("collapse");
-        if (killedCount > 0) endSession("inhibitor-final-portal-missed", { killedCount, portalId: portal.id });
-      }
       continue;
     }
+    const remaining = portal.scheduledCloseTime - runtime.simTime;
     portal.opacity = remaining < 15 ? Math.max(0, remaining / 15) : 1;
   }
 }
@@ -2447,16 +2705,10 @@ function tickWaveRings(dt) {
 }
 
 function maybeCollapseRun() {
+  if (!runtime.portalClock?.finalClosed) return;
   const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
-  const hasMorePortalWaves = runtime.mapState.nextPortalWaveIndex < PORTAL_CONFIG.waves.length;
   if (runtime.simTime <= 60) return;
   if (activePortalCount > 0) return;
-  if (hasMorePortalWaves) return;
-  if (runtime.inhibitor?.form >= 3 &&
-      !runtime.inhibitor.finalPortalSpawned &&
-      !runtime.inhibitor.finalPortalExpired) {
-    return;
-  }
 
   let killedCount = 0;
   for (const player of runtime.players.values()) {
@@ -5579,6 +5831,16 @@ function updateInhibitorPortalBlocks(inh, ws) {
   const cfg = INHIBITOR_CONFIG;
   for (const portal of runtime.mapState.portals) {
     if (portal.alive === false) continue;
+    if (portal.guaranteedFinalExfil) {
+      if (portal.blockedByInhibitor === true) {
+        portal.blockedByInhibitor = false;
+        publishEvent("portal.unblocked", {
+          portalId: portal.id,
+          by: "guaranteed-final-exfil",
+        });
+      }
+      continue;
+    }
     const shouldBlock = inh.form >= 3 &&
       worldDistance(inh.wx, inh.wy, portal.wx, portal.wy, ws) < cfg.vesselPortalBlockRange;
     if (portal.blockedByInhibitor !== shouldBlock) {
@@ -5618,50 +5880,6 @@ function updateVesselWellDistortion(inh, dt, ws) {
       });
     }
   }
-}
-
-function spawnInhibitorFinalPortal(inh, ws) {
-  const cfg = INHIBITOR_CONFIG;
-  let bestScore = -Infinity, bestX = ws / 2, bestY = ws / 2;
-  const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
-  const minWellClearance = 0.22;
-  const minInhibitorClearance = (cfg.vesselPortalBlockRange || 0) + portalCaptureRadius({ type: "standard" });
-  for (let i = 0; i < 32; i++) {
-    const cx = rng() * ws;
-    const cy = rng() * ws;
-    const inhibitorDist = worldDistance(inh.wx, inh.wy, cx, cy, ws);
-    let wellClearance = ws;
-    for (const well of runtime.mapState.wells) {
-      if (well.consumedByInhibitor) continue;
-      const radius = Math.max(0, Number(well.killRadius) || 0);
-      wellClearance = Math.min(wellClearance, worldDistance(well.wx, well.wy, cx, cy, ws) - radius);
-    }
-    let portalClearance = ws;
-    for (const portal of runtime.mapState.portals) {
-      if (portal.alive === false) continue;
-      portalClearance = Math.min(portalClearance, worldDistance(portal.wx, portal.wy, cx, cy, ws) - portalCaptureRadius(portal));
-    }
-    const wellPenalty = wellClearance < minWellClearance ? (minWellClearance - wellClearance) * 6 : 0;
-    const inhibitorPenalty = inhibitorDist < minInhibitorClearance ? (minInhibitorClearance - inhibitorDist) * 8 : 0;
-    const score = inhibitorDist * 0.5 + wellClearance * 1.4 + portalClearance * 0.15 - wellPenalty - inhibitorPenalty;
-    if (score > bestScore) {
-      bestScore = score;
-      bestX = cx;
-      bestY = cy;
-    }
-  }
-  runtime.mapState.portals.push({
-    id: `portal-final-${runtime.tick}`,
-    wx: bestX, wy: bestY,
-    type: "standard", wave: 99,
-    spawnTime: runtime.simTime,
-    lifespan: cfg.finalPortalLifespan,
-    alive: true, opacity: 1,
-    finalInhibitor: true,
-    blockedByInhibitor: false,
-  });
-  inh.finalPortalSpawned = true;
-  publishEvent("inhibitor.finalPortal", { wx: bestX, wy: bestY });
 }
 
 function tickInhibitor(dt) {
@@ -5766,12 +5984,6 @@ function tickInhibitor(dt) {
   }
 
   updateInhibitorPortalBlocks(inh, ws);
-
-  const formTimes = ensureInhibitorFormTimes(inh);
-  const timeSinceVessel = formTimes[3] == null ? 0 : runtime.simTime - formTimes[3];
-  if (inh.form >= 3 && !inh.finalPortalSpawned && timeSinceVessel >= cfg.finalPortalDelay) {
-    spawnInhibitorFinalPortal(inh, ws);
-  }
 }
 
 function tickSim() {
@@ -5789,7 +6001,6 @@ function tickSim() {
   const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
-  if (maybeEnforceMatchLifetime()) return;
   const relevance = buildRelevanceView();
 
   runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
@@ -5800,6 +6011,7 @@ function tickSim() {
   });
   runSystemAtRate("growth", runtime.session.growthTickHz || runtime.session.tickHz, dt, tickGrowth);
   runSystemAtRate("portals", runtime.session.portalTickHz || runtime.session.tickHz, dt, tickPortals);
+  if (maybeEnforceMatchLifetime()) return;
   tickWreckWaves(dt);
   runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, (stepDt) =>
     tickScavengers(stepDt, relevance.scavengers)
