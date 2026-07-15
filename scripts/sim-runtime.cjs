@@ -379,8 +379,6 @@ const SENTRY_CONFIG = {
 const AI_PLAYER_CONFIG = {
   decisionInterval: 0.8,      // seconds between tactical decisions
   strategicInterval: 3.0,     // seconds between extraction re-evaluation
-  thrustAccel: 2.5,           // same as human player
-  drag: 0.92,                 // same drag exponent base
   pickupRadius: 0.08,
   sensorRange: 1.2,           // wu — how far AI can "see"
   perceptionDelay: 0.5,       // seconds of position staleness for other players
