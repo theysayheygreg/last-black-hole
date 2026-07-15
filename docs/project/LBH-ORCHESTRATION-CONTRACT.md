@@ -108,10 +108,9 @@ progress belongs in commits and task receipts, not status churn here.
 
 | Role | Codex task | Owned line | Current assignment |
 |---|---|---|---|
-| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `main` governance, cross-workstream routing, forward merges, and RC selection | Keep the project moving; preserve both policy branches as history only |
-| v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Integrate bounded multiplayer product slices on the v0.4 line |
-| v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from the stable product branch | Complete the bounded rematch/product slice and return a committed receipt |
-| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3.1-movement-truth` in `/private/tmp/lbh-v031-movement-truth` | Integrate bounded movement-truth slices and return committed receipts |
+| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `main` governance, cross-workstream routing, merge readiness, and RC selection | Route the v0.3.1 design-review sequence; hold the completed v0.4 P5 milestone before broad P6 evidence |
+| v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Hold accepted P5E commit `40b5f26` on `codex/v0.4-p5e-controls`; no integration or P6 until Primary routes it |
+| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3-w1f2-inhibitor-clock` in `/private/tmp/lbh-v03-w1f2-inhibitor-clock` | Build the bounded W1-F2 Inhibitor Conductor clock from accepted W1-F1 commit `80ebbef` |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
 | Maestro Specialist Intake | Primary Sol routes; Maestro executes | Pinned player-facing slices across version lines | Production and quality-review lanes are available from `#orb-assistant` message `1526773577079328930`; invoke only when a coherent slice warrants multi-craft judgment |
 
