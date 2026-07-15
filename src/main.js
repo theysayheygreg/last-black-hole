@@ -4803,7 +4803,6 @@ function gameLoop(now) {
   if (!inMenu) {
     const threeOwnsWorld = rendererBackend?.name === 'three';
     if (!threeOwnsWorld) {
-      waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
       starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
       // lootSystem removed — loot anchors replaced with stars
       wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);

@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "line": "v0.3",
+  "purpose": "Machine-readable disposition for vector primitives and procedural marks.",
+  "productionForbidden": [
+    "generic_entity_disc_core",
+    "generic_entity_ring_rim",
+    "generic_entity_triangle_or_square",
+    "generic_landmark_ring_or_bullseye",
+    "generic_in_match_well_growth_ring",
+    "generic_in_match_well_pulse_ring",
+    "canvas_entity_duplicate_when_three_owns_world"
+  ],
+  "semanticDebugAllowlist": [
+    "fabric_owned_well_contour",
+    "named_slingshot_range_affordance",
+    "named_slingshot_tether",
+    "named_map_node_marker",
+    "named_background_depth_cue",
+    "portal_blocked_or_final_state_accent",
+    "bounded_title_fault_vfx",
+    "bounded_loading_transition_vfx",
+    "raw_scene_well_diagnostic",
+    "debug_coordinate_marker",
+    "debug_velocity_field"
+  ],
+  "roles": {
+    "entityCore": {
+      "disposition": "forbid_vector_finished_art",
+      "productionOwner": "src/render-three/entity-assets.js",
+      "surface": "generated pixel PNG sprite card",
+      "allowed": []
+    },
+    "wellPulseState": {
+      "disposition": "fabric_first",
+      "productionOwner": "FluidDisplay and src/wells.js",
+      "surface": "ASCII/fabric shader only",
+      "allowed": ["fabric_owned_well_contour"],
+      "forbidden": ["generic_in_match_well_growth_ring", "generic_in_match_well_pulse_ring"],
+      "activation": "shader frame state",
+      "resetDispose": "fluid/display lifecycle"
+    },
+    "slingshotAbilitySemantic": {
+      "disposition": "retain_ratified_affordance",
+      "productionOwner": "PlayerVisualFamily",
+      "surface": "range ring, tether line, release direction ghost",
+      "allowed": ["named_slingshot_range_affordance", "named_slingshot_tether"],
+      "activation": "aimCue, lock, ownedArc, or releaseGhost",
+      "resetDispose": "visual family reset/dispose"
+    },
+    "mapNode": {
+      "disposition": "retain_named_route_marker",
+      "productionOwner": "title/map canvas telemetry",
+      "surface": "small node dot plus label/bracket",
+      "allowed": ["named_map_node_marker"],
+      "activation": "title/map-select presentation state",
+      "resetDispose": "canvas clear each frame"
+    },
+    "menuDecoration": {
+      "disposition": "retain_bounded_transition_only",
+      "productionOwner": "main.js loading transition and Three backdrop",
+      "surface": "loading pulse, restrained background grid, lens depth cue",
+      "allowed": ["bounded_loading_transition_vfx", "named_background_depth_cue"],
+      "activation": "loading phase or renderer presentation frame",
+      "resetDispose": "phase transition and renderer dispose"
+    },
+    "vfx": {
+      "disposition": "retain_named_bounded_lifecycle",
+      "productionOwner": "src/render-three/vfx/vfx-manager.js",
+      "surface": "event-driven pooled particles and state accents",
+      "allowed": ["bounded_title_fault_vfx", "portal_blocked_or_final_state_accent"],
+      "activation": "renderer-neutral event or explicit presentation state",
+      "resetDispose": "VfxManager reset/dispose"
+    },
+    "debug": {
+      "disposition": "allow_explicit_debug_only",
+      "productionOwner": "Three raw-scene mode and CONFIG.debug overlays",
+      "surface": "well diagnostics, coordinate markers, velocity arrows",
+      "allowed": ["raw_scene_well_diagnostic", "debug_coordinate_marker", "debug_velocity_field"],
+      "activation": "explicit debug flag or scene view",
+      "resetDispose": "debug overlay clear and renderer dispose"
+    }
+  },
+  "runtimePrimitives": [
+    { "primitive": "CircleGeometry", "owner": "entity backing", "role": "entityCore", "disposition": "retain_contact_matte_only" },
+    { "primitive": "RingGeometry", "owner": "PlayerVisualFamily", "role": "slingshotAbilitySemantic", "disposition": "retain_named_affordance_only" },
+    { "primitive": "RingGeometry", "owner": "ThreeRendererBackend", "role": "wellPulseState", "disposition": "debug_scene_only; no_product_wave_ring_submission" },
+    { "primitive": "PlaneGeometry", "owner": "entity-assets and post quad", "role": "entityCore", "disposition": "sprite_card_or_screen_post_only" },
+    { "primitive": "Line", "owner": "PlayerVisualFamily", "role": "slingshotAbilitySemantic", "disposition": "retain_tether_or_release_direction_only" }
+  ]
+}
