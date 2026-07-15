@@ -1,9 +1,27 @@
 # Changelog
 
-> Human-readable version history of design docs.
-> Git is authoritative. This is for quick scanning without `git log`.
+> **Journal policy from 2026-07-14:** this file records project-wide releases,
+> version promotions, and large revisions merged between version lines.
+> Detailed branch work belongs in that version line's changelog. Existing
+> entries below remain archival history; do not duplicate routine commits,
+> CI receipts, or orchestration state here.
 
 ---
+
+## 2026-07-14 — asynchronous feature delivery and Primary Sol routing
+
+- Feature workers now run only changed-contract proof, commit a durable
+  artifact, and return control; broad CI runs asynchronously at integration,
+  nightly, candidate, or release checkpoints.
+- Primary Sol owns cross-version routing, merge topology, and RC selection.
+  Workstream Sols integrate version-local commits and delegate bounded feature
+  and CI work to Luna agents.
+- Orrery/Fable/Opus review is reserved for bundled milestone verticals or
+  strategic design forks rather than stepwise commit review.
+- Primary runs Sol/high, version integrators run Sol/medium, and descendant
+  workers use Luna/high or the narrow Luna/xhigh risk lane. Routine LBH Forge
+  traffic goes to `#last-black-hole`; only Primary may DM Greg when attention
+  is actually required.
 
 ## 2026-07-08 — Cloudflare Drop share build target
 
