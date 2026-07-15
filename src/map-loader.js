@@ -6,6 +6,8 @@
  */
 
 import { setWorldScale } from './coords.js';
+import { selectAnomalyCast } from './anomaly-catalog.js';
+import { assertMapDefinitionParity } from './content/map-scales.js';
 
 function applyPlanetoidOverrides(planetoid, data = {}) {
   if (!planetoid) return planetoid;
@@ -30,13 +32,14 @@ function applyPlanetoidOverrides(planetoid, data = {}) {
  * @param {PortalSystem} systems.portalSystem
  * @param {PlanetoidSystem} systems.planetoidSystem
  * @param {FluidSim} systems.fluid
- * @returns {{ startingMasses: number[] }}
+ * @returns {{ startingMasses: number[], anomalyCatalog: Object }}
  */
-export function loadMap(map, systems) {
+export function loadMap(map, systems, { seed = 1 } = {}) {
   const { wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid } = systems;
+  const mapDefinition = assertMapDefinitionParity(map);
 
   // 1. Set world scale (live binding — all importers see the new value)
-  setWorldScale(map.worldScale);
+  setWorldScale(mapDefinition.dimensions.width);
 
   // 2. Clear all entity arrays
   wellSystem.wells = [];
@@ -51,9 +54,19 @@ export function loadMap(map, systems) {
     fluid.reinitialize(map.fluidResolution);
   }
 
-  // 4. Spawn wells
-  for (const w of map.wells) {
+  // 4. Spawn wells through the catalog migration seam. The selected entry
+  // only supplies identity in phase 1; current-well fields remain untouched.
+  const anomalyCatalog = selectAnomalyCast({
+    mapId: map.id,
+    seed,
+    wellCount: map.wells.length,
+  });
+  for (let index = 0; index < map.wells.length; index += 1) {
+    const w = map.wells[index];
+    const catalogWell = anomalyCatalog.cast[index];
     wellSystem.addWell(w.x, w.y, {
+      id: w.id || `well-${index + 1}`,
+      catalogId: catalogWell?.catalogId,
       mass: w.mass,
       orbitalDir: w.orbitalDir ?? 1,
       killRadius: w.killRadius,
@@ -109,5 +122,6 @@ export function loadMap(map, systems) {
   // 9. Return starting masses for restart
   return {
     startingMasses: wellSystem.wells.map(w => w.mass),
+    anomalyCatalog,
   };
 }

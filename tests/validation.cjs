@@ -10,6 +10,8 @@
 const path = require('path');
 const fs = require('fs');
 const ROOT = path.resolve(__dirname, '..');
+const { loadPlayableMaps } = require('../scripts/shared-map-loader.cjs');
+const { MAP_SCALE_REGISTRY, PLAYABLE_MAP_IDS } = require('../scripts/content/map-scales.cjs');
 
 // ---- Helpers ----
 
@@ -72,14 +74,28 @@ const MAPS_DIR = path.join(SRC, 'maps');
 const mapFiles = fs.readdirSync(MAPS_DIR).filter(f => {
   if (!f.endsWith('.js')) return false;
   const src = fs.readFileSync(path.join(MAPS_DIR, f), 'utf8');
-  return src.includes('export const MAP =');
+  return src.includes('export const MAP = {');
 });
-const maps = mapFiles.map(f => ({
+const staticMaps = mapFiles.map(f => ({
   name: f,
   data: parseMapFile(path.join(MAPS_DIR, f)),
 }));
-const playableMapNames = new Set(['shallows-3x3.js', 'expanse-5x5.js', 'deep-field-10x10.js']);
-const playableMaps = maps.filter(map => playableMapNames.has(map.name));
+const loadedPlayableMaps = loadPlayableMaps();
+const playableMaps = PLAYABLE_MAP_IDS.map(mapId => {
+  const definition = MAP_SCALE_REGISTRY[mapId];
+  const map = loadedPlayableMaps[mapId];
+  return {
+    name: definition.sourceFile,
+    data: {
+      ...map,
+      wells: map.wells.map(({ wx, wy, ...well }) => ({ ...well, x: wx, y: wy })),
+      stars: map.stars.map(({ wx, wy, ...star }) => ({ ...star, x: wx, y: wy })),
+      wrecks: map.wrecks.map(({ wx, wy, ...wreck }) => ({ ...wreck, x: wx, y: wy })),
+      fluidResolution: null,
+    },
+  };
+});
+const maps = [...staticMaps, ...playableMaps];
 
 // ---- Extract config values ----
 // CONFIG is a plain object literal, extract via eval
@@ -87,11 +103,13 @@ const playableMaps = maps.filter(map => playableMapNames.has(map.name));
 function parseConfig() {
   const src = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
   const movement = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'movement.data.json'), 'utf8'));
+  const sessionProfiles = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'session-profiles.data.json'), 'utf8'));
   const evaluable = src
     .replace("import { MOVEMENT } from './content/movement.js';", '')
+    .replace("import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';", '')
     .replace('export const CONFIG =', 'return');
-  const fn = new Function('MOVEMENT', evaluable);
-  return fn(movement);
+  const fn = new Function('MOVEMENT', 'CLIENT_PERF_PROFILES', evaluable);
+  return fn(movement, sessionProfiles.CLIENT_PERF_PROFILES);
 }
 
 const CONFIG = parseConfig();
@@ -100,7 +118,7 @@ const CONFIG = parseConfig();
 
 const SIGNATURE_CONSTANTS = [
   'SIGNATURE_DEFINITIONS',
-  'SIGNATURE_POOLS_BY_MAP_SIZE',
+  'SIGNATURE_POOLS_BY_MAP_ID',
   'LAYOUT_MULTIPLIERS',
   'SEEDED_SIGNATURES',
 ];
@@ -116,7 +134,6 @@ const SESSION_PROFILE_CONSTANTS = [
   'SESSION_PROFILE_FIELDS',
   'CLIENT_PERF_PROFILES',
   'SESSION_PROFILES',
-  'MAP_SESSION_PROFILES',
 ];
 
 const HULL_CONSTANTS = [
@@ -410,19 +427,24 @@ runner.run('Playable maps do not carry client perf overrides', () => {
   }
 });
 
-runner.run('Playable map scales match the fixed-grid test contract', () => {
-  const expected = new Map([
-    ['shallows-3x3.js', { scale: 3, wells: 4 }],
-    ['expanse-5x5.js', { scale: 5, wells: 8 }],
-    ['deep-field-10x10.js', { scale: 10, wells: 20 }],
-  ]);
-  for (const map of playableMaps) {
-    const contract = expected.get(map.name);
-    assert(contract, `${map.name}: missing expected scale contract`);
-    assert(map.data.worldScale === contract.scale,
-      `${map.name}: expected worldScale ${contract.scale}, got ${map.data.worldScale}`);
-    assert(map.data.wells.length === contract.wells,
-      `${map.name}: expected ${contract.wells} wells, got ${map.data.wells.length}`);
+runner.run('Playable map scales and filenames match the canonical registry', () => {
+  assert(playableMaps.length === PLAYABLE_MAP_IDS.length,
+    `Expected ${PLAYABLE_MAP_IDS.length} playable maps, got ${playableMaps.length}`);
+  for (const mapId of PLAYABLE_MAP_IDS) {
+    const definition = MAP_SCALE_REGISTRY[mapId];
+    const map = playableMaps.find(candidate => candidate.data.id === mapId);
+    assert(map, `${mapId}: shared loader did not return canonical map`);
+    assert(map.name === definition.sourceFile,
+      `${mapId}: expected sourceFile ${definition.sourceFile}, got ${map.name}`);
+    assert(map.data.sourceFile === definition.sourceFile,
+      `${mapId}: loaded sourceFile does not match registry`);
+    assert(map.data.worldScale === definition.dimensions.width,
+      `${mapId}: worldScale does not match registry width`);
+    assert(map.data.dimensions.width === definition.dimensions.width
+      && map.data.dimensions.height === definition.dimensions.height,
+      `${mapId}: dimensions do not match registry`);
+    assert(map.data.profileId === definition.profileId,
+      `${mapId}: profile identity does not match registry`);
   }
 });
 
@@ -495,26 +517,26 @@ runner.run('Playable signature manifest has unique ids and names', () => {
   }
 });
 
-runner.run('Playable signature pools match supported map sizes', () => {
-  const allowedMapSizes = new Set(playableMaps.map(map => map.data.worldScale));
+runner.run('Playable signature pools match canonical map ids', () => {
+  const allowedMapIds = new Set(PLAYABLE_MAP_IDS);
   const pooledIds = new Set();
-  for (const [sizeText, pool] of Object.entries(serverSignatures.SIGNATURE_POOLS_BY_MAP_SIZE)) {
-    const mapSize = Number(sizeText);
-    assert(allowedMapSizes.has(mapSize), `Signature pool exists for unknown map size ${sizeText}`);
-    assert(Array.isArray(pool) && pool.length > 0, `Signature pool ${sizeText} must be a non-empty array`);
+  for (const [mapId, pool] of Object.entries(serverSignatures.SIGNATURE_POOLS_BY_MAP_ID)) {
+    assert(allowedMapIds.has(mapId), `Signature pool exists for unknown map id ${mapId}`);
+    assert(Array.isArray(pool) && pool.length > 0, `Signature pool ${mapId} must be a non-empty array`);
     for (const id of pool) {
       const sig = serverSignatures.SIGNATURE_DEFINITIONS[id];
-      assert(sig, `Signature pool ${sizeText} references unknown id ${id}`);
-      assert(sig.mapSizes.includes(mapSize),
-        `Signature ${id} is in ${sizeText} pool but mapSizes=${sig.mapSizes.join(',')}`);
+      assert(sig, `Signature pool ${mapId} references unknown id ${id}`);
+      assert(sig.mapIds.includes(mapId),
+        `Signature ${id} is in ${mapId} pool but mapIds=${sig.mapIds.join(',')}`);
       pooledIds.add(id);
     }
   }
   for (const sig of Object.values(serverSignatures.SIGNATURE_DEFINITIONS)) {
-    assert(pooledIds.has(sig.id), `Signature ${sig.id} is not present in any map-size pool`);
-    for (const size of sig.mapSizes) {
-      const pool = serverSignatures.SIGNATURE_POOLS_BY_MAP_SIZE[size] || [];
-      assert(pool.includes(sig.id), `Signature ${sig.id} supports ${size} but is missing from that pool`);
+    assert(pooledIds.has(sig.id), `Signature ${sig.id} is not present in any map-id pool`);
+    for (const mapId of sig.mapIds) {
+      assert(allowedMapIds.has(mapId), `Signature ${sig.id} supports unknown map id ${mapId}`);
+      const pool = serverSignatures.SIGNATURE_POOLS_BY_MAP_ID[mapId] || [];
+      assert(pool.includes(sig.id), `Signature ${sig.id} supports ${mapId} but is missing from that pool`);
     }
   }
 });
@@ -524,7 +546,7 @@ runner.run('Playable signature config overrides match CONFIG shape', () => {
     assert(typeof sig.name === 'string' && sig.name.length > 0, `${sig.id}: missing name`);
     assert(typeof sig.flavor === 'string' && sig.flavor.length > 0, `${sig.id}: missing flavor`);
     assert(typeof sig.mechanical === 'string' && sig.mechanical.length > 0, `${sig.id}: missing mechanical text`);
-    assert(Array.isArray(sig.mapSizes) && sig.mapSizes.length > 0, `${sig.id}: missing mapSizes`);
+    assert(Array.isArray(sig.mapIds) && sig.mapIds.length > 0, `${sig.id}: missing mapIds`);
     assertObject(sig.config, `${sig.id}.config`);
     for (const [section, overrides] of Object.entries(sig.config)) {
       assertObject(CONFIG[section], `${sig.id}.config.${section} target`);
@@ -680,16 +702,11 @@ runner.run('Session profiles expose complete server/client scale truth', () => {
 });
 
 runner.run('Playable maps bind to known session profiles', () => {
-  const idsByFile = new Map([
-    ['shallows-3x3.js', 'shallows'],
-    ['expanse-5x5.js', 'expanse'],
-    ['deep-field-10x10.js', 'deep-field'],
-  ]);
   for (const map of playableMaps) {
-    const mapId = idsByFile.get(map.name);
-    assert(mapId, `${map.name}: missing validation map id binding`);
-    const profileId = serverSessionProfiles.MAP_SESSION_PROFILES[mapId];
-    assert(profileId, `${map.name}: missing MAP_SESSION_PROFILES entry for ${mapId}`);
+    const mapId = map.data.id;
+    const definition = MAP_SCALE_REGISTRY[mapId];
+    assert(definition, `${map.name}: missing canonical registry binding`);
+    const profileId = definition.profileId;
     assert(serverSessionProfiles.SESSION_PROFILES[profileId],
       `${map.name}: unknown session profile ${profileId}`);
     const resolved = serverSessionProfiles.getSessionProfile(mapId, map.data.worldScale);

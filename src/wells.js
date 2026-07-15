@@ -7,6 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
+import { migrateCurrentWell } from './anomaly-catalog.js';
 
 // ---- Well name generation (foreboding) ----
 
@@ -30,6 +31,7 @@ export class Well {
   constructor(wx, wy, opts = {}) {
     this.wx = wx;
     this.wy = wy;
+    this.id = opts.id ?? null;
     this.name = generateWellName();
     this.mass = opts.mass ?? 1.0;
     this.startMass = this.mass;  // for kill radius growth calculation
@@ -44,6 +46,10 @@ export class Well {
     // Per-well growth rate: base + random variance for asymmetric growth
     this.growthRate = (opts.growthRate ?? CONFIG.events.growthAmount)
       + (Math.random() * 2 - 1) * CONFIG.universe.wellGrowthVariance;
+    const catalogWell = migrateCurrentWell(this, opts.catalogId);
+    this.catalogId = catalogWell.catalogId;
+    this.behaviorId = catalogWell.behaviorId;
+    this.catalogActivation = catalogWell.catalogActivation;
   }
 
   /** Recalculate kill radius from current mass vs starting mass. */
@@ -71,26 +77,16 @@ export class WellSystem {
   }
 
   /**
-   * Apply all well forces to the fluid sim and inject density.
-   * When camX/camY are provided, culls wells beyond visible range + margin.
+   * Offline/title mode retains the existing local visual well current. Remote
+   * sessions pass authorityDriven so this path cannot compete with the server
+   * field that is forcing the GPU.
    */
-  update(fluid, dt, totalTime) {
+  update(fluid, dt, _totalTime, { authorityDriven = false } = {}) {
+    if (authorityDriven) return;
     const cfg = CONFIG.wells;
-    // No camera culling for wells — they're too important to skip.
-    // Direct gravity + kill radius check ALL wells, so visual density must match.
-    // 8-20 wells is cheap enough for the GPU.
-    // UV scaling factors. s = linear (for UV position offsets).
-    // s2 = quadratic (for splat radii — because the splat shader uses exp(-d²/r),
-    // keeping the same world-space Gaussian width requires r to scale as s²).
     const s = uvScale();
-    const s2 = s * s;
-
     for (const well of this.wells) {
-
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
-
-      // Apply gravitational + orbital force to velocity field
-      // Gravity scaled by s^falloff to compensate for smaller UV distances on large maps
       fluid.applyWellForce(
         [fu, fv],
         cfg.gravity * well.mass * Math.pow(s, cfg.falloff),
@@ -98,12 +94,8 @@ export class WellSystem {
         cfg.fluidClampRadius,
         cfg.orbitalStrength * well.orbitalDir,
         dt,
-        cfg.fluidTerminalSpeed * s
+        cfg.fluidTerminalSpeed * s,
       );
-
-      // The renderer now owns the well silhouette analytically.
-      // Do not accumulate a subtractive splat here every fixed tick — it turns
-      // large wells into blocky dark slabs once the ASCII quantization kicks in.
     }
   }
 

@@ -1,7 +1,8 @@
 import { MOVEMENT } from './movement.js';
+import { dragFactorFromHalfLife } from './tuning.js';
 
 export const MOVEMENT_INPUT = Object.freeze({
-  baseDragPer60HzFrame: MOVEMENT.player.baseDragPer60HzFrame,
+  coastHalfLifeSeconds: MOVEMENT.player.coastHalfLifeSeconds,
   fluidCoupling: MOVEMENT.player.fluidCoupling,
   brakeThrustScale: MOVEMENT.player.brakeThrustScale,
   brakeFuelScale: MOVEMENT.player.brakeFuelScale,
@@ -67,17 +68,24 @@ function applyPlayerDriveAndFlow(player, input, dt, options = {}) {
   const thrustScale = Number(brain.thrustScale) || 1;
   const accel = MOVEMENT.player.thrustAccel * thrustScale
     * (burnModifiers.thrust || 1) * thrustIntensity * controlMult;
+  const thrustDeltaV = { x: moveX * accel * dt, y: moveY * accel * dt };
 
-  player.vx += moveX * accel * dt;
-  player.vy += moveY * accel * dt;
+  player.vx += thrustDeltaV.x;
+  player.vy += thrustDeltaV.y;
 
   const currentCoupling = Math.max(0, Number(brain.currentCoupling) || 0);
   const coupling = Math.min(inputConfig.fluidCoupling * currentCoupling * dt, 0.5);
   const current = flowSample.current || { x: 0, y: 0 };
+  const beforeCouplingVX = player.vx;
+  const beforeCouplingVY = player.vy;
   player.vx = player.vx * (1 - coupling) + finiteNumber(current.x, 0) * coupling;
   player.vy = player.vy * (1 - coupling) + finiteNumber(current.y, 0) * coupling;
+  const couplingDeltaV = {
+    x: player.vx - beforeCouplingVX,
+    y: player.vy - beforeCouplingVY,
+  };
 
-  return { thrustIntensity, coupling, flowSample };
+  return { thrustIntensity, coupling, flowSample, thrustDeltaV, couplingDeltaV };
 }
 
 function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
@@ -89,26 +97,34 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   const moveY = finiteNumber(input?.moveY, 0);
   const thrustIntensity = Math.max(0, Number(options.thrustIntensity) || 0);
   const brakeIntensity = consumePlayerDeltaV(player, input?.brake, dt, inputConfig.brakeFuelScale);
+  const thrustDeltaV = { x: 0, y: 0 };
 
   if (brakeIntensity > 0) {
     const thrustScale = Number(brain.thrustScale) || 1;
     const brakeAccel = MOVEMENT.player.thrustAccel * thrustScale
       * inputConfig.brakeThrustScale * brakeIntensity * controlMult;
-    player.vx -= moveX * brakeAccel * dt;
-    player.vy -= moveY * brakeAccel * dt;
+    thrustDeltaV.x = -moveX * brakeAccel * dt;
+    thrustDeltaV.y = -moveY * brakeAccel * dt;
+    player.vx += thrustDeltaV.x;
+    player.vy += thrustDeltaV.y;
   }
 
+  const beforeDragVX = player.vx;
+  const beforeDragVY = player.vy;
   applyPlayerDeltaVRegen(player, dt, thrustIntensity > 0.01 || brakeIntensity > 0.01, inputConfig);
   const dragScale = Number(brain.dragScale) || 1;
-  const dragPerFrame = Math.max(0, Math.min(0.95, inputConfig.baseDragPer60HzFrame * dragScale));
-  const dragFactor = Math.pow(1 - dragPerFrame, dt * 60);
+  const dragFactor = dragFactorFromHalfLife(inputConfig.coastHalfLifeSeconds, dt, dragScale);
   player.vx *= dragFactor;
   player.vy *= dragFactor;
   clampPlayerSpeed(player, inputConfig);
+  const dragDeltaV = {
+    x: player.vx - beforeDragVX,
+    y: player.vy - beforeDragVY,
+  };
   player.wx = wrapWorldPosition(player.wx + player.vx * dt, worldScale);
   player.wy = wrapWorldPosition(player.wy + player.vy * dt, worldScale);
 
-  return { brakeIntensity, dragFactor };
+  return { brakeIntensity, dragFactor, thrustDeltaV, dragDeltaV };
 }
 
 function stepPlayerMovementCore(player, input, dt, options = {}) {

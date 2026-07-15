@@ -24,6 +24,10 @@
 
 import { CONFIG } from './config.js';
 import { FLUID_REF_SCALE, uvScale } from './coords.js';
+import {
+  authorityFloor,
+  resampleAuthoritativeField,
+} from './authoritative-field.mjs';
 
 // ---- Shader sources ----
 
@@ -514,93 +518,26 @@ void main() {
   }
 }`;
 
-// Coarse field update — runs at coarse resolution (e.g. 64x64). Each
-// cell represents one world-UV position. The shader does two jobs in
-// one pass:
-//
-//   1. Compute a well-driven baseline velocity at this world position
-//      (sum of well pulls + tangential orbit, attenuated with distance).
-//      This guarantees a sensible value at every cell on every frame —
-//      players flying into never-before-visited regions still get
-//      world-scale current truth instead of dead fluid.
-//
-//   2. If the cell's world position is currently inside the fluid grid
-//      window, sample the fluid velocity texture and blend it in. The
-//      fluid carries transient features (ship wakes, scavenger thrust,
-//      pulses) that the baseline alone can't represent. Blend favors
-//      the fluid where present so the captured state is faithful.
-//
-// Cells outside the grid window keep the previous coarse velocity and
-// decay it toward the baseline. Features are captured while in-window,
-// remain available to re-enter at the fluid boundary, then slowly relax
-// back into well-driven flow.
-const COARSE_MAX_WELLS = 32;
-const FRAG_COARSE_UPDATE = `#version 300 es
+// Authority is uploaded by the server snapshot. Presentation detail may
+// survive the fluid solve, but it is bounded so it cannot reverse a current
+// stronger than the accepted ambient authority floor.
+const FRAG_AUTHORITY_FORCE = `#version 300 es
 precision highp float;
-uniform sampler2D u_fluidVel;
-uniform sampler2D u_previousCoarse;
-uniform vec2 u_camera;        // camera world position
-uniform float u_gridWindow;
-uniform float u_worldScale;
-
-uniform int u_wellCount;
-uniform vec2 u_wellPos[${COARSE_MAX_WELLS}];     // world positions
-uniform float u_wellMass[${COARSE_MAX_WELLS}];
-uniform float u_wellOrbitalDir[${COARSE_MAX_WELLS}];
-uniform float u_baselineStrength;
-uniform float u_persistenceDecay;
+uniform sampler2D u_velocity;
+uniform sampler2D u_authority;
+uniform float u_detailFloor;
 
 in vec2 v_uv;
 out vec4 fragColor;
-${GLSL_COORDS}
-
-vec2 toroidalDelta(vec2 a, vec2 b, float worldScale) {
-  vec2 d = a - b;
-  float half_ = worldScale * 0.5;
-  if (d.x > half_) d.x -= worldScale;
-  if (d.x < -half_) d.x += worldScale;
-  if (d.y > half_) d.y -= worldScale;
-  if (d.y < -half_) d.y += worldScale;
-  return d;
-}
 
 void main() {
-  vec2 cellWorld = lbhCoarseUvToWorld(v_uv, u_worldScale);
-
-  // 1. Well-driven baseline (cheap O(N_wells) per cell, 64x64 = 4096
-  //    fragments × ≤32 wells = trivial cost).
-  vec2 baseline = vec2(0.0);
-  for (int i = 0; i < ${COARSE_MAX_WELLS}; i++) {
-    if (i >= u_wellCount) break;
-    vec2 toWell = toroidalDelta(u_wellPos[i], cellWorld, u_worldScale);
-    float dist = length(toWell) + 1e-3;
-    vec2 dir = toWell / dist;
-    // Pull strength falls off with distance; saturates at close range.
-    float pull = u_wellMass[i] / (dist * dist + 0.25);
-    // Tangential component for orbital character.
-    vec2 tangent = vec2(-dir.y, dir.x) * u_wellOrbitalDir[i];
-    vec2 worldVel = (dir * 0.7 + tangent * 0.3) * pull;
-    baseline += lbhWorldVelocityToFluidVelocity(worldVel);
+  vec2 authority = texture(u_authority, v_uv).xy;
+  vec2 detail = texture(u_velocity, v_uv).xy - authority;
+  float detailMagnitude = length(detail);
+  if (detailMagnitude > u_detailFloor && detailMagnitude > 1e-6) {
+    detail *= u_detailFloor / detailMagnitude;
   }
-  baseline *= u_baselineStrength;
-
-  // 2. If the cell is currently inside the fluid grid window, sample
-  //    the live fluid velocity at this world position and blend it in.
-  vec2 cellRelToCamera = toroidalDelta(cellWorld, u_camera, u_worldScale);
-  vec2 fluidUV = lbhWorldDeltaToFluidUv(cellRelToCamera, u_gridWindow);
-  vec4 previous = texture(u_previousCoarse, v_uv);
-  vec2 persisted = previous.a > 0.5
-    ? baseline + (previous.xy - baseline) * u_persistenceDecay
-    : baseline;
-  vec2 finalVel = persisted;
-  if (fluidUV.x >= 0.0 && fluidUV.x <= 1.0 && fluidUV.y >= 0.0 && fluidUV.y <= 1.0) {
-    vec2 liveVel = texture(u_fluidVel, fluidUV).xy;
-    // Favor fluid where it has signal; preserve coarse memory where it doesn't.
-    float liveStrength = clamp(length(liveVel) * 5.0, 0.0, 1.0);
-    finalVel = mix(persisted, liveVel, liveStrength);
-  }
-
-  fragColor = vec4(finalVel, 0.0, 1.0);
+  fragColor = vec4(authority + detail, 0.0, 1.0);
 }`;
 
 
@@ -609,6 +546,8 @@ export class FluidSim {
     this.gl = gl;
     this.res = CONFIG.fluid.resolution;
     this.texelSize = [1.0 / this.res, 1.0 / this.res];
+    this.authoritativeField = null;
+    this.authorityFloor = 0;
 
     this._initGL();
     this._createFramebuffers();
@@ -631,7 +570,7 @@ export class FluidSim {
       dissipation: this._createProgram(VERT_QUAD, FRAG_DISSIPATION),
       clear: this._createProgram(VERT_QUAD, FRAG_CLEAR),
       translate: this._createProgram(VERT_QUAD, FRAG_TRANSLATE),
-      coarseUpdate: this._createProgram(VERT_QUAD, FRAG_COARSE_UPDATE),
+      authorityForce: this._createProgram(VERT_QUAD, FRAG_AUTHORITY_FORCE),
     };
 
     // Fullscreen quad
@@ -660,7 +599,7 @@ export class FluidSim {
     // fluid grid's inflow boundary. Ping-pong so captured transient flow
     // can decay toward the well baseline instead of disappearing as soon
     // as a cell leaves the live fluid window.
-    this.coarseRes = 64;
+    this.coarseRes = CONFIG.fluid.coarseResolution;
     this.coarseField = this._createDoubleFBO(this.coarseRes, this.coarseRes);
     this._clearTarget(this.coarseField.read, 0, 0, 0, 0);
     this._clearTarget(this.coarseField.write, 0, 0, 0, 0);
@@ -991,6 +930,10 @@ export class FluidSim {
     gl.uniform2fv(u['u_texelSize'], this.texelSize);
     this._blit(this.velocity.write);
     this.velocity.swap();
+
+    // Authority is the gameplay-visible floor. Presentation turbulence can
+    // remain, but it is clamped against the registered field before display.
+    this.forceFromAuthoritativeField();
   }
 
   /**
@@ -1162,6 +1105,8 @@ export class FluidSim {
     // Create new framebuffers at the new resolution
     this.res = newRes;
     this.texelSize = [1.0 / this.res, 1.0 / this.res];
+    this.authoritativeField = null;
+    this.authorityFloor = 0;
     this._createFramebuffers();
   }
 
@@ -1171,9 +1116,8 @@ export class FluidSim {
    * Run once per frame with the camera's UV delta.
    *
    * Texels scrolling in from outside the source range read from the
-   * coarse field at the corresponding world position, which carries
-   * world-scale current truth captured from previous in-window state
-   * plus a well-driven baseline (see updateCoarseField).
+   * coarse field at the corresponding world position, which carries the
+   * latest server-owned world-scale current truth.
    *
    * Shifts velocity (which has the coarse-field inflow). Density and
    * visualDensity scroll with empty inflow. They're cosmetic and don't
@@ -1226,42 +1170,57 @@ export class FluidSim {
   }
 
   /**
-   * Refresh the world-anchored coarse field. Each cell receives a
-   * well-driven baseline (so unvisited regions have sensible current
-   * truth) blended with a sample of the live fluid grid wherever the
-   * cell's world position is currently in-window. Run once per frame.
-   *
-   * wells: array of { wx, wy, mass, orbitalDir }.
+   * Register the latest server-owned field in the world-anchored GPU texture.
+   * The field is resampled once per authority tick; the fluid solver then
+   * forces from it after every fixed simulation step.
    */
-  updateCoarseField(camera, gridWindow, worldScale, wells, baselineStrength = 0.18, persistenceDecay = 0.94) {
+  setAuthoritativeCoarseField(field) {
+    const hasCells = Array.isArray(field?.cells) && field.cells.length > 0;
+    const hasPackedData = typeof field?.data === 'string' && Number(field?.cellCount) > 0;
+    if (!field || (!hasCells && !hasPackedData)) {
+      this.clearAuthoritativeCoarseField();
+      return false;
+    }
+    if (this.authoritativeField === field) return false;
+
+    const data = resampleAuthoritativeField(field, this.coarseRes);
     const gl = this.gl;
-    const u = this._useProgram(this.programs.coarseUpdate);
-    gl.uniform1i(u['u_fluidVel'], 0);
+    for (const target of [this.coarseField.read, this.coarseField.write]) {
+      gl.bindTexture(gl.TEXTURE_2D, target.tex);
+      gl.texSubImage2D(
+        gl.TEXTURE_2D, 0, 0, 0, this.coarseRes, this.coarseRes,
+        gl.RGBA, gl.FLOAT, data,
+      );
+    }
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.authoritativeField = field;
+    // The packet floor is world-unit authority; the GPU texture is reference-scaled.
+    this.authorityFloor = authorityFloor(field) / FLUID_REF_SCALE;
+    return true;
+  }
+
+  clearAuthoritativeCoarseField() {
+    if (!this.authoritativeField) return;
+    this.authoritativeField = null;
+    this.authorityFloor = 0;
+    this._clearTarget(this.coarseField.read, 0, 0, 0, 0);
+    this._clearTarget(this.coarseField.write, 0, 0, 0, 0);
+  }
+
+  forceFromAuthoritativeField() {
+    if (!this.authoritativeField) return false;
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.authorityForce);
+    gl.uniform1i(u['u_velocity'], 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex);
-    gl.uniform1i(u['u_previousCoarse'], 1);
+    gl.uniform1i(u['u_authority'], 1);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.coarseField.read.tex);
-    gl.uniform2f(u['u_camera'], camera[0], camera[1]);
-    gl.uniform1f(u['u_gridWindow'], gridWindow);
-    gl.uniform1f(u['u_worldScale'], worldScale);
-    gl.uniform1f(u['u_baselineStrength'], baselineStrength);
-    gl.uniform1f(u['u_persistenceDecay'], persistenceDecay);
-
-    const count = Math.min(wells.length, COARSE_MAX_WELLS);
-    gl.uniform1i(u['u_wellCount'], count);
-    for (let i = 0; i < count; i++) {
-      const w = wells[i];
-      const posLoc = u[`u_wellPos[${i}]`];
-      if (posLoc) gl.uniform2f(posLoc, w.wx, w.wy);
-      const massLoc = u[`u_wellMass[${i}]`];
-      if (massLoc) gl.uniform1f(massLoc, w.mass ?? 1.0);
-      const orbLoc = u[`u_wellOrbitalDir[${i}]`];
-      if (orbLoc) gl.uniform1f(orbLoc, w.orbitalDir ?? 1.0);
-    }
-
-    this._blit(this.coarseField.write);
-    this.coarseField.swap();
+    gl.uniform1f(u['u_detailFloor'], this.authorityFloor);
+    this._blit(this.velocity.write);
+    this.velocity.swap();
+    return true;
   }
 
   /**
@@ -1280,5 +1239,7 @@ export class FluidSim {
     this._clearTarget(this.visualDensity.write);
     this._clearTarget(this.coarseField.read, 0, 0, 0, 0);
     this._clearTarget(this.coarseField.write, 0, 0, 0, 0);
+    this.authoritativeField = null;
+    this.authorityFloor = 0;
   }
 }

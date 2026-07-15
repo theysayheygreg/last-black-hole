@@ -55,13 +55,35 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     this.drop(remotePlayers.length - remoteIndex);
 
     const sling = player?.slingshot;
-    const slingAnchor = sling?.anchor || sling?.affordance;
-    if (slingAnchor) {
+    const telegraph = sling?.telegraph;
+    const aimAnchor = telegraph?.aimCue?.anchor || sling?.affordance;
+    const slingAnchor = sling?.anchor || sling?.affordance || telegraph?.lock?.anchor;
+    if (aimAnchor) {
       draw.semantic(this.geometries.ring, this.materials.surfRing,
-        slingAnchor.world.x, slingAnchor.world.y, slingAnchor.range || 0.1, 0, 0.13);
+        aimAnchor.world.x, aimAnchor.world.y, aimAnchor.range || 0.1, 0, 0.13);
       this.submittedParts += 1;
-      if (sling.engaged && player && draw.line(
+    }
+    if (slingAnchor) {
+      if (!aimAnchor || slingAnchor.world.x !== aimAnchor.world.x || slingAnchor.world.y !== aimAnchor.world.y) {
+        draw.semantic(this.geometries.ring, this.materials.surfRing,
+          slingAnchor.world.x, slingAnchor.world.y, slingAnchor.range || 0.1, 0, 0.13);
+        this.submittedParts += 1;
+      }
+      if ((sling.engaged || telegraph?.lock || telegraph?.ownedArc) && player && draw.line(
         player.world.x, player.world.y, slingAnchor.world.x, slingAnchor.world.y, this.materials.tether
+      )) this.submittedParts += 1;
+    }
+    const ghost = telegraph?.releaseGhost;
+    if (ghost && player) {
+      const direction = ghost.direction || { x: 1, y: 0 };
+      const magnitude = Math.hypot(direction.x, direction.y) || 1;
+      const ghostDistance = 0.16;
+      if (draw.line(
+        player.world.x,
+        player.world.y,
+        player.world.x + (direction.x / magnitude) * ghostDistance,
+        player.world.y + (direction.y / magnitude) * ghostDistance,
+        this.materials.tether,
       )) this.submittedParts += 1;
     }
     return this.getStats();

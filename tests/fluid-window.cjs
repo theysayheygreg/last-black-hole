@@ -1,7 +1,7 @@
 /**
  * Fluid-window tests - browser coverage for the camera-anchored GPU grid.
  *
- * Large maps should keep the same fluid texture cost as the 3x3 reference
+ * Large maps should keep the same fluid texture cost as the fixed local reference
  * map. Only wells near the camera feed the display shader directly; off-window
  * influence is carried by the coarse field.
  *
@@ -15,15 +15,19 @@ const {
   assert,
 } = require("./helpers.cjs");
 const { CLIENT_PERF_PROFILES } = require("../scripts/content/session-profiles.cjs");
+const { PLAYABLE_MAP_IDS, MAP_SCALE_REGISTRY } = require("../scripts/content/map-scales.cjs");
+const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
 const EXPECTED_FLUID_RESOLUTION = CLIENT_PERF_PROFILES.fixedGrid.fluidResolution;
 
-const MAPS = [
-  { index: 0, label: "shallows", scale: 3, wells: 4 },
-  { index: 1, label: "expanse", scale: 5, wells: 8 },
-  { index: 2, label: "deep-field", scale: 10, wells: 20 },
-];
+const AUTHORITATIVE_MAPS = loadPlayableMaps();
+const MAPS = PLAYABLE_MAP_IDS.map((mapId, index) => ({
+  index,
+  label: mapId,
+  scale: MAP_SCALE_REGISTRY[mapId].dimensions.width,
+  wells: AUTHORITATIVE_MAPS[mapId].wells.length,
+}));
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,7 +72,8 @@ async function run() {
         const grid = await startMapAndReadGrid(page, map);
         const stats = grid.perfStats;
         assert(grid.worldScale === map.scale, `${map.label}: expected worldScale ${map.scale}, got ${grid.worldScale}`);
-        assert(grid.gridWindow === 3, `${map.label}: expected GRID_WINDOW 3, got ${grid.gridWindow}`);
+        assert(grid.gridWindow === CLIENT_PERF_PROFILES.fixedGrid.localWindowWorldUnits,
+          `${map.label}: expected fixed GRID_WINDOW ${CLIENT_PERF_PROFILES.fixedGrid.localWindowWorldUnits}, got ${grid.gridWindow}`);
         assert(stats.fluidResolution === EXPECTED_FLUID_RESOLUTION,
           `${map.label}: expected ${EXPECTED_FLUID_RESOLUTION} fluid grid, got ${stats.fluidResolution}`);
         assert(stats.totalWellCount === map.wells, `${map.label}: expected ${map.wells} wells, got ${stats.totalWellCount}`);
@@ -79,7 +84,7 @@ async function run() {
     });
 
     await runner.run("Large maps cull off-window wells from direct rendering", async () => {
-      for (const map of MAPS.filter((m) => m.scale > 3)) {
+      for (const map of MAPS.filter((m) => m.scale > CLIENT_PERF_PROFILES.fixedGrid.localWindowWorldUnits)) {
         const grid = await startMapAndReadGrid(page, map);
         const { visibleWellCount, totalWellCount } = grid.perfStats;
         assert(visibleWellCount < totalWellCount,

@@ -13,6 +13,8 @@
  *   revertSceneOverrides(CONFIG);
  */
 
+import { normalizeTuningOverrideAliases } from './content/tuning.js';
+
 let _savedValues = [];  // stack of { path, originalValue } for reverting
 
 /**
@@ -21,7 +23,7 @@ let _savedValues = [];  // stack of { path, originalValue } for reverting
 export function applySceneOverrides(config, overrides) {
   if (!overrides) return;
   _savedValues = [];
-  _applyRecursive(config, overrides, '');
+  _applyRecursive(config, normalizeTuningOverrideAliases(overrides, 'scene config override'), '');
 }
 
 function _applyRecursive(target, source, path) {

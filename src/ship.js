@@ -14,6 +14,10 @@ import {
   applyPlayerBrakeAndIntegrate,
   applyPlayerDriveAndFlow,
 } from './content/movement-step.js';
+import {
+  dragPerReferenceFrameFromHalfLife,
+  profileDragScaleFromUpgradeRank,
+} from './content/tuning.js';
 
 export class Ship {
   constructor(canvasWidth, canvasHeight) {
@@ -141,9 +145,18 @@ export class Ship {
     this.wellResistScale *= wellResistScale;
   }
 
+  applyProfileDragUpgrade(rank) {
+    this.dragScale *= profileDragScaleFromUpgradeRank(rank);
+  }
+
   /** Refill fuel by an absolute amount (used by fuelCell consumable). */
   refillDeltaV(amount) {
     this.deltaV = Math.min(this.deltaVMax, this.deltaV + amount);
+  }
+
+  wakeTerminalVelocityWorld() {
+    const dragPerFrame = dragPerReferenceFrameFromHalfLife(CONFIG.ship.coastHalfLifeSeconds);
+    return CONFIG.ship.thrustAccel / (dragPerFrame > 0 ? dragPerFrame : 0.03);
   }
 
   /** Fraction 0..1 for HUD gauge consumers. */
@@ -206,6 +219,10 @@ export class Ship {
       thrust: this.thrustIntensity,
       brake: this.brakeIntensity,
     };
+    const movementConfig = {
+      ...MOVEMENT_INPUT,
+      coastHalfLifeSeconds: CONFIG.ship.coastHalfLifeSeconds,
+    };
 
     // Sample fluid velocity at ship position
     let fluidVelWorld = { x: 0, y: 0 };
@@ -220,7 +237,7 @@ export class Ship {
     // forces stay in their existing owners and ordering for this slice.
     const driveStep = applyPlayerDriveAndFlow(this, movementInput, dt, {
       brain: this,
-      inputConfig: MOVEMENT_INPUT,
+      inputConfig: movementConfig,
       flowSample: { current: fluidVelWorld },
     });
     const effectiveIntensity = driveStep.thrustIntensity;
@@ -248,7 +265,7 @@ export class Ship {
 
     const brakeStep = applyPlayerBrakeAndIntegrate(this, movementInput, dt, {
       brain: this,
-      inputConfig: MOVEMENT_INPUT,
+      inputConfig: movementConfig,
       thrustIntensity: effectiveIntensity,
       worldScale: WORLD_SCALE,
     });
@@ -259,7 +276,7 @@ export class Ship {
     if (fluid) {
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
       // Terminal velocity = thrust / drag. Fallback 0.03 prevents division by zero if drag is 0.
-      const terminalVelWorld = cfg.thrustAccel / (cfg.drag > 0 ? cfg.drag : 0.03);
+      const terminalVelWorld = this.wakeTerminalVelocityWorld();
       const speedFraction = speed / terminalVelWorld;
       const wake = cfg.wake;
 

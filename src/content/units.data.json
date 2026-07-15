@@ -1,0 +1,8 @@
+{
+  "status": "provisional",
+  "metersPerSimUnit": 1000,
+  "drifterHullLengthMeters": 12,
+  "drifterHullLengthSimUnits": 0.012,
+  "scaleBarMeters": 100,
+  "source": "v0.3.1 S4 units doctrine plus Greg/Primary W1-E ruling, 2026-07-14"
+}

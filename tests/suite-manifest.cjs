@@ -18,6 +18,24 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AnomalyCatalog",
+    file: "anomaly-catalog.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "W2A3ShippingTrio",
+    file: "w2a3-shipping-trio.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "W2A4MapScale",
+    file: "w2a4-map-scale.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "RouteBriefing",
     file: "route-briefing.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],
@@ -138,6 +156,30 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthoritativeField",
+    file: "authoritative-field.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "RendererAuthority",
+    file: "renderer-authority.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "SeededSea",
+    file: "seeded-sea.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "SimRandomGuard",
+    file: "sim-random-guard.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "FlowField",
     file: "flow-field.cjs",
     lanes: ["core", "static", "full"],
@@ -164,6 +206,12 @@ const SUITES = [
   {
     name: "WorldGeometry",
     file: "world-geometry.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "Conductor",
+    file: "conductor.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
     browser: false,
   },
@@ -267,6 +315,12 @@ const SUITES = [
     name: "SimBoundedGrowth",
     file: "sim-bounded-growth.cjs",
     lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "SimGrowthEpochs",
+    file: "sim-growth-epochs.cjs",
+    lanes: ["fast", "core", "authority", "sim-structure", "full"],
     browser: false,
   },
   {

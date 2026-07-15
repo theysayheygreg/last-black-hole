@@ -12,7 +12,17 @@ const SEEDED_GEN = require("./seeded-generation.cjs");
 const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
+  serializeCoarseFlowField,
 } = require("./coarse-flow-field.cjs");
+const {
+  advanceSeededSea,
+  createSeededSea,
+  hashSeededSea,
+} = require("./sim/seeded-sea.cjs");
+const { decayWaveAmplitude, WAVE_HALF_LIFE_SECONDS } = require("./sim/event-wave.cjs");
+const {
+  signalFractionPerSecond,
+} = require("../src/content/tuning.js");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PUBLIC_HULL_IDS,
@@ -33,7 +43,15 @@ const {
   survivalBonusEm,
   runEmEarned,
 } = require("./content/balance.cjs");
-const { getSessionProfile } = require("./content/session-profiles.cjs");
+const {
+  getSessionProfile,
+  CLIENT_PERF_PROFILES,
+} = require("./content/session-profiles.cjs");
+const { simUnitsToMeters } = require("./content/units.cjs");
+const {
+  selectAnomalyCast,
+  migrateCurrentWell,
+} = require("./anomaly-catalog.cjs");
 const {
   defaultRigLevels,
   normalizeRigLevels,
@@ -82,20 +100,64 @@ const {
   wrappedDistance,
   wrappedDelta,
 } = require("./sim/world-geometry.cjs");
+const { createConductor } = require("./sim/conductor.cjs");
+const {
+  beginForceLedger,
+  finalizeForceLedger,
+  recordForceDeltaV,
+  recordForceMutation,
+  setForceLedgerDt,
+} = require("./sim/force-ledger.cjs");
+const {
+  INTERNAL: SLINGSHOT_INTERNAL,
+  SLINGSHOT_VALUES,
+  boundedReleaseDelta,
+  captureRadiusWorld,
+  coyoteWindowOpen,
+  quarterTurnsFromArc,
+  releaseSpeedCap,
+  resolveChainCount,
+  rotateToward,
+  signedAngle,
+} = require("./sim/slingshot-contract.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
+const {
+  createCollapseEpochSchedule,
+  createCollapseEpochState,
+  advanceCollapseEpochs,
+} = require("./sim/collapse-epochs.cjs");
+const { calculateWellGrowth, createWellGrowthEvent } = require("./sim/well-growth.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
-const PORTAL_CONFIG = {
+const PORTAL_CONFIG = Object.freeze({
   captureRadius: 0.08,
-  waves: [
-    { time: 45, count: [2, 3], types: ["standard"], lifespan: 90 },
-    { time: 180, count: [1, 2], types: ["standard", "unstable"], lifespan: 75 },
-    { time: 330, count: [1, 2], types: ["standard", "rift"], lifespan: 60 },
-    { time: 450, count: [1, 1], types: ["unstable"], lifespan: 45 },
-    { time: 570, count: [1, 1], types: ["standard"], lifespan: 30 },
-  ],
-};
+  schedule: Object.freeze({
+    graceSeconds: 45,
+    cadenceSeconds: 120,
+    offsetGuardSeconds: 10,
+    optionalWindows: Object.freeze([
+      { count: [2, 3], types: ["standard"], durationSeconds: 90 },
+      { count: [1, 2], types: ["standard", "unstable"], durationSeconds: 75 },
+      { count: [1, 2], types: ["standard", "rift"], durationSeconds: 60 },
+      { count: [1, 1], types: ["unstable"], durationSeconds: 45 },
+      { count: [1, 1], types: ["standard"], durationSeconds: 30 },
+    ]),
+    latePhaseRules: Object.freeze([
+      { minInhibitorPhase: 2, countMultiplier: 0.5, durationMultiplier: 0.8 },
+      { minInhibitorPhase: 3, countMultiplier: 0, durationMultiplier: 0.6 },
+    ]),
+    spawnRadiusBands: Object.freeze({
+      standard: { anchor: "map-center", minRadius: 0.45, maxRadius: 1.25, minWellDistance: 0.45 },
+      unstable: { anchor: "map-center", minRadius: 0.30, maxRadius: 1.35, minWellDistance: 0.12 },
+      rift: { anchor: "map-center", minRadius: 0.20, maxRadius: 1.30, minWellDistance: 0.18, maxWellDistance: 0.70 },
+      finalExfil: { anchor: "map-center", minRadius: 0.70, maxRadius: 1.35, minWellClearance: 0.22 },
+    }),
+    finalExfilDuration: readNumber(process.env.LBH_SIM_FINAL_EXFIL_DURATION, 60, 1),
+    placementAttempts: 128,
+    minPortalSpacing: 0.30,
+  }),
+});
 const AUTHORITY_INPUT_CONFIG = Object.freeze({
   heldInputTimeoutMs: readNumber(process.env.LBH_SIM_HELD_INPUT_TIMEOUT_MS, 750, 1),
 });
@@ -134,7 +196,7 @@ const WRECK_NOUNS = [
 ];
 const WRECK_PREFIXES = ["Wreck", "Remains", "Hulk"];
 
-function generateWreckName(rng = Math.random) {
+function generateWreckName(rng) {
   const pick = (list) => list[Math.floor(rng() * list.length)] || list[0];
   return `${pick(WRECK_PREFIXES)} of the ${pick(WRECK_ADJECTIVES)} ${pick(WRECK_NOUNS)}`;
 }
@@ -150,7 +212,15 @@ function readNumber(value, fallback, min = -Infinity) {
 // seeded from runtime.session.seed. Same seed → same initial loot.
 
 function currentRNG(streamName) {
-  return runtime.session?.rng?.rawStream(streamName) || Math.random;
+  if (!runtime.session?.rng) {
+    throw new Error(`Seeded sim RNG requested before session stream setup: ${streamName}`);
+  }
+  return runtime.session.rng.rawStream(streamName);
+}
+
+function nextSeededToken(prefix, streamName = "authorityIds") {
+  const value = Math.floor(currentRNG(streamName)() * 0x100000000).toString(36);
+  return `${prefix}-${value}`;
 }
 
 function rollTier(sessionTime, streamName = 'loot') {
@@ -161,8 +231,7 @@ function rollTier(sessionTime, streamName = 'loot') {
 function rollItem(tier, streamName = 'loot') {
   const item = SEEDED_GEN.rollItem(currentRNG(streamName), tier);
   if (!item) return null;
-  // instanceId uses Math.random — purely cosmetic, not seed-dependent
-  return { ...item, instanceId: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };
+  return { ...item, instanceId: nextSeededToken("item") };
 }
 
 function generateWreckLoot(sessionTime, slotCount, streamName = 'loot') {
@@ -172,7 +241,7 @@ function generateWreckLoot(sessionTime, slotCount, streamName = 'loot') {
   // Stamp cosmetic instance IDs after rolling so instance IDs don't affect RNG order
   for (const item of items) {
     const prefix = item.effect ? 'cons' : 'item';
-    item.instanceId = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    item.instanceId = nextSeededToken(prefix);
   }
   return items;
 }
@@ -240,26 +309,25 @@ const PLANETOID_SERVER = {
 const WAVE_SERVER = {
   waveSpeed: 0.4,
   waveWidth: 0.1,
-  waveDecay: 0.97,
+  waveHalfLife: WAVE_HALF_LIFE_SECONDS,
   waveMaxRadius: 2.0,
   waveShipPush: 0.8,
   growthWaveAmplitude: 1.0,
 };
-const SLINGSHOT_SERVER = {
-  range: { well: 0.45, star: 0.30, planetoid: 0.18 },
-  massWeight: { well: 1.0, star: 0.6, planetoid: 0.3 },
-  energyAccrualRate: 3.5,
-  releaseMultiplier: 4.5,
-  gravityCancelFraction: 0.95,
-  tangentialForce: 1.5,
-  chainWindowSeconds: 1.2,
-  chainMultiplier: 1.4,
-  minTangentialSpeed: 0.05,
-  maxChainCount: 6,
-};
+const SLINGSHOT_SERVER = Object.freeze({
+  // Exactly five player-facing gameplay knobs. The values/ranges/steps live
+  // in slingshot-contract.cjs; the remaining fields are implementation-only.
+  captureRadius: SLINGSHOT_VALUES.captureRadius,
+  magnetism: SLINGSHOT_VALUES.magnetism,
+  coyoteTime: SLINGSHOT_VALUES.coyoteTime,
+  payoffCurve: SLINGSHOT_VALUES.payoffCurve,
+  chainWindow: SLINGSHOT_VALUES.chainWindow,
+  internal: SLINGSHOT_INTERNAL,
+  massWeight: Object.freeze({ well: 1.0, star: 0.6, planetoid: 0.3 }),
+});
 const SIGNAL_CONFIG = {
   // Generation rates (per second for continuous, instant for spikes)
-  thrustBaseRate: 0.005,
+  thrustBasePercentPerSecond: 0.5,
   thrustOppositionMult: 2.0,
   lootSpikeT1: 0.06,
   lootSpikeT2: 0.10,
@@ -271,14 +339,14 @@ const SIGNAL_CONFIG = {
   // have per-type bumpSignal values tuned to their gameplay role.
   // extractionRate removed — extraction is instant (no charge time), so continuous
   // signal generation during extraction never fires. If extraction gains a charge
-  // period, re-add at 0.003/s.
-  wellProximityRate: 0.002,
+  // period, re-add at 0.3%/s.
+  wellProximityPercentPerSecond: 0.2,
   wellProximityDist: 0.30,
-  coastRate: 0.001,
+  coastPercentPerSecond: 0.1,
   // Decay rates (per second)
-  decayBase: 0.025,
-  decayWreckWake: 0.040,
-  decayAccretionShadow: 0.050,
+  decayBasePercentPerSecond: 2.5,
+  decayWreckWakePercentPerSecond: 4.0,
+  decayAccretionShadowPercentPerSecond: 5.0,
   // Thresholds
   ghostMax: 0.15,
   whisperMax: 0.35,
@@ -290,19 +358,14 @@ const SIGNAL_CONFIG = {
 };
 
 const INHIBITOR_CONFIG = {
-  // Pressure accumulation
-  pressureFromSignal: 0.008,    // pressure/s per unit signal level
-  pressureFromTime: 0.0005,     // pressure/s from elapsed time (normalized)
-  pressureFromGrowth: 0.05,     // pressure per well growth event
-  // Form thresholds (fraction of wake threshold)
-  glitchFraction: 0.7,         // Form 1 at 70% of threshold
-  // Wake threshold randomized per run
-  thresholdMin: 0.82,
-  thresholdMax: 0.98,
+  // Provisional Conductor clock. Both values use the S12 tuning step of
+  // 0.5 minutes (30 seconds): grace 90s, then each phase 90s apart.
+  graceMinutes: 1.5,
+  phaseIntervalMinutes: 1.5,
+  phaseWaveBudgets: [0, 1, 2, 3],
   // Form 1: Glitch
   glitchRadius: 0.1,           // world-units
   glitchDriftSpeed: 0.02,      // wu/s toward last signal position
-  glitchDissipateTime: 10,     // seconds of silence before dissipating
   glitchSolidifySignal: 0.35,  // signal level that solidifies glitch
   glitchSolidifySpeed: 0.04,   // wu/s when solidified
   // Form 2: Swarm
@@ -335,10 +398,134 @@ const INHIBITOR_CONFIG = {
   vesselWellConsumeRadius: 0.06,
   vesselConsumeRadiusGrowth: 0.025,
   vesselConsumeGravityBonus: 0.03,
-  vesselTimeToForm: 90,        // seconds after Swarm, or instant if signal hits 1.0
-  finalPortalDelay: 60,        // seconds after Vessel before guaranteed portal
-  finalPortalLifespan: 15,
 };
+
+function inhibitorPhaseTime(phase) {
+  if (phase <= 0) return 0;
+  const graceSeconds = INHIBITOR_CONFIG.graceMinutes * 60;
+  const intervalSeconds = INHIBITOR_CONFIG.phaseIntervalMinutes * 60;
+  return graceSeconds + (phase - 1) * intervalSeconds;
+}
+
+function inhibitorPhaseAtTime(time) {
+  for (let phase = 3; phase >= 1; phase -= 1) {
+    if (time >= inhibitorPhaseTime(phase)) return phase;
+  }
+  return 0;
+}
+
+function latePortalRuleForPhase(phase) {
+  return PORTAL_CONFIG.schedule.latePhaseRules.reduce((selected, rule) => {
+    return phase >= rule.minInhibitorPhase ? rule : selected;
+  }, { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 });
+}
+
+function scalePortalCountRange(countRange, multiplier) {
+  if (multiplier <= 0) return [0, 0];
+  const min = Math.max(0, Math.ceil(countRange[0] * multiplier));
+  const max = Math.max(min, Math.floor(countRange[1] * multiplier));
+  return [min, max];
+}
+
+function portalWindowMetadata(declaration, index, phase) {
+  const lateRule = latePortalRuleForPhase(phase);
+  return {
+    system: "portals",
+    kind: "optional",
+    windowIndex: index,
+    phaseAtOpen: phase,
+    countRange: declaration.count.slice(),
+    effectiveCountRange: scalePortalCountRange(declaration.count, lateRule.countMultiplier),
+    types: declaration.types.slice(),
+    baseDurationSeconds: declaration.durationSeconds,
+    durationMultiplier: lateRule.durationMultiplier,
+    durationSeconds: declaration.durationSeconds * lateRule.durationMultiplier,
+    latePhaseRule: lateRule,
+    spawnRadiusBands: PORTAL_CONFIG.schedule.spawnRadiusBands,
+    minPortalSpacing: PORTAL_CONFIG.schedule.minPortalSpacing,
+    finalExfil: false,
+  };
+}
+
+function createInhibitorConductor(seed) {
+  const conductor = createConductor({
+    seed,
+    conductorId: "match-conductor",
+    offsetGuardSeconds: PORTAL_CONFIG.schedule.offsetGuardSeconds,
+  });
+  conductor.registerEventFront({
+    id: "inhibitor:phase-0",
+    time: 0,
+    kind: "inhibitor.phase",
+    metadata: {
+      system: "inhibitor",
+      phase: 0,
+      tier: 0,
+      scheduledTime: 0,
+      budget: INHIBITOR_CONFIG.phaseWaveBudgets[0],
+    },
+  });
+
+  for (let phase = 1; phase <= 3; phase += 1) {
+    const scheduledTime = inhibitorPhaseTime(phase);
+    conductor.scheduleSeverityWaves({
+      waveIdPrefix: `inhibitor:phase-${phase}`,
+      startTime: scheduledTime,
+      cadence: INHIBITOR_CONFIG.phaseIntervalMinutes * 60,
+      count: 1,
+      budget: INHIBITOR_CONFIG.phaseWaveBudgets[phase],
+      tier: phase,
+      metadata: {
+        system: "inhibitor",
+        phase,
+        form: phase,
+        scheduledTime,
+      },
+    });
+  }
+
+  const optionalWindows = PORTAL_CONFIG.schedule.optionalWindows.map((declaration, index) => {
+    const openTime = PORTAL_CONFIG.schedule.graceSeconds + PORTAL_CONFIG.schedule.cadenceSeconds * index;
+    const phase = inhibitorPhaseAtTime(openTime);
+    const metadata = portalWindowMetadata(declaration, index, phase);
+    return {
+      durationSeconds: metadata.durationSeconds,
+      metadata,
+    };
+  });
+  conductor.scheduleWindows({
+    idPrefix: "portal:optional",
+    startTime: PORTAL_CONFIG.schedule.graceSeconds,
+    cadence: PORTAL_CONFIG.schedule.cadenceSeconds,
+    count: optionalWindows.length,
+    durations: optionalWindows.map((window) => window.durationSeconds),
+    metadata: optionalWindows.map((window) => window.metadata),
+  });
+  conductor.scheduleWindows({
+    idPrefix: "portal:final-exfil",
+    startTime: MATCH_MAX_SIM_TIME,
+    cadence: 1,
+    count: 1,
+    durations: PORTAL_CONFIG.schedule.finalExfilDuration,
+    metadata: {
+      system: "portals",
+      kind: "final-exfil",
+      windowIndex: optionalWindows.length,
+      phaseAtOpen: inhibitorPhaseAtTime(MATCH_MAX_SIM_TIME),
+      countRange: [1, 1],
+      effectiveCountRange: [1, 1],
+      types: ["standard"],
+      baseDurationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
+      durationMultiplier: 1,
+      durationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
+      latePhaseRule: { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 },
+      spawnRadiusBands: PORTAL_CONFIG.schedule.spawnRadiusBands,
+      minPortalSpacing: PORTAL_CONFIG.schedule.minPortalSpacing,
+      finalExfil: true,
+    },
+  });
+  return conductor;
+}
 
 const FAUNA_CONFIG = {
   maxTotal: 60,
@@ -379,8 +566,6 @@ const SENTRY_CONFIG = {
 const AI_PLAYER_CONFIG = {
   decisionInterval: 0.8,      // seconds between tactical decisions
   strategicInterval: 3.0,     // seconds between extraction re-evaluation
-  thrustAccel: 2.5,           // same as human player
-  drag: 0.92,                 // same drag exponent base
   pickupRadius: 0.08,
   sensorRange: 1.2,           // wu — how far AI can "see"
   perceptionDelay: 0.5,       // seconds of position staleness for other players
@@ -690,25 +875,37 @@ function updatePlanetoidState(planetoid, wells, dt, worldScale) {
 }
 
 function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
+  if (!rngStreams) throw new Error("Map state cloning requires seeded RNG streams");
   const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
   const parsedWorldScale = worldScaleOverride == null ? NaN : Number(worldScaleOverride);
-  const worldScale = Number.isFinite(parsedWorldScale) && parsedWorldScale > 0 ? parsedWorldScale : map.worldScale;
-  const growthRng = rngStreams ? rngStreams.rawStream('wellGrowthVar') : Math.random;
-  const wells = map.wells.map((well) => ({
+  if (Number.isFinite(parsedWorldScale) && parsedWorldScale !== map.worldScale) {
+    throw new Error(`Map ${map.id} is canonical at ${map.worldScale} world units; scale override ${parsedWorldScale} rejected`);
+  }
+  const worldScale = map.worldScale;
+  const anomalyCatalog = selectAnomalyCast({
+    mapId: map.id,
+    seed: rngStreams.seed,
+    wellCount: map.wells.length,
+    rngStreams,
+  });
+  const growthRng = rngStreams.rawStream('wellGrowthVar');
+  const wells = map.wells.map((well, index) => migrateCurrentWell({
     ...well,
+    catalogId: anomalyCatalog.cast[index]?.catalogId,
     baseKillRadius: well.killRadius,
     startMass: well.mass,
-    growthRate: (well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE,
+    growthRate: ((well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE)
+      * (anomalyCatalog.cast[index]?.fabricSignature?.parameters?.growthRateMultiplier ?? 1),
     killRadius: well.killRadius,
-  }));
+  }, anomalyCatalog.cast[index]?.catalogId));
   const stars = map.stars.map((star) => ({
     ...star,
     alive: star.alive !== false,
     driftVX: star.driftVX ?? 0,
     driftVY: star.driftVY ?? 0,
   }));
-  const initialLootStream = rngStreams ? rngStreams.rawStream('initialWreckLoot') : Math.random;
-  const initialNameStream = rngStreams ? rngStreams.rawStream('initialWreckNames') : Math.random;
+  const initialLootStream = rngStreams.rawStream('initialWreckLoot');
+  const initialNameStream = rngStreams.rawStream('initialWreckNames');
   const wrecks = map.wrecks.map((wreck) => ({
     ...wreck,
     name: wreck.name || generateWreckName(initialNameStream),
@@ -731,14 +928,19 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
 
   return {
     id: map.id,
+    mapClass: map.mapClass,
+    profileId: map.profileId,
+    dimensions: { ...map.dimensions },
     name: map.name,
     worldScale,
     fluidResolution: map.fluidResolution,
+    anomalyCatalog,
     wells,
     stars,
     wrecks,
     planetoids,
     portals: [],
+    nextPortalWindowIndex: 0,
     nextPortalWaveIndex: 0,
     scavengers: [],
   };
@@ -760,16 +962,8 @@ function isPortalAvailable(portal) {
   return Boolean(portal && portal.alive !== false && portal.blockedByInhibitor !== true);
 }
 
-function randomBetween(min, max) {
-  return min + Math.random() * (max - min);
-}
-
-function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 function generateScavengerIdentity(archetype) {
-  const rng = runtime.session?.rng?.rawStream('scavNames') || Math.random;
+  const rng = currentRNG('scavNames');
   const pickSeeded = (list) => list[Math.floor(rng() * list.length)];
   const faction = pickSeeded(SCAVENGER_FACTIONS);
   const callsign = archetype === "vulture" ? pickSeeded(VULTURE_NAMES) : pickSeeded(DRIFTER_NAMES);
@@ -795,7 +989,8 @@ function spawnServerScavengers(mapState, session) {
   );
   const vultureCount = Math.max(1, Math.round(count * 0.33));
   const scavengers = [];
-  const rng = session?.rng?.rawStream('scavSpawn') || Math.random;
+  const rng = session?.rng?.rawStream('scavSpawn');
+  if (!rng) throw new Error("Scavenger spawning requires seeded RNG streams");
   for (let i = 0; i < count; i++) {
     const archetype = i < vultureCount ? "vulture" : "drifter";
     const edge = i % 4;
@@ -847,46 +1042,91 @@ function spawnServerScavengers(mapState, session) {
   return scavengers;
 }
 
-function findPortalSpawnPosition(portalType) {
+function portalSpawnAnchor(anchorName, worldScale) {
+  if (anchorName === "map-center") return { wx: worldScale / 2, wy: worldScale / 2 };
+  throw new RangeError(`Unknown portal spawn anchor: ${anchorName}`);
+}
+
+function portalSpawnBand(portalType, finalExfil = false) {
+  const bands = PORTAL_CONFIG.schedule.spawnRadiusBands;
+  const band = finalExfil ? bands.finalExfil : bands[portalType];
+  if (!band) throw new RangeError(`No portal spawn radius band for ${portalType}`);
+  return band;
+}
+
+function portalPlacementIsValid(position, portalType, band, { finalExfil = false } = {}) {
   const worldScale = runtime.session.worldScale;
-  const minPortalSpacing = 0.3;
-  const dangerBias = portalType === "rift" ? 0.2 : portalType === "unstable" ? 0.1 : 0.45;
-  const rng = runtime.session?.rng?.rawStream('portalPos') || Math.random;
+  const epsilon = 1e-9;
+  if (position.distance < band.minRadius - epsilon || position.distance > band.maxRadius + epsilon) return false;
 
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const wx = rng() * worldScale;
-    const wy = rng() * worldScale;
-
-    let nearestPortal = Infinity;
-    for (const portal of runtime.mapState.portals) {
-      if (portal.alive === false) continue;
-      nearestPortal = Math.min(
-        nearestPortal,
-        worldDistance(wx, wy, portal.wx, portal.wy, worldScale)
-      );
-    }
-    if (nearestPortal < minPortalSpacing) continue;
-
-    let nearestWell = Infinity;
-    for (const well of runtime.mapState.wells) {
-      nearestWell = Math.min(nearestWell, worldDistance(wx, wy, well.wx, well.wy, worldScale));
-    }
-
-    if (portalType === "rift") {
-      if (nearestWell < 0.18 || nearestWell > 0.5) continue;
-    } else if (portalType === "unstable") {
-      if (nearestWell < 0.12 || nearestWell > 0.7) continue;
-    } else {
-      if (nearestWell < dangerBias) continue;
-    }
-
-    return { wx, wy };
+  if (!finalExfil) {
+    const nearestPortal = runtime.mapState.portals.reduce((nearest, portal) => {
+      if (portal.alive === false) return nearest;
+      return Math.min(nearest, worldDistance(position.wx, position.wy, portal.wx, portal.wy, worldScale));
+    }, Infinity);
+    if (nearestPortal < (band.minPortalSpacing || PORTAL_CONFIG.schedule.minPortalSpacing)) return false;
   }
 
-  return {
-    wx: rng() * worldScale,
-    wy: rng() * worldScale,
-  };
+  const nearestWell = runtime.mapState.wells.reduce((nearest, well) => {
+    return Math.min(nearest, worldDistance(position.wx, position.wy, well.wx, well.wy, worldScale));
+  }, Infinity);
+  const nearestWellClearance = runtime.mapState.wells.reduce((nearest, well) => {
+    if (well.consumedByInhibitor) return nearest;
+    const clearance = worldDistance(position.wx, position.wy, well.wx, well.wy, worldScale)
+      - Math.max(0, Number(well.killRadius) || 0);
+    return Math.min(nearest, clearance);
+  }, Infinity);
+  if (finalExfil) return nearestWellClearance >= band.minWellClearance;
+  if (band.minWellDistance !== undefined && nearestWell < band.minWellDistance) return false;
+  if (band.maxWellDistance !== undefined && nearestWell > band.maxWellDistance) return false;
+  return true;
+}
+
+function findPortalSpawnPosition(portalType, window, portalIndex, { finalExfil = false } = {}) {
+  const worldScale = runtime.session.worldScale;
+  const band = portalSpawnBand(portalType, finalExfil);
+  const anchor = portalSpawnAnchor(band.anchor, worldScale);
+  const windowId = window.windowId;
+  const attemptCount = PORTAL_CONFIG.schedule.placementAttempts;
+  for (let attempt = 0; attempt < attemptCount; attempt += 1) {
+    const position = runtime.conductor.selectToroidalSpawn({
+      streamName: `portal.spawn.${windowId}.${portalIndex}.attempt-${attempt}`,
+      anchor,
+      worldScale,
+      minRadius: band.minRadius,
+      maxRadius: band.maxRadius,
+    });
+    if (portalPlacementIsValid(position, portalType, band, { finalExfil })) {
+      return { ...position, anchorName: band.anchor, minRadius: band.minRadius, maxRadius: band.maxRadius };
+    }
+  }
+
+  // The seeded attempts carry normal placement variation. The final exfil
+  // also gets a bounded angular/radial scan so a bad roll cannot erase its
+  // guarantee or escape the declared radius band.
+  const fallbackRings = finalExfil ? 8 : 2;
+  const fallbackAngles = finalExfil ? 256 : 64;
+  for (let ring = 0; ring < fallbackRings; ring += 1) {
+    const radius = band.minRadius + (band.maxRadius - band.minRadius) * ((ring + 0.5) / fallbackRings);
+    for (let angleIndex = 0; angleIndex < fallbackAngles; angleIndex += 1) {
+      const position = runtime.conductor.selectToroidalSpawn({
+        streamName: `portal.spawn.${windowId}.${portalIndex}.fallback-${ring}-${angleIndex}`,
+        anchor,
+        worldScale,
+        minRadius: band.minRadius,
+        maxRadius: band.maxRadius,
+        angle: (Math.PI * 2 * angleIndex) / fallbackAngles,
+        radius,
+      });
+      if (portalPlacementIsValid(position, portalType, band, { finalExfil })) {
+        return { ...position, anchorName: band.anchor, minRadius: band.minRadius, maxRadius: band.maxRadius };
+      }
+    }
+  }
+  throw new RangeError(
+    `No valid ${finalExfil ? "final exfil" : portalType} portal position in declared radius band `
+    + `[${band.minRadius}, ${band.maxRadius}] for ${windowId}`
+  );
 }
 const args = parseArgs(process.argv.slice(2));
 const HOST = args.host || "127.0.0.1";
@@ -965,14 +1205,24 @@ const runtime = {
   players: new Map(),
   playerAuthorities: new Map(),
   joinClaims: new Map(),
+  idCounters: Object.create(null),
   waveRings: [],
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
+  authorityFieldPacket: null,
+  collapseEpochSchedule: [],
+  collapseEpochState: null,
+  conductor: null,
+  inhibitorSchedule: null,
+  portalSchedule: null,
+  portalClock: null,
   inhibitor: {
-    pressure: 0,
-    threshold: 0.90,  // randomized per run
     form: 0,          // 0=inactive, 1=glitch, 2=swarm, 3=vessel
+    phase: 0,
+    waveId: "inhibitor:phase-0",
+    scheduledTime: 0,
+    waveBudget: 0,
     wx: 0, wy: 0,     // world position
     vx: 0, vy: 0,
     intensity: 0,      // 0-1, ramps during transitions
@@ -981,7 +1231,6 @@ const runtime = {
     swarmTrackTimer: 0,
     swarmTargetX: 0, swarmTargetY: 0,
     silenceTimer: 0,   // how long peak signal has been low
-    vesselTimer: 0,    // time since Form 2
     finalPortalSpawned: false,
     finalPortalExpired: false,
     formTimes: [null, null, null, null],
@@ -1002,6 +1251,7 @@ const runtime = {
     wrecks: [],
     planetoids: [],
     portals: [],
+    nextPortalWindowIndex: 0,
   },
   overload: null,
   keepAlive: KEEP_ALIVE,
@@ -1199,6 +1449,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     controlDebuff: 0,
     portalInteraction: null,
     slingshot: {
+      phase: "idle",
       engaged: false,
       anchorId: null,
       anchorType: null,
@@ -1212,6 +1463,29 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       inputWasDown: false,
       lastReleaseTime: -Infinity,
       lastReleasedAnchorKey: null,
+      entryVX: 0,
+      entryVY: 0,
+      lockedVX: 0,
+      lockedVY: 0,
+      bendDegrees: 0,
+      arcRadians: 0,
+      previousRadialX: 0,
+      previousRadialY: 0,
+      aimAnchorKey: null,
+      aimAnchorId: null,
+      aimAnchorType: null,
+      aimAnchorWX: null,
+      aimAnchorWY: null,
+      aimAnchorRange: 0,
+      aimDistance: 0,
+      lastAimSeenTime: -Infinity,
+      coyoteUntil: 0,
+      coyoteActive: false,
+      lockTick: -1,
+      lockUntil: 0,
+      releaseGhostUntil: 0,
+      releaseGhost: null,
+      lastPayoff: null,
     },
     committedOutcome: null,
     deltaV: brain.deltaVMax || BRAIN_DEFAULTS.deltaVMax,
@@ -1242,7 +1516,9 @@ function startSession(config = {}) {
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
   // Build the RNG streams BEFORE cloning the map state so well growth
   // variance and initial wreck loot roll through the seed.
-  const seed = Number.isFinite(Number(config.seed)) ? Number(config.seed) : Math.floor(Math.random() * 1e9);
+  const seed = Number.isFinite(Number(config.seed))
+    ? Number(config.seed)
+    : crypto.randomInt(1, 1_000_000_000);
   const rngStreams = createRNGStreams(seed);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
@@ -1252,6 +1528,7 @@ function startSession(config = {}) {
     status: "running",
     mapId: mapState.id,
     mapName: mapState.name,
+    anomalyCatalog: mapState.anomalyCatalog,
     hostClientId: config.requesterId ? String(config.requesterId) : null,
     hostProfileId: config.requesterProfileId
       ? String(config.requesterProfileId)
@@ -1310,6 +1587,13 @@ function startSession(config = {}) {
     maxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     simScaleProfile: scaleProfile.profileId,
     clientPerfProfile: scaleProfile.clientPerfProfile,
+    localFluidResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].fluidResolution,
+    localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].localWindowWorldUnits,
+    coarseTextureResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].coarseTextureResolution,
+    maxCoarseFieldCells: scaleProfile.maxCoarseFieldCells,
+    snapshotBudgetBytes: scaleProfile.snapshotBudgetBytes,
+    snapshotBudgetBytesPerSecond: scaleProfile.snapshotBudgetBytesPerSecond,
+    ballparkSyncBudgetMs: scaleProfile.ballparkSyncBudgetMs,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   // Attach seed + rng to the live session. rng stored non-enumerably so
@@ -1322,6 +1606,14 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
+  runtime.session.seededSea = createSeededSea({
+    seed,
+    mapId: mapState.id,
+    worldScale: mapState.worldScale,
+    wells: mapState.wells,
+    rngStreams: runtime.session.rng,
+  });
+  runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
 
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
@@ -1348,6 +1640,7 @@ function startSession(config = {}) {
     });
   runtime.tick = 0;
   runtime.simTime = 0;
+  runtime.idCounters = Object.create(null);
   runtime.emptySince = null;
   runtime.terminalSince = null;
   runtime.terminalShutdownAt = null;
@@ -1359,17 +1652,28 @@ function startSession(config = {}) {
     waves: 0,
     field: 0,
   };
-  // Inhibitor: threshold per run, seeded for determinism
+  // The Conductor is one match-scoped authority built from the run seed.
+  runtime.conductor = createInhibitorConductor(runtime.session.seed);
+  runtime.inhibitorSchedule = runtime.conductor.getSchedule();
+  runtime.portalSchedule = runtime.inhibitorSchedule;
+  runtime.portalClock = {
+    openedWindowIds: new Set(),
+    closedWindowIds: new Set(),
+    finalOpen: false,
+    finalClosed: false,
+  };
   const inh = INHIBITOR_CONFIG;
-  const inhRng = runtime.session.rng.rawStream('inhibitorInit');
+  const phaseZero = runtime.inhibitorSchedule.eventFronts.find((event) => event.id === "inhibitor:phase-0");
   runtime.inhibitor = {
-    pressure: 0,
-    threshold: inh.thresholdMin + inhRng() * (inh.thresholdMax - inh.thresholdMin),
     form: 0, wx: 0, wy: 0, vx: 0, vy: 0,
+    phase: 0,
+    waveId: phaseZero?.id || "inhibitor:phase-0",
+    scheduledTime: phaseZero?.time || 0,
+    waveBudget: phaseZero?.metadata?.budget ?? inh.phaseWaveBudgets[0],
     intensity: 0, radius: inh.glitchRadius,
     localTime: 0, swarmTrackTimer: 0,
     swarmTargetX: 0, swarmTargetY: 0,
-    silenceTimer: 0, vesselTimer: 0,
+    silenceTimer: 0,
     finalPortalSpawned: false,
     finalPortalExpired: false,
     formTimes: [null, null, null, null],
@@ -1377,7 +1681,7 @@ function startSession(config = {}) {
     lastSignalWY: 0,
     lastSignalAge: 0,
     swarmSearchTimer: 0,
-    swarmSearchAngle: inhRng() * Math.PI * 2,
+    swarmSearchAngle: runtime.session.rng.rawStream('inhibitorInit')() * Math.PI * 2,
     gravityBonus: 0,
   };
   runtime.players.clear();
@@ -1420,11 +1724,17 @@ function startSession(config = {}) {
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
+  runtime.collapseEpochSchedule = createCollapseEpochSchedule({ matchDurationSeconds: MATCH_MAX_SIM_TIME });
+  runtime.collapseEpochState = createCollapseEpochState(runtime.collapseEpochSchedule);
+  runtime.conductor.scheduleCollapseEpochs(runtime.collapseEpochSchedule);
+  runtime.inhibitorSchedule = runtime.conductor.getSchedule();
+  runtime.portalSchedule = runtime.inhibitorSchedule;
   runtime._wreckWaveIndex = 0;
   runtime._wreckWaveRepeatTimer = 0;
   runtime._wreckRepeatWaveCount = 0;
   runtime.waveRings = [];
   runtime.coarseField = null;
+  runtime.authorityFieldPacket = null;
   rebuildAuthoritativeField();
   telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
@@ -1437,6 +1747,7 @@ function startSession(config = {}) {
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
+  publishInhibitorPhaseEvent(0, phaseZero, { startup: true });
   refreshBallparkMirror("session-started");
   persistSessionRegistry();
   restartTickLoop();
@@ -1600,6 +1911,22 @@ function promoteHostIfNeeded() {
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
+function getAuthorityFieldPacket() {
+  if (!runtime.coarseField) return null;
+  if (runtime.authorityFieldPacket?.field === runtime.coarseField
+    && runtime.authorityFieldPacket.tick === runtime.tick) {
+    return runtime.authorityFieldPacket.payload;
+  }
+  const payload = serializeCoarseFlowField(runtime.coarseField, runtime.tick, {
+    maxCells: runtime.session.useCoarseField
+      ? runtime.session.maxCoarseFieldCells
+      : Infinity,
+    maxBytes: runtime.session.snapshotBudgetBytes,
+  });
+  runtime.authorityFieldPacket = { field: runtime.coarseField, tick: runtime.tick, payload };
+  return payload;
+}
+
 function buildSnapshotBody() {
   return {
     type: "snapshot",
@@ -1650,6 +1977,7 @@ function buildSnapshotBody() {
       vx: player.vx,
       vy: player.vy,
       slingshot: player.slingshot ? {
+        phase: player.slingshot.phase || "idle",
         engaged: Boolean(player.slingshot.engaged),
         anchorId: player.slingshot.anchorId ?? null,
         anchorType: player.slingshot.anchorType ?? null,
@@ -1660,12 +1988,27 @@ function buildSnapshotBody() {
         chainCount: player.slingshot.chainCount || 0,
         engageRadius: player.slingshot.engageRadius || 0,
         orbitDir: player.slingshot.orbitDir || 0,
+        bendDegrees: player.slingshot.bendDegrees || 0,
+        arcRadians: player.slingshot.arcRadians || 0,
+        aim: player.slingshot.aimAnchorKey ? {
+          anchorId: player.slingshot.aimAnchorId,
+          anchorType: player.slingshot.aimAnchorType,
+          anchorWX: player.slingshot.aimAnchorWX,
+          anchorWY: player.slingshot.aimAnchorWY,
+          anchorRange: player.slingshot.aimAnchorRange,
+          distance: player.slingshot.aimDistance,
+          coyoteActive: Boolean(player.slingshot.coyoteActive),
+          coyoteRemainingMs: Math.max(0, (player.slingshot.coyoteUntil - runtime.simTime) * 1000),
+        } : null,
+        telegraph: buildSlingshotTelegraph(player),
       } : null,
       deltaV: player.deltaV,
       deltaVMax: player.deltaVMax,
       deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
       deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
       deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
+      forceLedger: player.forceLedger || null,
+      ruler: buildPlayerRulerFacts(player),
       lastInputSeq: player.lastInput.seq,
       lastInputBrake: player.lastInput.brake || 0,
       pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
@@ -1680,31 +2023,53 @@ function buildSnapshotBody() {
       controlDebuff: player.controlDebuff || 0,
     })),
     world: {
+      anomalyCatalog: runtime.mapState.anomalyCatalog,
       wells: runtime.mapState.wells,
       stars: runtime.mapState.stars,
       wrecks: runtime.mapState.wrecks,
       planetoids: runtime.mapState.planetoids,
       portals: runtime.mapState.portals,
+      portalSchedule: runtime.portalSchedule,
+      nextPortalWindowIndex: runtime.mapState.nextPortalWindowIndex,
       nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
       scavengers: runtime.mapState.scavengers,
       fauna: runtime.mapState.fauna,
       sentries: runtime.mapState.sentries,
+      waveRings: runtime.waveRings.map((ring) => ({
+        id: ring.id,
+        sourceWX: ring.sourceWX,
+        sourceWY: ring.sourceWY,
+        radius: ring.radius,
+        amplitude: ring.amplitude,
+        initialAmplitude: ring.initialAmplitude,
+        sourceWellId: ring.sourceWellId ?? null,
+        alive: ring.alive !== false,
+      })),
+      collapseEpoch: runtime.collapseEpochState ? {
+        epochId: runtime.collapseEpochState.epochId,
+        epochIndex: runtime.collapseEpochState.epochIndex,
+        scheduledTime: runtime.collapseEpochState.scheduledTime,
+        transitionCount: runtime.collapseEpochState.transitionCount,
+        parameterVector: { ...runtime.collapseEpochState.parameterVector },
+      } : null,
+      collapseEpochSchedule: runtime.collapseEpochSchedule,
+      authoritativeField: getAuthorityFieldPacket(),
     },
     inhibitor: {
       form: runtime.inhibitor.form,
+      phase: runtime.inhibitor.phase,
+      waveId: runtime.inhibitor.waveId,
+      scheduledTime: runtime.inhibitor.scheduledTime,
+      waveBudget: runtime.inhibitor.waveBudget,
       wx: runtime.inhibitor.wx,
       wy: runtime.inhibitor.wy,
       intensity: runtime.inhibitor.intensity,
       radius: runtime.inhibitor.radius,
-      threshold: runtime.inhibitor.threshold,
-      pressureFrac: runtime.inhibitor.threshold > 0
-        ? runtime.inhibitor.pressure / runtime.inhibitor.threshold
-        : 0,
-      pressure: runtime.inhibitor.pressure,
       localTime: runtime.inhibitor.localTime,
       formTimes: Array.isArray(runtime.inhibitor.formTimes)
         ? runtime.inhibitor.formTimes.slice(0, 4)
         : [null, null, null, null],
+      schedule: runtime.inhibitorSchedule,
       targetWX: runtime.inhibitor.swarmTargetX,
       targetWY: runtime.inhibitor.swarmTargetY,
       lastSignalWX: runtime.inhibitor.lastSignalWX,
@@ -1713,6 +2078,7 @@ function buildSnapshotBody() {
       finalPortalExpired: Boolean(runtime.inhibitor.finalPortalExpired),
       gravityBonus: runtime.inhibitor.gravityBonus || 0,
     },
+    portalSchedule: runtime.portalSchedule,
     // Snapshot baselines are shared and cacheable. Player-local events are
     // recovered through the authenticated event stream instead.
     recentEvents: filterEventsForPlayer(runtime.recentEvents.slice(-32), null),
@@ -1731,6 +2097,8 @@ function snapshotBody({ force = false } = {}) {
     bodySchemaVersion: BODY_SCHEMA_VERSION,
     snapshotSchemaVersion: 2,
     lastEventSeq,
+    maxBytes: runtime.session.snapshotBudgetBytes,
+    budgetLabel: `${runtime.session.mapId || "unknown"} snapshot`,
   });
 }
 
@@ -1880,9 +2248,13 @@ function killActiveHumanPlayers(cause) {
 
 function maybeEnforceMatchLifetime() {
   if (runtime.session.status !== "running") return false;
-  if (runtime.simTime < MATCH_MAX_SIM_TIME) return false;
+  if (!runtime.portalClock?.finalClosed) return false;
   const killedCount = killActiveHumanPlayers("run-timeout");
-  return endSession("run-timeout", { killedCount, maxSimTime: MATCH_MAX_SIM_TIME });
+  return endSession("run-timeout", {
+    killedCount,
+    maxSimTime: MATCH_MAX_SIM_TIME,
+    finalExfilCloseTime: runtime.portalSchedule?.windows?.find((window) => window.metadata?.finalExfil)?.closeTime,
+  });
 }
 
 function maybeEndTerminalSession(reason = "terminal-players") {
@@ -2092,9 +2464,10 @@ function buildEchoWreckRecord(player, runResult) {
 // is preserved so the client can render it distinctly and the signal
 // leak / pickup-spike systems can detect it.
 function hydrateEchoWreck(echo) {
+  const fallbackEchoKey = `${echo.seed || runtime.session.seed}:${echo.pilotName || "unknown"}:${echo.wx || 0}:${echo.wy || 0}`;
   const wreck = {
     ...echo,
-    id: `echo-${echo.wreckId || Math.random().toString(36).slice(2, 8)}`,
+    id: `echo-${echo.wreckId || Math.abs(hashStringFNV(fallbackEchoKey)).toString(16)}`,
     type: 'echo',
     isEcho: true,
     alive: true,
@@ -2199,16 +2572,20 @@ function commitPlayerOutcome(player, outcome) {
   return runResult;
 }
 
-function spawnWaveRing(wx, wy, amplitude) {
-  runtime.waveRings.push({
-    id: `wave-${runtime.tick}-${Math.random().toString(36).slice(2, 6)}`,
+function spawnWaveRing(wx, wy, amplitude, sourceWellId = null) {
+  const ring = {
+    id: nextSeededToken(`wave-${runtime.tick}`, "waveIds"),
     sourceWX: wx,
     sourceWY: wy,
     radius: 0,
     amplitude,
     initialAmplitude: amplitude,
+    sourceWellId: sourceWellId == null ? null : String(sourceWellId),
     alive: true,
-  });
+  };
+  runtime.waveRings.push(ring);
+  if (runtime.session?.status === "running") rebuildAuthoritativeField();
+  return ring;
 }
 
 function tickWells(dt) {
@@ -2217,47 +2594,144 @@ function tickWells(dt) {
   }
 }
 
-function tickPortals(dt) {
-  const schedule = PORTAL_CONFIG.waves;
-  const rng = runtime.session?.rng?.rawStream('portals') || Math.random;
-  while (runtime.mapState.nextPortalWaveIndex < schedule.length) {
-    const wave = schedule[runtime.mapState.nextPortalWaveIndex];
-    if (runtime.simTime < wave.time) break;
+function portalEventPayload(window, extra = {}) {
+  return {
+    conductorId: runtime.conductor?.id || "match-conductor",
+    windowId: window.windowId,
+    openId: window.openId,
+    closeId: window.closeId,
+    scheduledOpenTime: window.openTime,
+    scheduledCloseTime: window.closeTime,
+    portalMetadata: window.metadata,
+    ...extra,
+  };
+}
 
-    const spawnCount = wave.count[0] + Math.floor(rng() * (wave.count[1] - wave.count[0] + 1));
-    for (let i = 0; i < spawnCount; i++) {
-      const type = wave.types[Math.floor(rng() * wave.types.length)];
-      const pos = findPortalSpawnPosition(type);
-      const lifespan = type === "unstable"
-        ? wave.lifespan + (rng() - 0.5) * wave.lifespan * 0.4
-        : wave.lifespan;
-      const portal = {
-        id: `portal-${runtime.mapState.nextPortalWaveIndex + 1}-${i + 1}-${runtime.tick}`,
-        wx: pos.wx,
-        wy: pos.wy,
-        type,
-        wave: runtime.mapState.nextPortalWaveIndex + 1,
-        spawnTime: runtime.simTime,
-        lifespan,
-        alive: true,
-        opacity: 1,
-      };
-      runtime.mapState.portals.push(portal);
-      publishEvent("portal.spawned", {
-        portalId: portal.id,
-        type: portal.type,
-        wx: portal.wx,
-        wy: portal.wy,
-        wave: portal.wave,
-      });
+function portalWindowIdLabel(window) {
+  return window.metadata?.finalExfil ? "final-exfil" : `optional-${window.metadata?.windowIndex + 1}`;
+}
+
+function spawnPortalForWindow(window, type, index, { finalExfil = false } = {}) {
+  const position = findPortalSpawnPosition(type, window, index, { finalExfil });
+  const label = portalWindowIdLabel(window);
+  const portal = {
+    id: finalExfil ? "portal-final-exfil" : `portal-${label}-${index + 1}`,
+    wx: position.wx,
+    wy: position.wy,
+    type,
+    wave: finalExfil ? 99 : window.metadata.windowIndex + 1,
+    spawnTime: window.openTime,
+    lifespan: window.duration,
+    scheduledOpenTime: window.openTime,
+    scheduledCloseTime: window.closeTime,
+    windowId: window.windowId,
+    openId: window.openId,
+    closeId: window.closeId,
+    spawnAnchor: position.anchorName,
+    spawnRadius: position.radius,
+    spawnRadiusBand: { minRadius: position.minRadius, maxRadius: position.maxRadius },
+    alive: true,
+    opacity: 1,
+    finalInhibitor: finalExfil,
+    guaranteedFinalExfil: finalExfil,
+    blockedByInhibitor: false,
+  };
+  runtime.mapState.portals.push(portal);
+  publishEvent("portal.spawned", portalEventPayload(window, {
+    portalId: portal.id,
+    type: portal.type,
+    wx: portal.wx,
+    wy: portal.wy,
+    wave: portal.wave,
+    finalExfil,
+    spawnAnchor: portal.spawnAnchor,
+    spawnRadius: portal.spawnRadius,
+    spawnRadiusBand: portal.spawnRadiusBand,
+  }));
+  return portal;
+}
+
+function openPortalWindow(window) {
+  if (runtime.portalClock.openedWindowIds.has(window.windowId)) return;
+  runtime.portalClock.openedWindowIds.add(window.windowId);
+  const finalExfil = Boolean(window.metadata?.finalExfil);
+  const countRange = window.metadata?.effectiveCountRange || [0, 0];
+  const count = finalExfil
+    ? 1
+    : runtime.session.rng.int(`portal.window.count.${window.windowId}`, countRange[0], countRange[1]);
+  publishEvent("portal.windowOpened", portalEventPayload(window, {
+    finalExfil,
+    portalCount: count,
+    portalTypes: window.metadata?.types || [],
+  }));
+
+  for (let index = 0; index < count; index += 1) {
+    const type = finalExfil
+      ? "standard"
+      : runtime.session.rng.pick(`portal.window.type.${window.windowId}.${index}`, window.metadata.types);
+    spawnPortalForWindow(window, type, index, { finalExfil });
+  }
+
+  if (window.metadata?.finalExfil) {
+    runtime.portalClock.finalOpen = true;
+    runtime.inhibitor.finalPortalSpawned = true;
+    const finalPortal = runtime.mapState.portals.find((portal) => portal.windowId === window.windowId);
+    publishEvent("inhibitor.finalPortal", portalEventPayload(window, {
+      portalId: finalPortal?.id || null,
+      wx: finalPortal?.wx,
+      wy: finalPortal?.wy,
+      finalExfil: true,
+    }));
+  } else {
+    runtime.mapState.nextPortalWindowIndex = window.metadata.windowIndex + 1;
+    runtime.mapState.nextPortalWaveIndex = runtime.mapState.nextPortalWindowIndex;
+  }
+}
+
+function closePortalWindow(window) {
+  if (!runtime.portalClock.openedWindowIds.has(window.windowId) ||
+      runtime.portalClock.closedWindowIds.has(window.windowId)) return;
+  runtime.portalClock.closedWindowIds.add(window.windowId);
+  const finalExfil = Boolean(window.metadata?.finalExfil);
+  const closingPortals = runtime.mapState.portals.filter((portal) =>
+    portal.windowId === window.windowId && portal.alive !== false
+  );
+  publishEvent("portal.windowClosed", portalEventPayload(window, {
+    finalExfil,
+    portalIds: closingPortals.map((portal) => portal.id),
+  }));
+  for (const portal of closingPortals) {
+    portal.alive = false;
+    portal.opacity = 0;
+    const handle = runtime.ballparkMirror?.getHandleById(`portal:${portal.id}`);
+    if (handle) runtime.ballparkMirror.setLifecycle(handle, "dead", { tick: runtime.tick });
+    publishEvent("portal.expired", portalEventPayload(window, {
+      portalId: portal.id,
+      type: portal.type,
+      finalExfil,
+    }));
+  }
+  if (finalExfil) {
+    runtime.portalClock.finalClosed = true;
+    runtime.inhibitor.finalPortalExpired = true;
+  }
+}
+
+function tickPortals(dt) {
+  const windows = runtime.portalSchedule?.windows || [];
+  for (const window of windows) {
+    if (runtime.simTime >= window.openTime && !runtime.portalClock.openedWindowIds.has(window.windowId)) {
+      openPortalWindow(window);
     }
-    runtime.mapState.nextPortalWaveIndex += 1;
+    if (runtime.simTime >= window.closeTime && !runtime.portalClock.closedWindowIds.has(window.windowId)) {
+      closePortalWindow(window);
+    }
   }
 
   for (const portal of runtime.mapState.portals) {
     if (portal.alive === false) continue;
-    const remaining = portal.spawnTime + portal.lifespan - runtime.simTime;
-    if (remaining <= 0) {
+    if (!portal.windowId && Number.isFinite(portal.spawnTime) && Number.isFinite(portal.lifespan) &&
+        runtime.simTime >= portal.spawnTime + portal.lifespan) {
       portal.alive = false;
       portal.opacity = 0;
       const handle = runtime.ballparkMirror?.getHandleById(`portal:${portal.id}`);
@@ -2265,14 +2739,11 @@ function tickPortals(dt) {
       publishEvent("portal.expired", {
         portalId: portal.id,
         type: portal.type,
+        source: "unscheduled",
       });
-      if (portal.finalInhibitor) {
-        runtime.inhibitor.finalPortalExpired = true;
-        const killedCount = killActiveHumanPlayers("collapse");
-        if (killedCount > 0) endSession("inhibitor-final-portal-missed", { killedCount, portalId: portal.id });
-      }
       continue;
     }
+    const remaining = portal.scheduledCloseTime - runtime.simTime;
     portal.opacity = remaining < 15 ? Math.max(0, remaining / 15) : 1;
   }
 }
@@ -2286,8 +2757,8 @@ function tickWreckWaves(dt) {
   if (!runtime._wreckWaveRepeatTimer) runtime._wreckWaveRepeatTimer = 0;
   if (!runtime._wreckRepeatWaveCount) runtime._wreckRepeatWaveCount = 0;
   const ws = runtime.session.worldScale;
-  const waveRng = runtime.session?.rng?.rawStream('wreckWave') || Math.random;
-  const nameRng = runtime.session?.rng?.rawStream('wreckNames') || Math.random;
+  const waveRng = currentRNG('wreckWave');
+  const nameRng = currentRNG('wreckNames');
 
   // Process scheduled waves
   while (runtime._wreckWaveIndex < WRECK_WAVES.length) {
@@ -2354,7 +2825,7 @@ function tickWreckWaves(dt) {
 // Spawn position biased by danger zone: lower dangerZone = closer to wells
 function findWreckSpawnPosition(dangerZone) {
   const ws = runtime.session.worldScale;
-  const rng = runtime.session?.rng?.rawStream('wreckPos') || Math.random;
+  const rng = currentRNG('wreckPos');
   for (let attempt = 0; attempt < 20; attempt++) {
     const wx = rng() * ws;
     const wy = rng() * ws;
@@ -2379,24 +2850,75 @@ function tickGrowth(dt) {
     runtime.growthIndex = idx + 1;
     const well = runtime.mapState.wells[idx];
     if (!well) break;
-    well.mass += well.growthRate;
-    well.killRadius = wellKillRadiusForMass(well);
-    spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass);
-    runtime.inhibitor.pressure += INHIBITOR_CONFIG.pressureFromGrowth;
-    publishEvent("well.grew", {
-      wellId: well.id,
-      mass: well.mass,
-      killRadius: well.killRadius,
-      wx: well.wx,
-      wy: well.wy,
+    const scheduledTime = runtime.simTime - runtime.growthTimer;
+    applyWellGrowth(well, {
+      massDelta: well.growthRate,
+      source: "schedule",
+      reason: "normal-schedule",
+      scheduledTime,
+      waveAmplitude: WAVE_SERVER.growthWaveAmplitude * (well.mass + well.growthRate),
     });
   }
+}
+
+function tickCollapseEpochs() {
+  if (!runtime.collapseEpochState || runtime.collapseEpochSchedule.length === 0) return;
+  const advanced = advanceCollapseEpochs(
+    runtime.collapseEpochState,
+    runtime.collapseEpochSchedule,
+    runtime.simTime,
+  );
+  runtime.collapseEpochState = advanced.state;
+  for (const transition of advanced.transitions) {
+    publishEvent("collapse.epochTransition", {
+      ...transition,
+      source: "collapse-schedule",
+      reason: "match-progress",
+    });
+  }
+}
+
+function applyWellGrowth(well, {
+  massDelta,
+  source,
+  reason,
+  sourceEntityId = null,
+  sourceEntityType = null,
+  scheduledTime = null,
+  waveAmplitude,
+} = {}) {
+  const growth = calculateWellGrowth({
+    well,
+    massDelta,
+    killRadiusForMass: wellKillRadiusForMass,
+  });
+  well.mass = growth.after.mass;
+  well.killRadius = growth.after.killRadius;
+  const growthWaveMultiplier = well.fabricSignature?.parameters?.growthWaveAmplitudeMultiplier ?? 1;
+  const ring = spawnWaveRing(
+    well.wx,
+    well.wy,
+    (waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass) * growthWaveMultiplier,
+    well.id,
+  );
+  return publishEvent("well.grew", createWellGrowthEvent({
+    well,
+    source,
+    reason,
+    sourceEntityId,
+    sourceEntityType,
+    scheduledTime,
+    eventTime: runtime.simTime,
+    waveId: ring.id,
+    before: growth.before,
+    after: growth.after,
+  }));
 }
 
 function tickWaveRings(dt) {
   for (const ring of runtime.waveRings) {
     ring.radius += WAVE_SERVER.waveSpeed * dt;
-    ring.amplitude *= WAVE_SERVER.waveDecay;
+    ring.amplitude = decayWaveAmplitude(ring.amplitude, dt, WAVE_SERVER.waveHalfLife);
     if (ring.radius > WAVE_SERVER.waveMaxRadius || ring.amplitude < 0.01) {
       ring.alive = false;
     }
@@ -2405,16 +2927,10 @@ function tickWaveRings(dt) {
 }
 
 function maybeCollapseRun() {
+  if (!runtime.portalClock?.finalClosed) return;
   const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
-  const hasMorePortalWaves = runtime.mapState.nextPortalWaveIndex < PORTAL_CONFIG.waves.length;
   if (runtime.simTime <= 60) return;
   if (activePortalCount > 0) return;
-  if (hasMorePortalWaves) return;
-  if (runtime.inhibitor?.form >= 3 &&
-      !runtime.inhibitor.finalPortalSpawned &&
-      !runtime.inhibitor.finalPortalExpired) {
-    return;
-  }
 
   let killedCount = 0;
   for (const player of runtime.players.values()) {
@@ -2443,9 +2959,15 @@ function tickStars(dt, stars = runtime.mapState.stars) {
       const dist = worldDistance(star.wx, star.wy, well.wx, well.wy, runtime.session.worldScale);
       if (dist < well.killRadius) {
         star.alive = false;
-        well.mass += (star.mass || 1) * 0.5;
-        well.killRadius = wellKillRadiusForMass(well);
-        const angle = (runtime.session?.rng?.rawStream('starRemnant') || Math.random)() * Math.PI * 2;
+        const growthEvent = applyWellGrowth(well, {
+          massDelta: (star.mass || 1) * 0.5,
+          source: "star-consumption",
+          reason: "star-consumed",
+          sourceEntityId: star.id,
+          sourceEntityType: "star",
+          waveAmplitude: (star.mass || 1) * 3,
+        });
+        const angle = currentRNG('starRemnant')() * Math.PI * 2;
         const ejectDist = 0.08;
         const ejectSpeed = 0.4;
         const remnant = {
@@ -2464,7 +2986,6 @@ function tickStars(dt, stars = runtime.mapState.stars) {
           name: `Remnant of ${star.name}`,
         };
         runtime.mapState.wrecks.push(remnant);
-        spawnWaveRing(well.wx, well.wy, (star.mass || 1) * 3);
         publishEvent("star.consumed", {
           starId: star.id,
           starName: star.name,
@@ -2474,6 +2995,7 @@ function tickStars(dt, stars = runtime.mapState.stars) {
           wx: well.wx,
           wy: well.wy,
           remnantWreckId: remnant.id,
+          wellGrowthEventSeq: growthEvent.seq,
         });
         break;
       }
@@ -2521,7 +3043,7 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
 
     wreck.vx += ax * dt;
     wreck.vy += ay * dt;
-    const dragFactor = Math.exp(-1.5 * dt);
+    const dragFactor = Math.exp(-WELL_GRAVITY_PARAMS.wreck.dragRate * dt);
     wreck.vx *= dragFactor;
     wreck.vy *= dragFactor;
 
@@ -2694,27 +3216,11 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sw
 }
 
 function applyWaveRingPush(player, dt) {
-  if (runtime.session.useCoarseField && runtime.coarseField) {
+  if (runtime.coarseField) {
     const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
     player.vx += (field.wave?.x ?? field.waveX) * dt;
     player.vy += (field.wave?.y ?? field.waveY) * dt;
     return;
-  }
-  const halfWidth = WAVE_SERVER.waveWidth * 0.5;
-  const relevantRings = collectNearestByDistance(
-    player.wx,
-    player.wy,
-    runtime.waveRings,
-    runtime.session.maxWaveInfluencesPerPlayer || runtime.waveRings.length || 1,
-    (ring) => ({ wx: ring.sourceWX, wy: ring.sourceWY })
-  );
-  for (const { entity: ring } of relevantRings) {
-    const { dist, nx, ny } = worldDirection(ring.sourceWX, ring.sourceWY, player.wx, player.wy, runtime.session.worldScale);
-    const accel = waveBandForce(dist, ring.radius, halfWidth, WAVE_SERVER.waveShipPush, ring.amplitude);
-    if (accel > 0) {
-      player.vx += nx * accel * dt;
-      player.vy += ny * accel * dt;
-    }
   }
 }
 
@@ -2755,7 +3261,7 @@ function resolveWellContact(player, well, dt, dx, dy) {
     player.vy = Math.sin(ejectAngle) * 0.3;
     player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    const scatterRng = runtime.session?.rng?.rawStream('hullSave') || Math.random;
+    const scatterRng = currentRNG('hullSave');
     const filled = player.cargo.map((cargo, index) => cargo ? index : -1).filter((index) => index >= 0);
     const scatterCount = Math.min(filled.length, 1 + Math.floor(scatterRng() * 2));
     for (let scatter = 0; scatter < scatterCount; scatter++) {
@@ -3058,7 +3564,7 @@ function refreshPlayerEffects(player) {
 }
 
 function spawnTemporaryPortalNearPlayer(player) {
-  const rng = runtime.session?.rng?.rawStream('breachFlare') || Math.random;
+  const rng = currentRNG('breachFlare');
   const angle = rng() * Math.PI * 2;
   const dist = 0.15 + rng() * 0.1;
   const portal = {
@@ -3178,7 +3684,7 @@ function applyPulse(player) {
 
 function addDroppedItemWreck(player, item) {
   if (!item) return;
-  const rng = runtime.session?.rng?.rawStream('cargoDrop') || Math.random;
+  const rng = currentRNG('cargoDrop');
   const inputAngle =
     Math.hypot(player.lastInput.moveX, player.lastInput.moveY) > 0.1
       ? Math.atan2(player.lastInput.moveY, player.lastInput.moveX)
@@ -3187,7 +3693,7 @@ function addDroppedItemWreck(player, item) {
   const ejectDist = 0.18;
   const ejectSpeed = 0.3;
   const wreck = {
-    id: `wreck-drop-${player.clientId}-${runtime.tick}-${Math.random().toString(36).slice(2, 6)}`,
+    id: nextSeededToken(`wreck-drop-${player.clientId}-${runtime.tick}`, "wreckIds"),
     wx: wrapWorld(player.wx + Math.cos(rearAngle) * ejectDist, runtime.session.worldScale),
     wy: wrapWorld(player.wy + Math.sin(rearAngle) * ejectDist, runtime.session.worldScale),
     type: "derelict",
@@ -3315,6 +3821,7 @@ function applyDebugPlayerState(player, body) {
   if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
   if (body.resetSlingshot === true) {
     const state = ensurePlayerSlingshot(player);
+    state.phase = "idle";
     state.engaged = false;
     state.anchorId = null;
     state.anchorType = null;
@@ -3328,6 +3835,29 @@ function applyDebugPlayerState(player, body) {
     state.inputWasDown = false;
     state.lastReleaseTime = -Infinity;
     state.lastReleasedAnchorKey = null;
+    state.entryVX = 0;
+    state.entryVY = 0;
+    state.lockedVX = 0;
+    state.lockedVY = 0;
+    state.bendDegrees = 0;
+    state.arcRadians = 0;
+    state.previousRadialX = 0;
+    state.previousRadialY = 0;
+    state.aimAnchorKey = null;
+    state.aimAnchorId = null;
+    state.aimAnchorType = null;
+    state.aimAnchorWX = null;
+    state.aimAnchorWY = null;
+    state.aimAnchorRange = 0;
+    state.aimDistance = 0;
+    state.lastAimSeenTime = -Infinity;
+    state.coyoteUntil = 0;
+    state.coyoteActive = false;
+    state.lockTick = -1;
+    state.lockUntil = 0;
+    state.releaseGhostUntil = 0;
+    state.releaseGhost = null;
+    state.lastPayoff = null;
     state.consumedEdgeIds = [];
     if (player.lastInput) player.lastInput.slingshotEdges = [];
   }
@@ -3353,17 +3883,14 @@ function applyDebugInhibitorState(body) {
   if (!inh) return null;
   let requestedForm = null;
 
-  // Harnesses need to render rare late-run forms without waiting through a
-  // full match clock; gameplay still owns normal pressure and transitions.
+  // Harnesses can render rare late-run forms without waiting through a full
+  // match clock; normal gameplay transitions still belong to the Conductor.
   if (Number.isFinite(Number(body.form))) requestedForm = Math.max(0, Math.min(3, Math.round(Number(body.form))));
   if (Number.isFinite(Number(body.wx))) inh.wx = wrapWorldPosition(Number(body.wx), ws);
   if (Number.isFinite(Number(body.wy))) inh.wy = wrapWorldPosition(Number(body.wy), ws);
-  if (Number.isFinite(Number(body.pressure))) inh.pressure = Math.max(0, Math.min(1.5, Number(body.pressure)));
-  if (Number.isFinite(Number(body.threshold))) inh.threshold = Math.max(0.01, Math.min(1.5, Number(body.threshold)));
   if (Number.isFinite(Number(body.intensity))) inh.intensity = Math.max(0, Math.min(1, Number(body.intensity)));
   if (Number.isFinite(Number(body.radius))) inh.radius = Math.max(0, Math.min(ws, Number(body.radius)));
   if (Number.isFinite(Number(body.localTime))) inh.localTime = Math.max(0, Number(body.localTime));
-  if (Number.isFinite(Number(body.vesselTimer))) inh.vesselTimer = Math.max(0, Number(body.vesselTimer));
   if (Number.isFinite(Number(body.swarmTrackTimer))) inh.swarmTrackTimer = Math.max(0, Number(body.swarmTrackTimer));
   if (Number.isFinite(Number(body.swarmTargetX))) inh.swarmTargetX = wrapWorldPosition(Number(body.swarmTargetX), ws);
   if (Number.isFinite(Number(body.swarmTargetY))) inh.swarmTargetY = wrapWorldPosition(Number(body.swarmTargetY), ws);
@@ -3689,7 +4216,7 @@ function spawnScavengerDeathDrops(scav) {
   if ((scav.lootCount || 0) <= 0) return [];
   const tier = scav.archetype === "vulture" ? 2 : 1;
   const drops = [];
-  const rng = runtime.session?.rng?.rawStream('scavDeath') || Math.random;
+  const rng = currentRNG('scavDeath');
   for (let i = 0; i < scav.lootCount; i++) {
     const angle = rng() * Math.PI * 2;
     const ejectDist = 0.05 + rng() * 0.05;
@@ -3778,7 +4305,7 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
           scav.targetPortalId = null;
         } else {
           scav.state = "drift";
-          scav.driftHeading = (runtime.session?.rng?.rawStream('scavDrift') || Math.random)() * Math.PI * 2;
+          scav.driftHeading = currentRNG('scavDrift')() * Math.PI * 2;
           scav.targetWreckId = null;
           scav.targetPortalId = null;
         }
@@ -3872,8 +4399,8 @@ function runSystemAtRate(key, hz, baseDt, fn) {
 
 // --- Signal System ---
 // Signal is the core risk/reward meter. It rises from valuable actions (thrust,
-// loot, combat) and decays when quiet. Higher signal attracts fauna, escalates
-// scavenger behavior, and accumulates Inhibitor pressure.
+// loot, combat) and decays when quiet. Higher signal attracts fauna and
+// escalates scavenger behavior; it does not advance the Inhibitor clock.
 // Design: signal taxes ambition, never buys capability. See SIGNAL-DESIGN.md.
 // Signal is a 0-1 float per player. Rises from activity, decays when quiet.
 // Zone crossings publish events for client audio/visual feedback.
@@ -3913,17 +4440,17 @@ function tickPlayerSignal(player, dt) {
       // alignment: -1 (fighting) to +1 (surfing). Scale opposition: 1.0 (surfing) to 3.0 (fighting)
       oppositionMult = 1.0 + Math.max(0, -alignment) * (cfg.thrustOppositionMult - 1.0);
     }
-    generation += cfg.thrustBaseRate * oppositionMult * deliveredThrust;
+    generation += signalFractionPerSecond(cfg.thrustBasePercentPerSecond) * oppositionMult * deliveredThrust;
   } else if (speed > 0.001) {
     // Coasting — minimal signal
-    generation += cfg.coastRate;
+    generation += signalFractionPerSecond(cfg.coastPercentPerSecond);
   }
 
   // Well proximity — near wells is noisy
   for (const well of runtime.mapState.wells) {
     const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
     if (dist < cfg.wellProximityDist) {
-      generation += cfg.wellProximityRate;
+      generation += signalFractionPerSecond(cfg.wellProximityPercentPerSecond);
       break; // only count once
     }
   }
@@ -3949,14 +4476,14 @@ function tickPlayerSignal(player, dt) {
   // --- Decay ---
   let decay = 0;
   if (!isThrusting) {
-    decay = cfg.decayBase;
+    decay = signalFractionPerSecond(cfg.decayBasePercentPerSecond);
 
     // Enhanced decay in wreck wake zones
     for (const wreck of runtime.mapState.wrecks) {
       if (wreck.looted) continue;
       const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
       if (dist < 0.15) {
-        decay = cfg.decayWreckWake;
+        decay = signalFractionPerSecond(cfg.decayWreckWakePercentPerSecond);
         break;
       }
     }
@@ -3965,7 +4492,7 @@ function tickPlayerSignal(player, dt) {
     for (const well of runtime.mapState.wells) {
       const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
       if (dist < 0.25) {
-        decay = Math.max(decay, cfg.decayAccretionShadow);
+        decay = Math.max(decay, signalFractionPerSecond(cfg.decayAccretionShadowPercentPerSecond));
         break;
       }
     }
@@ -4023,7 +4550,7 @@ function spikePlayerSignal(player, amount) {
 function createAIPlayer(personalityKey, index, hullType = 'drifter') {
   const p = AI_PERSONALITIES[personalityKey];
   const name = p.names[index % p.names.length];
-  const rng = runtime.session?.rng?.rawStream('aiInit') || Math.random;
+  const rng = currentRNG('aiInit');
   const lootTarget = p.lootTarget[0] + Math.floor(rng() * (p.lootTarget[1] - p.lootTarget[0] + 1));
   const player = createPlayer(`ai-${personalityKey}-${index}`, name, hullType);
   player.isAI = true;
@@ -4046,7 +4573,8 @@ function createAIPlayer(personalityKey, index, hullType = 'drifter') {
 function spawnAIPlayers(mapState, session) {
   const personalityKeys = Object.keys(AI_PERSONALITIES);
   const count = 3;
-  const rng = session?.rng?.rawStream('aiPick') || Math.random;
+  const rng = session?.rng?.rawStream('aiPick');
+  if (!rng) throw new Error("AI personality selection requires seeded RNG streams");
 
   let humanHull = null;
   for (const p of runtime.players.values()) {
@@ -4135,7 +4663,7 @@ function findSafeSpawn(mapState) {
   const ws = mapState.worldScale;
   const minDist = Math.max(0.55, ws * 0.055);
   const hazards = collectSpawnHazards(mapState, minDist);
-  const rng = runtime.session?.rng?.rawStream('safeSpawn') || Math.random;
+  const rng = currentRNG('safeSpawn');
   let best = { wx: ws / 2, wy: ws * 0.15, score: -Infinity };
   const consider = (wx, wy) => {
     const score = scoreSpawnCandidate(wx, wy, hazards, ws);
@@ -4161,46 +4689,13 @@ function findSafeSpawn(mapState) {
   return { wx: best.wx, wy: best.wy };
 }
 
-// Analytical FlowSample estimate from well positions (no GPU needed).
+// Gameplay reads the server-owned field only; presentation has no authority seam.
 function estimateFlowSample(wx, wy) {
-  if (runtime.session.useCoarseField && runtime.coarseField) {
+  if (runtime.coarseField) {
     const sample = sampleCoarseFlowField(runtime.coarseField, wx, wy);
     return normalizeFlowSample(sample);
   }
-  const ws = runtime.session.worldScale;
-  let fx = 0, fy = 0;
-  let surf = 0;
-  let sourceWellId = null;
-  let bestCurrent = 0;
-  for (const well of runtime.mapState.wells) {
-    const dx = worldDisplacement(wx, well.wx, ws);
-    const dy = worldDisplacement(wy, well.wy, ws);
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.01) continue;
-    const dir = well.orbitalDir || 1;
-    const currentAccel = orbitalCurrentSpeed(
-      dist,
-      SERVER_WELLS.currentStrength,
-      well.mass || 1,
-      SERVER_WELLS.currentFalloff,
-      SERVER_WELLS.currentRange
-    );
-    if (currentAccel > 0) {
-      fx += (-dy / dist) * dir * currentAccel;
-      fy += (dx / dist) * dir * currentAccel;
-      surf = Math.max(surf, Math.max(0, Math.min(1, currentAccel / 2.5)));
-      if (Math.abs(currentAccel) > bestCurrent) {
-        bestCurrent = Math.abs(currentAccel);
-        sourceWellId = well.id ?? well.name ?? null;
-      }
-    }
-  }
-  return normalizeFlowSample({
-    current: { x: fx, y: fy },
-    surf,
-    sources: { wellId: sourceWellId, ringId: null, anchorId: null },
-    confidence: 1,
-  });
+  return normalizeFlowSample({ confidence: 0 });
 }
 
 function estimateFlow(wx, wy) {
@@ -4211,6 +4706,7 @@ function estimateFlow(wx, wy) {
 function ensurePlayerSlingshot(player) {
   if (player.slingshot) return player.slingshot;
   player.slingshot = {
+    phase: "idle",
     engaged: false,
     anchorId: null,
     anchorType: null,
@@ -4224,6 +4720,29 @@ function ensurePlayerSlingshot(player) {
     inputWasDown: false,
     lastReleaseTime: -Infinity,
     lastReleasedAnchorKey: null,
+    entryVX: 0,
+    entryVY: 0,
+    lockedVX: 0,
+    lockedVY: 0,
+    bendDegrees: 0,
+    arcRadians: 0,
+    previousRadialX: 0,
+    previousRadialY: 0,
+    aimAnchorKey: null,
+    aimAnchorId: null,
+    aimAnchorType: null,
+    aimAnchorWX: null,
+    aimAnchorWY: null,
+    aimAnchorRange: 0,
+    aimDistance: 0,
+    lastAimSeenTime: -Infinity,
+    coyoteUntil: 0,
+    coyoteActive: false,
+    lockTick: -1,
+    lockUntil: 0,
+    releaseGhostUntil: 0,
+    releaseGhost: null,
+    lastPayoff: null,
   };
   return player.slingshot;
 }
@@ -4246,7 +4765,7 @@ function collectSlingshotAnchors() {
       pullStrength: SERVER_WELLS.shipPullStrength,
       pullFalloff: SERVER_WELLS.shipPullFalloff,
       pullRange: SERVER_WELLS.maxRange,
-      range: SLINGSHOT_SERVER.range.well,
+      range: captureRadiusWorld("well", SLINGSHOT_SERVER.captureRadius),
     });
   });
   runtime.mapState.stars.forEach((star, index) => {
@@ -4262,7 +4781,7 @@ function collectSlingshotAnchors() {
       pullStrength: STAR_SERVER.shipPushStrength,
       pullFalloff: STAR_SERVER.shipPushFalloff,
       pullRange: STAR_SERVER.maxRange,
-      range: SLINGSHOT_SERVER.range.star,
+      range: captureRadiusWorld("star", SLINGSHOT_SERVER.captureRadius),
     });
   });
   runtime.mapState.planetoids.forEach((planetoid, index) => {
@@ -4278,7 +4797,7 @@ function collectSlingshotAnchors() {
       pullStrength: PLANETOID_SERVER.shipPushStrength,
       pullFalloff: 1,
       pullRange: PLANETOID_SERVER.shipPushRadius,
-      range: SLINGSHOT_SERVER.range.planetoid,
+      range: captureRadiusWorld("planetoid", SLINGSHOT_SERVER.captureRadius),
     });
   });
   return anchors;
@@ -4310,20 +4829,78 @@ function slingshotOrbitDirection(player, anchor) {
   return (player.vx * tx + player.vy * ty) >= 0 ? 1 : -1;
 }
 
-function findSlingshotAffordance(player) {
+function findNearestSlingshotAffordance(player) {
   let best = null;
   let bestDist = Infinity;
   for (const anchor of collectSlingshotAnchors()) {
     const dist = worldDistance(player.wx, player.wy, anchor.wx, anchor.wy, runtime.session.worldScale);
-    if (dist <= anchor.range && slingshotTangentialSpeed(player, anchor) < SLINGSHOT_SERVER.minTangentialSpeed) {
-      continue;
-    }
     if (dist <= anchor.range && dist < bestDist) {
       best = { anchor, distance: dist };
       bestDist = dist;
     }
   }
   return best;
+}
+
+function updateSlingshotAim(player, currentTime) {
+  const state = ensurePlayerSlingshot(player);
+  if (state.engaged) return null;
+  const current = findNearestSlingshotAffordance(player);
+  if (current) {
+    const key = slingshotAnchorKey(current.anchor);
+    state.phase = "aim";
+    state.aimAnchorKey = key;
+    state.aimAnchorId = current.anchor.id;
+    state.aimAnchorType = current.anchor.type;
+    state.aimAnchorWX = current.anchor.wx;
+    state.aimAnchorWY = current.anchor.wy;
+    state.aimAnchorRange = current.anchor.range;
+    state.aimDistance = current.distance;
+    state.lastAimSeenTime = currentTime;
+    state.coyoteUntil = currentTime + Math.max(0, SLINGSHOT_SERVER.coyoteTime) / 1000;
+    state.coyoteActive = false;
+    return current;
+  }
+
+  const canCoyote = state.aimAnchorKey && coyoteWindowOpen(
+    currentTime,
+    state.lastAimSeenTime,
+    SLINGSHOT_SERVER.coyoteTime,
+  );
+  if (canCoyote) {
+    state.phase = "aim";
+    state.coyoteActive = true;
+    return findSlingshotAnchorByState({
+      anchorId: state.aimAnchorId,
+      anchorType: state.aimAnchorType,
+    });
+  }
+
+  state.phase = "idle";
+  state.aimAnchorKey = null;
+  state.aimAnchorId = null;
+  state.aimAnchorType = null;
+  state.aimAnchorWX = null;
+  state.aimAnchorWY = null;
+  state.aimAnchorRange = 0;
+  state.aimDistance = 0;
+  state.coyoteActive = false;
+  state.coyoteUntil = 0;
+  return null;
+}
+
+function findSlingshotAffordance(player, currentTime = runtime.simTime) {
+  const normal = findNearestSlingshotAffordance(player);
+  if (normal) return normal;
+  const state = ensurePlayerSlingshot(player);
+  if (!state.aimAnchorKey || !coyoteWindowOpen(currentTime, state.lastAimSeenTime, SLINGSHOT_SERVER.coyoteTime)) {
+    return null;
+  }
+  const anchor = findSlingshotAnchorByState({ anchorId: state.aimAnchorId, anchorType: state.aimAnchorType });
+  if (!anchor) return null;
+  const distance = worldDistance(player.wx, player.wy, anchor.wx, anchor.wy, runtime.session.worldScale);
+  if (distance > anchor.range * SLINGSHOT_INTERNAL.rangeBreakGraceFactor) return null;
+  return { anchor, distance, coyote: true };
 }
 
 function slingshotHullMods(player) {
@@ -4334,23 +4911,130 @@ function slingshotHullMods(player) {
   };
 }
 
+function slingshotAnchorTelemetry(state, prefix = "anchor") {
+  const field = (name) => prefix ? `${prefix}${name[0].toUpperCase()}${name.slice(1)}` : name;
+  const id = state[field("anchorId")];
+  if (!id) return null;
+  return {
+    id,
+    type: state[field("anchorType")],
+    wx: state[field("anchorWX")],
+    wy: state[field("anchorWY")],
+    range: state[field("anchorRange")] || 0,
+  };
+}
+
+function buildSlingshotTelegraph(player) {
+  const state = ensurePlayerSlingshot(player);
+  const aimAnchor = slingshotAnchorTelemetry(state, "aim");
+  const activeAnchor = slingshotAnchorTelemetry(state, "");
+  const releaseGhost = state.releaseGhost ? {
+    ...state.releaseGhost,
+    remainingMs: Math.max(0, (state.releaseGhostUntil - runtime.simTime) * 1000),
+  } : null;
+  return {
+    phase: state.phase || "idle",
+    aimCue: aimAnchor ? {
+      anchor: aimAnchor,
+      distance: state.aimDistance || 0,
+      coyoteActive: Boolean(state.coyoteActive),
+      coyoteRemainingMs: Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000),
+    } : null,
+    lock: state.engaged || state.phase === "lock" ? {
+      anchor: activeAnchor,
+      entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+      locked: { x: state.lockedVX || 0, y: state.lockedVY || 0 },
+      bendDegrees: state.bendDegrees || 0,
+    } : null,
+    ownedArc: state.engaged && state.phase === "arc" ? {
+      anchor: activeAnchor,
+      orbitDir: state.orbitDir || 0,
+      arcRadians: state.arcRadians || 0,
+      quarterTurns: quarterTurnsFromArc(state.arcRadians, state.chainCount),
+      energy: state.energy || 0,
+      chainCount: state.chainCount || 0,
+    } : null,
+    releaseGhost,
+  };
+}
+
+function buildPlayerRulerFacts(player) {
+  const state = ensurePlayerSlingshot(player);
+  const mods = slingshotHullMods(player);
+  const effectiveChainWindow = SLINGSHOT_SERVER.chainWindow * mods.chainWindowMult;
+  const chainElapsed = runtime.simTime - (state.lastReleaseTime ?? -Infinity);
+  const chainRemaining = Number.isFinite(chainElapsed)
+    ? Math.max(0, effectiveChainWindow - chainElapsed)
+    : 0;
+  const releaseDirection = slingshotReleaseDirection(player);
+  const projectedBoost = (state.energy || 0) * SLINGSHOT_INTERNAL.releaseFillMultiplier * mods.energyMult;
+  const livePayoff = state.engaged ? {
+    entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+    exit: boundedReleaseDelta({
+      velocity: { x: player.vx, y: player.vy },
+      direction: releaseDirection,
+      entrySpeed: Math.hypot(state.entryVX || 0, state.entryVY || 0),
+      arcRadians: state.arcRadians,
+      payoffCurve: SLINGSHOT_SERVER.payoffCurve,
+      chainCount: state.chainCount,
+      desiredBoost: projectedBoost,
+    }).exit,
+  } : state.lastPayoff;
+  const entrySpeed = Math.hypot(livePayoff?.entry?.x || 0, livePayoff?.entry?.y || 0);
+  const exitSpeed = Math.hypot(livePayoff?.exit?.x || 0, livePayoff?.exit?.y || 0);
+  return {
+    source: "authority",
+    slingshot: {
+      captureRadius_m: {
+        well: SLINGSHOT_SERVER.captureRadius,
+        star: SLINGSHOT_SERVER.captureRadius * (2 / 3),
+        planetoid: SLINGSHOT_SERVER.captureRadius * 0.4,
+      },
+      magnetism: {
+        active: Boolean(state.engaged || state.phase === "lock"),
+        entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+        locked: { x: state.lockedVX || 0, y: state.lockedVY || 0 },
+        bend_deg: state.bendDegrees || 0,
+      },
+      coyoteTime: {
+        implemented: SLINGSHOT_SERVER.coyoteTime > 0,
+        duration_ms: SLINGSHOT_SERVER.coyoteTime,
+        remaining_ms: Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000),
+      },
+      payoffCurve: {
+        active: Boolean(livePayoff),
+        entry: livePayoff?.entry || { x: 0, y: 0 },
+        exit: livePayoff?.exit || { x: 0, y: 0 },
+        ratio: entrySpeed > 1e-9 ? exitSpeed / entrySpeed : 0,
+      },
+      chainWindow: {
+        duration_s: effectiveChainWindow,
+        remaining_s: chainRemaining,
+        active: chainRemaining > 0,
+      },
+    },
+  };
+}
+
 function engagePlayerSlingshot(player, currentTime) {
   const state = ensurePlayerSlingshot(player);
   if (state.engaged) return false;
-  const affordance = findSlingshotAffordance(player);
+  const affordance = findSlingshotAffordance(player, currentTime);
   const anchor = affordance?.anchor;
   if (!anchor) return false;
   const tanSpeed = slingshotTangentialSpeed(player, anchor);
-  if (tanSpeed < SLINGSHOT_SERVER.minTangentialSpeed) return false;
+  if (tanSpeed < SLINGSHOT_INTERNAL.minimumTangentialSpeed) return false;
 
   const mods = slingshotHullMods(player);
-  const sinceRelease = currentTime - (state.lastReleaseTime ?? -Infinity);
-  const chainWindow = SLINGSHOT_SERVER.chainWindowSeconds * mods.chainWindowMult;
   const anchorKey = slingshotAnchorKey(anchor);
-  const chained = sinceRelease <= chainWindow && state.lastReleasedAnchorKey && state.lastReleasedAnchorKey !== anchorKey;
-  const chainCount = chained
-    ? Math.min((state.chainCount || 1) + 1, SLINGSHOT_SERVER.maxChainCount)
-    : 1;
+  const chainCount = resolveChainCount({
+    nowSeconds: currentTime,
+    lastReleaseSeconds: state.lastReleaseTime,
+    chainWindowSeconds: SLINGSHOT_SERVER.chainWindow * mods.chainWindowMult,
+    lastAnchorKey: state.lastReleasedAnchorKey,
+    anchorKey,
+    previousCount: state.chainCount,
+  });
 
   const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
   const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
@@ -4361,6 +5045,13 @@ function engagePlayerSlingshot(player, currentTime) {
   const tangentNX = -radialNY * orbitDir;
   const tangentNY = radialNX * orbitDir;
   const speed = Math.hypot(player.vx, player.vy);
+  const locked = rotateToward(
+    { x: player.vx, y: player.vy },
+    { x: tangentNX * speed, y: tangentNY * speed },
+    SLINGSHOT_SERVER.magnetism,
+  );
+  state.entryVX = player.vx;
+  state.entryVY = player.vy;
 
   state.engaged = true;
   state.anchorId = anchor.id;
@@ -4372,14 +5063,26 @@ function engagePlayerSlingshot(player, currentTime) {
   state.chainCount = chainCount;
   state.engageRadius = affordance.distance;
   state.orbitDir = orbitDir;
-  player.vx = tangentNX * speed;
-  player.vy = tangentNY * speed;
+  state.phase = "lock";
+  state.lockTick = runtime.tick;
+  state.lockUntil = currentTime + SLINGSHOT_INTERNAL.lockTelegraphDurationSeconds;
+  state.bendDegrees = locked.bendDegrees;
+  state.arcRadians = 0;
+  state.previousRadialX = radialNX;
+  state.previousRadialY = radialNY;
+  state.coyoteActive = false;
+  player.vx = locked.vector.x;
+  player.vy = locked.vector.y;
+  state.lockedVX = player.vx;
+  state.lockedVY = player.vy;
 
   publishEvent("player.slingshotEngaged", {
     clientId: player.clientId,
     anchorId: anchor.id,
     anchorType: anchor.type,
     chainCount,
+    phase: state.phase,
+    bendDegrees: state.bendDegrees,
   });
   return true;
 }
@@ -4397,12 +5100,36 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   if (!state.engaged) return null;
   const mods = slingshotHullMods(player);
   const baseEnergy = state.energy || 0;
-  const chainMult = Math.pow(SLINGSHOT_SERVER.chainMultiplier, Math.max(0, (state.chainCount || 1) - 1));
-  const totalEnergy = baseEnergy * chainMult * SLINGSHOT_SERVER.releaseMultiplier * mods.energyMult;
+  const entrySpeed = Math.hypot(state.entryVX || 0, state.entryVY || 0);
+  const requestedBoost = baseEnergy * SLINGSHOT_INTERNAL.releaseFillMultiplier * mods.energyMult;
   const dir = slingshotReleaseDirection(player, input);
+  const beforeRelease = { x: player.vx, y: player.vy };
+  const speedCap = releaseSpeedCap(
+    entrySpeed,
+    state.arcRadians,
+    SLINGSHOT_SERVER.payoffCurve,
+    state.chainCount,
+  );
+  const release = boundedReleaseDelta({
+    velocity: beforeRelease,
+    direction: dir,
+    entrySpeed,
+    arcRadians: state.arcRadians,
+    payoffCurve: SLINGSHOT_SERVER.payoffCurve,
+    chainCount: state.chainCount,
+    desiredBoost: requestedBoost,
+  });
+  state.lastPayoff = {
+    entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+    exit: applyBoost ? release.exit : beforeRelease,
+    direction: { x: dir.x, y: dir.y },
+    speedCap,
+    arcRadians: state.arcRadians,
+    quarterTurns: quarterTurnsFromArc(state.arcRadians, state.chainCount),
+  };
   if (applyBoost) {
-    player.vx += dir.x * totalEnergy;
-    player.vy += dir.y * totalEnergy;
+    player.vx = release.exit.x;
+    player.vy = release.exit.y;
   }
   const previousAnchorId = state.anchorId;
   const previousAnchorType = state.anchorType;
@@ -4417,6 +5144,25 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   state.energy = 0;
   state.engageRadius = 0;
   state.orbitDir = 0;
+  state.arcRadians = 0;
+  state.previousRadialX = 0;
+  state.previousRadialY = 0;
+  state.phase = "release-ghost";
+  state.releaseGhostUntil = currentTime + SLINGSHOT_INTERNAL.releaseGhostDurationSeconds;
+  state.releaseGhost = {
+    anchor: {
+      id: previousAnchorId,
+      type: previousAnchorType,
+      wx: state.aimAnchorWX,
+      wy: state.aimAnchorWY,
+      range: state.aimAnchorRange,
+    },
+    entry: { x: state.entryVX || 0, y: state.entryVY || 0 },
+    exit: applyBoost ? release.exit : beforeRelease,
+    direction: { x: dir.x, y: dir.y },
+    speedCap,
+    quarterTurns: state.lastPayoff.quarterTurns,
+  };
 
   publishEvent("player.slingshotReleased", {
     clientId: player.clientId,
@@ -4424,10 +5170,12 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
     anchorType: previousAnchorType,
     reason,
     energyBanked: baseEnergy,
-    totalEnergyAwarded: applyBoost ? totalEnergy : 0,
+    totalEnergyAwarded: applyBoost ? Math.hypot(release.delta.x, release.delta.y) : 0,
     chainCount: state.chainCount || 1,
+    speedCap,
+    exitSpeed: Math.hypot(player.vx, player.vy),
   });
-  return { totalEnergy, baseEnergy, chainCount: state.chainCount || 1 };
+  return { totalEnergy: Math.hypot(release.delta.x, release.delta.y), baseEnergy, chainCount: state.chainCount || 1 };
 }
 
 function rememberConsumedSlingshotEdge(state, edgeId) {
@@ -4482,12 +5230,22 @@ function applyPlayerSlingshotForces(player, dt, input) {
 
   const radialNX = dx / dist;
   const radialNY = dy / dist;
+  if (runtime.simTime >= state.lockUntil && state.phase === "lock") state.phase = "arc";
+  if (Math.hypot(state.previousRadialX, state.previousRadialY) > 0.5) {
+    const radialDelta = signedAngle(
+      { x: state.previousRadialX, y: state.previousRadialY },
+      { x: radialNX, y: radialNY },
+    ) * (state.orbitDir || 1);
+    if (radialDelta > 0) state.arcRadians += radialDelta;
+  }
+  state.previousRadialX = radialNX;
+  state.previousRadialY = radialNY;
   const orbitDir = state.orbitDir || 1;
   const tangentNX = -radialNY * orbitDir;
   const tangentNY = radialNX * orbitDir;
   const tanSpeed = player.vx * tangentNX + player.vy * tangentNY;
   const proximity = Math.max(0, 1 - dist / Math.max(anchor.range, 1e-4));
-  state.energy += SLINGSHOT_SERVER.energyAccrualRate
+  state.energy += SLINGSHOT_INTERNAL.energyAccrualRate
     * Math.max(0, tanSpeed)
     * anchor.massWeight
     * proximity
@@ -4502,13 +5260,18 @@ function applyPlayerSlingshotForces(player, dt, input) {
     anchor.pullFalloff,
     anchor.pullRange
   );
-  const cancelMag = radialPull * SLINGSHOT_SERVER.gravityCancelFraction;
-  player.vx += (-radialNX * cancelMag + tangentNX * SLINGSHOT_SERVER.tangentialForce) * dt;
-  player.vy += (-radialNY * cancelMag + tangentNY * SLINGSHOT_SERVER.tangentialForce) * dt;
+  const cancelMag = radialPull * SLINGSHOT_INTERNAL.gravityCancelFraction;
+  player.vx += (-radialNX * cancelMag + tangentNX * SLINGSHOT_INTERNAL.tangentialForce) * dt;
+  player.vy += (-radialNY * cancelMag + tangentNY * SLINGSHOT_INTERNAL.tangentialForce) * dt;
 }
 
 function tickPlayerSlingshot(player, dt, input) {
   const state = ensurePlayerSlingshot(player);
+  if (!state.engaged && state.phase === "release-ghost" && runtime.simTime >= state.releaseGhostUntil) {
+    state.phase = "idle";
+    state.releaseGhost = null;
+  }
+  if (!state.engaged) updateSlingshotAim(player, runtime.simTime);
   const pendingEdges = Array.isArray(input?.slingshotEdges) ? input.slingshotEdges : [];
   const edgeId = pendingEdges.shift();
   if (edgeId !== undefined) {
@@ -4529,7 +5292,7 @@ function tickPlayerSlingshot(player, dt, input) {
 }
 
 function rebuildAuthoritativeField() {
-  if (!runtime.session.useCoarseField) {
+  if (!runtime.session?.worldScale || !runtime.session?.flowFieldCellSize) {
     runtime.coarseField = null;
     return;
   }
@@ -4538,14 +5301,19 @@ function rebuildAuthoritativeField() {
     cellSize: runtime.session.flowFieldCellSize,
     wells: runtime.mapState.wells,
     waveRings: runtime.waveRings,
+    seededSea: runtime.session.seededSea,
     wellGravityScale: SERVER_WELLS.shipPullStrength,
     wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
     wellGravityMaxRange: SERVER_WELLS.maxRange,
     wellCurrentScale: SERVER_WELLS.currentStrength,
     wellCurrentFalloff: SERVER_WELLS.currentFalloff,
     wellCurrentMaxRange: SERVER_WELLS.currentRange,
-    waveShipPush: WAVE_SERVER.waveShipPush * runtime.session.fieldFlowScale,
+    waveShipPush: WAVE_SERVER.waveShipPush,
     waveWidth: WAVE_SERVER.waveWidth,
+    collapseParameters: runtime.collapseEpochState?.parameterVector,
+    maxCells: runtime.session.useCoarseField
+      ? runtime.session.maxCoarseFieldCells
+      : Infinity,
   });
 }
 
@@ -4584,7 +5352,7 @@ function aiScoreWreck(ai, wreck) {
   const itemCount = wreck.loot ? wreck.loot.length : 1;
   const tierMult = (wreck.tier || 1);
   const rawValue = itemCount * tierMult * 50;
-  const noise = 1.0 + ((runtime.session?.rng?.rawStream('aiPerception') || Math.random)() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
+  const noise = 1.0 + (currentRNG('aiPerception')() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
   let score = rawValue * noise;
 
   // Distance penalty
@@ -4843,7 +5611,7 @@ function tickAIPlayers(dt) {
     } else {
       // Drift
       ai.thrustIntensity = 0.05;
-      ai.facingAngle += ((runtime.session?.rng?.rawStream('aiDrift') || Math.random)() - 0.5) * 0.1 * dt;
+      ai.facingAngle += (currentRNG('aiDrift')() - 0.5) * 0.1 * dt;
     }
 
     // Set lastInput — main tick loop handles all physics (thrust, gravity, drag).
@@ -5123,7 +5891,7 @@ function getMomentumShieldMult(player) {
 function spawnSentries(mapState) {
   const cfg = SENTRY_CONFIG;
   const sentries = [];
-  const rng = runtime.session?.rng?.rawStream('sentrySpawn') || Math.random;
+  const rng = currentRNG('sentrySpawn');
   for (const well of mapState.wells) {
     const count = cfg.perWell[0] + Math.floor(rng() * (cfg.perWell[1] - cfg.perWell[0] + 1));
     const baseOrbit = (well.ringOuter || 0.1);
@@ -5255,7 +6023,7 @@ function tickFauna(dt) {
   }
   const peakZone = peakPlayer ? peakPlayer.signal.zone : "ghost";
 
-  const faunaRng = runtime.session?.rng?.rawStream('fauna') || Math.random;
+  const faunaRng = currentRNG('fauna');
 
   // Spawn drift jellies to maintain count
   const jellyCount = fauna.filter(f => f.type === "jelly" && f.alive).length;
@@ -5264,7 +6032,7 @@ function tickFauna(dt) {
     if (runtime._jellySpawnTimer >= cfg.jellySpawnInterval) {
       runtime._jellySpawnTimer = 0;
       fauna.push({
-        id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
+        id: nextSeededToken(`fauna-${runtime.tick}`, "faunaIds"),
         type: "jelly",
         wx: faunaRng() * ws, wy: faunaRng() * ws,
         vx: (faunaRng() - 0.5) * 0.005, vy: (faunaRng() - 0.5) * 0.005,
@@ -5285,7 +6053,7 @@ function tickFauna(dt) {
       const angle = faunaRng() * Math.PI * 2;
       const dist = cfg.bloomSpawnRange[0] + faunaRng() * (cfg.bloomSpawnRange[1] - cfg.bloomSpawnRange[0]);
       fauna.push({
-        id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
+        id: nextSeededToken(`fauna-${runtime.tick}`, "faunaIds"),
         type: "bloom",
         wx: ((peakPlayer.wx + Math.cos(angle) * dist) % ws + ws) % ws,
         wy: ((peakPlayer.wy + Math.sin(angle) * dist) % ws + ws) % ws,
@@ -5351,12 +6119,11 @@ function tickFauna(dt) {
 }
 
 // --- Inhibitor System (Existential Tier) ---
-// Three-form escalation driven by signal pressure + time + well growth.
-// Form 1 (Glitch): 70% of threshold — drifting corruption zone, magenta pulse.
+// Three-form escalation is a deterministic match-scoped Conductor clock.
+// Form 1 (Glitch): drifting corruption zone, magenta pulse.
 // Form 2 (Swarm): irreversible wake — hunting mass, cargo drain, control debuff.
 // Form 3 (Vessel): geometric anti-fluid — instant kill, portal blocking, gravity pull.
-// Final portal guaranteed 60s after Vessel. See INHIBITOR.md.
-// Pressure builds from player signal + time + well growth.
+// Final portal guaranteed 60s after Vessel. Portal-window conversion is W1-F3.
 // Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
 
 function ensureInhibitorFormTimes(inh = runtime.inhibitor) {
@@ -5365,15 +6132,104 @@ function ensureInhibitorFormTimes(inh = runtime.inhibitor) {
   return inh.formTimes;
 }
 
-function setInhibitorForm(form, payload = {}) {
+function getScheduledInhibitorWave(phase) {
+  return runtime.inhibitorSchedule?.severityWaves?.find((wave) => wave.tier === phase) || null;
+}
+
+function publishInhibitorPhaseEvent(phase, wave, extra = {}) {
+  const event = wave || {};
+  const waveId = event.waveId || event.id || `inhibitor:phase-${phase}`;
+  const scheduledTime = event.time ?? event.metadata?.scheduledTime ?? 0;
+  const budget = event.budget ?? event.metadata?.budget ?? 0;
+  const payload = {
+    conductorId: "match-conductor",
+    waveId,
+    phase,
+    tier: event.tier ?? event.metadata?.tier ?? phase,
+    scheduledTime,
+    budget,
+    announced: extra.announced !== false,
+    ...extra,
+  };
+  publishEvent("inhibitor.waveAnnounced", payload);
+  publishEvent("inhibitor.phase", { ...payload, form: phase });
+  return payload;
+}
+
+function setInhibitorPhase(phase, wave, payload = {}) {
   const inh = runtime.inhibitor;
-  if (inh.form === form) return false;
-  inh.form = form;
+  if (inh.form === phase && inh.phase === phase && !payload.debug) return false;
+  inh.phase = phase;
+  inh.form = phase;
   const formTimes = ensureInhibitorFormTimes(inh);
-  if (form > 0 && formTimes[form] == null) formTimes[form] = runtime.simTime;
-  publishEvent("inhibitor.form", { form, pressure: inh.pressure, ...payload });
-  if (form === 2) publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy });
+  if (phase > 0 && formTimes[phase] == null) formTimes[phase] = runtime.simTime;
+  const event = wave || {
+    id: `inhibitor:debug:phase-${phase}`,
+    time: runtime.simTime,
+    tier: phase,
+    budget: INHIBITOR_CONFIG.phaseWaveBudgets[phase] ?? 0,
+  };
+  const eventPayload = publishInhibitorPhaseEvent(phase, event, {
+    ...payload,
+    announced: payload.announced !== undefined ? payload.announced : !payload.debug,
+  });
+  inh.waveId = eventPayload.waveId;
+  inh.scheduledTime = eventPayload.scheduledTime;
+  inh.waveBudget = eventPayload.budget;
+  publishEvent("inhibitor.form", { form: phase, ...eventPayload });
+  if (phase === 2) publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy, ...eventPayload });
   return true;
+}
+
+function setInhibitorForm(form, payload = {}) {
+  const phase = Math.max(0, Math.min(3, Math.round(Number(form) || 0)));
+  const debugPhaseZero = payload.debug && phase === 0
+    ? runtime.inhibitorSchedule?.eventFronts?.find((event) => event.id === "inhibitor:phase-0")
+    : null;
+  return setInhibitorPhase(phase, debugPhaseZero || (payload.debug ? null : getScheduledInhibitorWave(phase)), payload);
+}
+
+function configureInhibitorPhase(phase, signalSource, vesselTarget, ws) {
+  const inh = runtime.inhibitor;
+  const cfg = INHIBITOR_CONFIG;
+  if (phase === 1) {
+    inh.intensity = 0;
+    inh.radius = cfg.glitchRadius;
+    const spawnFrom = signalSource || vesselTarget;
+    if (spawnFrom) {
+      inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
+      inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
+      inh.lastSignalWX = spawnFrom.wx;
+      inh.lastSignalWY = spawnFrom.wy;
+    } else {
+      const rng = currentRNG("inhibitorSpawn");
+      inh.wx = rng() * ws;
+      inh.wy = rng() * ws;
+    }
+    inh.silenceTimer = 0;
+  } else if (phase === 2) {
+    inh.intensity = 0;
+    inh.radius = cfg.swarmRadius;
+    inh.swarmTrackTimer = 0;
+    inh.swarmSearchTimer = 0;
+    const target = signalSource || vesselTarget;
+    if (target) {
+      inh.swarmTargetX = target.wx;
+      inh.swarmTargetY = target.wy;
+    }
+  } else if (phase === 3) {
+    inh.intensity = 0;
+    inh.radius = Math.max(inh.radius || 0, cfg.swarmRadius * 1.5);
+  }
+}
+
+function advanceInhibitorClock({ signalSource, vesselTarget, ws } = {}) {
+  const inh = runtime.inhibitor;
+  for (const wave of runtime.inhibitorSchedule?.severityWaves || []) {
+    if (wave.time > runtime.simTime || wave.tier <= inh.phase) continue;
+    configureInhibitorPhase(wave.tier, signalSource, vesselTarget, ws);
+    setInhibitorPhase(wave.tier, wave);
+  }
 }
 
 function collectInhibitorSignalSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -5452,6 +6308,16 @@ function updateInhibitorPortalBlocks(inh, ws) {
   const cfg = INHIBITOR_CONFIG;
   for (const portal of runtime.mapState.portals) {
     if (portal.alive === false) continue;
+    if (portal.guaranteedFinalExfil) {
+      if (portal.blockedByInhibitor === true) {
+        portal.blockedByInhibitor = false;
+        publishEvent("portal.unblocked", {
+          portalId: portal.id,
+          by: "guaranteed-final-exfil",
+        });
+      }
+      continue;
+    }
     const shouldBlock = inh.form >= 3 &&
       worldDistance(inh.wx, inh.wy, portal.wx, portal.wy, ws) < cfg.vesselPortalBlockRange;
     if (portal.blockedByInhibitor !== shouldBlock) {
@@ -5493,50 +6359,6 @@ function updateVesselWellDistortion(inh, dt, ws) {
   }
 }
 
-function spawnInhibitorFinalPortal(inh, ws) {
-  const cfg = INHIBITOR_CONFIG;
-  let bestScore = -Infinity, bestX = ws / 2, bestY = ws / 2;
-  const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
-  const minWellClearance = 0.22;
-  const minInhibitorClearance = (cfg.vesselPortalBlockRange || 0) + portalCaptureRadius({ type: "standard" });
-  for (let i = 0; i < 32; i++) {
-    const cx = rng() * ws;
-    const cy = rng() * ws;
-    const inhibitorDist = worldDistance(inh.wx, inh.wy, cx, cy, ws);
-    let wellClearance = ws;
-    for (const well of runtime.mapState.wells) {
-      if (well.consumedByInhibitor) continue;
-      const radius = Math.max(0, Number(well.killRadius) || 0);
-      wellClearance = Math.min(wellClearance, worldDistance(well.wx, well.wy, cx, cy, ws) - radius);
-    }
-    let portalClearance = ws;
-    for (const portal of runtime.mapState.portals) {
-      if (portal.alive === false) continue;
-      portalClearance = Math.min(portalClearance, worldDistance(portal.wx, portal.wy, cx, cy, ws) - portalCaptureRadius(portal));
-    }
-    const wellPenalty = wellClearance < minWellClearance ? (minWellClearance - wellClearance) * 6 : 0;
-    const inhibitorPenalty = inhibitorDist < minInhibitorClearance ? (minInhibitorClearance - inhibitorDist) * 8 : 0;
-    const score = inhibitorDist * 0.5 + wellClearance * 1.4 + portalClearance * 0.15 - wellPenalty - inhibitorPenalty;
-    if (score > bestScore) {
-      bestScore = score;
-      bestX = cx;
-      bestY = cy;
-    }
-  }
-  runtime.mapState.portals.push({
-    id: `portal-final-${runtime.tick}`,
-    wx: bestX, wy: bestY,
-    type: "standard", wave: 99,
-    spawnTime: runtime.simTime,
-    lifespan: cfg.finalPortalLifespan,
-    alive: true, opacity: 1,
-    finalInhibitor: true,
-    blockedByInhibitor: false,
-  });
-  inh.finalPortalSpawned = true;
-  publishEvent("inhibitor.finalPortal", { wx: bestX, wy: bestY });
-}
-
 function tickInhibitor(dt) {
   const inh = runtime.inhibitor;
   const cfg = INHIBITOR_CONFIG;
@@ -5548,67 +6370,12 @@ function tickInhibitor(dt) {
   const vesselTarget = selectInhibitorSignalSource({ includeDecoys: false, includeZeroPlayers: true });
   const peakSignal = signalSource?.signal || 0;
   rememberInhibitorSignalSource(inh, signalSource, dt);
-
-  inh.pressure += peakSignal * cfg.pressureFromSignal * dt;
-  inh.pressure += (runtime.simTime / RUN_DURATION) * cfg.pressureFromTime * dt;
-  inh.pressure = Math.min(1.5, inh.pressure);
-
-  const glitchThreshold = inh.threshold * cfg.glitchFraction;
-
-  if (inh.form === 0 && inh.pressure >= glitchThreshold) {
-    inh.intensity = 0;
-    inh.radius = cfg.glitchRadius;
-    const spawnFrom = signalSource || vesselTarget;
-    if (spawnFrom) {
-      inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
-      inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
-      inh.lastSignalWX = spawnFrom.wx;
-      inh.lastSignalWY = spawnFrom.wy;
-    } else {
-      const rng = runtime.session?.rng?.rawStream('inhibitorSpawn') || Math.random;
-      inh.wx = rng() * ws;
-      inh.wy = rng() * ws;
-    }
-    inh.silenceTimer = 0;
-    setInhibitorForm(1);
-  }
-
-  if (inh.form === 1 && inh.pressure >= inh.threshold) {
-    inh.intensity = 0;
-    inh.radius = cfg.swarmRadius;
-    inh.vesselTimer = 0;
-    inh.swarmTrackTimer = 0;
-    inh.swarmSearchTimer = 0;
-    const target = signalSource || vesselTarget;
-    if (target) {
-      inh.swarmTargetX = target.wx;
-      inh.swarmTargetY = target.wy;
-    }
-    setInhibitorForm(2);
-  }
-
-  if (inh.form >= 2) inh.vesselTimer += dt;
-
-  if (inh.form === 2) {
-    if (inh.vesselTimer >= cfg.vesselTimeToForm || peakSignal >= 1.0) {
-      inh.intensity = 0;
-      inh.radius = Math.max(inh.radius || 0, cfg.swarmRadius * 1.5);
-      setInhibitorForm(3);
-    }
-  }
+  advanceInhibitorClock({ signalSource, vesselTarget, ws });
 
   if (inh.form === 1) {
     inh.intensity = Math.min(1, inh.intensity + dt * 0.5);
-    if (peakSignal < SIGNAL_CONFIG.ghostMax) {
-      inh.silenceTimer += dt;
-      if (inh.silenceTimer >= cfg.glitchDissipateTime) {
-        inh.intensity = 0;
-        inh.pressure = inh.threshold * cfg.glitchFraction * 0.5;
-        setInhibitorForm(0);
-      }
-    } else {
-      inh.silenceTimer = 0;
-    }
+    if (peakSignal < SIGNAL_CONFIG.ghostMax) inh.silenceTimer += dt;
+    else inh.silenceTimer = 0;
     const targetX = Number.isFinite(inh.lastSignalWX) ? inh.lastSignalWX : signalSource?.wx;
     const targetY = Number.isFinite(inh.lastSignalWY) ? inh.lastSignalWY : signalSource?.wy;
     if (Number.isFinite(targetX) && Number.isFinite(targetY)) {
@@ -5646,7 +6413,7 @@ function tickInhibitor(dt) {
       if (pd < inh.radius * 0.5) {
         spikePlayerSignal(player, cfg.swarmContactSignalSpike * dt);
         player.controlDebuff = Math.max(player.controlDebuff || 0, cfg.swarmControlDebuffDuration);
-        if ((runtime.session?.rng?.rawStream('swarmDrain') || Math.random)() < cfg.swarmContactDrain * dt) {
+        if (currentRNG('swarmDrain')() < cfg.swarmContactDrain * dt) {
           for (let i = player.cargo.length - 1; i >= 0; i--) {
             if (player.cargo[i]) {
               player.cargo[i] = null;
@@ -5694,12 +6461,6 @@ function tickInhibitor(dt) {
   }
 
   updateInhibitorPortalBlocks(inh, ws);
-
-  const formTimes = ensureInhibitorFormTimes(inh);
-  const timeSinceVessel = formTimes[3] == null ? 0 : runtime.simTime - formTimes[3];
-  if (inh.form >= 3 && !inh.finalPortalSpawned && timeSinceVessel >= cfg.finalPortalDelay) {
-    spawnInhibitorFinalPortal(inh, ws);
-  }
 }
 
 function tickSim() {
@@ -5717,7 +6478,7 @@ function tickSim() {
   const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
-  if (maybeEnforceMatchLifetime()) return;
+  tickCollapseEpochs();
   const relevance = buildRelevanceView();
 
   runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
@@ -5728,12 +6489,15 @@ function tickSim() {
   });
   runSystemAtRate("growth", runtime.session.growthTickHz || runtime.session.tickHz, dt, tickGrowth);
   runSystemAtRate("portals", runtime.session.portalTickHz || runtime.session.tickHz, dt, tickPortals);
+  if (maybeEnforceMatchLifetime()) return;
   tickWreckWaves(dt);
   runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, (stepDt) =>
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
-  runSystemAtRate("field", runtime.session.fieldTickHz || runtime.session.worldTickHz || runtime.session.tickHz, dt, rebuildAuthoritativeField);
+  runtime.session.seededSea = advanceSeededSea(runtime.session.seededSea, dt);
+  runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
+  rebuildAuthoritativeField();
   tickAIPlayers(dt);
   tickSentries(dt);
   tickFauna(dt);
@@ -5741,8 +6505,14 @@ function tickSim() {
   maybeCollapseRun();
   if (runtime.session.status !== "running") return;
 
+  const forceLedgers = new Map();
+  for (const player of runtime.players.values()) {
+    if (player.status === "alive") forceLedgers.set(player, beginForceLedger(player, dt, runtime.tick));
+  }
+
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
+    const forceLedger = forceLedgers.get(player);
 
     if (player.effectState.pulseCooldownRemaining > 0) {
       player.effectState.pulseCooldownRemaining = Math.max(0, player.effectState.pulseCooldownRemaining - dt);
@@ -5782,13 +6552,14 @@ function tickSim() {
       player.effectState.timeSlowRemaining > 0
         ? dt * SERVER_COMBAT.timeSlowScale
         : dt;
+    setForceLedgerDt(forceLedger, playerDt);
     // Tick control debuff (Swarm contact → sluggish controls)
     if (player.controlDebuff > 0) {
       const debuffDecay = player.brain ? player.brain.controlDebuffResist : 1.0;
       player.controlDebuff = Math.max(0, player.controlDebuff - playerDt * debuffDecay);
     }
     // Tick hull abilities before physics
-    tickHullAbilities(player, playerDt);
+    recordForceMutation(forceLedger, "impulse", player, () => tickHullAbilities(player, playerDt));
 
     const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
     const b = player.brain || BRAIN_DEFAULTS;
@@ -5799,14 +6570,16 @@ function tickSim() {
       controlMult,
       flowSample,
     });
+    recordForceDeltaV(forceLedger, "thrust", driveStep.thrustDeltaV);
+    recordForceDeltaV(forceLedger, "coupling", driveStep.couplingDeltaV);
     player.lastDeliveredThrustIntensity = driveStep.thrustIntensity;
 
-    applyWellGravity(player, playerDt);
+    recordForceMutation(forceLedger, "gravity", player, () => applyWellGravity(player, playerDt));
     if (player.status !== "alive") continue;
-    tickPlayerSlingshot(player, playerDt, input);
-    applyStarPush(player, playerDt, relevance.stars);
-    applyPlanetoidPush(player, playerDt, relevance.planetoids);
-    applyWaveRingPush(player, playerDt);
+    recordForceMutation(forceLedger, "impulse", player, () => tickPlayerSlingshot(player, playerDt, input));
+    recordForceMutation(forceLedger, "gravity", player, () => applyStarPush(player, playerDt, relevance.stars));
+    recordForceMutation(forceLedger, "gravity", player, () => applyPlanetoidPush(player, playerDt, relevance.planetoids));
+    recordForceMutation(forceLedger, "wave", player, () => applyWaveRingPush(player, playerDt));
     const movementStartWX = player.wx;
     const movementStartWY = player.wy;
     const brakeStep = applyPlayerBrakeAndIntegrate(player, input, playerDt, {
@@ -5815,16 +6588,21 @@ function tickSim() {
       thrustIntensity: driveStep.thrustIntensity,
       worldScale: runtime.session.worldScale,
     });
+    recordForceDeltaV(forceLedger, "thrust", brakeStep.thrustDeltaV);
+    recordForceDeltaV(forceLedger, "drag", brakeStep.dragDeltaV);
     player.lastDeliveredBrakeIntensity = brakeStep.brakeIntensity;
     const sweep = movementSweep(movementStartWX, movementStartWY, player);
-    applySweptWellContacts(player, playerDt, sweep);
+    recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
     if (player.status !== "alive") continue;
-    applyScavengerBump(player, relevance.scavengers, sweep);
+    recordForceMutation(forceLedger, "impulse", player, () => applyScavengerBump(player, relevance.scavengers, sweep));
 
     tickPlayerPickups(player, relevance.wrecks, sweep);
     tickExtraction(player, extractConfirm);
     if (player.status !== "alive") continue;
     tickPlayerSignal(player, playerDt);
+  }
+  for (const [player, ledger] of forceLedgers) {
+    player.forceLedger = finalizeForceLedger(ledger, player);
   }
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
@@ -5974,6 +6752,9 @@ const server = http.createServer(async (req, res) => {
           const profile = getSessionProfile(map.id, map.worldScale);
           return {
             id: map.id,
+            mapClass: map.mapClass,
+            profileId: map.profileId,
+            dimensions: { ...map.dimensions },
             name: map.name,
             worldScale: map.worldScale,
             fluidResolution: map.fluidResolution,
@@ -6007,6 +6788,13 @@ const server = http.createServer(async (req, res) => {
             maxWaveInfluencesPerPlayer: profile.maxWaveInfluencesPerPlayer,
             maxPickupChecksPerPlayer: profile.maxPickupChecksPerPlayer,
             maxPortalChecksPerPlayer: profile.maxPortalChecksPerPlayer,
+            localFluidResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].fluidResolution,
+            localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[profile.clientPerfProfile].localWindowWorldUnits,
+            coarseTextureResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].coarseTextureResolution,
+            maxCoarseFieldCells: profile.maxCoarseFieldCells,
+            snapshotBudgetBytes: profile.snapshotBudgetBytes,
+            snapshotBudgetBytesPerSecond: profile.snapshotBudgetBytesPerSecond,
+            ballparkSyncBudgetMs: profile.ballparkSyncBudgetMs,
           };
         }),
       });

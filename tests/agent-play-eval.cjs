@@ -526,7 +526,7 @@ async function collectRouteLootAndRaiseSignal(page, clientId, outputDir, screens
     (player) => player.signal?.zone !== "ghost" || player.signal?.level > 0.04,
     { timeout: 6000 },
   );
-  await waitForWorld((world) => world.inhibitor?.pressureFrac > 0 ? world.inhibitor : null, { timeout: 6000 });
+  await waitForWorld((world) => Number.isInteger(world.inhibitor?.phase) ? world.inhibitor : null, { timeout: 6000 });
   screenshots.push(await capturePage(page, outputDir, "07-signal-escalated"));
   return {
     wreckId: wreck.id,

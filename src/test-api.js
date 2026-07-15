@@ -182,6 +182,15 @@ export function initTestAPI(getState) {
       return perfStats ? JSON.parse(JSON.stringify(perfStats)) : null;
     },
 
+    getRulerOverlayStats() {
+      const { getRulerOverlayStatsForTest } = getState();
+      return clone(getRulerOverlayStatsForTest?.() || {
+        enabled: false,
+        handlerCount: 0,
+        geometry: {},
+      });
+    },
+
     getAudioDiagnostics() {
       const { audioEngine } = getState();
       return clone(audioEngine?.getDiagnostics?.() || {

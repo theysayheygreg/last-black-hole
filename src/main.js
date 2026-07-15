@@ -1,7 +1,7 @@
 /**
  * main.js — Game loop, canvas setup, wiring.
  *
- * V3: 3x3 world-space with camera follow. Portals + planetoids.
+ * V3: canonical map-scale worlds with camera follow. Portals + planetoids.
  *
  * Architecture:
  *   - WebGL canvas: fluid sim rendering (Layer 0)
@@ -35,6 +35,7 @@ import { VignettePass } from './render/passes/vignette-pass.js';
 import { ChromaticAberrationPass } from './render/passes/chromatic-aberration-pass.js';
 import { ScanlinesPass } from './render/passes/scanlines-pass.js';
 import { initTestAPI } from './test-api.js';
+import { drawRulerOverlay } from './ruler-overlay.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
@@ -56,9 +57,7 @@ import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js'
 import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
-import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
-import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
-import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
+import { DEFAULT_PLAYABLE_MAP, MAP_LIST, PLAYABLE_MAPS } from './maps/playable-map-loader.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
@@ -108,13 +107,6 @@ function reportBootFailure(message, detail) {
   window.__LBH_SHOW_BOOT_ERROR__?.(message, formattedDetail);
   console.error(`[LBH boot] ${message}`, formattedDetail);
 }
-
-const PLAYABLE_MAPS = [
-  { id: 'shallows', map: MAP_SHALLOWS },
-  { id: 'expanse', map: MAP_EXPANSE },
-  { id: 'deep-field', map: MAP_DEEP },
-];
-const MAP_LIST = PLAYABLE_MAPS.map((entry) => entry.map);
 
 function getPlayableMapEntryById(id) {
   return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
@@ -183,6 +175,7 @@ const perfStats = {
   composerPasses: [],
   three: null,
 };
+let rulerOverlayStats = Object.freeze({ enabled: false, handlerCount: 0, geometry: Object.freeze({}) });
 
 function recordPerfStat(key, ms) {
   const prev = perfStats[key] || 0;
@@ -258,10 +251,11 @@ let camX = 1.5;
 let camY = 1.5;
 
 // Map state
-let currentMap = MAP_SHALLOWS;
+let currentMap = DEFAULT_PLAYABLE_MAP;
 let remoteAuthorityActive = false;
 let remoteMapId = null;
 let remoteSnapshot = null;
+let remoteAuthoritativeField = null;
 let remotePlayers = [];
 let fixtureShipCandidates = [];
 let remoteLastAckSeq = 0;
@@ -311,7 +305,18 @@ let shieldActive = false;   // shieldBurst consumable — survive one well conta
 let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
 let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
-let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
+let inhibitorState = {
+  form: 0,
+  phase: 0,
+  waveId: 'inhibitor:phase-0',
+  scheduledTime: 0,
+  waveBudget: 0,
+  wx: 0,
+  wy: 0,
+  intensity: 0,
+  radius: 0,
+  localTime: 0,
+};
 let inhibitorWakeGlitchTimer = 0;
 let localAbilityState = null;
 let lastRunResult = null;  // populated from run.result event
@@ -339,24 +344,6 @@ let phantomNextEligibleAt = 0;    // simTime after which a new phantom may spawn
 let phantomRng = null;            // lazily created seeded stream
 let phantomLastRollTick = -1;     // last quantized sim tick we rolled on
 const PHANTOM_ROLL_QUANTUM = 0.25; // seconds per spawn roll (frame-rate independent)
-
-// --- INHIBITOR HAUNTS ---
-// Pre-spawn hauntings. Different from phantoms: these are tied to the
-// inhibitor's rising pressure, not random signal. When inhibitor.pressure
-// climbs past 70% of the wake threshold but form is still 0, the player
-// gets brief silhouette glimpses of a vessel-like shape — warning them
-// the universe is about to respond.
-//
-// Unlike the phantom, these do not point opposite the player's motion —
-// they appear in the direction the future inhibitor spawn is likely to
-// come from, which the server keeps hidden until form 1. Since we don't
-// know the final spawn location on the client, we pick a random screen
-// edge per haunt and let the player feel "something nearby is about to
-// notice me" without knowing from where.
-let hauntState = null;            // { sx, sy, bornAt, lifespan }
-let hauntNextEligibleAt = 0;      // simTime after which a new haunt may spawn
-let hauntLastRollTick = -1;       // quantized tick gate
-const HAUNT_ROLL_QUANTUM = 0.5;   // haunts are rarer — 2s between rolls
 
 // Death linger duration — the world dims before the staged results reveal.
 // Shared between the render path and the continue-input gate so pressing
@@ -545,9 +532,8 @@ function homeTabRole(index) {
 }
 
 function mapRiskRole(map) {
-  const wellCount = Array.isArray(map?.wells) ? map.wells.length : 0;
-  if (wellCount >= 10 || Number(map?.worldScale) >= 8) return 'danger';
-  if (wellCount >= 7 || Number(map?.worldScale) >= 5) return 'salvage';
+  if (map?.mapClass === 'deep-field') return 'danger';
+  if (map?.mapClass === 'expanse') return 'salvage';
   return 'flow';
 }
 
@@ -952,7 +938,7 @@ function init() {
   // shader's naturally out-of-range highlights, then tonemap compresses
   // to LDR before ASCII quantizes. The rich default is documented in
   // docs/reference/RENDER-PIPELINE.md; ?minimalrender=1 keeps a cheap
-  // baseline for 5x5/10x10 perf comparisons.
+  // baseline for 15x15/25x25 perf comparisons.
   // Gameplay render chain. Default is the rich chain (Art-Is-Product
   // identity: bloom highlights, color grade, vignette, CRT aberration
   // + scanlines). Pass ?minimalrender=1 to fall back to the bare
@@ -1192,6 +1178,7 @@ function init() {
       camX, camY,
       fps,
       perfStats,
+      getRulerOverlayStatsForTest: () => rulerOverlayStats,
       audioEngine,
       getFluidGridStateForTest: () => {
         const renderInputs = getVisibleWellRenderInputs(camX, camY);
@@ -1414,25 +1401,24 @@ function seedInitialFluid() {
     const [wellFU, wellFV] = worldToFluidUV(well.wx, well.wy);
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2;
-      const dist = 0.015 + Math.random() * 0.04;
+      const dist = 0.015 + ((i % 4) / 3) * 0.04;
       const x = wellFU + Math.cos(angle) * dist;
       const y = wellFV + Math.sin(angle) * dist;
-      fluid.splat(
+      fluid.visualSplat(
         x, y,
-        Math.cos(angle) * 0.0005, Math.sin(angle) * 0.0005,
         0.001,
-        0.15 + Math.random() * 0.25 * well.mass,
-        0.08 + Math.random() * 0.15,
-        0.03 + Math.random() * 0.08
+        0.15 + 0.25 * well.mass,
+        0.08 + 0.15,
+        0.03 + 0.08,
       );
     }
   }
-  // Broader ambient density scattered across the fluid field
+  // Deterministic ambient dye only; no random velocity/current splats.
   for (let i = 0; i < 25; i++) {
-    fluid.splat(
-      0.05 + Math.random() * 0.9,
-      0.05 + Math.random() * 0.9,
-      0, 0, 0.003,
+    fluid.visualSplat(
+      0.05 + ((i * 17) % 90) / 100,
+      0.05 + ((i * 29) % 90) / 100,
+      0.003,
       0.04, 0.12, 0.18
     );
   }
@@ -1514,7 +1500,7 @@ function findSafeSpawn(minDist = 0.55) {
  * Every scene transition (title, map select, gameplay) calls this.
  * Nothing from the previous scene leaks into the next.
  */
-function loadScene(map) {
+function loadScene(map, { seed = 1 } = {}) {
   // 1. Revert previous scene's CONFIG overrides
   revertSceneOverrides();
 
@@ -1551,7 +1537,7 @@ function loadScene(map) {
   currentCameraMode = map.camera ?? 'follow';
   const mapResult = loadMap(currentMap, {
     wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
-  });
+  }, { seed });
   startingMasses = mapResult.startingMasses;
 
   // 7. Reset camera — 'locked' = world center, 'follow' = ship sets it later
@@ -1729,10 +1715,10 @@ function transitionToTitle() {
  */
 function startGame(map, seed = null) {
   resetPhantomForNewSession();
-  resetHauntForNewSession();
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
+  remoteAuthoritativeField = null;
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -1749,8 +1735,6 @@ function startGame(map, seed = null) {
   fixtureShipCandidates = [];
   rendererFixtureActive = false;
   activeRendererFixture = null;
-  loadScene(map);
-
   // Local-sim seed: use the previewed seed when one is supplied, otherwise
   // pick a fresh one. Same RNG primitives as the server so the previewed
   // signature/well names match what the local run actually uses.
@@ -1758,6 +1742,7 @@ function startGame(map, seed = null) {
     ? Number(seed)
     : Math.floor(Math.random() * 1e9);
   const localRng = createRNGStreams(localSeed);
+  loadScene(map, { seed: localSeed });
 
   // Local fallback presents the same seeded signature as authority would.
   currentSignature = computeSeedPreview(map, localSeed).signature;
@@ -1793,21 +1778,14 @@ function startGame(map, seed = null) {
     scavengerSystem.spawn(sx, sy, archetype);
   }
 
-  // Apply upgrade multipliers from profile to CONFIG at run start.
-  // We mutate CONFIG directly (not ship properties) so all systems that read CONFIG
-  // see the upgraded values. CONFIG reverts to defaults via revertSceneOverrides()
-  // at the start of the next loadScene().
-  //
-  // Per-rank multipliers: 15% thrust per rank, 10% coupling, -12% drag (lower = less friction).
-  // These are intentionally modest — rank 3 gives ~45% thrust boost, not 2×.
+  // Apply the profile's client-visible movement multipliers at run start.
+  // Authority movement owns drag through the shared PlayerBrain contract.
   const prof = profileManager.active;
   if (prof) {
     const thrustMult = 1 + prof.upgrades.thrust * 0.15;
     CONFIG.ship.thrustAccel *= thrustMult;
     const couplingMult = 1 + prof.upgrades.coupling * 0.10;
     CONFIG.ship.fluidCoupling *= couplingMult;
-    const dragMult = 1 - prof.upgrades.drag * 0.12;
-    CONFIG.ship.drag *= dragMult;
   }
 
   gamePhase = 'playing';
@@ -1942,6 +1920,8 @@ function applyRemoteSnapshot(snapshot) {
 
 function applyRemoteSlingshotState(state) {
   if (!remoteAuthorityActive || !state) return;
+  ship.slingshotPhase = state.phase || state.telegraph?.phase || 'idle';
+  ship.slingshotTelegraph = state.telegraph || null;
   ship.slingshotEngaged = Boolean(state.engaged);
   ship.slingshotEnergy = state.energy || 0;
   ship.slingshotChainCount = state.chainCount || 0;
@@ -2246,90 +2226,6 @@ function renderPhantom(ctx, camX, camY, canvasW, canvasH, simTime) {
   ctx.restore();
 }
 
-// --- INHIBITOR HAUNTS ---
-// See declaration above. Client-only pre-spawn haunting tied to
-// inhibitor.pressure approaching the wake threshold.
-
-function resetHauntForNewSession() {
-  hauntState = null;
-  hauntNextEligibleAt = 0;
-  hauntLastRollTick = -1;
-}
-
-function tickHaunt(simTime, canvasW, canvasH) {
-  // Age and expire
-  if (hauntState) {
-    if (simTime - hauntState.bornAt >= hauntState.lifespan) {
-      hauntState = null;
-      hauntNextEligibleAt = simTime + 8 + (phantomRng?.() || Math.random()) * 10;
-    }
-    return;
-  }
-  if (simTime < hauntNextEligibleAt) return;
-  // Only eligible while the inhibitor is building toward form 1
-  const inh = inhibitorState;
-  if (!inh || inh.form > 0) return;
-  const pressure = inh.pressure || 0;
-  const pressureFrac = Number.isFinite(inh.pressureFrac)
-    ? inh.pressureFrac
-    : pressure / Math.max(0.01, inh.threshold || 1.0);
-  if (pressureFrac < 0.65) return;
-
-  // Quantized roll — avoid frame-rate drift
-  const currentTick = Math.floor(simTime / HAUNT_ROLL_QUANTUM);
-  if (currentTick === hauntLastRollTick) return;
-  hauntLastRollTick = currentTick;
-
-  // Roll weight ramps sharply as pressure approaches threshold
-  const rng = getPhantomRng();
-  const weight = Math.max(0, (pressureFrac - 0.65) * 0.12); // peaks ~0.042 at full pressure
-  if (rng() > weight) return;
-
-  // Pick a random screen-edge position (client-local, not world)
-  const edge = Math.floor(rng() * 4);
-  const margin = 48;
-  let sx, sy;
-  if (edge === 0) {      sx = margin + rng() * (canvasW - margin * 2); sy = margin; }
-  else if (edge === 1) { sx = canvasW - margin; sy = margin + rng() * (canvasH - margin * 2); }
-  else if (edge === 2) { sx = margin + rng() * (canvasW - margin * 2); sy = canvasH - margin; }
-  else {                 sx = margin; sy = margin + rng() * (canvasH - margin * 2); }
-
-  hauntState = { sx, sy, bornAt: simTime, lifespan: 1.6 + rng() * 0.8 };
-}
-
-function renderHaunt(ctx, simTime) {
-  if (!hauntState) return;
-  const age = simTime - hauntState.bornAt;
-  const lifeFrac = age / hauntState.lifespan;
-  // Fade 0-0.3, hold 0.3-0.7, fade 0.7-1.0
-  let op;
-  if (lifeFrac < 0.3) op = lifeFrac / 0.3;
-  else if (lifeFrac < 0.7) op = 1.0;
-  else op = Math.max(0, 1 - (lifeFrac - 0.7) / 0.3);
-
-  // Inhibitor magenta, very faint — the haunt is a hint, not a reveal.
-  const alpha = op * 0.35;
-  ctx.save();
-  ctx.font = canvasFont(12);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = `rgba(204, 26, 128, ${alpha.toFixed(3)})`;
-  ctx.shadowColor = `rgba(204, 26, 128, ${(alpha * 0.8).toFixed(3)})`;
-  ctx.shadowBlur = 8;
-  // Tall narrow cluster — suggests the vessel form without being it
-  const cells = [
-    { ch: '|', dx: 0, dy: -6 },
-    { ch: '|', dx: 0, dy:  0 },
-    { ch: '|', dx: 0, dy:  6 },
-    { ch: '-', dx: -5, dy: -2 },
-    { ch: '-', dx:  5, dy: -2 },
-  ];
-  for (const c of cells) {
-    ctx.fillText(c.ch, hauntState.sx + c.dx, hauntState.sy + c.dy);
-  }
-  ctx.restore();
-}
-
 function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
   if (!remoteAuthorityActive || remotePlayers.length === 0) return;
   ctx.save();
@@ -2450,7 +2346,7 @@ function applyRemoteEvents(events) {
           showInhibitorWarning('THE VESSEL', 3, payload.intensity ?? 1, 4000, 'rgba(255, 60, 140, 1.0)', { boost: 1.2 });
         } else if (payload.form === 0) {
           // Reset — should be rare but handle it (e.g. session reset)
-          showWarning('pressure relieved', 'rgba(120, 200, 180, 0.7)', 2000);
+          showWarning('inhibitor reset', 'rgba(120, 200, 180, 0.7)', 2000);
         }
         break;
       case 'inhibitor.drainCargo':
@@ -2499,9 +2395,6 @@ function applyRemoteEvents(events) {
         break;
       case 'star.consumed':
         if (Array.isArray(payload.starColor) && typeof payload.starName === 'string') {
-          if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-            waveRings.spawn(payload.wx, payload.wy, 3.0);
-          }
           const [cr, cg, cb] = payload.starColor;
           showWarning(`${payload.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
           _starFlashTimer = 0.8;
@@ -2509,14 +2402,8 @@ function applyRemoteEvents(events) {
         }
         break;
       case 'planetoid.consumed':
-        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-          waveRings.spawn(payload.wx, payload.wy, 0.2);
-        }
         break;
       case 'well.grew':
-        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy) && Number.isFinite(payload.mass)) {
-          waveRings.spawn(payload.wx, payload.wy, CONFIG.events.growthWaveAmplitude * payload.mass);
-        }
         break;
       case 'scavenger.extracted':
         showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
@@ -2554,6 +2441,20 @@ function applyRemoteInventoryAction(action) {
 function syncRemoteWorldState(world) {
   if (!world) return;
 
+  remoteAuthoritativeField = world.authoritativeField || null;
+
+  if (Array.isArray(world.waveRings)) {
+    waveRings.rings = world.waveRings.map((remote) => ({
+      sourceWX: remote.sourceWX,
+      sourceWY: remote.sourceWY,
+      radius: remote.radius ?? 0,
+      amplitude: remote.amplitude ?? 0,
+      initialAmplitude: remote.initialAmplitude ?? remote.amplitude ?? 0,
+      alive: remote.alive !== false,
+      id: remote.id || null,
+    }));
+  }
+
   if (Array.isArray(world.wells)) {
     for (let i = 0; i < Math.min(world.wells.length, wellSystem.wells.length); i++) {
       const remote = world.wells[i];
@@ -2561,6 +2462,9 @@ function syncRemoteWorldState(world) {
       local.wx = remote.wx;
       local.wy = remote.wy;
       local.mass = remote.mass;
+      if (remote.catalogId) local.catalogId = remote.catalogId;
+      if (remote.behaviorId) local.behaviorId = remote.behaviorId;
+      if (remote.catalogActivation) local.catalogActivation = remote.catalogActivation;
       if (remote.killRadius) local.killRadius = remote.killRadius;
       if (remote.name) local.name = remote.name;
     }
@@ -2644,7 +2548,6 @@ function syncRemoteWorldState(world) {
 
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   resetPhantomForNewSession();
-  resetHauntForNewSession();
   if (!simClient?.enabled) {
     startGame(mapEntry.map, previewSeed);
     return;
@@ -2662,6 +2565,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
 
   rendererFixtureActive = false;
   remoteAuthorityActive = true;
+  remoteAuthoritativeField = null;
   remoteMapId = targetMapEntry.id;
   remoteSnapshot = null;
   remotePlayers = [];
@@ -2678,8 +2582,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteShipPresentation = null;
   fixtureShipCandidates = [];
 
-  loadScene(targetMapEntry.map);
   const briefingSeed = runningSession?.seed ?? previewSeed;
+  loadScene(targetMapEntry.map, { seed: briefingSeed });
   currentSignature = runningSession?.cosmicSignature
     ? { ...runningSession.cosmicSignature }
     : computeSeedPreview(targetMapEntry.map, briefingSeed).signature;
@@ -3661,6 +3565,10 @@ function getHullSlingshotMods() {
 }
 
 function collectThreeSceneState() {
+  const authorityPlayer = remoteAuthorityActive
+    ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+    : null;
+  const authoritySlingshot = authorityPlayer?.slingshot || null;
   const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
@@ -3678,10 +3586,14 @@ function collectThreeSceneState() {
       facing: ship.facing,
       hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
       deltaVRatio: ship.getDeltaVRatio?.() ?? 1,
+      forceLedger: authorityPlayer?.forceLedger || null,
+      ruler: authorityPlayer?.ruler || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
     } : null,
     wells: (wellSystem?.wells || []).map((well, index) => ({
       id: well.id || well.name || `well-${index}`,
+      catalogId: well.catalogId || 'base-well',
+      behaviorId: well.behaviorId || 'base-well',
       wx: well.wx,
       wy: well.wy,
       mass: well.mass || 1,
@@ -3779,14 +3691,29 @@ function collectThreeSceneState() {
       wy: s.wy,
       state: s.state || 'patrol',
     })),
+    collapseEpoch: remoteSnapshot?.world?.collapseEpoch || null,
+    collapseEpochSchedule: remoteSnapshot?.world?.collapseEpochSchedule || [],
     slingshot: {
-      affordance: slingshotAffordance ? {
+      phase: authoritySlingshot?.phase || ship.slingshotPhase || (ship.slingshotEngaged ? 'arc' : 'idle'),
+      affordance: authoritySlingshot?.aim ? {
+        wx: authoritySlingshot.aim.anchorWX,
+        wy: authoritySlingshot.aim.anchorWY,
+        range: authoritySlingshot.aim.anchorRange,
+        type: authoritySlingshot.aim.anchorType,
+      } : slingshotAffordance ? {
         wx: slingshotAffordance.anchor.wx,
         wy: slingshotAffordance.anchor.wy,
         range: slingshotAffordance.anchor.range,
         type: slingshotAffordance.anchor.type,
       } : null,
-      engaged: ship.slingshotEngaged && ship.slingshotAnchor ? {
+      engaged: authoritySlingshot?.engaged ? {
+        wx: authoritySlingshot.anchorWX,
+        wy: authoritySlingshot.anchorWY,
+        range: authoritySlingshot.anchorRange,
+        type: authoritySlingshot.anchorType,
+        energy: authoritySlingshot.energy || 0,
+        chainCount: authoritySlingshot.chainCount || 0,
+      } : ship.slingshotEngaged && ship.slingshotAnchor ? {
         wx: ship.slingshotAnchor.wx,
         wy: ship.slingshotAnchor.wy,
         range: ship.slingshotAnchor.range,
@@ -3794,6 +3721,7 @@ function collectThreeSceneState() {
         energy: ship.slingshotEnergy || 0,
         chainCount: ship.slingshotChainCount || 0,
       } : null,
+      telegraph: authoritySlingshot?.telegraph || ship.slingshotTelegraph || null,
     },
     semanticField: {
       shipSample: fieldSample ? {
@@ -3840,6 +3768,7 @@ function applyHullToShip({ refill = true } = {}) {
     wellResistScale: hullDef.wellResistScale ?? 1.0,
     refill,
   });
+  ship.applyProfileDragUpgrade(profileManager.active?.upgrades?.drag);
   if (inventorySystem) {
     ship.applyMovementItemBonus(inventorySystem.getMovementStats());
     ship.applyDeltaVItemBonus(inventorySystem.getDeltaVStats());
@@ -3928,6 +3857,17 @@ function gameLoop(now) {
   // resume local simulation of those server-owned entities.
   const remoteVisualMode = remoteAuthorityActive;
 
+  // Register the last server field before any fixed step runs. FluidSim
+  // forces from this texture after each step, so visual detail cannot become
+  // a second gameplay current between snapshots.
+  if (fluid) {
+    if (remoteAuthorityActive && remoteAuthoritativeField) {
+      fluid.setAuthoritativeCoarseField(remoteAuthoritativeField);
+    } else {
+      fluid.clearAuthoritativeCoarseField();
+    }
+  }
+
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
     const simStart = performance.now();
@@ -3941,9 +3881,6 @@ function gameLoop(now) {
     });
     if (remoteVisualMode) {
       combatSystem.update(dt);
-      combatSystem.applyDisruptions(fluid);
-      waveRings.update(dt);
-      waveRings.injectIntoFluid(fluid);
     } else if (!rendererFixtureActive) {
       planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings, camX, camY);
     }
@@ -4674,22 +4611,14 @@ function gameLoop(now) {
   _prevConsumable1 = consumable1Now;
   _prevConsumable2 = consumable2Now;
 
-  // 6a. Sync fluid camera + coarse field. The fluid grid is a
-  //     camera-anchored window; the coarse field is a world-anchored,
-  //     low-res velocity memory that feeds the window boundary.
+  // 6a. Sync the fluid camera. The authority texture is registered above,
+  //     before simulation ticks, and remains world-anchored for boundary
+  //     inflow when the camera scrolls.
   //
-  //     Order each frame:
-  //       1. Refresh the coarse field from the live fluid + a well-driven
-  //          baseline. In-window cells capture transient features; cells
-  //          outside the window retain prior coarse velocity with decay.
-  //       2. If the camera moved, translate the fluid by the camera UV
-  //          delta. Texels scrolling in from outside read from the coarse
-  //          field at the corresponding world position.
-  //       3. Advance the fluid camera state so the next frame's
-  //          worldToFluidUV() calls produce the correct mapping.
+  //     Camera translation still reads the authority field for off-window
+  //     inflow; it never regenerates a client-side well baseline.
   if (fluid) {
     const [prevFcamX, prevFcamY] = getFluidCamera();
-    fluid.updateCoarseField([prevFcamX, prevFcamY], GRID_WINDOW, WORLD_SCALE, wellSystem.wells);
 
     let dCamX = camX - prevFcamX;
     let dCamY = camY - prevFcamY;
@@ -4772,7 +4701,10 @@ function gameLoop(now) {
     runId: remoteSnapshot?.session?.runId || null,
     frameId: remoteSnapshot?.snapshotId || Math.floor(totalTime * 60),
     scene: collectThreeSceneState(),
-    vfxEvents,
+    events: [
+      ...(remoteSnapshot?.recentEvents || []),
+      ...vfxEvents,
+    ],
     vfxConfig: CONFIG.vfx,
   }, { qualityTier: rendererBackend?.renderQuality });
   const composerStart = performance.now();
@@ -4894,10 +4826,6 @@ function gameLoop(now) {
       );
       renderPhantom(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime);
 
-      // INHIBITOR HAUNTS — pre-spawn silhouette glimpses while pressure
-      // climbs toward the wake threshold. See declaration comments.
-      tickHaunt(simState.runElapsedTime, overlayCanvas.width, overlayCanvas.height);
-      renderHaunt(ctx, simState.runElapsedTime);
     }
 
     // Hull ability visual effects
@@ -5433,6 +5361,13 @@ function gameLoop(now) {
   // Show/hide HUD based on phase
   if (inMenu) hideHUD();
   else if (gamePhase === 'playing') showHUD();
+
+  rulerOverlayStats = drawRulerOverlay(ctx, {
+    presentation,
+    canvasW: overlayCanvas.width,
+    canvasH: overlayCanvas.height,
+    reducedMotion: currentUiMotionSettings().reducedMotion,
+  });
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {

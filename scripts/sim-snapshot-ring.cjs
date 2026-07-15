@@ -1,4 +1,5 @@
 const { PROTOCOL_VERSION } = require("./sim-protocol.cjs");
+const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
 
 const DEFAULT_SNAPSHOT_RING_CAPACITY = 32;
 const DEFAULT_BODY_SCHEMA_VERSION = 1;
@@ -83,7 +84,8 @@ class SimSnapshotRing {
   }
 
   append(snapshot = {}, metadata = {}) {
-    const source = { ...cloneJson(snapshot), ...cloneJson(metadata) };
+    const { maxBytes = Infinity, budgetLabel = "Snapshot", ...storedMetadata } = metadata;
+    const source = { ...cloneJson(snapshot), ...cloneJson(storedMetadata) };
     const snapshotRunId = source.runId === undefined || source.runId === null
       ? this.runId
       : normalizeRunId(source.runId);
@@ -116,6 +118,14 @@ class SimSnapshotRing {
       snapshotSchemaVersion: normalizeSeq(source.snapshotSchemaVersion, DEFAULT_SNAPSHOT_SCHEMA_VERSION),
       lastEventSeq: normalizeSeq(source.lastEventSeq),
     };
+
+    if (Number.isFinite(Number(maxBytes))) {
+      assertSerializedJsonBudget(stored, maxBytes, {
+        label: budgetLabel,
+        pretty: true,
+        trailingNewline: true,
+      });
+    }
 
     this.nextSnapshotId = snapshotId + 1;
     this.snapshots.push(stored);

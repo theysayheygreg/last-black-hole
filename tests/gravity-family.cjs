@@ -9,7 +9,7 @@ const path = require("path");
 const { TestRunner, assert } = require("./helpers.cjs");
 
 const WELL = { mass: 1.5 };
-const PRODUCTION_PARAMS = {
+const LEGACY_PRODUCTION_PARAMS = {
   player: {
     strength: 0.6,
     referenceDistance: 0.25,
@@ -39,8 +39,22 @@ const PRODUCTION_PARAMS = {
   },
 };
 
+const CURRENT_PRODUCTION_PARAMS = {
+  ...LEGACY_PRODUCTION_PARAMS,
+  wreck: {
+    referenceDriftSpeed: 0.003,
+    dragRate: 1.5,
+    referenceDistance: 1,
+    minimumDistance: 0.02,
+    falloff: 1.5,
+    rangeMode: "cutoff",
+    maxRange: 0.8,
+    zeroDistanceThreshold: 0.001,
+  },
+};
+
 function oldMagnitude(bodyClass, dist) {
-  const params = PRODUCTION_PARAMS[bodyClass];
+  const params = LEGACY_PRODUCTION_PARAMS[bodyClass];
   if (dist < params.zeroDistanceThreshold) return 0;
   if (params.rangeMode !== "unbounded" && dist > params.maxRange) return 0;
   const safeDist = Math.max(dist, params.minimumDistance);
@@ -61,7 +75,7 @@ async function run() {
   const { worldDirectionTo } = await import("../src/coords.js");
 
   await runner.run("Authority profiles expose the named production parameters", async () => {
-    for (const [bodyClass, expected] of Object.entries(PRODUCTION_PARAMS)) {
+    for (const [bodyClass, expected] of Object.entries(CURRENT_PRODUCTION_PARAMS)) {
       for (const [name, value] of Object.entries(expected)) {
         assert(WELL_GRAVITY_PARAMS[bodyClass][name] === value,
           `${bodyClass}.${name}: expected ${value}, got ${WELL_GRAVITY_PARAMS[bodyClass][name]}`);
@@ -72,14 +86,13 @@ async function run() {
   await runner.run("Shared authority family preserves the representative matrix", async () => {
     const distances = [0.0001, 0.001, 0.1, 0.15, 0.25, 0.5, 0.8, 1.0, 1.2, 4.0];
     let rows = 0;
-    for (const bodyClass of Object.keys(PRODUCTION_PARAMS)) {
+    for (const bodyClass of Object.keys(LEGACY_PRODUCTION_PARAMS)) {
       for (const distance of distances) {
         const direction = { dist: distance, nx: 1, ny: 0 };
         const gravity = wellGravityVector(
           bodyClass,
           direction,
-          WELL.mass,
-          PRODUCTION_PARAMS[bodyClass]
+          WELL.mass
         );
         const magnitude = wellGravityMagnitude(bodyClass, distance, WELL.mass);
         const expected = oldMagnitude(bodyClass, distance);
@@ -97,13 +110,12 @@ async function run() {
 
   await runner.run("Wrapped well direction points inward for every body class", async () => {
     let rows = 0;
-    for (const bodyClass of Object.keys(PRODUCTION_PARAMS)) {
+    for (const bodyClass of Object.keys(LEGACY_PRODUCTION_PARAMS)) {
       const direction = worldDirectionTo(2.99, 1.5, 0.01, 1.5);
       const gravity = wellGravityVector(
         bodyClass,
         direction,
-        WELL.mass,
-        PRODUCTION_PARAMS[bodyClass]
+        WELL.mass
       );
       assert(direction.nx > 0 && direction.ny === 0,
         `${bodyClass}: wrapped direction was not inward (+x)`);

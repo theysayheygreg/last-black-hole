@@ -175,7 +175,7 @@ export class StarSystem {
     }
   }
 
-  injectIntoFluid(fluid, dt) {
+  injectIntoFluid(fluid, dt, { authorityDriven = false } = {}) {
     const cfg = CONFIG.stars;
     const s = uvScale();
     const s2 = s * s;
@@ -185,18 +185,20 @@ export class StarSystem {
       const td = star.typeDef;
       const [fu, fv] = worldToFluidUV(star.wx, star.wy);
 
-      // Outward push: NEGATIVE gravity, scaled by type
-      fluid.applyWellForce(
-        [fu, fv],
-        -cfg.radiationStrength * star.mass * td.pushMult * Math.pow(s, cfg.falloff),
-        cfg.falloff,
-        cfg.fluidClampRadius,
-        cfg.orbitalStrength * star.orbitalDir,
-        dt,
-        cfg.fluidTerminalSpeed * s
-      );
+      if (!authorityDriven) {
+        fluid.applyWellForce(
+          [fu, fv],
+          -cfg.radiationStrength * star.mass * td.pushMult * Math.pow(s, cfg.falloff),
+          cfg.falloff,
+          cfg.fluidClampRadius,
+          cfg.orbitalStrength * star.orbitalDir,
+          dt,
+          cfg.fluidTerminalSpeed * s,
+        );
+      }
 
-      // Bright core — type-colored visual density
+      // The core dye remains honest presentation in both paths. Remote star
+      // flow is supplied by the authoritative field, never reconstructed.
       const coreRadius = cfg.coreBrightness * 0.025 * s2 * td.sizeMult;
       fluid.visualSplat(fu, fv, coreRadius,
         cfg.coreBrightness * td.coreDensity[0],
@@ -210,7 +212,7 @@ export class StarSystem {
     if (!options.visualOnly) {
       this.tick(dt, wellSystem, waveRings);
     }
-    this.injectIntoFluid(fluid, dt);
+    this.injectIntoFluid(fluid, dt, options);
   }
 
   applyToShip(ship, dt = 1 / 60) {

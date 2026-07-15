@@ -6,8 +6,8 @@
  * counts. The older template helpers remain available for design experiments,
  * but they do not describe a launched authoritative run.
  *
- * Selection: rollSignature(mapScale) picks a random signature whose
- * mapSizes includes the current scale, with streak protection (never
+ * Selection: rollSignature(mapIdOrScale) picks a random signature from the
+ * canonical map-id pool, with streak protection (never
  * the same signature twice in a row).
  *
  * Application: applySignatureConfig() deep-merges the signature's config
@@ -24,11 +24,13 @@ import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES } from './seeded-generation.js';
 import {
   SIGNATURE_DEFINITIONS,
+  SIGNATURE_POOLS_BY_MAP_ID,
   SIGNATURE_POOLS_BY_MAP_SIZE,
   LAYOUT_MULTIPLIERS,
 } from './content/signatures.js';
+import { MAP_SCALE_REGISTRY } from './content/map-scales.js';
 
-export { SIGNATURE_DEFINITIONS, SIGNATURE_POOLS_BY_MAP_SIZE, LAYOUT_MULTIPLIERS };
+export { SIGNATURE_DEFINITIONS, SIGNATURE_POOLS_BY_MAP_ID, SIGNATURE_POOLS_BY_MAP_SIZE, LAYOUT_MULTIPLIERS };
 
 function cloneRoute(route) {
   return route ? JSON.parse(JSON.stringify(route)) : null;
@@ -95,11 +97,16 @@ let _lastSignature = null;
  * Roll a cosmic signature appropriate for the given map scale.
  * Streak protection: never the same signature twice in a row.
  *
- * @param {number} mapScale — WORLD_SCALE of the map (3, 5, or 10)
+ * @param {string|number} mapIdOrScale — canonical map id or registry dimension
  * @returns {{ name, flavor, mechanical, config, layout }}
  */
-export function rollSignature(mapScale, rng = Math.random) {
-  const ids = SIGNATURE_POOLS_BY_MAP_SIZE[mapScale] || [];
+export function rollSignature(mapIdOrScale, rng = Math.random) {
+  const mapId = typeof mapIdOrScale === 'string'
+    ? mapIdOrScale
+    : Object.entries(MAP_SCALE_REGISTRY).find(([, definition]) => (
+      definition.dimensions.width === Number(mapIdOrScale)
+    ))?.[0];
+  const ids = SIGNATURE_POOLS_BY_MAP_ID[mapId] || [];
   const signatures = ids.map(id => SIGNATURE_DEFINITIONS[id]).filter(Boolean);
   const pool = signatures.filter(s => s.id !== _lastSignature);
 

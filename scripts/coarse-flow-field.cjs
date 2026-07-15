@@ -1,23 +1,25 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
+const { wrapPosition, wrappedDelta } = require("./sim/world-geometry.cjs");
+const { AMBIENT_FLOOR, BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
+const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
 const FORCE_MIN_DIST = 0.15;
 
 function wrapWorld(value, worldScale) {
-  let wrapped = value;
-  while (wrapped < 0) wrapped += worldScale;
-  while (wrapped >= worldScale) wrapped -= worldScale;
-  return wrapped;
+  return wrapPosition(value, worldScale);
 }
 
 function worldDisplacement(a, b, worldScale) {
-  let delta = b - a;
-  if (delta > worldScale / 2) delta -= worldScale;
-  if (delta < -worldScale / 2) delta += worldScale;
-  return delta;
+  return wrappedDelta(a, b, worldScale);
 }
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+function signatureMultiplier(well, name) {
+  const value = Number(well?.fabricSignature?.parameters?.[name]);
+  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
@@ -38,13 +40,36 @@ function buildCoarseFlowField({
   wellGravityScale = 0.6,
   wellGravityFalloff = 1.5,
   wellGravityMaxRange = 1.2,
+  seededSea = null,
   waveShipPush = 0.8,
   waveWidth = 0.1,
+  collapseParameters = {},
+  maxCells = Infinity,
 }) {
   const safeCellSize = Math.max(0.05, Number(cellSize) || 0.25);
   const columns = Math.max(1, Math.ceil(worldScale / safeCellSize));
   const rows = Math.max(1, Math.ceil(worldScale / safeCellSize));
-  const cells = new Array(columns * rows);
+  const cellCount = columns * rows;
+  const cellLimit = Number(maxCells);
+  if (Number.isFinite(cellLimit) && cellCount > cellLimit) {
+    throw new RangeError(`Coarse field requires ${cellCount} cells, exceeding the ${cellLimit}-cell budget`);
+  }
+  const cells = new Array(cellCount);
+  const seededSeaAmbientMultiplier = Number.isFinite(Number(collapseParameters.seededSeaAmbientMultiplier))
+    ? Number(collapseParameters.seededSeaAmbientMultiplier)
+    : 1;
+  const liveWavePushMultiplier = Number.isFinite(Number(collapseParameters.liveWavePushMultiplier))
+    ? Number(collapseParameters.liveWavePushMultiplier)
+    : 1;
+  const wellById = new Map(wells.map((well) => [String(well?.id ?? well?.name ?? ''), well]));
+  const seededSeaSourceMultipliers = Object.fromEntries(
+    wells
+      .filter((well) => well?.id != null || well?.name != null)
+      .map((well) => [
+        String(well.id ?? well.name),
+        signatureMultiplier(well, 'seededSeaAmbientMultiplier'),
+      ])
+  );
 
   for (let row = 0; row < rows; row++) {
     const wy = wrapWorld((row + 0.5) * safeCellSize, worldScale);
@@ -56,6 +81,8 @@ function buildCoarseFlowField({
       let gravityY = 0;
       let waveX = 0;
       let waveY = 0;
+      let ambientX = 0;
+      let ambientY = 0;
       let hazard = 0;
       let surf = 0;
       let signalShadow = 0;
@@ -76,10 +103,10 @@ function buildCoarseFlowField({
         const dir = well.orbitalDir || 1;
         const currentAccel = orbitalCurrentSpeed(
           dist,
-          wellCurrentScale,
+          wellCurrentScale * signatureMultiplier(well, 'currentStrengthMultiplier'),
           well.mass || 1,
           wellCurrentFalloff,
-          wellCurrentMaxRange
+          wellCurrentMaxRange * signatureMultiplier(well, 'currentReachMultiplier')
         );
         if (currentAccel > 0) {
           currentX += (-dy / dist) * dir * currentAccel;
@@ -91,9 +118,9 @@ function buildCoarseFlowField({
         }
 
         const gravityStrength = wellGravityMagnitude("player", dist, well.mass || 1, {
-          strength: wellGravityScale,
+          strength: wellGravityScale * signatureMultiplier(well, 'gravityStrengthMultiplier'),
           falloff: wellGravityFalloff,
-          maxRange: wellGravityMaxRange,
+          maxRange: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),
         });
         gravityX += (dx / dist) * gravityStrength;
         gravityY += (dy / dist) * gravityStrength;
@@ -110,6 +137,20 @@ function buildCoarseFlowField({
         }
       }
 
+      const ambient = sampleSeededSea(seededSea, wx, wy, {
+        ambientMultiplier: seededSeaAmbientMultiplier,
+        sourceMultipliers: seededSeaSourceMultipliers,
+      });
+      ambientX = ambient.x;
+      ambientY = ambient.y;
+      currentX += ambientX;
+      currentY += ambientY;
+      const ambientMagnitude = Math.hypot(ambientX, ambientY);
+      if (ambientMagnitude > bestCurrent) {
+        bestCurrent = ambientMagnitude;
+        sourceWellId = ambient.sourceWellId;
+      }
+
       const halfWidth = waveWidth * 0.5;
       for (const ring of waveRings) {
         const dx = worldDisplacement(ring.sourceWX, wx, worldScale);
@@ -119,7 +160,9 @@ function buildCoarseFlowField({
         if (dist < 0.001 || distFromFront > halfWidth) continue;
         const bandPosition = distFromFront / halfWidth;
         const profile = Math.cos(bandPosition * Math.PI * 0.5);
-        const accel = waveShipPush * (ring.amplitude || 0) * profile;
+        const sourceWell = ring.sourceWellId == null ? null : wellById.get(String(ring.sourceWellId));
+        const ringMultiplier = signatureMultiplier(sourceWell, 'liveWavePushMultiplier');
+        const accel = waveShipPush * liveWavePushMultiplier * ringMultiplier * (ring.amplitude || 0) * profile;
         waveX += (dx / dist) * accel;
         waveY += (dy / dist) * accel;
         hazard = Math.max(hazard, clamp01(accel));
@@ -133,6 +176,8 @@ function buildCoarseFlowField({
       cells[row * columns + col] = {
         currentX,
         currentY,
+        ambientX,
+        ambientY,
         gravityX,
         gravityY,
         waveX,
@@ -151,8 +196,39 @@ function buildCoarseFlowField({
     cellSize: safeCellSize,
     columns,
     rows,
+    authorityFloor: BASE_THRUST_ACCEL * AMBIENT_FLOOR,
     cells,
   };
+}
+
+function serializeCoarseFlowField(field, tick = null, { maxCells = Infinity, maxBytes = Infinity } = {}) {
+  if (!field) return null;
+  const cellLimit = Number(maxCells);
+  if (Number.isFinite(cellLimit) && field.cells.length > cellLimit) {
+    throw new RangeError(`Coarse field packet has ${field.cells.length} cells, exceeding the ${cellLimit}-cell budget`);
+  }
+  const packed = Buffer.allocUnsafe(field.cells.length * 8);
+  for (let index = 0; index < field.cells.length; index += 1) {
+    const cell = field.cells[index];
+    packed.writeFloatLE(Number(cell.currentX) || 0, index * 8);
+    packed.writeFloatLE(Number(cell.currentY) || 0, index * 8 + 4);
+  }
+  const packet = {
+    schemaVersion: 1,
+    tick: Number.isInteger(tick) ? tick : null,
+    encoding: "float32le-current-y-down-row-major-v1",
+    worldScale: field.worldScale,
+    cellSize: field.cellSize,
+    columns: field.columns,
+    rows: field.rows,
+    authorityFloor: field.authorityFloor,
+    cellCount: field.cells.length,
+    data: packed.toString("base64"),
+  };
+  if (Number.isFinite(Number(maxBytes))) {
+    assertSerializedJsonBudget(packet, maxBytes, { label: "Coarse field packet" });
+  }
+  return packet;
 }
 
 function sampleCoarseFlowField(field, wx, wy) {
@@ -197,6 +273,8 @@ function sampleCoarseFlowField(field, wx, wy) {
 
   const currentX = bilerp("currentX");
   const currentY = bilerp("currentY");
+  const ambientX = bilerp("ambientX");
+  const ambientY = bilerp("ambientY");
   const gravityX = bilerp("gravityX");
   const gravityY = bilerp("gravityY");
   const waveX = bilerp("waveX");
@@ -225,6 +303,9 @@ function sampleCoarseFlowField(field, wx, wy) {
   return {
     currentX: bilerp("currentX"),
     currentY: bilerp("currentY"),
+    ambientX,
+    ambientY,
+    ambientMagnitude: Math.min(BASE_THRUST_ACCEL * 0.30, Math.hypot(ambientX, ambientY)),
     gravityX: bilerp("gravityX"),
     gravityY: bilerp("gravityY"),
     waveX: bilerp("waveX"),
@@ -239,4 +320,5 @@ function sampleCoarseFlowField(field, wx, wy) {
 module.exports = {
   buildCoarseFlowField,
   sampleCoarseFlowField,
+  serializeCoarseFlowField,
 };

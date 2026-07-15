@@ -1,7 +1,7 @@
 {
   "player": {
     "thrustAccel": 2.5,
-    "baseDragPer60HzFrame": 0.015,
+    "coastHalfLifeSeconds": 0.7643727575403364,
     "fluidCoupling": 1.2,
     "brakeThrustScale": 0.4,
     "brakeFuelScale": 0.6,

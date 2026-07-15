@@ -284,18 +284,6 @@ function frame(now) {
   simAccumulator += dtRaw;
   let steps = 0;
   while (simAccumulator >= SIM_DT && steps < CONFIG.sim.maxStepsPerFrame) {
-    const aT = CONFIG.fluid.ambientTurbulence;
-    const aD = CONFIG.fluid.ambientDensity;
-    if (aT > 0 || aD > 0) {
-      fluid.splat(
-        Math.random(), Math.random(),
-        (Math.random() - 0.5) * aT,
-        (Math.random() - 0.5) * aT,
-        0.04,
-        aD * 0.5, aD * 0.6, aD * 1.0,
-      );
-    }
-
     fluid.fadeVisualDensity(CONFIG.fluid.visualDensityFade ?? 0.92);
 
     wellSystem.update(fluid, SIM_DT, totalTime);
@@ -312,11 +300,9 @@ function frame(now) {
   camX = CAMERA_CENTER_X + Math.sin((totalTime / CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
   camY = CAMERA_CENTER_Y + Math.cos((totalTime / CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
 
-  // --- Sync fluid camera. Refresh coarse flow before translating so the
-  // leading edge can pull in remembered world currents. ---
+  // --- Sync fluid camera. Offline title retains its existing local well flow. ---
   {
     const [prevFcamX, prevFcamY] = getFluidCamera();
-    fluid.updateCoarseField([prevFcamX, prevFcamY], GRID_WINDOW, WORLD_SCALE, wellSystem.wells);
     const dCamX = camX - prevFcamX;
     const dCamY = camY - prevFcamY;
     if (dCamX !== 0 || dCamY !== 0) {

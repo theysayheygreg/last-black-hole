@@ -123,7 +123,6 @@
         "slipStream": {
           "type": "passive",
           "followDist": 0.1,
-          "speedBonus": 0.2,
           "signalReduction": 0.3
         }
       }
@@ -200,7 +199,6 @@
         "harmonicPulse": {
           "type": "enhanced_pulse",
           "eddyDuration": 6,
-          "eddyStrength": 0.03,
           "maxEddies": 3
         },
         "resonanceTap": {

@@ -25,12 +25,18 @@
     "maxWaveInfluencesPerPlayer",
     "maxPickupChecksPerPlayer",
     "maxPortalChecksPerPlayer",
-    "clientPerfProfile"
+    "clientPerfProfile",
+    "maxCoarseFieldCells",
+    "snapshotBudgetBytes",
+    "snapshotBudgetBytesPerSecond",
+    "ballparkSyncBudgetMs"
   ],
   "CLIENT_PERF_PROFILES": {
     "fixedGrid": {
       "id": "fixedGrid",
       "fluidResolution": 192,
+      "localWindowWorldUnits": 3,
+      "coarseTextureResolution": 64,
       "remotePresentationExtrapolateLimit": 0.75,
       "perfSmoothing": 0.12
     }
@@ -48,7 +54,7 @@
       "fieldTickHz": 10,
       "useCoarseField": false,
       "flowFieldCellSize": 0.25,
-      "fieldFlowScale": 0.18,
+      "fieldFlowScale": 1.0,
       "entityRelevanceRadius": 1.4,
       "scavengerRelevanceRadius": 1.8,
       "spawnScavengersBase": 1,
@@ -62,7 +68,11 @@
       "maxWaveInfluencesPerPlayer": 6,
       "maxPickupChecksPerPlayer": 4,
       "maxPortalChecksPerPlayer": 4,
-      "clientPerfProfile": "fixedGrid"
+      "clientPerfProfile": "fixedGrid",
+      "maxCoarseFieldCells": 256,
+      "snapshotBudgetBytes": 200000,
+      "snapshotBudgetBytesPerSecond": 2000000,
+      "ballparkSyncBudgetMs": 8
     },
     "medium": {
       "profileId": "medium",
@@ -76,7 +86,7 @@
       "fieldTickHz": 6,
       "useCoarseField": true,
       "flowFieldCellSize": 0.32,
-      "fieldFlowScale": 0.22,
+      "fieldFlowScale": 1.0,
       "entityRelevanceRadius": 1.2,
       "scavengerRelevanceRadius": 1.6,
       "spawnScavengersBase": 1,
@@ -90,7 +100,11 @@
       "maxWaveInfluencesPerPlayer": 5,
       "maxPickupChecksPerPlayer": 3,
       "maxPortalChecksPerPlayer": 3,
-      "clientPerfProfile": "fixedGrid"
+      "clientPerfProfile": "fixedGrid",
+      "maxCoarseFieldCells": 2304,
+      "snapshotBudgetBytes": 350000,
+      "snapshotBudgetBytesPerSecond": 2800000,
+      "ballparkSyncBudgetMs": 10
     },
     "large": {
       "profileId": "large",
@@ -104,7 +118,7 @@
       "fieldTickHz": 4,
       "useCoarseField": true,
       "flowFieldCellSize": 0.45,
-      "fieldFlowScale": 0.28,
+      "fieldFlowScale": 1.0,
       "entityRelevanceRadius": 1,
       "scavengerRelevanceRadius": 1.4,
       "spawnScavengersBase": 2,
@@ -118,12 +132,11 @@
       "maxWaveInfluencesPerPlayer": 4,
       "maxPickupChecksPerPlayer": 2,
       "maxPortalChecksPerPlayer": 2,
-      "clientPerfProfile": "fixedGrid"
+      "clientPerfProfile": "fixedGrid",
+      "maxCoarseFieldCells": 4096,
+      "snapshotBudgetBytes": 500000,
+      "snapshotBudgetBytesPerSecond": 4000000,
+      "ballparkSyncBudgetMs": 12
     }
-  },
-  "MAP_SESSION_PROFILES": {
-    "shallows": "small",
-    "expanse": "medium",
-    "deep-field": "large"
   }
 }

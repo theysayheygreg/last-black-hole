@@ -3,6 +3,7 @@
 // gameplay callbacks, so Three and future native renderers share one boundary.
 
 import { CAMERA_VIEW } from '../coords.js';
+import { FORCE_LEDGER_CLASSES } from '../ruler-contract.js';
 import {
   PRESENTATION_PALETTE_ID,
   PRESENTATION_ROLE_HINTS,
@@ -55,6 +56,94 @@ function velocity(source = {}) {
   return Object.freeze({ x, y, speed: Math.hypot(x, y) });
 }
 
+function forceVector(source = {}) {
+  const x = finite(source.x);
+  const y = finite(source.y);
+  return Object.freeze({ x, y, magnitude: Math.hypot(x, y) });
+}
+
+function forceLedger(source = null) {
+  if (!source) return null;
+  const vectors = {};
+  for (const name of FORCE_LEDGER_CLASSES) vectors[name] = forceVector(source.vectors?.[name]);
+  return Object.freeze({
+    tick: Math.max(0, Math.floor(finite(source.tick))),
+    dt: Math.max(0, finite(source.dt)),
+    unit: text(source.unit, 'm/s^2'),
+    vectors: Object.freeze(vectors),
+    total: forceVector(source.total),
+    deltaV: forceVector(source.deltaV_mps),
+  });
+}
+
+function normalizeParameterVector(source = null) {
+  if (!source || typeof source !== 'object') return Object.freeze({});
+  const vector = {};
+  for (const key of ['seededSeaAmbientMultiplier', 'liveWavePushMultiplier']) {
+    const value = optionalFinite(source[key]);
+    if (value !== undefined) vector[key] = value;
+  }
+  return Object.freeze(vector);
+}
+
+function normalizeCollapseEpoch(source = null) {
+  if (!source || typeof source !== 'object' || !source.epochId) return null;
+  return Object.freeze({
+    epochId: id(source.epochId, 'collapse-epoch-unknown'),
+    epochIndex: Math.max(0, Math.floor(finite(source.epochIndex))),
+    scheduledTime: Math.max(0, finite(source.scheduledTime)),
+    transitionCount: Math.max(0, Math.floor(finite(source.transitionCount))),
+    parameterVector: normalizeParameterVector(source.parameterVector),
+  });
+}
+
+function normalizeCollapseEpochSchedule(source = []) {
+  if (!Array.isArray(source)) return Object.freeze([]);
+  return Object.freeze(source.map((entry) => normalizeCollapseEpoch(entry)).filter(Boolean));
+}
+
+function rulerFacts(source = null) {
+  const sling = source?.slingshot;
+  if (!sling) return null;
+  const capture = sling.captureRadius_m || {};
+  const magnetism = sling.magnetism || {};
+  const coyote = sling.coyoteTime || {};
+  const payoff = sling.payoffCurve || {};
+  const chain = sling.chainWindow || {};
+  return Object.freeze({
+    source: text(source.source, 'authority'),
+    slingshot: Object.freeze({
+      captureRadius: Object.freeze({
+        well: Math.max(0, finite(capture.well)),
+        star: Math.max(0, finite(capture.star)),
+        planetoid: Math.max(0, finite(capture.planetoid)),
+      }),
+      magnetism: Object.freeze({
+        active: magnetism.active === true,
+        entry: forceVector(magnetism.entry),
+        locked: forceVector(magnetism.locked),
+        bendDegrees: Math.max(0, finite(magnetism.bend_deg)),
+      }),
+      coyoteTime: Object.freeze({
+        implemented: coyote.implemented === true,
+        durationMs: Math.max(0, finite(coyote.duration_ms)),
+        remainingMs: Math.max(0, finite(coyote.remaining_ms)),
+      }),
+      payoffCurve: Object.freeze({
+        active: payoff.active === true,
+        entry: forceVector(payoff.entry),
+        exit: forceVector(payoff.exit),
+        ratio: Math.max(0, finite(payoff.ratio)),
+      }),
+      chainWindow: Object.freeze({
+        active: chain.active === true,
+        durationSeconds: Math.max(0, finite(chain.duration_s)),
+        remainingSeconds: Math.max(0, finite(chain.remaining_s)),
+      }),
+    }),
+  });
+}
+
 function hull(source = {}) {
   return Object.freeze({
     type: text(source.hullType || source.shipType, 'drifter').toLowerCase(),
@@ -88,6 +177,53 @@ function anchor(source = {}) {
   });
 }
 
+function telegraph(source = null) {
+  if (!source) return null;
+  const normalizeAnchor = (value) => anchor({
+    wx: value?.wx,
+    wy: value?.wy,
+    range: value?.range,
+    type: value?.type,
+    energy: value?.energy,
+    chainCount: value?.chainCount,
+  });
+  const lock = source.lock;
+  const ownedArc = source.ownedArc;
+  const ghost = source.releaseGhost;
+  return Object.freeze({
+    phase: text(source.phase, 'idle'),
+    aimCue: source.aimCue ? Object.freeze({
+      anchor: normalizeAnchor(source.aimCue.anchor),
+      distance: Math.max(0, finite(source.aimCue.distance)),
+      coyoteActive: source.aimCue.coyoteActive === true,
+      coyoteRemainingMs: Math.max(0, finite(source.aimCue.coyoteRemainingMs)),
+    }) : null,
+    lock: lock ? Object.freeze({
+      anchor: normalizeAnchor(lock.anchor),
+      entry: forceVector(lock.entry),
+      locked: forceVector(lock.locked),
+      bendDegrees: Math.max(0, finite(lock.bendDegrees)),
+    }) : null,
+    ownedArc: ownedArc ? Object.freeze({
+      anchor: normalizeAnchor(ownedArc.anchor),
+      orbitDir: finite(ownedArc.orbitDir),
+      arcRadians: finite(ownedArc.arcRadians),
+      quarterTurns: Math.max(0, finite(ownedArc.quarterTurns)),
+      energy: Math.max(0, finite(ownedArc.energy)),
+      chainCount: Math.max(0, Math.floor(finite(ownedArc.chainCount))),
+    }) : null,
+    releaseGhost: ghost ? Object.freeze({
+      anchor: normalizeAnchor(ghost.anchor),
+      entry: forceVector(ghost.entry),
+      exit: forceVector(ghost.exit),
+      direction: forceVector(ghost.direction),
+      speedCap: Math.max(0, finite(ghost.speedCap)),
+      quarterTurns: Math.max(0, finite(ghost.quarterTurns)),
+      remainingMs: Math.max(0, finite(ghost.remainingMs)),
+    }) : null,
+  });
+}
+
 function normalizeLocalPlayer(source = null, scene = {}) {
   if (!source) return null;
   const motion = velocity(source);
@@ -104,10 +240,14 @@ function normalizeLocalPlayer(source = null, scene = {}) {
       pathState: pathState(source, sling),
     }),
     hull: hull(source),
+    forceLedger: forceLedger(source.forceLedger),
+    ruler: rulerFacts(source.ruler),
     slingshot: Object.freeze({
       engaged: Boolean(source.slingshotEngaged || sling.engaged),
       affordance: anchor(sling.affordance),
       anchor: anchor(sling.engaged || source.slingshotAnchor),
+      phase: text(sling.phase, source.slingshotPhase || 'idle'),
+      telegraph: telegraph(sling.telegraph),
     }),
     status: text(source.status, 'alive'),
     hint: hint('player'),
@@ -123,6 +263,9 @@ function normalizeEntity(family, source, index) {
     case 'wells':
       return Object.freeze({
         ...base,
+        catalogId: id(source.catalogId, 'base-well'),
+        behaviorId: id(source.behaviorId, 'base-well'),
+        mass: Math.max(0, finite(source.mass, 1)),
         visual: Object.freeze({
           coreRadius: Math.max(0.001, finite(source.killRadius, 0.04)),
           contourRadius: Math.max(0.001, finite(source.ringOuter, 0.1)),
@@ -238,11 +381,14 @@ function normalizeWorld(scene = {}) {
       signalShadow: finite(scene.semanticField.shipSample.signalShadow),
     }) : null,
   });
+  world.collapseEpoch = normalizeCollapseEpoch(scene.collapseEpoch);
+  world.collapseEpochSchedule = normalizeCollapseEpochSchedule(scene.collapseEpochSchedule);
   return Object.freeze(world);
 }
 
 function normalizeEvent(source, index) {
   if (!source || !source.type) return null;
+  const details = source.payload && typeof source.payload === 'object' ? source.payload : source;
   const eventId = id(source.eventId || source.id || source.seq, `presentation-event-${index}`);
   const event = {
     eventId,
@@ -261,9 +407,26 @@ function normalizeEvent(source, index) {
   for (const key of ['glyph', 'cleanGlyph', 'seed', 'role', 'variant']) {
     if (source[key] != null) event[key] = text(source[key]);
   }
+  for (const key of ['wellId', 'catalogId', 'behaviorId', 'waveId', 'tellId', 'epochId', 'sourceEntityId']) {
+    if (source[key] != null || details[key] != null) event[key] = text(source[key] ?? details[key]);
+  }
+  if (details.source != null) event.growthSource = text(details.source);
+  if (details.reason != null) event.growthReason = text(details.reason);
+  for (const key of ['scheduledTime', 'eventTime']) {
+    const value = optionalFinite(source[key] ?? details[key]);
+    if (value !== undefined) event[key] = Math.max(0, value);
+  }
+  for (const key of ['before', 'after']) {
+    if (details[key] && typeof details[key] === 'object') {
+      event[key] = Object.freeze({
+        mass: Math.max(0, finite(details[key].mass)),
+        killRadius: Math.max(0, finite(details[key].killRadius)),
+      });
+    }
+  }
   if (source.heavy === true) event.heavy = true;
-  if (Number.isFinite(Number(source.wx)) && Number.isFinite(Number(source.wy))) {
-    event.world = point(source);
+  if (Number.isFinite(Number(source.wx ?? details.wx)) && Number.isFinite(Number(source.wy ?? details.wy))) {
+    event.world = point({ wx: source.wx ?? details.wx, wy: source.wy ?? details.wy });
   }
   return Object.freeze(event);
 }

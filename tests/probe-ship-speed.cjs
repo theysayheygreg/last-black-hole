@@ -67,7 +67,7 @@ async function probeOne(page, mapIdx) {
     const c = window.__TEST_API.getConfig();
     return {
       thrustAccel: c.ship.thrustAccel,
-      drag: c.ship.drag,
+      coastHalfLifeSeconds: c.ship.coastHalfLifeSeconds,
       fluidCoupling: c.ship.fluidCoupling,
       wellsGravity: c.wells.gravity,
       shipPullStrength: c.wells.shipPullStrength,

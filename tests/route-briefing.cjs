@@ -5,6 +5,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers.cjs");
 const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
+const { PLAYABLE_MAP_IDS, getMapScaleDefinition } = require("../scripts/content/map-scales.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SIM_PORT = 8796;
@@ -42,11 +43,11 @@ function assertRouteAnchors(map) {
 async function run() {
   const runner = new TestRunner("RouteBriefing");
   const signatureModule = await import(pathToFileURL(path.join(ROOT, "src", "signatures.js")).href);
-  const browserMaps = {
-    shallows: (await import(pathToFileURL(path.join(ROOT, "src", "maps", "shallows-3x3.js")).href)).MAP,
-    expanse: (await import(pathToFileURL(path.join(ROOT, "src", "maps", "expanse-5x5.js")).href)).MAP,
-    "deep-field": (await import(pathToFileURL(path.join(ROOT, "src", "maps", "deep-field-10x10.js")).href)).MAP,
-  };
+  const browserMaps = {};
+  for (const mapId of PLAYABLE_MAP_IDS) {
+    const definition = getMapScaleDefinition(mapId);
+    browserMaps[mapId] = (await import(pathToFileURL(path.join(ROOT, "src", "maps", definition.sourceFile)).href)).MAP;
+  }
   const authoritativeMaps = loadPlayableMaps();
 
   await runner.run("maps expose distinct, anchored cyan route identities", async () => {

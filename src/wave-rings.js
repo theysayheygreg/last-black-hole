@@ -63,9 +63,8 @@ export class WaveRingSystem {
   }
 
   /**
-   * Inject wave rings into the fluid sim as expanding velocity/density pulses.
-   * This makes the ASCII fabric itself distort when waves pass through,
-   * rather than waves being an overlay-only visual.
+   * Preserve the ring dye without injecting an unregistered velocity. The
+   * server coarse field carries the authoritative wave force.
    */
   injectIntoFluid(fluid) {
     const SPLATS_PER_RING = 16; // points around the circumference
@@ -77,8 +76,7 @@ export class WaveRingSystem {
       const [srcU, srcV] = worldToFluidUV(ring.sourceWX, ring.sourceWY);
       const radiusUV = worldRadiusToFluidUV(ring.radius);
 
-      // Inject splats around the ring circumference
-      const force = ring.amplitude * 0.003; // velocity outward push
+      // Dye the authority-driven wavefront; never add a client current.
       const brightness = ring.amplitude * 0.08 * life; // density glow
 
       for (let i = 0; i < SPLATS_PER_RING; i++) {
@@ -86,14 +84,10 @@ export class WaveRingSystem {
         const px = srcU + Math.cos(angle) * radiusUV;
         const py = srcV + Math.sin(angle) * radiusUV;
 
-        // Velocity: push outward from source
-        const vx = Math.cos(angle) * force;
-        const vy = Math.sin(angle) * force;
-
         // Cyan-white density — scale splat radius by the central GPU splat rule.
-        const { s, s2 } = splatScale();
+        const { s2 } = splatScale();
         const splatRadius = 0.004;  // UV-space base radius for wave ring splats
-        fluid.splat(px, py, vx * s, vy * s, splatRadius * s2,
+        fluid.visualSplat(px, py, splatRadius * s2,
           brightness * 0.3, brightness * 0.8, brightness);
       }
     }

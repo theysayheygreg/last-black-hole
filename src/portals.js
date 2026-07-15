@@ -127,22 +127,8 @@ export class PortalSystem {
       const [fu, fv] = worldToFluidUV(portal.wx, portal.wy);
       const strength = portal.opacity;
 
-      // Pull strength varies by type
-      const gravMult = portal.type === 'rift' ? 3.0 : portal.type === 'unstable' ? 0.5 : 1.0;
-      // Unstable: intermittent pull (stutters on/off)
-      const unstableFlicker = portal.type === 'unstable'
-        ? (Math.sin(totalTime * 8 + portal.wx * 20) > 0 ? 1 : 0)
-        : 1;
-
-      fluid.applyWellForce(
-        [fu, fv],
-        cfg.gravity * Math.pow(s, cfg.falloff) * gravMult * strength * unstableFlicker,
-        cfg.falloff,
-        cfg.fluidClampRadius,
-        cfg.orbitalStrength,
-        dt,
-        cfg.fluidTerminalSpeed * s
-      );
+      // Portal suction is intentionally zero. Portal dye is an honest visual
+      // term; gameplay current remains the server-owned field only.
 
       // Spiral density
       const spiralAngle = totalTime * cfg.spiralSpeed;

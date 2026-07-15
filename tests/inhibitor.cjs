@@ -120,40 +120,59 @@ async function run() {
   await startSimServer(SIM_PORT, { keepAlive: true, idleShutdownMs: 5000 });
 
   try {
-    await runner.run("form times drive Vessel final portal timing", async () => {
+    await runner.run("Conductor clock is seed-stable, announced, ordered, and pressure-free", async () => {
+      await startRun({ seed: 1000 });
+      const first = await getSnapshot();
+      const clock = first.inhibitor;
+      assert(clock.phase === 0 && clock.form === 0, "Expected phase 0/form 0 at match start");
+      assert(clock.waveId === "inhibitor:phase-0", "Expected stable phase-0 identity");
+      assert(!("pressure" in clock) && !("pressureFrac" in clock) && !("threshold" in clock),
+        "Inhibitor snapshot must not expose pressure or threshold fields");
+
+      const waves = clock.schedule?.severityWaves || [];
+      assert(waves.length === 3, `Expected three scheduled Inhibitor waves, got ${waves.length}`);
+      assert(waves.every((wave, index) =>
+        wave.announced === true && wave.tier === index + 1 && wave.metadata?.phase === index + 1
+      ), `Expected announced tiered waves, got ${JSON.stringify(waves)}`);
+      assert(JSON.stringify(waves.map((wave) => wave.time)) === JSON.stringify([90, 180, 270]),
+        `Expected 90-second grace and even 90-second phases, got ${waves.map((wave) => wave.time)}`);
+      const portalSchedule = first.portalSchedule;
+      const finalWindow = portalSchedule?.windows?.find((window) => window.metadata?.finalExfil);
+      assert(finalWindow?.openTime === 600 && finalWindow?.closeTime === 660,
+        "Expected the guaranteed final exfil to be declared at the main timer with a 60-second window");
+      assert(waves.every((wave, index) => index === 0 || wave.time > waves[index - 1].time),
+        "Expected strictly ordered wave times");
+      assert(waves.every((wave) => Number.isFinite(wave.budget) && wave.budget > 0),
+        "Expected positive wave budget metadata");
+      assert(first.recentEvents.some((event) =>
+        event.type === "inhibitor.waveAnnounced" &&
+        event.payload?.waveId === "inhibitor:phase-0" &&
+        event.payload?.phase === 0 &&
+        event.payload?.announced === true
+      ), "Expected announced phase-0 event identity in the authoritative journal");
+      for (const event of first.recentEvents.filter((entry) => entry.type.startsWith("inhibitor."))) {
+        assert(!("pressure" in (event.payload || {})) && !("pressureFrac" in (event.payload || {})) && !("threshold" in (event.payload || {})),
+          `Inhibitor event exposed stale pressure fields: ${JSON.stringify(event)}`);
+      }
+
+      await startRun({ seed: 1000 });
+      const second = await getSnapshot();
+      assert(JSON.stringify(second.inhibitor.schedule) === JSON.stringify(clock.schedule),
+        "Expected identical phase/wave schedule for identical authoritative seed and config");
+      assert(second.inhibitor.phase === 0 && second.inhibitor.form === 0,
+        "Expected a restarted match to return to phase 0/form 0");
+    });
+
+    await runner.run("Vessel timing cannot advance or replace the scheduled final exfil", async () => {
       await startRun({ seed: 1001 });
       await postDebugPlayerState({ wx: 0.7, wy: 0.7, signalLevel: 0.25 });
-
-      const form1 = await postDebugInhibitorState({ form: 1, wx: 4.2, wy: 4.2, pressure: 0.7, threshold: 1 });
-      assert(form1.snapshot.inhibitor.formTimes[1] != null, "Form 1 should record first-seen sim time");
-
-      const form2 = await postDebugInhibitorState({ form: 2, wx: 4.2, wy: 4.2, pressure: 1, threshold: 1 });
-      assert(form2.snapshot.inhibitor.formTimes[2] != null, "Form 2 should record first-seen sim time");
-
-      const snap = await getSnapshot();
-      await postDebugInhibitorState({
-        form: 3,
-        wx: 4.2,
-        wy: 4.2,
-        pressure: 1,
-        threshold: 1,
-        formTimes: [null, form1.snapshot.inhibitor.formTimes[1], form2.snapshot.inhibitor.formTimes[2], snap.simTime - 61],
-        finalPortalSpawned: false,
-      });
-
-      const spawned = await waitForSnapshot((snapshot) =>
-        snapshot.inhibitor.finalPortalSpawned === true &&
-        snapshot.world.portals.some((portal) => portal.finalInhibitor && portal.alive !== false)
-      );
-      const finalPortal = spawned.world.portals.find((portal) => portal.finalInhibitor);
-      assert(finalPortal.blockedByInhibitor !== true, "Guaranteed final portal must start usable");
-      const ws = spawned.session?.worldScale || 5;
-      const nearestWellClearance = spawned.world.wells.reduce((nearest, well) => {
-        const clearance = worldDistance(well.wx, well.wy, finalPortal.wx, finalPortal.wy, ws) - (Number(well.killRadius) || 0);
-        return Math.min(nearest, clearance);
-      }, Infinity);
-      assert(nearestWellClearance >= 0.18,
-        `Guaranteed final portal must clear lethal well space, got clearance ${nearestWellClearance.toFixed(3)}`);
+      const before = await getSnapshot();
+      const finalWindow = before.portalSchedule.windows.find((window) => window.metadata?.finalExfil);
+      assert(finalWindow.openTime === 600, "Expected final exfil schedule front at the main timer");
+      await postDebugInhibitorState({ form: 3, wx: 4.2, wy: 4.2 });
+      const after = await getSnapshot();
+      assert(after.inhibitor.finalPortalSpawned === false,
+        "Vessel arrival must not spawn the final exfil before its Conductor front");
     });
 
     await runner.run("Vessel blocks and unblocks portals without destroying them", async () => {
@@ -167,7 +186,7 @@ async function run() {
         alive: true,
         blockedByInhibitor: false,
       });
-      await postDebugInhibitorState({ form: 3, wx: 1.04, wy: 1.04, pressure: 1, threshold: 1 });
+      await postDebugInhibitorState({ form: 3, wx: 1.04, wy: 1.04 });
 
       const blocked = await waitForSnapshot((snapshot) => {
         const portal = snapshot.world.portals.find((entry) => entry.id === "test-exit");
@@ -200,8 +219,6 @@ async function run() {
         form: 2,
         wx: 2.0,
         wy: 2.0,
-        pressure: 1,
-        threshold: 1,
         swarmTrackTimer: 3.5,
       });
 
@@ -210,7 +227,7 @@ async function run() {
       );
       assert(swarmTrackedDecoy.inhibitor.form === 2, "Expected active Swarm form");
 
-      await postDebugInhibitorState({ form: 3, wx: 2.0, wy: 2.0, pressure: 1, threshold: 1 });
+      await postDebugInhibitorState({ form: 3, wx: 2.0, wy: 2.0 });
       const before = await getSnapshot();
       const beforeDist = worldDistance(before.inhibitor.wx, before.inhibitor.wy, 3.0, 3.0, before.session.worldScale);
       await sleep(1000);
@@ -222,7 +239,7 @@ async function run() {
     await runner.run("Vessel kill publishes the Inhibitor death cause", async () => {
       await startRun({ seed: 1004 });
       await postDebugPlayerState({ wx: 2.0, wy: 2.0, vx: 0, vy: 0, signalLevel: 0.8 });
-      await postDebugInhibitorState({ form: 3, wx: 2.01, wy: 2.01, pressure: 1, threshold: 1 });
+      await postDebugInhibitorState({ form: 3, wx: 2.01, wy: 2.01 });
 
       const dead = await waitForSnapshot((snapshot) => {
         const player = snapshot.players.find((entry) => entry.clientId === CLIENT_ID);
@@ -243,8 +260,6 @@ async function run() {
         form: 2,
         wx: wreck.wx - 0.08,
         wy: wreck.wy,
-        pressure: 1,
-        threshold: 1,
         intensity: 1,
       });
 

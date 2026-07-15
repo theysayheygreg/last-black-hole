@@ -1,0 +1,447 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "lbh-anomaly-catalog",
+  "runtimeBehaviorIds": [
+    "base-well"
+  ],
+  "tunableContract": {
+    "unitSystem": "v0.3-provisional-meters",
+    "metersPerSimUnit": 1000,
+    "stepRule": "Every numeric knob declares a unit, range, step, and start bias.",
+    "sharedFieldFamily": "well",
+    "fabricSignatureParameters": {
+      "gravityStrengthMultiplier": {
+        "unit": "x base well gravity strength",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellGravityScale"
+      },
+      "gravityReachMultiplier": {
+        "unit": "x base well gravity reach",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellGravityMaxRange"
+      },
+      "currentStrengthMultiplier": {
+        "unit": "x base well orbital-current strength",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellCurrentScale"
+      },
+      "currentReachMultiplier": {
+        "unit": "x base well orbital-current reach",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellCurrentMaxRange"
+      },
+      "seededSeaAmbientMultiplier": {
+        "unit": "x seeded sea source term",
+        "range": [0.75, 1.0],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/sim/seeded-sea.cjs:sampleSeededSea"
+      },
+      "liveWavePushMultiplier": {
+        "unit": "x live wave source term",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:waveShipPush"
+      },
+      "growthRateMultiplier": {
+        "unit": "x mass per existing growth event",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well growth",
+        "source": "scripts/sim-runtime.cjs:well.growthRate"
+      },
+      "growthWaveAmplitudeMultiplier": {
+        "unit": "x existing growth wave amplitude",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well growth tell",
+        "source": "scripts/sim-runtime.cjs:spawnWaveRing"
+      }
+    },
+    "fields": {
+      "gravityStrength": {
+        "unit": "% base thrust",
+        "range": [0, 200],
+        "step": 5,
+        "startBias": "existing well gravity",
+        "source": "CONFIG.wells.shipPullStrength"
+      },
+      "gravityReach": {
+        "unit": "m",
+        "range": [0, 2000],
+        "step": 50,
+        "startBias": "existing well gravity reach",
+        "source": "CONFIG.wells.maxRange"
+      },
+      "currentStrength": {
+        "unit": "% base thrust",
+        "range": [0, 200],
+        "step": 5,
+        "startBias": "existing orbital current",
+        "source": "CONFIG.wells.currentStrength"
+      },
+      "currentReach": {
+        "unit": "m",
+        "range": [0, 2000],
+        "step": 50,
+        "startBias": "existing orbital current reach",
+        "source": "CONFIG.wells.currentRange"
+      },
+      "killRadius": {
+        "unit": "m",
+        "range": [0, 500],
+        "step": 25,
+        "startBias": "map-authored current well radius",
+        "source": "map.wells[].killRadius"
+      },
+      "growthAmount": {
+        "unit": "mass per growth event",
+        "range": [0, 1],
+        "step": 0.01,
+        "startBias": "existing growth amount",
+        "source": "CONFIG.events.growthAmount"
+      },
+      "growthInterval": {
+        "unit": "s",
+        "range": [0, 600],
+        "step": 5,
+        "startBias": "existing growth interval",
+        "source": "CONFIG.events.growthInterval"
+      },
+      "killRadiusGrowth": {
+        "unit": "radius multiplier per mass",
+        "range": [0, 2],
+        "step": 0.05,
+        "startBias": "existing kill-radius growth",
+        "source": "CONFIG.universe.wellKillRadiusGrowth"
+      },
+      "growthWaveAmplitude": {
+        "unit": "wave amplitude",
+        "range": [0, 10],
+        "step": 0.5,
+        "startBias": "existing growth tell",
+        "source": "CONFIG.events.growthWaveAmplitude"
+      }
+    }
+  },
+  "eventContracts": {
+    "wellGrowth": {
+      "type": "well.grew",
+      "tellId": "well-growth",
+      "waveFamily": "growth"
+    }
+  },
+  "collapseEpochContract": {
+    "schemaVersion": 1,
+    "status": "provisional",
+    "boundaryMode": "match-progress",
+    "durationSource": "MATCH_MAX_SIM_TIME",
+    "parameterVectors": {
+      "seededSeaAmbientMultiplier": {
+        "unit": "x seeded ambient field term",
+        "range": [1, 1.25],
+        "step": 0.05,
+        "startBias": "identity until first collapse epoch",
+        "source": "scripts/sim/seeded-sea.cjs:sampleSeededSea"
+      },
+      "liveWavePushMultiplier": {
+        "unit": "x live wave field term",
+        "range": [1, 1.2],
+        "step": 0.05,
+        "startBias": "identity until first collapse epoch",
+        "source": "scripts/coarse-flow-field.cjs:waveShipPush"
+      }
+    },
+    "boundaries": [
+      {
+        "id": "collapse-epoch-0",
+        "progress": 0,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1,
+          "liveWavePushMultiplier": 1
+        }
+      },
+      {
+        "id": "collapse-epoch-1",
+        "progress": 0.25,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1.08,
+          "liveWavePushMultiplier": 1.05
+        }
+      },
+      {
+        "id": "collapse-epoch-2",
+        "progress": 0.5,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1.16,
+          "liveWavePushMultiplier": 1.1
+        }
+      },
+      {
+        "id": "collapse-epoch-3",
+        "progress": 0.65,
+        "parameterVector": {
+          "seededSeaAmbientMultiplier": 1.24,
+          "liveWavePushMultiplier": 1.15
+        }
+      }
+    ]
+  },
+  "catalog": {
+    "base-well": {
+      "id": "base-well",
+      "label": "Gravity well",
+      "status": "shipping",
+      "activation": "phase-1",
+      "runtimeBehaviorId": "base-well",
+      "shipping": true,
+      "fabricSignature": {
+        "id": "base-well",
+        "kind": "bounded-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "gravityStrengthMultiplier": 1.0,
+          "gravityReachMultiplier": 1.0,
+          "currentStrengthMultiplier": 1.0,
+          "currentReachMultiplier": 1.0,
+          "seededSeaAmbientMultiplier": 1.0,
+          "liveWavePushMultiplier": 1.0,
+          "growthRateMultiplier": 1.0,
+          "growthWaveAmplitudeMultiplier": 1.0
+        }
+      },
+      "interactionVerb": {
+        "id": "slingshot",
+        "authority": "movement/slingshot",
+        "skillExpression": "engage, read the arc, and release with the existing bounded payoff"
+      },
+      "tell": {
+        "state": "named well with accretion ring and readable kill edge",
+        "growth": [
+          "the specific well's mass increases",
+          "its kill radius grows",
+          "its growth wave ring identifies the source"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "round-robin-mass-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
+        "perEntity": true,
+        "schedule": "existing growth tick",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "vectorSource": "fabricSignature.parameters"
+      }
+    },
+    "micro-black-hole": {
+      "id": "micro-black-hole",
+      "label": "Micro black hole",
+      "status": "shipping",
+      "activation": "phase-2-shipping-trio",
+      "shipping": true,
+      "runtimeBehaviorId": "base-well",
+      "implementation": "base-well authority with a provisional bounded fabric vector",
+      "fabricSignature": {
+        "id": "micro-black-hole",
+        "kind": "bounded-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "gravityStrengthMultiplier": 1.15,
+          "gravityReachMultiplier": 0.75,
+          "currentStrengthMultiplier": 1.20,
+          "currentReachMultiplier": 0.80,
+          "seededSeaAmbientMultiplier": 0.90,
+          "liveWavePushMultiplier": 0.95,
+          "growthRateMultiplier": 1.15,
+          "growthWaveAmplitudeMultiplier": 0.90
+        }
+      },
+      "interactionVerb": {
+        "id": "precision-slingshot",
+        "authority": "movement/slingshot",
+        "skillExpression": "thread the short capture line and chain a clean release"
+      },
+      "tell": {
+        "id": "micro-vortex-tell",
+        "state": "tight accretion ring with a narrow gravity/current reach",
+        "growth": [
+          "the specific well's mass and kill edge increase",
+          "a compact growth ring identifies this source"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "rapid-local-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
+        "perEntity": true,
+        "schedule": "existing round-robin growth tick",
+        "massParameter": "fabricSignature.parameters.growthRateMultiplier",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring, scaled by growthWaveAmplitudeMultiplier"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "vectorSource": "fabricSignature.parameters",
+        "status": "provisional"
+      }
+    },
+    "supermassive-black-hole": {
+      "id": "supermassive-black-hole",
+      "label": "Supermassive black hole",
+      "status": "shipping",
+      "activation": "phase-2-shipping-trio",
+      "shipping": true,
+      "runtimeBehaviorId": "base-well",
+      "implementation": "base-well authority with a provisional bounded fabric vector; no time dilation",
+      "fabricSignature": {
+        "id": "supermassive-black-hole",
+        "kind": "bounded-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "gravityStrengthMultiplier": 0.95,
+          "gravityReachMultiplier": 1.25,
+          "currentStrengthMultiplier": 0.80,
+          "currentReachMultiplier": 1.25,
+          "seededSeaAmbientMultiplier": 0.95,
+          "liveWavePushMultiplier": 1.10,
+          "growthRateMultiplier": 0.85,
+          "growthWaveAmplitudeMultiplier": 1.15
+        }
+      },
+      "interactionVerb": {
+        "id": "long-orbit",
+        "authority": "movement/slingshot",
+        "skillExpression": "commit to a long orbit and release with the existing bounded payoff"
+      },
+      "tell": {
+        "id": "supermassive-anchor-tell",
+        "state": "broad slow contour with a long readable reach",
+        "growth": [
+          "the specific well's mass and kill edge increase",
+          "a wide growth ring identifies this source"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "slow-anchor-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
+        "perEntity": true,
+        "schedule": "existing round-robin growth tick",
+        "massParameter": "fabricSignature.parameters.growthRateMultiplier",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring, scaled by growthWaveAmplitudeMultiplier"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "vectorSource": "fabricSignature.parameters",
+        "status": "provisional"
+      }
+    },
+    "pulsar": {
+      "id": "pulsar",
+      "label": "Pulsar",
+      "status": "shipping",
+      "activation": "phase-2-shipping-trio",
+      "shipping": true,
+      "runtimeBehaviorId": "base-well",
+      "implementation": "base-well authority with a provisional bounded fabric vector; no bespoke periodic clock",
+      "fabricSignature": {
+        "id": "pulsar",
+        "kind": "bounded-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "gravityStrengthMultiplier": 0.90,
+          "gravityReachMultiplier": 0.90,
+          "currentStrengthMultiplier": 1.05,
+          "currentReachMultiplier": 1.00,
+          "seededSeaAmbientMultiplier": 1.00,
+          "liveWavePushMultiplier": 1.20,
+          "growthRateMultiplier": 1.00,
+          "growthWaveAmplitudeMultiplier": 1.20
+        }
+      },
+      "interactionVerb": {
+        "id": "ride-the-beat",
+        "authority": "field/wave",
+        "skillExpression": "read the existing swell front and cross it on the favorable line"
+      },
+      "tell": {
+        "id": "pulsar-beat-tell",
+        "state": "directional swell fronts make the source's rhythm readable in the fabric",
+        "growth": [
+          "the specific well's mass and kill edge increase",
+          "a strong growth ring identifies this source"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "beat-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
+        "perEntity": true,
+        "schedule": "existing round-robin growth tick",
+        "massParameter": "fabricSignature.parameters.growthRateMultiplier",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring, scaled by growthWaveAmplitudeMultiplier"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "vectorSource": "fabricSignature.parameters",
+        "status": "provisional"
+      }
+    }
+  },
+  "mapPolicies": {
+    "shallows": {
+      "mode": "fixed-curated",
+      "drawStream": null,
+      "fixedCast": [
+        "base-well"
+      ],
+      "eligibleCatalogIds": [
+        "base-well"
+      ]
+    },
+    "expanse": {
+      "mode": "seeded-draw",
+      "drawStream": "anomalyCatalog",
+      "fixedCast": [],
+      "eligibleCatalogIds": [
+        "base-well",
+        "micro-black-hole",
+        "pulsar"
+      ]
+    },
+    "deep-field": {
+      "mode": "seeded-draw",
+      "drawStream": "anomalyCatalog",
+      "fixedCast": [],
+      "eligibleCatalogIds": [
+        "base-well",
+        "micro-black-hole",
+        "pulsar",
+        "supermassive-black-hole"
+      ]
+    }
+  }
+}

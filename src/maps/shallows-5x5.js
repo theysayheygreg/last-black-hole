@@ -1,10 +1,9 @@
-/**
- * shallows-3x3.js — The original 3×3 layout, extracted verbatim from main.js init().
- */
-export const MAP = {
+import { migrateAuthoredMap } from './map-migration.js';
+
+/** Authored route layout; target dimensions come from the canonical registry. */
+export const AUTHORED_MAP = {
   id: 'shallows',
   name: 'The Shallows',
-  worldScale: 3.0,
   route: {
     id: 'first-current',
     name: 'the first current',
@@ -50,3 +49,5 @@ export const MAP = {
     { type: 'figure8', wellA: 0, wellB: 1 },
   ],
 };
+
+export const MAP = migrateAuthoredMap(AUTHORED_MAP, 'shallows');

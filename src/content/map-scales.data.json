@@ -1,0 +1,60 @@
+{
+  "MAP_SCALE_REGISTRY": {
+    "shallows": {
+      "mapId": "shallows",
+      "mapClass": "shallows",
+      "dimensions": { "width": 5, "height": 5 },
+      "profileId": "small",
+      "sourceFile": "shallows-5x5.js",
+      "legacyDimensions": { "width": 3, "height": 3 }
+    },
+    "expanse": {
+      "mapId": "expanse",
+      "mapClass": "expanse",
+      "dimensions": { "width": 15, "height": 15 },
+      "profileId": "medium",
+      "sourceFile": "expanse-15x15.js",
+      "legacyDimensions": { "width": 5, "height": 5 }
+    },
+    "deep-field": {
+      "mapId": "deep-field",
+      "mapClass": "deep-field",
+      "dimensions": { "width": 25, "height": 25 },
+      "profileId": "large",
+      "sourceFile": "deep-field-25x25.js",
+      "legacyDimensions": { "width": 10, "height": 10 }
+    }
+  },
+  "AUTHORED_MAP_CONTRACT": {
+    "densityPerWorldUnit": {
+      "wells": { "min": 0.5, "max": 1.0 },
+      "stars": { "min": 0.7, "max": 1.25 },
+      "wrecks": { "min": 1.0, "max": 2.0 },
+      "planetoids": { "min": 0.4, "max": 0.8 }
+    },
+    "travel": {
+      "minimumRouteLegWorldUnits": 0.75,
+      "maximumRouteLegFraction": 0.7,
+      "model": "canonical-direct-no-flow-baseline-v1",
+      "integrationHz": 60,
+      "sufficientDeltaV": true,
+      "tiers": {
+        "shallows": {
+          "floorSeconds": 1.4,
+          "ceilingSeconds": 1.6,
+          "observedLegSeconds": [1.48]
+        },
+        "expanse": {
+          "floorSeconds": 1.1,
+          "ceilingSeconds": 8.75,
+          "observedLegSeconds": [1.55, 8.52, 1.22]
+        },
+        "deep-field": {
+          "floorSeconds": 1.9,
+          "ceilingSeconds": 14.5,
+          "observedLegSeconds": [1.98, 14.22]
+        }
+      }
+    }
+  }
+}

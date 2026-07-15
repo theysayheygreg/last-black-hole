@@ -3,7 +3,8 @@
 > How the player's hands connect to the ship. Ship physics model, input schemes,
 > and per-device affordance tuning.
 >
-> See MOVEMENT.md for the surfing metaphor, navigation affordances, and fabric interactions.
+> See the [v0.3 movement owner](../v0.3/DESIGN-INDEX.md#movement) for the
+> current surfing metaphor, navigation affordances, and fabric interactions.
 
 ---
 

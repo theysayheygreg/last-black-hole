@@ -16,8 +16,9 @@ const LARGE_PROFILE = SESSION_PROFILES.large;
 
 async function getJson(path, options) {
   const response = await fetch(`${SIM_URL}${path}`, options);
-  const body = await response.json();
-  return { status: response.status, body };
+  const text = await response.text();
+  const body = JSON.parse(text);
+  return { status: response.status, body, bytes: Buffer.byteLength(text) };
 }
 
 async function restartFreshSim() {
@@ -58,6 +59,13 @@ async function run() {
           `${advertised.id}: advertised well count drifted from map truth`);
         assert(advertised.wreckCount === source.wrecks.length,
           `${advertised.id}: advertised wreck count drifted from map truth`);
+        assert(advertised.worldScale === source.worldScale,
+          `${advertised.id}: advertised worldScale drifted from map truth`);
+        assert(advertised.dimensions?.width === source.dimensions.width
+          && advertised.dimensions?.height === source.dimensions.height,
+          `${advertised.id}: advertised dimensions drifted from map truth`);
+        assert(advertised.profileId === source.profileId,
+          `${advertised.id}: advertised profile identity drifted from map truth`);
         assert(source.route?.id, `${advertised.id}: authoritative map is missing route identity`);
       }
       assert(shallows.tickHz > expanse.tickHz, `Expected shallows tickHz > expanse (${shallows.tickHz} vs ${expanse.tickHz})`);
@@ -113,6 +121,7 @@ async function run() {
           mapId: "deep-field",
           requesterId: "sim-scale-test",
           requesterName: "Scale Test",
+          seed: 424242,
         }),
       });
       assert(status === 200, `Expected /session/start 200, got ${status}`);
@@ -150,6 +159,17 @@ async function run() {
         body.session.maxPortalChecksPerPlayer === LARGE_PROFILE.maxPortalChecksPerPlayer,
         `Expected large-map maxPortalChecksPerPlayer ${LARGE_PROFILE.maxPortalChecksPerPlayer}, got ${body.session.maxPortalChecksPerPlayer}`
       );
+      assert(body.session.localFluidWindowWorldUnits > 0, "Expected bounded local fluid window");
+      assert(body.session.localFluidResolution === 192, "Expected fixed local fluid resolution");
+      assert(body.session.coarseTextureResolution === 64, "Expected fixed coarse texture resolution");
+      assert(body.session.maxCoarseFieldCells === LARGE_PROFILE.maxCoarseFieldCells,
+        "Expected large-map coarse-field cell ceiling");
+      assert(body.session.snapshotBudgetBytes === LARGE_PROFILE.snapshotBudgetBytes,
+        "Expected large-map snapshot budget");
+      const snapshot = await getJson("/snapshot");
+      assert(snapshot.status === 200, `Expected /snapshot 200, got ${snapshot.status}`);
+      assert(snapshot.bytes <= LARGE_PROFILE.snapshotBudgetBytes,
+        `Deep Field snapshot exceeds budget: ${snapshot.bytes}/${LARGE_PROFILE.snapshotBudgetBytes}`);
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {

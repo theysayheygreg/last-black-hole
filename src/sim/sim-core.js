@@ -1,5 +1,4 @@
 import { CONFIG } from '../config.js';
-import { worldToFluidUV } from '../coords.js';
 
 export class SimCore {
   constructor({
@@ -63,29 +62,11 @@ export class SimCore {
     this.fluid.step(stepDt);
     this.fluid.fadeVisualDensity(0.99);
 
-    this.wellSystem.update(this.fluid, stepDt, totalTime);
-    this.starSystem.update(this.fluid, stepDt, totalTime, this.wellSystem, this.waveRings, { visualOnly });
-
-    const turbStr = CONFIG.fluid.ambientTurbulence;
-    const densStr = CONFIG.fluid.ambientDensity;
-    if (turbStr > 0 || densStr > 0) {
-      for (let i = 0; i < 3; i++) {
-        const rx = Math.random();
-        const ry = Math.random();
-        const angle = Math.random() * Math.PI * 2;
-        const forceMag = turbStr * (0.5 + Math.random());
-        this.fluid.splat(
-          rx,
-          ry,
-          Math.cos(angle) * forceMag,
-          Math.sin(angle) * forceMag,
-          0.003 + Math.random() * 0.005,
-          densStr * (0.3 + Math.random() * 0.7),
-          densStr * (0.5 + Math.random() * 0.5),
-          densStr * (0.6 + Math.random() * 0.4)
-        );
-      }
-    }
+    this.wellSystem.update(this.fluid, stepDt, totalTime, { authorityDriven: visualOnly });
+    this.starSystem.update(this.fluid, stepDt, totalTime, this.wellSystem, this.waveRings, {
+      visualOnly,
+      authorityDriven: visualOnly,
+    });
 
     if (!visualOnly) {
       this.wreckSystem.update(this.fluid, stepDt, totalTime, camX, camY, this.wellSystem);

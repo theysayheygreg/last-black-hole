@@ -25,6 +25,8 @@
  *   Fluid vel → World vel:  Y-flipped, reference-scaled (fluidVelToWorld)
  */
 
+import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
+
 // ---- Scale constants ----
 
 /** Total toroidal world size. All entity positions live in 0–WORLD_SCALE. */
@@ -37,7 +39,7 @@ export let WORLD_SCALE = 3.0;
  * when WORLD_SCALE grows. Large maps pay for visible fabric, not total
  * world area; off-window flow returns through the coarse field.
  */
-export let GRID_WINDOW = 3.0;
+export let GRID_WINDOW = CLIENT_PERF_PROFILES.fixedGrid.localWindowWorldUnits;
 
 /** Update the world scale. GRID_WINDOW is intentionally NOT updated — fluid grid stays fixed. */
 export function setWorldScale(s) {
@@ -48,7 +50,7 @@ export function setWorldScale(s) {
 /**
  * World-units shown by the current camera projection on each screen axis.
  *
- * The renderer is intentionally locked to the same 3x3 world slice as the
+ * The renderer is intentionally locked to the same fixed local world slice as the
  * camera-anchored fluid texture. Until the sim supports rectangular fluid
  * windows, widening X by aspect would show danger and fabric from different
  * world slices. Three.js still owns a real 3D scene; this is the adapter that
@@ -147,6 +149,11 @@ export function fluidUVToWorld(fu, fv) {
   wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   return [wx, wy];
+}
+
+/** Convert normalized world Y (top-left, down) to texture V (bottom-left, up). */
+export function worldYToFluidTextureV(worldY) {
+  return 1 - worldY;
 }
 
 // ---- World <-> Screen ----
@@ -290,7 +297,8 @@ export function splatScale() {
  * See docs/design/RING-SCALE.md for the full analysis.
  *
  * Cached — recomputed only when setWorldScale() is called (on map load).
- * 3x3 map: 3.0, 5x5: 3.87, 10x10: 5.48 (vs linear WORLD_SCALE: 3, 5, 10)
+ * Canonical map scales 5x5, 15x15, and 25x25 remain sub-linear here;
+ * fluid injection still keys to the fixed local window above.
  */
 let _accretionScaleCache = Math.sqrt(WORLD_SCALE * FLUID_REF_SCALE);
 export function accretionScale() {
@@ -326,6 +334,11 @@ export function shouldCull(entityWX, entityWY, camX, camY, margin = 0.3) {
 
 /** Fluid velocity is Y-up; screen/world velocity is Y-down. Negate Y component. */
 export function fluidVelToScreen(fvx, fvy) { return [fvx, -fvy]; }
+
+/** Convert world-space velocity to reference-scaled fluid velocity. */
+export function worldVelToFluid(wvx, wvy) {
+  return [wvx / FLUID_REF_SCALE, -wvy / FLUID_REF_SCALE];
+}
 
 // ---- Unit conversion helpers ----
 // Use these instead of inline * GRID_WINDOW or / GRID_WINDOW.
