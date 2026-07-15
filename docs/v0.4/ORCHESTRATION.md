@@ -71,8 +71,33 @@ Singularity that:
 4. Treat 24/48/96 as separate capacity/product profiles. Every claim names
    participants, sim envelope, clock, body/AI counts, bytes, CPU, memory, host
    allocation, and whether TiDi occurred.
-5. Commit each meaningful docs/code slice atomically and re-run the relevant
-   harness lane. Preserve v0.3 and do not merge v0.4 back without Greg's call.
+5. Commit each meaningful docs/code slice and run only its focused proof. Queue
+   broader exposure lenses for checkpoint CI. Preserve v0.3 and do not merge
+   v0.4 back without Greg's call.
+
+## Validation Routing
+
+The throughput target is 80--90% of active agent time on feature construction,
+with planning and immediate verification kept to the smallest useful boundary.
+This is a routing target, not a timer or permission to ship an unbootable or
+contract-red artifact.
+
+Ordinary v0.4 feature commits use the smallest directly affected pure,
+authority, transport, or boot check. A coherent player-facing milestone gets
+one natural journey at the minimum cohort that can prove the new interaction:
+one client for a local presentation state, two for a cross-client handoff, and
+four only for a true four-human contract. Do not use a four-browser matrix to
+debug a one- or two-client defect.
+
+Broader authority, network, count, latency, visual, high-count, soak, cost, and
+package lanes run asynchronously against immutable commits. CI runners report
+pass, product failure, or infrastructure failure and stop; they do not become
+feature writers. Green cohorts are not rerun. A product failure routes one
+source-bounded fix-forward slice, while unrelated failures do not stall other
+feature work.
+
+Historical verification entries below are evidence, not current per-commit
+instructions.
 
 ## CodexBar Heartbeat
 

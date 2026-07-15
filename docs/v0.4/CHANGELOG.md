@@ -11,6 +11,9 @@
 
 ### Documentation workflow
 
+- Refined the harness contract around focused feature proof, one minimum-cohort
+  milestone journey, and asynchronous checkpoint CI so broad browser, count,
+  latency, and visual matrices no longer dominate multiplayer development.
 - Split detailed decisions and changes into version-local journals for v0.2,
   v0.3, and v0.4 while preserving the combined project journals as archive.
 - Reserved the project-wide decision log for cross-version rules and the

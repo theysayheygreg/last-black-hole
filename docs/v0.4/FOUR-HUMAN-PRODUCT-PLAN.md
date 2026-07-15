@@ -138,11 +138,25 @@ P5 closes in this order:
 
 ### P6 — Product Evidence And Greg Gate
 
-- automate coherent one-, two-, three-, and four-browser journeys;
-- automate a real fifth-browser rejection at the human surface;
-- produce a named four-human playtest pack with no debug navigation;
-- repeat at controlled 80, 120, and 160 ms conditions;
-- obtain Greg's movement honesty, readability, correction-feel, and dread gate.
+P6 is checkpoint CI for the completed player journey, not the implementation
+loop for each P5 fix. It closes in three separately scheduled lanes:
+
+1. **P6-A coherent product matrix:** run one-, two-, three-, and four-human
+   journeys serially against one accepted SHA. The four-human cohort includes
+   real fifth-browser rejection. Do not rerun a green cohort; stop at the first
+   product failure and route a source-bounded fix.
+2. **P6-B network conditions:** only after P6-A is green, repeat the accepted
+   scenario at controlled 80, 120, and 160 ms conditions. This is impairment
+   evidence, not a feature-development prerequisite.
+3. **P6-C Greg pack:** produce one named four-human playtest pack with no debug
+   navigation, then obtain Greg's movement honesty, readability,
+   correction-feel, and dread gate.
+
+During P5/P6 fix-forward work, use a pure or focused authority fixture first,
+then exactly one natural journey at the minimum cohort that can prove the fix.
+Counts three and four remain closed while a one- or two-client product defect
+is unresolved. Browser stacks are serialized on GregBot; source development
+continues independently while the browser slot is occupied.
 
 ## Product Acceptance
 

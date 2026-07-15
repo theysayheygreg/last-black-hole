@@ -94,8 +94,8 @@ behavior.
 Agents should verify that features work before Greg plays them. Greg's time is
 for feel, taste, art direction, and product judgment, not first-contact QA.
 
-Before handing over meaningful gameplay, renderer, UI, platform, or architecture
-work, the responsible agent should leave three kinds of evidence:
+Before handing a coherent gameplay, renderer, UI, platform, or architecture
+milestone to Greg, the responsible agent should leave three kinds of evidence:
 
 - the deterministic contract lane that matches the changed system;
 - a playable or visual artifact showing the feature in context;
@@ -110,6 +110,13 @@ results, Rig, Chronicle, and a changed second run. A second fresh branch selects
 Breacher, dies to a named visible well, and returns Home. Greg remains the human
 polish gate, not first-contact QA.
 
+This is an accumulation contract, not a requirement to produce all three
+layers after every commit. A feature worker runs the smallest directly affected
+proof and commits. Playable, visual, broad authority, package, soak, and
+platform evidence runs asynchronously at the next relevant checkpoint. A
+direct regression or authority/privacy failure blocks that feature line;
+unrelated CI does not block independent construction.
+
 For a release handoff, source proof is not enough. Commit first, run
 `npm run release:internal`, then run `npm run release:status` and
 `npm run test:package`. The package gate must find the exact HEAD artifact,
@@ -120,7 +127,11 @@ idle authority alive through the attract-screen wait, and launch a human run.
 
 ## Review Protocol: Audit → Codex
 
-After any feature build that touches >200 lines or adds a new system, run a two-pass review before reporting done. The passes catch different classes of bugs.
+Independent review is a risk lens, not a per-commit ceremony. Use design audit
+for intent-sensitive architecture and code review for risky integration or
+milestone diffs. A second pass is required only when blocking findings changed
+the reviewed surface. Tuning, docs, isolated fixes, and ordinary feature slices
+do not automatically trigger review.
 
 ### Pass 1: Design Audit (Orrery)
 
@@ -171,23 +182,13 @@ camera, or renderer projection gets one extra checklist before Greg playtests:
 4. **Fresh-process evidence** — movement/playtest evidence comes from a fresh
    browser and fresh sim unless the task is explicitly a long-run stability
    probe. Reloading a page is not a clean process boundary.
-5. **Representative lanes** — run `npm test`, `npm run test:playtest`, and
-   `npm run test:authority` for movement/sim work. Add `npm run test:visual`
-   when camera, renderer, radius, or scene projection changes.
+5. **Representative proof** — run the smallest affected check now. Queue
+   authority, playtest, visual, and fresh-process lenses for the next checkpoint
+   when the exposure area requires them.
 
 If the player dies to an invisible well, spawns off-route, gets pulled by a
 thing they cannot see, or bounces between positions, treat that as a contract
 failure first. Tune only after the math, authority, and camera contracts agree.
-
-### Trigger Rules
-
-- **Always run both passes:** new system, new entity type, new server↔client wiring
-- **Run Codex only:** bug fix >50 lines, refactor touching shared state
-- **Skip both:** tuning constants, docs, comments-only changes
-
-### Hook Setup
-
-For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~/.claude/settings.json` that fires `codex-post-commit-review.sh`. The hook script lives at `~/.claude/hooks/codex-post-commit-review.sh` and triggers `codex review --background --scope working-tree` after successful `git commit` commands.
 
 ---
 
