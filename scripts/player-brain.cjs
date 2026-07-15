@@ -3,6 +3,7 @@ const {
   PROFILE_SHIP_TO_HULL,
   HULL_DEFINITIONS,
 } = require('./content/hulls.cjs');
+const { MOVEMENT } = require('./content/movement.cjs');
 
 // Default rig state: 3 tracks at level 0 for a given hull
 function defaultRigLevels(hullType) {
@@ -44,11 +45,11 @@ const BRAIN_DEFAULTS = {
   controlDebuffResist: 1.0,
   wellGraceDuration: 0,
   freeWellSurvives: 0,
-  deltaVMax: 100,
-  deltaVRegen: 1.5,
-  deltaVRegenBoost: 6.0,
+  deltaVMax: MOVEMENT.player.deltaVMax,
+  deltaVRegen: MOVEMENT.player.deltaVRegen,
+  deltaVRegenBoost: MOVEMENT.player.deltaVRegenBoost,
   deltaVBurnEff: 1.0,
-  deltaVBurnRate: 12,
+  deltaVBurnRate: MOVEMENT.player.deltaVBurnRate,
 };
 
 const BRAIN_CAPS = {

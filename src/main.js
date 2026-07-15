@@ -4332,8 +4332,12 @@ function gameLoop(now) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
-          const intentX = Number.isFinite(facing) ? Math.cos(facing) : 1;
-          const intentY = Number.isFinite(facing) ? Math.sin(facing) : 0;
+          const intentX = Number.isFinite(inputManager.moveX)
+            ? inputManager.moveX
+            : (Number.isFinite(facing) ? Math.cos(facing) : 1);
+          const intentY = Number.isFinite(inputManager.moveY)
+            ? inputManager.moveY
+            : (Number.isFinite(facing) ? Math.sin(facing) : 0);
           const sentPulse = remotePendingPulse;
           const sentExtractConfirm = remotePendingExtractConfirm;
           const sentConsumeSlot = remotePendingConsumeSlot;

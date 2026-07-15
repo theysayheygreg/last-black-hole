@@ -59,6 +59,8 @@ export class InputManager {
 
     // Output state (consumed by ship and menus)
     this.facing = null;           // radians, or null if no directional input
+    this.moveX = 1;               // normalized stick-relative thrust direction
+    this.moveY = 0;
     this.thrustIntensity = 0;     // 0-1
     this.brakeIntensity = 0;      // 0-1
 
@@ -343,7 +345,7 @@ export class InputManager {
   _readMouse(view) {
     if (!view?.active || !view.ship || !Number.isFinite(view.camX) || !Number.isFinite(view.camY)) {
       this._mouse.distancePx = 0;
-      return { facing: null, thrust: 0, brake: 0 };
+      return { facing: null, moveX: 0, moveY: 0, thrust: 0, brake: 0 };
     }
 
     // Activity expiry: if the cursor hasn't moved AND no button is
@@ -377,6 +379,8 @@ export class InputManager {
       : null;
     return {
       facing,
+      moveX: direction.nx,
+      moveY: direction.ny,
       thrust: this._mouse.left ? this._mouseThrustFromDistance(this._mouse.distancePx) : 0,
       brake: this._mouse.right ? 1.0 : 0,
     };
@@ -394,6 +398,8 @@ export class InputManager {
 
     // --- Read keyboard ---
     let kbFacing = null;
+    let kbMoveX = 0;
+    let kbMoveY = 0;
     let kbThrust = 0;
     let kbBrake = 0;
 
@@ -402,7 +408,12 @@ export class InputManager {
     if (this._keys['ArrowRight'] || this._keys['KeyD']) dx += 1;
     if (this._keys['ArrowUp']) dy -= 1;
     if (this._keys['ArrowDown']) dy += 1;
-    if (dx !== 0 || dy !== 0) kbFacing = Math.atan2(dy, dx);
+    const keyboardMagnitude = Math.hypot(dx, dy);
+    if (keyboardMagnitude > 0) {
+      kbFacing = Math.atan2(dy, dx);
+      kbMoveX = dx / keyboardMagnitude;
+      kbMoveY = dy / keyboardMagnitude;
+    }
     if (this._keys['Space'] || this._keys['KeyW']) kbThrust = 1.0;
     if (this._keys['ControlLeft'] || this._keys['ControlRight'] || this._keys['KeyS']) kbBrake = 1.0;
 
@@ -414,6 +425,8 @@ export class InputManager {
 
     // --- Read gamepad ---
     let gpFacing = null;
+    let gpMoveX = 0;
+    let gpMoveY = 0;
     let gpThrust = 0;
     let gpBrake = 0;
 
@@ -447,8 +460,12 @@ export class InputManager {
           cfg.gamepadSmoothTime, cfg.gamepadSmallAngle, cfg.gamepadBigAngle
         );
         gpFacing = this._lastAngle;
+        gpMoveX = Math.cos(this._lastAngle);
+        gpMoveY = Math.sin(this._lastAngle);
       } else if (this._isAiming) {
         gpFacing = this._lastAngle; // hold last angle while still in aim state
+        gpMoveX = Math.cos(this._lastAngle);
+        gpMoveY = Math.sin(this._lastAngle);
       }
 
       // Triggers
@@ -470,12 +487,18 @@ export class InputManager {
     // otherwise the mouse cursor is the default no-controller aim model.
     if (gpFacing !== null) {
       this.facing = gpFacing;
+      this.moveX = gpMoveX;
+      this.moveY = gpMoveY;
       this.lastInputSource = 'gamepad';
     } else if (kbFacing !== null) {
       this.facing = kbFacing;
+      this.moveX = kbMoveX;
+      this.moveY = kbMoveY;
       this.lastInputSource = 'keyboard';
     } else if (mouseFacing !== null) {
       this.facing = mouseFacing;
+      this.moveX = mouse.moveX;
+      this.moveY = mouse.moveY;
       this.lastInputSource = 'mouse';
     } else {
       this.facing = null; // no directional input — hold current facing
@@ -499,6 +522,7 @@ export class InputManager {
     if (this.facing !== null) {
       ship.setFacingDirect(this.facing);
     }
+    ship.setMoveIntent(this.moveX, this.moveY);
     ship.setThrustIntensity(this.thrustIntensity);
     ship.setBrakeIntensity(this.brakeIntensity);
   }

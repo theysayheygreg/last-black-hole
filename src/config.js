@@ -64,13 +64,13 @@ export const CONFIG = {
     // refills slowly when not thrusting (small ambient regen) and after
     // a short pause when releasing thrust (deltaVRegenDelay). These are
     // the BASELINE — hulls override via deltaV{Max,Regen,BurnEff}.
-    deltaVMax: 100,           // Default tank size (Drifter is small/efficient,
+    deltaVMax: MOVEMENT.player.deltaVMax, // Default tank size (Drifter is small/efficient,
                               // Breacher is large/expensive — see hulls.data.json).
-    deltaVRegen: 1.5,         // deltaV/sec ambient regen (always-on, even mid-burn).
-    deltaVRegenBoost: 6.0,    // Bonus regen rate added when not thrusting.
+    deltaVRegen: MOVEMENT.player.deltaVRegen, // deltaV/sec ambient regen (always-on, even mid-burn).
+    deltaVRegenBoost: MOVEMENT.player.deltaVRegenBoost, // Bonus regen rate added when not thrusting.
     deltaVRegenDelay: MOVEMENT.player.deltaVRegenDelay, // Seconds before boost regen —
                               // keeps the thrust→regen race from feeling fluttery.
-    deltaVBurnRate: 12,       // deltaV/sec consumed at thrustIntensity = 1.0.
+    deltaVBurnRate: MOVEMENT.player.deltaVBurnRate, // deltaV/sec consumed at thrustIntensity = 1.0.
                               // Burns linearly with intensity (analog trigger ⇒
                               // half pull = half cost).
     size: 12,                 // Ship triangle radius in pixels (overlay rendering only).
@@ -357,7 +357,7 @@ export const CONFIG = {
     count: 3,                    // base count per map (overridden by signature layout)
     vultureRatio: 0.3,           // fraction that spawn as vultures
     size: 8,                     // overlay triangle radius in px (70% of player ship.size)
-    thrustAccel: 0.5,            // world-units/s², slightly slower than player (1.7)
+    thrustAccel: 0.5,            // world-units/s², slightly slower than player (2.5)
     drag: 0.06,                  // same 60 Hz reference damping model as player
     fluidCoupling: 1.2,          // same as player — scavengers surf the same currents
     decisionInterval: 0.8,       // seconds between AI decision updates (not per-frame)
