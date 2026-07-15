@@ -57,6 +57,72 @@ async function run() {
   const assets = await importModule('src/render-three/entity-assets.js');
   const visualStyle = await importModule('src/render-three/visual-style.js');
   const { createWorldProjection } = await importModule('src/render-three/world-projection.js');
+  const { ThreeRendererBackend } = await importModule('src/render-three/three-renderer.js');
+  const { TemporalVisibilityContract } = await importModule('src/render-three/entities/temporal-visibility.js');
+  const THREE = await importModule('node_modules/three/build/three.module.js');
+
+  await runner.run('Pooled renderer reuses meshes while isolating opacity and disposing sprite materials', async () => {
+    const sharedMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1 });
+    sharedMaterial.userData = { baseOpacity: 1 };
+    const backend = Object.create(ThreeRendererBackend.prototype);
+    const activeGroup = new THREE.Group();
+    activeGroup.name = 'active-entity-layer';
+    backend.entityGroup = new THREE.Group();
+    backend.semanticGroup = new THREE.Group();
+    backend.entityGeometries = { spriteCard: new THREE.PlaneGeometry(1, 1) };
+    backend.entityMeshPool = [];
+    backend.semanticMeshPool = [];
+    backend.linePool = [];
+    backend.entityMeshCursor = 0;
+    backend.semanticMeshCursor = 0;
+    backend.lineCursor = 0;
+    backend.entityBackingGroup = new THREE.Group();
+    backend.entitySpriteMaterials = new Set();
+    backend.temporalVisibility = new TemporalVisibilityContract();
+    backend.entityAssets = {
+      getMaterial() { return sharedMaterial; },
+      dispose() { this.disposed = true; },
+    };
+    backend.currentProjection = createWorldProjection({ x: 0, y: 0, worldScale: 3, view: 3 }, 1);
+    backend.lastSceneState = { cameraX: 0, cameraY: 0, worldScale: 3, cameraView: 3 };
+    backend._addContrastBacking = () => {};
+
+    backend._beginDynamicScene();
+    const first = backend._addSpriteEntity(activeGroup, 'shipDrifter', 0, 0, 0.04, 0, 0.13,
+      backend.lastSceneState, 'player', { id: 'ship-a', opacity: 0.25 }, 'player');
+    const second = backend._addSpriteEntity(activeGroup, 'shipDrifter', 0.1, 0, 0.04, 0, 0.13,
+      backend.lastSceneState, 'player', { id: 'ship-b', opacity: 0.85 }, 'player');
+    assert(first && second && first !== second, 'Expected two pooled meshes for two live sprite identities');
+    assert(first.material !== second.material, 'Each pooled mesh must own an opacity material clone');
+    first.material.opacity = 0.1;
+    assert(second.material.opacity === 0.85, 'Changing one sprite opacity must not change its pooled neighbor');
+    assert(sharedMaterial.opacity === 1, 'Shared asset material must remain at its base opacity');
+
+    backend._beginDynamicScene();
+    const reused = backend._addSpriteEntity(activeGroup, 'shipDrifter', 0, 0, 0.04, 0, 0.13,
+      backend.lastSceneState, 'player', { id: 'ship-c', opacity: 0.6 }, 'player');
+    assert(reused === first && reused.material === first.material,
+      'The next frame must reuse the pooled mesh and its per-mesh material clone');
+    assert(reused.material.opacity === 0.6 && second.material.opacity === 0.85,
+      'Reuse must update only the reused mesh opacity');
+
+    let disposedMaterials = 0;
+    for (const material of backend.entitySpriteMaterials) material.addEventListener('dispose', () => { disposedMaterials += 1; });
+    let targetDisposed = false;
+    let rendererDisposed = false;
+    backend.sourceCanvas = { removeEventListener() {} };
+    backend.visualFamilies = {};
+    backend.sceneTarget = { dispose() { targetDisposed = true; } };
+    backend.copyMaterial = { dispose() {} };
+    backend.worldScene = new THREE.Scene();
+    backend.postScene = new THREE.Scene();
+    backend.renderer = { dispose() { rendererDisposed = true; } };
+    backend.dispose();
+    assert(disposedMaterials === 2 && backend.entitySpriteMaterials.size === 0,
+      'Renderer disposal must release every pooled sprite material clone');
+    assert(backend.entityAssets.disposed && targetDisposed && rendererDisposed,
+      'Renderer disposal must release the asset store, target, and WebGL renderer');
+  });
 
   await runner.run('Product sprite seam has one alpha core and no universal vector parts', async () => {
     const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');

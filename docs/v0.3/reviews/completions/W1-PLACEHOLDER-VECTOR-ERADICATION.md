@@ -1,61 +1,64 @@
 # W1 Placeholder Vector Eradication
 
-Status: source implementation complete on `codex/v0.3-placeholder-vector-eradication`.
+Status: bounded correction applied on `codex/v0.3-placeholder-vector-eradication`.
+This note records source and focused-test evidence only; it is not a browser,
+capture, or visual-taste completion claim.
 
 ## Temporal Dropout Contract
 
-The dropout owner was the Three pooled sprite submission path. Entity opacity
-was being written through shared cached asset materials while pooled meshes were
-reassigned across visual families. A later entity could therefore leave the
-shared material in a different alpha state; the renderer had no bounded
-identity history to distinguish that from intentional culling or a fading
-portal.
+The temporal ledger now receives the expected sprite identities and all ten
+sprite families for every sequential renderer frame. Families emit either a
+real sprite submission or an explicit state row for every current identity;
+budget skips are no longer silent. The ledger carries prior identities forward
+and synthesizes bounded `absent` rows when a later snapshot omits one. Scene
+resets synthesize `reset` rows for prior identities.
 
-The fix keeps the shared texture and asset-material cache intact, but gives each
-pooled sprite mesh a cached per-asset material clone. Presentation opacity is
-now local to that bounded mesh/material pair. The existing renderer loop owns a
-bounded temporal contract with explicit `visible`, `offscreen-cull`, and
-`zero-opacity` outcomes. It resets at phase/run boundaries and reports sampled
-frame ids, stable-core summaries, and dropout reasons through renderer stats.
+Records distinguish `visible`, `offscreen-cull`, `budget-cull`, `transparent`,
+`absent`, `reset`, and explicit `occluded`. The renderer does not know depth
+occlusion at this boundary, so its records use `occlusion: unsupported` rather
+than claiming `occluded`. Entity and family summaries include state counts and
+sequential-frame proof; a missing in-view identity therefore makes
+`stableCore` false.
 
-The focused temporal proof samples one named title core over 4 sequential frames
-and one named match core over 4 sequential frames: both remain submitted,
-in-view, and above the opacity floor for every sample. A second proof records
-one visible frame, one offscreen cull, and one zero-opacity frame and reports
-exactly 2 dropout frames with both reasons preserved.
+## Ability-State Ownership
+
+`localAbilityState` is cleared by scene reset and by every remote snapshot
+before optional ability state is applied. Canvas ability marks are gated to
+`gamePhase === 'playing'`. The machine-readable inventory now owns the
+`hullAbilityStateMark` role and its named allowlist entry.
+
+## Pooled Renderer Evidence
+
+The focused lifecycle test uses real Three `Mesh`, `PlaneGeometry`, and
+`MeshBasicMaterial` instances with the renderer's pooled `_addMesh` and
+`_addSpriteEntity` methods. It proves two simultaneous pooled meshes receive
+independent material clones, opacity changes do not leak through the shared
+asset material, the next frame reuses the mesh and clone, and renderer disposal
+releases the clones and backing resources. This is a pooled-method/unit proof,
+not a WebGL browser render proof.
 
 ## Primitive Disposition
 
-Machine-readable role inventory: `docs/v0.3/visual-primitive-inventory.json`.
-
-- Entity cores and landmarks are generated nearest-filtered pixel sprite cards.
-- Generic discs, rings, triangles, squares, bullseyes, and duplicate canvas
-  entity marks are forbidden as finished production art.
-- Wells remain fabric-first. Neither product Three nor the legacy canvas world
-  path submits generic `waveRings`; the remaining well rings/core helpers are
-  explicit raw-scene diagnostics only, while wave physics and fabric splats
-  remain intact.
-- Slingshot range/tether/release direction marks remain because they carry
-  ratified state, direction, or radius semantics that sprites cannot carry.
-- Portal blocked/final accents, title faults, loading transition motion, map
-  nodes, background depth cues, and debug marks remain only under their named
-  owner and activation/reset/dispose contract.
+`docs/v0.3/visual-primitive-inventory.json` now states the product and
+representative forbidden sets explicitly. Both modes assert zero entries from
+`productionForbidden`; semantic/debug marks are permitted only through the
+named allowlists, and debug mode requires an explicit view. Generic entity
+discs, rings, triangles, squares, bullseyes, and duplicate canvas entity marks
+remain forbidden as finished production art.
 
 ## Focused Proof
 
-`node tests/three-entity-temporal.cjs` covers:
+The bounded check set is:
 
-- 2 stable named-core summaries across 8 sequential title/match samples;
-- 2 explicit dropout reasons across 3 diagnostic samples;
-- renderer ownership, phase/run reset, isolated opacity material, and product
-  wave-ring absence assertions;
-- all 7 inventory roles, forbidden-set coverage, and semantic allowlist.
+- `node tests/three-entity-temporal.cjs`
+- `node tests/three-entity-lifecycle.cjs`
+- `node tests/vfx.cjs`
+- `node tests/render-plan.cjs`
+- `node tests/presentation-frame.cjs`
 
-`node tests/render-plan.cjs` and `node tests/presentation-frame.cjs` remain
-passing. Three/VFX execution tests were not run in the final source-only pass
-because this worktree has no tracked dependency tree; no browser or capture
-lane was used.
-
-Residual risk: the serialized browser visual proof still needs the separately
-assigned read-only source review and one external browser-capacity slot. This
-commit does not claim that visual gate.
+These checks cover sequential temporal rows and summaries, all sprite-family
+coverage, pooled mesh/material reuse and cleanup, VFX lifecycle, render-plan
+ownership, presentation normalization, ability-state source guards, and the
+machine-readable product/representative/debug inventory policy. No browser,
+dev server, capture, physics, authority, or broad CI lane is part of this
+correction.

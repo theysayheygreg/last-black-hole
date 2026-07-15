@@ -80,6 +80,31 @@ function clamp(n, min, max) {
 }
 
 const NOOP_ON_BEFORE_RENDER = () => {};
+const TEMPORAL_SPRITE_FAMILIES = Object.freeze([
+  'player',
+  'shipCandidates',
+  'remotePlayers',
+  'wrecks',
+  'portals',
+  'stars',
+  'planetoids',
+  'scavengers',
+  'fauna',
+  'sentries',
+]);
+
+function collectTemporalSpriteExpectations(frame = {}) {
+  const expected = [];
+  const add = (family, entity) => {
+    if (entity?.id) expected.push({ id: entity.id, family, role: family });
+  };
+  add('player', frame.localPlayer);
+  for (const family of TEMPORAL_SPRITE_FAMILIES) {
+    if (family === 'player') continue;
+    for (const entity of frame.world?.[family] || []) add(family, entity);
+  }
+  return expected;
+}
 
 function seededUnit(index) {
   const x = Math.sin(index * 12.9898 + 78.233) * 43758.5453;
@@ -214,6 +239,7 @@ export class ThreeRendererBackend {
       }).create(),
     };
     this.temporalVisibility = new TemporalVisibilityContract();
+    this.temporalFrameId = null;
     this.entitySpriteMaterials = new Set();
     this.lastPresentationPhase = null;
     this.lastPresentationRunId = null;
@@ -497,6 +523,7 @@ export class ThreeRendererBackend {
     if (phaseChanged || runChanged) {
       for (const family of Object.values(this.visualFamilies)) family.reset();
       this.temporalVisibility.reset({ phase: frame.phase, runId: frame.runId });
+      this.temporalFrameId = null;
     }
     this.lastPresentationPhase = frame.phase;
     this.lastPresentationRunId = frame.runId || this.lastPresentationRunId;
@@ -625,12 +652,40 @@ export class ThreeRendererBackend {
     const rotation = -facing - Math.PI * 0.5;
     const radius = candidate.radius || 0.040;
     const core = this._addSpriteEntity(this.activeEntityGroup, selectPlayerAsset(candidate),
-      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'player', candidate);
+      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'player', candidate, 'shipCandidates');
     if (core) this.shipCandidateCount += 1;
     return core;
   }
 
-  _addSpriteEntity(group, assetId, wx, wy, radius, rotation, z, state, treatmentId, entity = {}) {
+  _spriteInView(wx, wy, radius, state = this.lastSceneState, radiusMode = 'screen') {
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) return false;
+    const point = this._scenePoint(wx, wy, state);
+    const sceneScale = this.currentProjection.radius(Math.max(0.001, radius), radiusMode);
+    return this._isSceneVisible(point, Math.max(sceneScale.x, sceneScale.y));
+  }
+
+  _recordSpriteState(family, entity, state, radius = 0.04, role = family) {
+    if (!entity?.id) return false;
+    const inView = state === 'visible' || state === 'transparent'
+      ? true
+      : state === 'absent' || state === 'reset'
+        ? false
+        : this._spriteInView(entity.world?.x, entity.world?.y, radius,
+          this.temporalRenderState || this.lastSceneState, 'screen');
+    return this.temporalVisibility.record({
+      id: entity.id,
+      family,
+      role,
+      state,
+      coreSubmitted: state === 'visible' || state === 'transparent',
+      inView,
+      opacity: entity.opacity ?? (state === 'transparent' ? 0 : 1),
+      reason: state,
+      occlusion: 'unsupported',
+    });
+  }
+
+  _addSpriteEntity(group, assetId, wx, wy, radius, rotation, z, state, treatmentId, entity = {}, family = treatmentId) {
     const treatment = ENTITY_CONTACT_MATTE_TREATMENTS[treatmentId] || ENTITY_CONTACT_MATTE_TREATMENTS.fauna;
     this._addContrastBacking(wx, wy, radius, rotation, z, state, 'screen', {
       radiusScale: treatment.matteRadius,
@@ -639,13 +694,20 @@ export class ThreeRendererBackend {
     const core = this._addMesh(group, this.entityGeometries.spriteCard, this.entityAssets.getMaterial(assetId),
       wx, wy, radius * 1.65, rotation, z, state, 'screen');
     if (entity.id) {
+      const entityOpacity = clamp(entity.opacity ?? 1, 0, 1);
+      const visibleState = core
+        ? (entityOpacity <= 0.001 ? 'transparent' : 'visible')
+        : (this._spriteInView(wx, wy, radius * 1.65, state, 'screen') ? 'unknown' : 'offscreen-cull');
       this.temporalVisibility.record({
         id: entity.id,
+        family,
         role: treatmentId,
         coreSubmitted: Boolean(core),
-        inView: Boolean(core),
-        opacity: entity.opacity ?? 1,
-        reason: core ? ((entity.opacity ?? 1) <= 0.001 ? 'zero-opacity' : 'visible') : 'offscreen-cull',
+        inView: Boolean(core) || visibleState === 'unknown',
+        opacity: entityOpacity,
+        state: visibleState,
+        reason: visibleState,
+        occlusion: 'unsupported',
       });
     }
     if (core) {
@@ -697,10 +759,13 @@ export class ThreeRendererBackend {
 
   _syncWorldScene(frame, currentRenderState = null) {
     this._beginDynamicScene();
+    this.temporalFrameId = this.temporalFrameId == null ? 0 : this.temporalFrameId + 1;
     this.temporalVisibility.beginFrame({
       phase: frame.phase,
       runId: frame.runId,
-      frameId: frame.frameId,
+      frameId: this.temporalFrameId,
+      expected: collectTemporalSpriteExpectations(frame),
+      families: TEMPORAL_SPRITE_FAMILIES,
     });
     const sceneState = frame.world || {};
     const renderState = {
@@ -710,6 +775,7 @@ export class ThreeRendererBackend {
       gridWindow: currentRenderState?.gridWindow ?? this.lastSceneState.gridWindow,
       cameraView: currentRenderState?.cameraView ?? this.lastSceneState.cameraView ?? CAMERA_VIEW,
     };
+    this.temporalRenderState = renderState;
     let entityCount = 0;
     let semanticCount = 0;
     const addEntity = (...args) => {
@@ -745,6 +811,8 @@ export class ThreeRendererBackend {
         if (mesh) entityCount++;
         return mesh;
       },
+      budgetCull: (family, entity, radius = 0.04) => this._recordSpriteState(family, entity, 'budget-cull', radius),
+      state: (family, entity, state, radius = 0.04) => this._recordSpriteState(family, entity, state, radius),
     };
 
     const diagnosticView = this.getViewMode() === 'scene';
@@ -782,11 +850,7 @@ export class ThreeRendererBackend {
     };
     this.temporalVisibility.endFrame();
     this.lastEntitySeparation.temporalVisibility = this.temporalVisibility.getStats({
-      entityIds: [
-        frame.localPlayer?.id,
-        ...(frame.world?.stars || []).map((entity) => entity.id),
-        ...(frame.world?.shipCandidates || []).map((entity) => entity.id),
-      ].filter(Boolean),
+      families: TEMPORAL_SPRITE_FAMILIES,
     });
   }
 
