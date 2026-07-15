@@ -32,6 +32,10 @@ export class VisualFamilyLifecycle {
     this.maxActiveObjects = Math.max(this.maxActiveObjects, this.activeObjects);
   }
 
+  countPart(parts = 1) {
+    this.submittedParts += Math.max(0, Number(parts) || 0);
+  }
+
   drop(count = 1) {
     this.droppedObjects += Math.max(0, Number(count) || 0);
   }

@@ -120,7 +120,11 @@ export class EntityAssetStore {
       blending: THREE.NormalBlending,
       side: THREE.DoubleSide,
     });
-    material.userData = { ...(material.userData || {}), entityAssetStoreOwned: true };
+    material.userData = {
+      ...(material.userData || {}),
+      baseOpacity: 1,
+      entityAssetStoreOwned: true,
+    };
     this.materials.set(id, material);
     this.peakMaterialCount = Math.max(this.peakMaterialCount, this.materials.size);
     return material;

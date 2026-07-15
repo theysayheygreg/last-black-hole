@@ -1519,6 +1519,7 @@ function loadScene(map, { seed = 1 } = {}) {
   inventorySystem.clearCargo();
   inventoryOpen = false;
   shieldActive = false;
+  localAbilityState = null;
   timeSlowRemaining = 0;
   _starFlashTimer = 0;
   hullGraceTimer = 0;
@@ -1833,6 +1834,9 @@ function syncRemoteNetworkPerfStats() {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
+  // Ability marks are presentation-only snapshot state. A missing field is a
+  // clear, not permission to replay the previous remote ability indefinitely.
+  localAbilityState = null;
   syncRemoteNetworkPerfStats();
   const duplicateSnapshot = remoteSnapshot &&
     snapshot.tick === remoteSnapshot.tick &&
@@ -1882,9 +1886,7 @@ function applyRemoteSnapshot(snapshot) {
     signalLevel = localPlayer.signal.level ?? 0;
     signalZone = localPlayer.signal.zone ?? 'ghost';
   }
-  if (localPlayer.abilityState) {
-    localAbilityState = localPlayer.abilityState;
-  }
+  localAbilityState = localPlayer.abilityState || null;
   if (snapshot.inhibitor) {
     inhibitorState = { ...snapshot.inhibitor };
   }
@@ -4796,7 +4798,6 @@ function gameLoop(now) {
   if (!inMenu) {
     const threeOwnsWorld = rendererBackend?.name === 'three';
     if (!threeOwnsWorld) {
-      waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
       starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
       // lootSystem removed — loot anchors replaced with stars
       wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
@@ -4829,7 +4830,7 @@ function gameLoop(now) {
     }
 
     // Hull ability visual effects
-    if (localAbilityState) {
+    if (gamePhase === 'playing' && localAbilityState) {
       const as = localAbilityState;
       const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
 

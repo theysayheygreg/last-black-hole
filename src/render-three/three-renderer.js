@@ -13,12 +13,13 @@ import {
   getPresentationPalette,
   resolvePresentationQuality,
 } from '../presentation/presentation-style.js';
-import { ENTITY_SPRITE_TREATMENTS, ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
+import { ENTITY_CONTACT_MATTE_TREATMENTS, ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
 import { EntityAssetStore, selectPlayerAsset } from './entity-assets.js';
 import { PlayerVisualFamily } from './entities/player-visual-family.js';
 import { PortalVisualFamily } from './entities/portal-visual-family.js';
 import { WreckVisualFamily } from './entities/wreck-visual-family.js';
 import { WorldSpriteVisualFamily } from './entities/world-sprite-visual-family.js';
+import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
 import { RENDER_PLAN_DESCRIPTOR, RENDER_PLAN_PASS_IDS } from './render-plan.js';
 import {
@@ -78,28 +79,36 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+const NOOP_ON_BEFORE_RENDER = () => {};
+const TEMPORAL_SPRITE_FAMILIES = Object.freeze([
+  'player',
+  'shipCandidates',
+  'remotePlayers',
+  'wrecks',
+  'portals',
+  'stars',
+  'planetoids',
+  'scavengers',
+  'fauna',
+  'sentries',
+]);
+
+function collectTemporalSpriteExpectations(frame = {}) {
+  const expected = [];
+  const add = (family, entity) => {
+    if (entity?.id) expected.push({ id: entity.id, family, role: family });
+  };
+  add('player', frame.localPlayer);
+  for (const family of TEMPORAL_SPRITE_FAMILIES) {
+    if (family === 'player') continue;
+    for (const entity of frame.world?.[family] || []) add(family, entity);
+  }
+  return expected;
+}
+
 function seededUnit(index) {
   const x = Math.sin(index * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
-}
-
-function makeRadialGeometry(pointCount = 4, innerRadius = 0.42) {
-  const positions = [0, 0, 0];
-  const indices = [];
-  const vertexCount = pointCount * 2;
-  for (let i = 0; i < vertexCount; i++) {
-    const radius = i % 2 === 0 ? 1 : innerRadius;
-    const angle = -Math.PI / 2 + i * Math.PI / pointCount;
-    positions.push(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
-  }
-  for (let i = 1; i <= vertexCount; i++) {
-    indices.push(0, i, i === vertexCount ? 1 : i + 1);
-  }
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setIndex(indices);
-  geom.computeVertexNormals();
-  return geom;
 }
 
 function setCanvasVisible(canvas, visible) {
@@ -229,6 +238,9 @@ export class ThreeRendererBackend {
         activeGroup: this.activeEntityGroup,
       }).create(),
     };
+    this.temporalVisibility = new TemporalVisibilityContract();
+    this.temporalFrameId = null;
+    this.entitySpriteMaterials = new Set();
     this.lastPresentationPhase = null;
     this.lastPresentationRunId = null;
 
@@ -284,6 +296,11 @@ export class ThreeRendererBackend {
         matteCount: 0,
         estimatedCoverage: 0,
         shipCandidateCount: 0,
+        spriteCoreCount: 0,
+        genericSpritePartCount: 0,
+        wellDebugPrimitiveCount: 0,
+        stateVfxCount: 0,
+        opacityEntityCount: 0,
       },
       sharedContext: true,
       canvasUploads: 0,
@@ -367,22 +384,10 @@ export class ThreeRendererBackend {
   }
 
   _buildWorldEntityResources() {
-    const tri = new THREE.BufferGeometry();
-    tri.setAttribute('position', new THREE.Float32BufferAttribute([
-      1.0, 0.0, 0,
-      -0.58, 0.45, 0,
-      -0.24, 0.0, 0,
-      -0.58, -0.45, 0,
-    ], 3));
-    tri.setIndex([0, 1, 2, 0, 2, 3]);
-    tri.computeVertexNormals();
     this.entityGeometries = {
-      triangle: tri,
       disc: new THREE.CircleGeometry(1, 28),
       ring: new THREE.RingGeometry(0.90, 1.0, 64),
-      square: new THREE.PlaneGeometry(1, 1),
       spriteCard: new THREE.PlaneGeometry(1, 1),
-      spark: makeRadialGeometry(4, 0.36),
     };
     this.entityMaterials = createVisualMaterials(getPresentationPalette());
     this.entityAssets = new EntityAssetStore();
@@ -517,6 +522,8 @@ export class ThreeRendererBackend {
     const runChanged = frame.runId && this.lastPresentationRunId && frame.runId !== this.lastPresentationRunId;
     if (phaseChanged || runChanged) {
       for (const family of Object.values(this.visualFamilies)) family.reset();
+      this.temporalVisibility.reset({ phase: frame.phase, runId: frame.runId });
+      this.temporalFrameId = null;
     }
     this.lastPresentationPhase = frame.phase;
     this.lastPresentationRunId = frame.runId || this.lastPresentationRunId;
@@ -553,6 +560,11 @@ export class ThreeRendererBackend {
     this.matteCount = 0;
     this.matteCoverage = 0;
     this.shipCandidateCount = 0;
+    this.spriteCoreCount = 0;
+    this.genericSpritePartCount = 0;
+    this.wellDebugPrimitiveCount = 0;
+    this.stateVfxCount = 0;
+    this.opacityEntityCount = 0;
     for (const mesh of this.entityMeshPool) mesh.visible = false;
     for (const mesh of this.semanticMeshPool) mesh.visible = false;
     for (const line of this.linePool) line.visible = false;
@@ -584,6 +596,13 @@ export class ThreeRendererBackend {
     this[cursorKey] += 1;
     mesh.geometry = geometry;
     mesh.material = material;
+    // Backing, diagnostic, semantic, and sprite cards share bounded pools.
+    // Clear sprite-only hooks before a mesh changes visual role.
+    mesh.onBeforeRender = NOOP_ON_BEFORE_RENDER;
+    mesh.userData = {};
+    if (Number.isFinite(material?.userData?.baseOpacity)) {
+      material.opacity = material.userData.baseOpacity;
+    }
     mesh.position.set(point.x, point.y, z);
     mesh.scale.set(sceneScale.x, sceneScale.y, 1);
     mesh.rotation.z = rotation;
@@ -614,45 +633,16 @@ export class ThreeRendererBackend {
   }
 
   _addContrastBacking(wx, wy, radius, rotation, z, state, radiusMode, {
-    opacity = 'normal',
     radiusScale = 1.65,
     yScale = 0.72,
   } = {}) {
-    const material = opacity === 'heavy' ? this.entityMaterials.matteHeavy : this.entityMaterials.matteCore;
-    const soft = this._addMesh(this.entityBackingGroup, this.entityGeometries.disc, this.entityMaterials.matteSoft,
-      wx, wy, radius * radiusScale * 1.28, rotation, z - 0.035, state, radiusMode);
-    const core = this._addMesh(this.entityBackingGroup, this.entityGeometries.disc, material,
+    const core = this._addMesh(this.entityBackingGroup, this.entityGeometries.disc, this.entityMaterials.matteContact,
       wx, wy, radius * radiusScale, rotation, z - 0.03, state, radiusMode);
-    this._squashMesh(soft, yScale);
     this._squashMesh(core, yScale);
     if (core) {
       this.matteCount += 1;
       this.matteCoverage += this._estimateMatteCoverage(radius, radiusScale, yScale, radiusMode, state);
     }
-  }
-
-  _addReadableEntity(group, geometry, coreMaterial, wx, wy, radius, rotation, z, state, radiusMode, {
-    haloMaterial = null,
-    rimMaterial = null,
-    haloRadius = 1.55,
-    rimRadius = 1.18,
-    matteRadius = 1.85,
-    matteY = 0.74,
-    matteOpacity = 'normal',
-  } = {}) {
-    this._addContrastBacking(wx, wy, radius, rotation, z, state, radiusMode, {
-      opacity: matteOpacity,
-      radiusScale: matteRadius,
-      yScale: matteY,
-    });
-    if (haloMaterial) {
-      this._addMesh(group, geometry, haloMaterial, wx, wy, radius * haloRadius, rotation, z - 0.012, state, radiusMode);
-    }
-    const core = this._addMesh(group, geometry, coreMaterial, wx, wy, radius, rotation, z, state, radiusMode);
-    if (rimMaterial) {
-      this._addMesh(group, geometry, rimMaterial, wx, wy, radius * rimRadius, rotation, z + 0.006, state, radiusMode);
-    }
-    return core;
   }
 
   _addShipCandidate(candidate, state) {
@@ -662,26 +652,85 @@ export class ThreeRendererBackend {
     const rotation = -facing - Math.PI * 0.5;
     const radius = candidate.radius || 0.040;
     const core = this._addSpriteEntity(this.activeEntityGroup, selectPlayerAsset(candidate),
-      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'player');
+      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'player', candidate, 'shipCandidates');
     if (core) this.shipCandidateCount += 1;
     return core;
   }
 
-  _addSpriteEntity(group, assetId, wx, wy, radius, rotation, z, state, treatmentId, entity = {}) {
-    const treatment = ENTITY_SPRITE_TREATMENTS[treatmentId] || ENTITY_SPRITE_TREATMENTS.fauna;
-    const haloKey = treatmentId === 'portals' && entity.blocked ? 'riftPortalHalo' : treatment.halo;
-    const rimKey = treatmentId === 'portals' && entity.visualState === 'rift' ? 'riftPortal' : treatment.rim;
+  _spriteInView(wx, wy, radius, state = this.lastSceneState, radiusMode = 'screen') {
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) return false;
+    const point = this._scenePoint(wx, wy, state);
+    const sceneScale = this.currentProjection.radius(Math.max(0.001, radius), radiusMode);
+    return this._isSceneVisible(point, Math.max(sceneScale.x, sceneScale.y));
+  }
+
+  _recordSpriteState(family, entity, state, radius = 0.04, role = family) {
+    if (!entity?.id) return false;
+    const inView = state === 'visible' || state === 'transparent'
+      ? true
+      : state === 'absent' || state === 'reset'
+        ? false
+        : this._spriteInView(entity.world?.x, entity.world?.y, radius,
+          this.temporalRenderState || this.lastSceneState, 'screen');
+    return this.temporalVisibility.record({
+      id: entity.id,
+      family,
+      role,
+      state,
+      coreSubmitted: state === 'visible' || state === 'transparent',
+      inView,
+      opacity: entity.opacity ?? (state === 'transparent' ? 0 : 1),
+      reason: state,
+      occlusion: 'unsupported',
+    });
+  }
+
+  _addSpriteEntity(group, assetId, wx, wy, radius, rotation, z, state, treatmentId, entity = {}, family = treatmentId) {
+    const treatment = ENTITY_CONTACT_MATTE_TREATMENTS[treatmentId] || ENTITY_CONTACT_MATTE_TREATMENTS.fauna;
     this._addContrastBacking(wx, wy, radius, rotation, z, state, 'screen', {
-      opacity: treatment.matteOpacity,
       radiusScale: treatment.matteRadius,
       yScale: treatment.matteY,
     });
-    this._addMesh(group, this.entityGeometries.disc, this.entityMaterials[haloKey],
-      wx, wy, radius * treatment.haloRadius, 0, z - 0.012, state, 'screen');
     const core = this._addMesh(group, this.entityGeometries.spriteCard, this.entityAssets.getMaterial(assetId),
       wx, wy, radius * 1.65, rotation, z, state, 'screen');
-    this._addMesh(group, this.entityGeometries.ring, this.entityMaterials[rimKey],
-      wx, wy, radius * treatment.rimRadius, 0, z + 0.006, state, 'screen');
+    if (entity.id) {
+      const entityOpacity = clamp(entity.opacity ?? 1, 0, 1);
+      const visibleState = core
+        ? (entityOpacity <= 0.001 ? 'transparent' : 'visible')
+        : (this._spriteInView(wx, wy, radius * 1.65, state, 'screen') ? 'unknown' : 'offscreen-cull');
+      this.temporalVisibility.record({
+        id: entity.id,
+        family,
+        role: treatmentId,
+        coreSubmitted: Boolean(core),
+        inView: Boolean(core) || visibleState === 'unknown',
+        opacity: entityOpacity,
+        state: visibleState,
+        reason: visibleState,
+        occlusion: 'unsupported',
+      });
+    }
+    if (core) {
+      const entityOpacity = clamp(entity.opacity ?? 1, 0, 1);
+      core.userData.entityOpacity = entityOpacity;
+      let spriteMaterial = core.lbhSpriteMaterials?.get(assetId);
+      if (!spriteMaterial) {
+        spriteMaterial = this.entityAssets.getMaterial(assetId).clone();
+        spriteMaterial.name = `entity-sprite-material:pooled:${assetId}`;
+        spriteMaterial.userData = {
+          ...(spriteMaterial.userData || {}),
+          baseOpacity: 1,
+          pooledEntitySprite: true,
+        };
+        if (!core.lbhSpriteMaterials) core.lbhSpriteMaterials = new Map();
+        core.lbhSpriteMaterials.set(assetId, spriteMaterial);
+        this.entitySpriteMaterials.add(spriteMaterial);
+      }
+      core.material = spriteMaterial;
+      spriteMaterial.opacity = entityOpacity;
+      this.spriteCoreCount += 1;
+      if (entityOpacity < 1) this.opacityEntityCount += 1;
+    }
     return core;
   }
 
@@ -710,6 +759,14 @@ export class ThreeRendererBackend {
 
   _syncWorldScene(frame, currentRenderState = null) {
     this._beginDynamicScene();
+    this.temporalFrameId = this.temporalFrameId == null ? 0 : this.temporalFrameId + 1;
+    this.temporalVisibility.beginFrame({
+      phase: frame.phase,
+      runId: frame.runId,
+      frameId: this.temporalFrameId,
+      expected: collectTemporalSpriteExpectations(frame),
+      families: TEMPORAL_SPRITE_FAMILIES,
+    });
     const sceneState = frame.world || {};
     const renderState = {
       camX: currentRenderState?.camX ?? this.lastSceneState.cameraX,
@@ -718,6 +775,7 @@ export class ThreeRendererBackend {
       gridWindow: currentRenderState?.gridWindow ?? this.lastSceneState.gridWindow,
       cameraView: currentRenderState?.cameraView ?? this.lastSceneState.cameraView ?? CAMERA_VIEW,
     };
+    this.temporalRenderState = renderState;
     let entityCount = 0;
     let semanticCount = 0;
     const addEntity = (...args) => {
@@ -726,19 +784,16 @@ export class ThreeRendererBackend {
       if (mesh) entityCount++;
       return mesh;
     };
-    const addReadable = (group, geometry, coreMaterial, wx, wy, radius, rotation, z, options = {}, mode = 'world') => {
-      const mesh = this._addReadableEntity(group, geometry, coreMaterial, wx, wy, radius, rotation, z, renderState, mode, options);
-      if (mesh) entityCount++;
-      return mesh;
-    };
     const addSemantic = (...args) => {
       const maybeMode = typeof args[args.length - 1] === 'string' ? args.pop() : 'world';
       const mesh = this._addMesh(this.semanticGroup, ...args, renderState, maybeMode);
-      if (mesh) semanticCount++;
+      if (mesh) {
+        semanticCount++;
+        this.stateVfxCount += 1;
+      }
       return mesh;
     };
     const draw = {
-      readable: addReadable,
       semantic: addSemantic,
       line: (ax, ay, bx, by, material) => {
         const line = this._addLine(this.entityGroup, ax, ay, bx, by, material, renderState);
@@ -756,21 +811,24 @@ export class ThreeRendererBackend {
         if (mesh) entityCount++;
         return mesh;
       },
+      budgetCull: (family, entity, radius = 0.04) => this._recordSpriteState(family, entity, 'budget-cull', radius),
+      state: (family, entity, state, radius = 0.04) => this._recordSpriteState(family, entity, state, radius),
     };
 
-    const suppressWellDebugMarkers = sceneState.titleBackdrop === true;
+    const diagnosticView = this.getViewMode() === 'scene';
     for (const well of sceneState.wells || []) {
-      const semanticMaterial = suppressWellDebugMarkers ? this.entityMaterials.wave : this.entityMaterials.hazardRing;
-      addSemantic(this.entityGeometries.ring, semanticMaterial, well.world.x, well.world.y, well.visual.contourRadius, 0, 0.01);
-      addEntity(this.entityGeometries.ring, this.entityMaterials.wellRing, well.world.x, well.world.y, Math.max(0.07, well.visual.coreRadius * 2.6), 0, 0.03);
-      if (!suppressWellDebugMarkers) {
-        addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore, well.world.x, well.world.y, Math.max(0.018, well.visual.coreRadius), 0, 0.04);
+      if (diagnosticView) {
+        if (addSemantic(this.entityGeometries.ring, this.entityMaterials.hazardRing,
+          well.world.x, well.world.y, well.visual.contourRadius, 0, 0.01)) this.wellDebugPrimitiveCount += 1;
+        if (addEntity(this.entityGeometries.ring, this.entityMaterials.wellRing,
+          well.world.x, well.world.y, Math.max(0.07, well.visual.coreRadius * 2.6), 0, 0.03)) this.wellDebugPrimitiveCount += 1;
+        if (addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore,
+          well.world.x, well.world.y, Math.max(0.018, well.visual.coreRadius), 0, 0.04)) this.wellDebugPrimitiveCount += 1;
       }
     }
-    for (const ring of sceneState.waveRings || []) {
-      const life = Math.max(0, Math.min(1, ring.strength / ring.initialStrength));
-      if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.world.x, ring.world.y, ring.radius || 0.01, 0, 0.02);
-    }
+    // Wave growth remains authoritative fabric state. Product Three mode does
+    // not add a generic ring on top; named slingshot/portal state owns the
+    // semantic affordances that sprites cannot carry.
     this.visualFamilies.portal.update(frame, draw);
     this.visualFamilies.wreck.update(frame, draw);
     this.visualFamilies.worldSprites.update(frame, draw);
@@ -783,7 +841,17 @@ export class ThreeRendererBackend {
       matteCount: this.matteCount,
       estimatedCoverage: Number(this.matteCoverage.toFixed(4)),
       shipCandidateCount: this.shipCandidateCount,
+      spriteCoreCount: this.spriteCoreCount,
+      genericSpritePartCount: this.genericSpritePartCount,
+      wellDebugPrimitiveCount: this.wellDebugPrimitiveCount,
+      stateVfxCount: this.stateVfxCount,
+      opacityEntityCount: this.opacityEntityCount,
+      pooledSpriteMaterials: this.entitySpriteMaterials.size,
     };
+    this.temporalVisibility.endFrame();
+    this.lastEntitySeparation.temporalVisibility = this.temporalVisibility.getStats({
+      families: TEMPORAL_SPRITE_FAMILIES,
+    });
   }
 
   render(frameContext) {
@@ -927,6 +995,8 @@ export class ThreeRendererBackend {
     this.sourceCanvas.removeEventListener('webglcontextlost', this.onContextLost);
     this.sourceCanvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     for (const family of Object.values(this.visualFamilies)) family.dispose();
+    for (const material of this.entitySpriteMaterials) material.dispose();
+    this.entitySpriteMaterials.clear();
     this.entityAssets.dispose();
     this.sceneTarget.dispose();
     this.copyMaterial.dispose();

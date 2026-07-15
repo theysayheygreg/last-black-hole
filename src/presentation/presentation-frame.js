@@ -37,6 +37,10 @@ function optionalFinite(value) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+function opacity(source = {}) {
+  return Math.max(0, Math.min(1, finite(source.opacity, 1)));
+}
+
 function text(value, fallback = '') {
   return value == null ? fallback : String(value);
 }
@@ -231,6 +235,7 @@ function normalizeLocalPlayer(source = null, scene = {}) {
   return Object.freeze({
     id: id(source.id || source.clientId, 'local-player'),
     world: point(source),
+    opacity: opacity(source),
     movement: Object.freeze({
       velocity: motion,
       facing: finite(source.facing, Math.atan2(motion.y, motion.x)),
@@ -258,6 +263,7 @@ function normalizeEntity(family, source, index) {
   const base = {
     id: id(source?.id || source?.name, `${family}-${index}`),
     world: point(source, family === 'waveRings' ? 'sourceWX' : 'wx', family === 'waveRings' ? 'sourceWY' : 'wy'),
+    opacity: opacity(source),
   };
   switch (family) {
     case 'wells':
@@ -312,7 +318,6 @@ function normalizeEntity(family, source, index) {
         ...base,
         variant,
         radius: Math.max(0.001, finite(source.radius ?? source.captureRadius, 0.08)),
-        opacity: Math.max(0, Math.min(1, finite(source.opacity, 1))),
         blocked,
         final,
         visualState: variant === 'rift'

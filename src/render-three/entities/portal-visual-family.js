@@ -14,15 +14,28 @@ export class PortalVisualFamily extends VisualFamilyLifecycle {
     const portals = frame.world?.portals || [];
     const budget = Math.max(0, frame.style?.entityBudgets?.portals ?? 20);
     this.objectBudget = budget;
-    let index = 0;
-    // Only a submitted sprite consumes the bounded visible-object budget.
-    for (; index < portals.length && this.activeObjects < budget; index++) {
-      const portal = portals[index];
+    let dropped = 0;
+    // Only a submitted sprite consumes the bounded visible-object budget, but
+    // budget skips remain explicit temporal records.
+    for (const portal of portals) {
+      if (this.activeObjects >= budget) {
+        draw.budgetCull?.('portals', portal, (portal.radius || 0.08) * 1.15);
+        dropped += 1;
+        continue;
+      }
       const core = draw.sprite(this.group, selectPortalAsset(portal), portal.world.x, portal.world.y,
         (portal.radius || 0.08) * 1.15, 0, 'portals', portal);
-      if (core) this.countObject(3);
+      if (core) this.countObject(1);
+      if (core && portal.visualState === 'blocked' && draw.semantic?.(
+        this.geometries.ring, this.materials.portalBlockedState || this.materials.portal,
+        portal.world.x, portal.world.y, (portal.radius || 0.08) * 1.28, 0, 0.145, 'screen'
+      )) this.countPart(1);
+      if (core && portal.visualState === 'final' && draw.semantic?.(
+        this.geometries.ring, this.materials.portalFinalState || this.materials.portal,
+        portal.world.x, portal.world.y, (portal.radius || 0.08) * 1.22, 0, 0.145, 'screen'
+      )) this.countPart(1);
     }
-    this.drop(portals.length - index);
+    this.drop(dropped);
     return this.getStats();
   }
 }

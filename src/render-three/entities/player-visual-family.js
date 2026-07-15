@@ -27,32 +27,50 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     // When enabled, the local ship claims the first slot; multiplayer density
     // may drop remote echoes, never the pilot.
     const player = frame.localPlayer;
-    if (remaining > 0 && player && player.status !== 'dead') {
-      const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
-        0.044, -player.movement.facing - Math.PI * 0.5, 'player');
-      if (core) { this.countObject(4); remaining -= 1; }
+    if (player) {
+      if (player.status === 'dead') {
+        draw.state?.('player', player, 'absent', 0.044);
+      } else if (remaining <= 0) {
+        draw.budgetCull?.('player', player, 0.044);
+      } else {
+        const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
+          0.044, -player.movement.facing - Math.PI * 0.5, 'player', player);
+        if (core) { this.countObject(1); remaining -= 1; }
+      }
     }
 
-    let candidateIndex = 0;
     let visibleCandidates = 0;
-    for (; candidateIndex < candidates.length && visibleCandidates < 2 && remaining > 0; candidateIndex++) {
-      if (draw.shipCandidate(candidates[candidateIndex])) {
+    let droppedCandidates = 0;
+    for (const candidate of candidates) {
+      if (remaining <= 0 || visibleCandidates >= 2) {
+        draw.budgetCull?.('shipCandidates', candidate, candidate.radius || 0.040);
+        droppedCandidates += 1;
+        continue;
+      }
+      if (draw.shipCandidate(candidate)) {
         this.countObject(4);
         visibleCandidates += 1;
         remaining -= 1;
       }
     }
-    this.drop(Math.max(0, candidates.length - candidateIndex));
+    this.drop(droppedCandidates);
 
-    let remoteIndex = 0;
-    for (; remoteIndex < remotePlayers.length && remaining > 0; remoteIndex++) {
-      const remote = remotePlayers[remoteIndex];
-      if (remote.status === 'dead') continue;
+    let droppedRemotes = 0;
+    for (const remote of remotePlayers) {
+      if (remote.status === 'dead') {
+        draw.state?.('remotePlayers', remote, 'absent', 0.040);
+        continue;
+      }
+      if (remaining <= 0) {
+        draw.budgetCull?.('remotePlayers', remote, 0.040);
+        droppedRemotes += 1;
+        continue;
+      }
       const core = draw.sprite(this.group, selectPlayerAsset(remote, { remote: true }),
-        remote.world.x, remote.world.y, 0.040, heading(remote) - Math.PI * 0.5, 'remotePlayers');
-      if (core) { this.countObject(4); remaining -= 1; }
+        remote.world.x, remote.world.y, 0.040, heading(remote) - Math.PI * 0.5, 'remotePlayers', remote);
+      if (core) { this.countObject(1); remaining -= 1; }
     }
-    this.drop(remotePlayers.length - remoteIndex);
+    this.drop(droppedRemotes);
 
     const sling = player?.slingshot;
     const telegraph = sling?.telegraph;

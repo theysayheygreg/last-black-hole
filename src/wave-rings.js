@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldRadiusToFluidUV, worldRadiusToScreen, worldToScreen, worldDirectionTo, worldToFluidUV, splatScale } from './coords.js';
+import { worldRadiusToFluidUV, worldDirectionTo, worldToFluidUV, splatScale } from './coords.js';
 import { waveBandForce, applyForceToShip } from './physics.js';
 
 class WaveRing {
@@ -90,52 +90,6 @@ export class WaveRingSystem {
         fluid.visualSplat(px, py, splatRadius * s2,
           brightness * 0.3, brightness * 0.8, brightness);
       }
-    }
-  }
-
-  /**
-   * Render wave rings on the overlay canvas (camera-aware).
-   */
-  render(ctx, camX, camY, canvasW, canvasH) {
-    for (const ring of this.rings) {
-      const [srcX, srcY] = worldToScreen(ring.sourceWX, ring.sourceWY, camX, camY, canvasW, canvasH);
-      const radiusPx = worldRadiusToScreen(ring.radius, canvasW, canvasH);
-      const bandPx = worldRadiusToScreen(CONFIG.events.waveWidth, canvasW, canvasH);
-      const lineWidthPx = (bandPx.rx + bandPx.ry) * 0.5;
-
-      // life = 1.0 at spawn, decays toward 0 as amplitude fades.
-      // Alpha overshoots early (×1.5) then caps at 0.7 — rings start bright, fade gracefully.
-      const life = ring.amplitude / ring.initialAmplitude;
-      const alpha = Math.min(1, life * 1.5) * 0.7;
-      if (alpha < 0.02) continue;
-
-      // Color transitions from bright cyan-white (life=1) to dim blue (life=0).
-      // R: 255→100, G: 255→200, B: always 255.
-      const r = Math.floor(100 + 155 * life);
-      const g = Math.floor(200 + 55 * life);
-      const b = 255;
-
-      ctx.save();
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      // Line width = 15% of the wavefront band width, thinning as amplitude fades
-      ctx.lineWidth = Math.max(1, lineWidthPx * 0.15 * life);
-      ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha * 0.5})`;
-      ctx.shadowBlur = 8 * life;
-
-      ctx.beginPath();
-      ctx.ellipse(srcX, srcY, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      if (life > 0.5) {
-        const innerAlpha = (life - 0.5) * 2 * alpha * 0.4;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${innerAlpha})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.ellipse(srcX, srcY, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      ctx.restore();
     }
   }
 

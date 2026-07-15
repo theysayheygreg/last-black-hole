@@ -39,17 +39,22 @@ export class WorldSpriteVisualFamily extends VisualFamilyLifecycle {
       const entities = world[name] || [];
       const familyBudget = Math.max(0, budget);
       let active = 0;
-      let index = 0;
-      // Walk past culled entries so budgets describe visible scene density.
-      for (; index < entities.length && active < familyBudget; index++) {
-        const entity = entities[index];
+      let dropped = 0;
+      // Walk every expected identity so offscreen and budget decisions reach
+      // the temporal ledger instead of disappearing at the loop boundary.
+      for (const entity of entities) {
+        if (active >= familyBudget) {
+          draw.budgetCull?.(name, entity, selectRadius(entity));
+          dropped += 1;
+          continue;
+        }
         if (draw.sprite(group, selectAsset(entity), entity.world.x, entity.world.y,
           selectRadius(entity), selectRotation(entity), name, entity)) {
-          this.countObject(4);
+          this.countObject(1);
           active += 1;
         }
       }
-      this.drop(entities.length - index);
+      this.drop(dropped);
     }
     return this.getStats();
   }
