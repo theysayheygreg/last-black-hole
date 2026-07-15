@@ -1971,3 +1971,17 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 **Door status:** Open — implementation is deferred, but the server-side layering is now explicit enough to build toward cleanly.
 
 | Mar 31 | Implementation lands: the first persistent control-plane slice now exists. Browser profiles carry stable ids, the sim bootstraps durable profile state on join, the server writes back death/extraction/abandon outcomes outside the tick loop, and the client resyncs its local profile from authoritative server truth after remote runs. |
+
+## 2026-07-15: Same-Version Integration And Cross-Version Merge Authority
+
+- Workstream Sols may integrate accepted child branches into their named
+  version integration branch after focused proof and pinned-SHA review. Normal
+  development inside v0.3 or inside v0.4 does not require Greg to approve each
+  merge, rebase, or cherry-pick.
+- Every operation that crosses a version line still requires Greg to approve
+  the exact source, target, and intent. This includes `main`/v0.2 and v0.3 in
+  either direction, v0.3 and v0.4 in either direction, every promotion into
+  `main`, and every v0.4 backflow into a lower version.
+- Primary Sol owns cross-version execution, RC candidate selection, and the
+  resulting merge receipt. Approval applies to one named cross-version
+  operation and does not create an automatic synchronization cadence.

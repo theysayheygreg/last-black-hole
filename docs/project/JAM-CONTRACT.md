@@ -339,8 +339,9 @@ For a v0.2 demo fix:
 2. Make the smallest useful fix.
 3. Run the risk-matched validation lane.
 4. Commit to `main`.
-5. If the fix still matters to v0.3, merge `main` into the v0.3 branch or
-   cherry-pick the single commit if the branch is intentionally isolated.
+5. If the fix still matters to v0.3, report the exact forward-port source and
+   target to Primary Sol. Merge or cherry-pick it only after Greg approves that
+   cross-version operation.
 
 For v0.3 structural work:
 

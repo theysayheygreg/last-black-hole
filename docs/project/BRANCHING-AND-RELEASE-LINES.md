@@ -48,8 +48,8 @@ all workstreams operate today. Route to v0.3 for next-version features and
 architecture. Route to v0.4 only for experimental multiplayer product work.
 
 When a later line exposes a current-version bug, fix it on `main` first when
-practical, then merge forward. Do not backport scaffolding that does not
-independently help the current line.
+practical, then report the exact forward-port operation for Greg's approval.
+Do not backport scaffolding that does not independently help the current line.
 
 Every delegated task names its branch/base SHA, owned write scope, avoided
 high-conflict files, focused proof, committed deliverable, and stop conditions.
@@ -57,23 +57,28 @@ Chat or agent memory is not a handoff.
 
 ## Merge Ownership And Cadence
 
-Workstream Sols integrate child commits inside their own version. Primary Sol
-alone performs cross-version merges and release-candidate selection.
+Workstream Sols integrate accepted child commits inside their own version after
+focused proof and pinned-SHA review. These same-version development operations
+do not require Greg to approve each merge, rebase, or cherry-pick. Primary Sol
+still owns release-candidate selection.
 
-No branch merge, cross-version cherry-pick, rebase, or promotion occurs without
-Greg explicitly approving the specific source, target, and intent. A settled
-checkpoint, RC/release candidate, or concrete shared dependency is a reason for
-Primary Sol to ask; it is never automatic permission. Until approval, let v0.3
-and v0.4 advance independently and record handoffs in commits.
+Every cross-version merge, cherry-pick, rebase, or promotion requires Greg to
+approve the specific source, target, and intent. This includes `main`/v0.2 and
+v0.3 in either direction, v0.3 and v0.4 in either direction, and any v0.4
+backflow into a lower line. A settled checkpoint, RC/release candidate, or
+concrete shared dependency is a reason for Primary Sol to ask; it is never
+automatic permission. Until approval, let version lines advance independently
+and record handoffs in commits.
 
-After approval, execute the operation as a dedicated high-effort bounded task
+After cross-version approval, execute the operation as a dedicated high-effort bounded task
 using the Primary Sol skill or a high-effort merge subagent. Pin source and
 target SHAs, preserve branch direction, review conflicts as product contracts,
 validate the resulting candidate asynchronously, and return one merge receipt.
 Do not fold merge work into routine orchestration or run speculative merge CI.
 
 Never resolve next-version conflict noise by editing `main`. Greg's approval of
-one operation does not authorize later synchronization or promotion.
+one cross-version operation does not authorize later synchronization or
+promotion.
 
 ## Validation By Checkpoint
 
