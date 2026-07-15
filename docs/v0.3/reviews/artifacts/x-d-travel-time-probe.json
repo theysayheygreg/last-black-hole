@@ -1,0 +1,2717 @@
+{
+  "schema": "x-d-travel-time-probe-v1",
+  "measurementBaseCommit": "e693adb26fc69390bdb2b0a1d9fb72404f4f5376",
+  "sourceCommits": {
+    "acceptedBase": "e693adb26fc69390bdb2b0a1d9fb72404f4f5376",
+    "laterEncounterGenerationDesign": "a4efcee8f4f4ee39727e8bee8d0d21ec2f2f4bb3"
+  },
+  "mapIds": [
+    "shallows",
+    "expanse",
+    "deep-field"
+  ],
+  "mapRegistrySource": "src/content/map-scales.data.json:MAP_SCALE_REGISTRY",
+  "movementSource": "src/content/movement-step.js -> src/content/movement.data.json",
+  "sessionProfileSource": "src/content/session-profiles.data.json:SESSION_PROFILES",
+  "sampleCount": 3,
+  "sampleSeeds": [
+    101,
+    202,
+    303
+  ],
+  "seedInfluence": "none: no RNG draw enters the isolated movement protocol; seeds are reproducibility labels",
+  "protocol": {
+    "dt": "1 / canonical session profile tickHz: 1/15, 1/12, 1/10 seconds for Shallows, Expanse, Deep Field",
+    "input": "moveX=shortest-path unit direction, moveY=shortest-path unit direction, thrust=1, brake=0; held for every tick",
+    "cruise": "canonical baseline brain defaults, sustained full-stick thrust, no burn, no flow, no entity forces",
+    "burst": "Breacher default brain with existing Burn active; burn thrustMult and fuelMax read from HULL_DEFINITIONS, no slingshot",
+    "deltaV": "sufficientDeltaV=true from AUTHORED_MAP_CONTRACT.travel; movement lane uses a 1e9 delta-v reserve so depletion cannot become the measured travel time",
+    "flow": "zero current sample; no wells, stars, planetoids, waves, gravity, contacts, or collisions",
+    "termination": "stop after accumulated path distance reaches target distance; measured time is completed simulation ticks",
+    "probes": "one cell = 1 current registry world unit; full-width = one toroidal map circumference; route legs use current authored route anchors and shortest toroidal distance"
+  },
+  "units": {
+    "currentRegistry": "map dimensions are world units; current measurement uses 1 wu = 1 provisional cell for placement math",
+    "fictionScale": "unresolved and intentionally not ratified; no meters conversion is claimed"
+  },
+  "summary": [
+    {
+      "mapId": "shallows",
+      "dimensions": {
+        "width": 5,
+        "height": 5
+      },
+      "profileId": "small",
+      "tickHz": 15,
+      "dtSeconds": 0.06666666666666667,
+      "cruiseSecondsPerCell": 1.4,
+      "burstSecondsPerCell": 0.6666666666666666,
+      "cruiseFullWidthCrossingSeconds": 5.133333333333333,
+      "burstFullWidthCrossingSeconds": 1.8666666666666667,
+      "representativeRoute": {
+        "routeId": "first-current",
+        "legs": [
+          {
+            "legIndex": 0,
+            "distanceWorldUnits": 1.2018504251546636,
+            "cruiseSeconds": 1.5333333333333332,
+            "burstSeconds": 0.7333333333333333
+          }
+        ]
+      },
+      "sensorRead": {
+        "source": "session profile entityRelevanceRadius",
+        "radiusWorldUnits": 1.4,
+        "radiusCellsProvisional": 1.4
+      },
+      "decisionsPerMinuteProxy": {
+        "definition": "60 / (cruise seconds per cell × sensor radius in provisional cells)",
+        "value": 30.612244897959187
+      }
+    },
+    {
+      "mapId": "expanse",
+      "dimensions": {
+        "width": 15,
+        "height": 15
+      },
+      "profileId": "medium",
+      "tickHz": 12,
+      "dtSeconds": 0.08333333333333333,
+      "cruiseSecondsPerCell": 1.4166666666666665,
+      "burstSecondsPerCell": 0.6666666666666666,
+      "cruiseFullWidthCrossingSeconds": 14.75,
+      "burstFullWidthCrossingSeconds": 4.666666666666666,
+      "representativeRoute": {
+        "routeId": "outer-circuit",
+        "legs": [
+          {
+            "legIndex": 0,
+            "distanceWorldUnits": 1.2727922061357855,
+            "cruiseSeconds": 1.6666666666666665,
+            "burstSeconds": 0.75
+          },
+          {
+            "legIndex": 1,
+            "distanceWorldUnits": 9.333809511662427,
+            "cruiseSeconds": 9.333333333333332,
+            "burstSeconds": 3.083333333333333
+          },
+          {
+            "legIndex": 2,
+            "distanceWorldUnits": 0.8999999999999986,
+            "cruiseSeconds": 1.25,
+            "burstSeconds": 0.5833333333333333
+          }
+        ]
+      },
+      "sensorRead": {
+        "source": "session profile entityRelevanceRadius",
+        "radiusWorldUnits": 1.2,
+        "radiusCellsProvisional": 1.2
+      },
+      "decisionsPerMinuteProxy": {
+        "definition": "60 / (cruise seconds per cell × sensor radius in provisional cells)",
+        "value": 35.294117647058826
+      }
+    },
+    {
+      "mapId": "deep-field",
+      "dimensions": {
+        "width": 25,
+        "height": 25
+      },
+      "profileId": "large",
+      "tickHz": 10,
+      "dtSeconds": 0.1,
+      "cruiseSecondsPerCell": 1.4000000000000001,
+      "burstSecondsPerCell": 0.7000000000000001,
+      "cruiseFullWidthCrossingSeconds": 24.900000000000002,
+      "burstFullWidthCrossingSeconds": 7.5,
+      "representativeRoute": {
+        "routeId": "long-descent",
+        "legs": [
+          {
+            "legIndex": 0,
+            "distanceWorldUnits": 1.7677669529663689,
+            "cruiseSeconds": 2.2,
+            "burstSeconds": 1
+          },
+          {
+            "legIndex": 1,
+            "distanceWorldUnits": 15.925608308632986,
+            "cruiseSeconds": 16,
+            "burstSeconds": 5
+          }
+        ]
+      },
+      "sensorRead": {
+        "source": "session profile entityRelevanceRadius",
+        "radiusWorldUnits": 1,
+        "radiusCellsProvisional": 1
+      },
+      "decisionsPerMinuteProxy": {
+        "definition": "60 / (cruise seconds per cell × sensor radius in provisional cells)",
+        "value": 42.857142857142854
+      }
+    }
+  ],
+  "rawRuns": [
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 5,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 21,
+      "simulatedSeconds": 1.4,
+      "pathDistanceWorldUnits": 1.0666841238414824,
+      "finalPosition": {
+        "x": 1.0666841238414815,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0248409636505686,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983.200001,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 5,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 21,
+      "simulatedSeconds": 1.4,
+      "pathDistanceWorldUnits": 1.0666841238414824,
+      "finalPosition": {
+        "x": 1.0666841238414815,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0248409636505686,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983.200001,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 5,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 21,
+      "simulatedSeconds": 1.4,
+      "pathDistanceWorldUnits": 1.0666841238414824,
+      "finalPosition": {
+        "x": 1.0666841238414815,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0248409636505686,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983.200001,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 5,
+      "distanceWorldUnits": 5,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 77,
+      "simulatedSeconds": 5.133333333333333,
+      "pathDistanceWorldUnits": 5.06629928998603,
+      "finalPosition": {
+        "x": 0.06629928998603152,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0773727933945656,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999938.4000037,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 5,
+      "distanceWorldUnits": 5,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 77,
+      "simulatedSeconds": 5.133333333333333,
+      "pathDistanceWorldUnits": 5.06629928998603,
+      "finalPosition": {
+        "x": 0.06629928998603152,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0773727933945656,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999938.4000037,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 5,
+      "distanceWorldUnits": 5,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 77,
+      "simulatedSeconds": 5.133333333333333,
+      "pathDistanceWorldUnits": 5.06629928998603,
+      "finalPosition": {
+        "x": 0.06629928998603152,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0773727933945656,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999938.4000037,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "first-current",
+      "legIndex": 0,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 5,
+      "distanceWorldUnits": 1.2018504251546636,
+      "start": {
+        "x": 3.5000000000000004,
+        "y": 1.5
+      },
+      "target": {
+        "x": 2.5,
+        "y": 0.8333333333333334
+      },
+      "direction": {
+        "x": -0.8320502943378437,
+        "y": -0.5547001962252289
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 23,
+      "simulatedSeconds": 1.5333333333333332,
+      "pathDistanceWorldUnits": 1.204674698294238,
+      "finalPosition": {
+        "x": 2.497650062702931,
+        "y": 0.8317667084686189
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.037977708646432,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999981.6000011,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "first-current",
+      "legIndex": 0,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 5,
+      "distanceWorldUnits": 1.2018504251546636,
+      "start": {
+        "x": 3.5000000000000004,
+        "y": 1.5
+      },
+      "target": {
+        "x": 2.5,
+        "y": 0.8333333333333334
+      },
+      "direction": {
+        "x": -0.8320502943378437,
+        "y": -0.5547001962252289
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 23,
+      "simulatedSeconds": 1.5333333333333332,
+      "pathDistanceWorldUnits": 1.204674698294238,
+      "finalPosition": {
+        "x": 2.497650062702931,
+        "y": 0.8317667084686189
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.037977708646432,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999981.6000011,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "first-current",
+      "legIndex": 0,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 5,
+      "distanceWorldUnits": 1.2018504251546636,
+      "start": {
+        "x": 3.5000000000000004,
+        "y": 1.5
+      },
+      "target": {
+        "x": 2.5,
+        "y": 0.8333333333333334
+      },
+      "direction": {
+        "x": -0.8320502943378437,
+        "y": -0.5547001962252289
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 23,
+      "simulatedSeconds": 1.5333333333333332,
+      "pathDistanceWorldUnits": 1.204674698294238,
+      "finalPosition": {
+        "x": 2.497650062702931,
+        "y": 0.8317667084686189
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.037977708646432,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999981.6000011,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 5,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 10,
+      "simulatedSeconds": 0.6666666666666666,
+      "pathDistanceWorldUnits": 1.109812740525548,
+      "finalPosition": {
+        "x": 1.1098127405255491,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.5801367356843965,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999987.2000003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.333333333333336
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 5,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 10,
+      "simulatedSeconds": 0.6666666666666666,
+      "pathDistanceWorldUnits": 1.109812740525548,
+      "finalPosition": {
+        "x": 1.1098127405255491,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.5801367356843965,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999987.2000003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.333333333333336
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 5,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 10,
+      "simulatedSeconds": 0.6666666666666666,
+      "pathDistanceWorldUnits": 1.109812740525548,
+      "finalPosition": {
+        "x": 1.1098127405255491,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.5801367356843965,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999987.2000003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.333333333333336
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 5,
+      "distanceWorldUnits": 5,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 28,
+      "simulatedSeconds": 1.8666666666666667,
+      "pathDistanceWorldUnits": 5.042283800837669,
+      "finalPosition": {
+        "x": 0.04228380083767025,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.586800661548796,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999964.1600008,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 28.13333333333334
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 5,
+      "distanceWorldUnits": 5,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 28,
+      "simulatedSeconds": 1.8666666666666667,
+      "pathDistanceWorldUnits": 5.042283800837669,
+      "finalPosition": {
+        "x": 0.04228380083767025,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.586800661548796,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999964.1600008,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 28.13333333333334
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 5,
+      "distanceWorldUnits": 5,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 28,
+      "simulatedSeconds": 1.8666666666666667,
+      "pathDistanceWorldUnits": 5.042283800837669,
+      "finalPosition": {
+        "x": 0.04228380083767025,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.586800661548796,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999964.1600008,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 28.13333333333334
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "first-current",
+      "legIndex": 0,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 5,
+      "distanceWorldUnits": 1.2018504251546636,
+      "start": {
+        "x": 3.5000000000000004,
+        "y": 1.5
+      },
+      "target": {
+        "x": 2.5,
+        "y": 0.8333333333333334
+      },
+      "direction": {
+        "x": -0.8320502943378437,
+        "y": -0.5547001962252289
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 11,
+      "simulatedSeconds": 0.7333333333333333,
+      "pathDistanceWorldUnits": 1.2903097825595724,
+      "finalPosition": {
+        "x": 2.426397365634312,
+        "y": 0.7842649104228725
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.70745563051037,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985.9200003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.26666666666667
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "first-current",
+      "legIndex": 0,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 5,
+      "distanceWorldUnits": 1.2018504251546636,
+      "start": {
+        "x": 3.5000000000000004,
+        "y": 1.5
+      },
+      "target": {
+        "x": 2.5,
+        "y": 0.8333333333333334
+      },
+      "direction": {
+        "x": -0.8320502943378437,
+        "y": -0.5547001962252289
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 11,
+      "simulatedSeconds": 0.7333333333333333,
+      "pathDistanceWorldUnits": 1.2903097825595724,
+      "finalPosition": {
+        "x": 2.426397365634312,
+        "y": 0.7842649104228725
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.70745563051037,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985.9200003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.26666666666667
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "shallows",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "first-current",
+      "legIndex": 0,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 5,
+      "distanceWorldUnits": 1.2018504251546636,
+      "start": {
+        "x": 3.5000000000000004,
+        "y": 1.5
+      },
+      "target": {
+        "x": 2.5,
+        "y": 0.8333333333333334
+      },
+      "direction": {
+        "x": -0.8320502943378437,
+        "y": -0.5547001962252289
+      },
+      "dtSeconds": 0.06666666666666667,
+      "steps": 11,
+      "simulatedSeconds": 0.7333333333333333,
+      "pathDistanceWorldUnits": 1.2903097825595724,
+      "finalPosition": {
+        "x": 2.426397365634312,
+        "y": 0.7842649104228725
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.70745563051037,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985.9200003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.26666666666667
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 17,
+      "simulatedSeconds": 1.4166666666666665,
+      "pathDistanceWorldUnits": 1.0671238037437656,
+      "finalPosition": {
+        "x": 1.0671238037437654,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0019580156003207,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 17,
+      "simulatedSeconds": 1.4166666666666665,
+      "pathDistanceWorldUnits": 1.0671238037437656,
+      "finalPosition": {
+        "x": 1.0671238037437654,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0019580156003207,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 17,
+      "simulatedSeconds": 1.4166666666666665,
+      "pathDistanceWorldUnits": 1.0671238037437656,
+      "finalPosition": {
+        "x": 1.0671238037437654,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0019580156003207,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 15,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 177,
+      "simulatedSeconds": 14.75,
+      "pathDistanceWorldUnits": 15.052609116523248,
+      "finalPosition": {
+        "x": 0.05260911652322697,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0504391943694993,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999823,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 15,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 177,
+      "simulatedSeconds": 14.75,
+      "pathDistanceWorldUnits": 15.052609116523248,
+      "finalPosition": {
+        "x": 0.05260911652322697,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0504391943694993,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999823,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 15,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 177,
+      "simulatedSeconds": 14.75,
+      "pathDistanceWorldUnits": 15.052609116523248,
+      "finalPosition": {
+        "x": 0.05260911652322697,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0504391943694993,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999823,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 0,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 1.2727922061357855,
+      "start": {
+        "x": 1.7999999999999998,
+        "y": 1.7999999999999998
+      },
+      "target": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "direction": {
+        "x": -0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 20,
+      "simulatedSeconds": 1.6666666666666665,
+      "pathDistanceWorldUnits": 1.3212009010585837,
+      "finalPosition": {
+        "x": 0.8657698835516978,
+        "y": 0.8657698835516978
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.022265476811061,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999980,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 0,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 1.2727922061357855,
+      "start": {
+        "x": 1.7999999999999998,
+        "y": 1.7999999999999998
+      },
+      "target": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "direction": {
+        "x": -0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 20,
+      "simulatedSeconds": 1.6666666666666665,
+      "pathDistanceWorldUnits": 1.3212009010585837,
+      "finalPosition": {
+        "x": 0.8657698835516978,
+        "y": 0.8657698835516978
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.022265476811061,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999980,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 0,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 1.2727922061357855,
+      "start": {
+        "x": 1.7999999999999998,
+        "y": 1.7999999999999998
+      },
+      "target": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "direction": {
+        "x": -0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 20,
+      "simulatedSeconds": 1.6666666666666665,
+      "pathDistanceWorldUnits": 1.3212009010585837,
+      "finalPosition": {
+        "x": 0.8657698835516978,
+        "y": 0.8657698835516978
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.022265476811061,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999980,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 1,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 9.333809511662427,
+      "start": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "target": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "direction": {
+        "x": 0.7071067811865476,
+        "y": 0.7071067811865476
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 112,
+      "simulatedSeconds": 9.333333333333332,
+      "pathDistanceWorldUnits": 9.362730147720352,
+      "finalPosition": {
+        "x": 7.52044997787279,
+        "y": 7.52044997787279
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.050439192706785,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999888,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 1,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 9.333809511662427,
+      "start": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "target": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "direction": {
+        "x": 0.7071067811865476,
+        "y": 0.7071067811865476
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 112,
+      "simulatedSeconds": 9.333333333333332,
+      "pathDistanceWorldUnits": 9.362730147720352,
+      "finalPosition": {
+        "x": 7.52044997787279,
+        "y": 7.52044997787279
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.050439192706785,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999888,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 1,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 9.333809511662427,
+      "start": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "target": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "direction": {
+        "x": 0.7071067811865476,
+        "y": 0.7071067811865476
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 112,
+      "simulatedSeconds": 9.333333333333332,
+      "pathDistanceWorldUnits": 9.362730147720352,
+      "finalPosition": {
+        "x": 7.52044997787279,
+        "y": 7.52044997787279
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.050439192706785,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999888,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 2,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 0.8999999999999986,
+      "start": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "target": {
+        "x": 7.5,
+        "y": 8.399999999999999
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 15,
+      "simulatedSeconds": 1.25,
+      "pathDistanceWorldUnits": 0.9009320727793491,
+      "finalPosition": {
+        "x": 7.5,
+        "y": 8.40093207277934
+      },
+      "finalSpeedWorldUnitsPerSecond": 0.9808205043936398,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 2,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 0.8999999999999986,
+      "start": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "target": {
+        "x": 7.5,
+        "y": 8.399999999999999
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 15,
+      "simulatedSeconds": 1.25,
+      "pathDistanceWorldUnits": 0.9009320727793491,
+      "finalPosition": {
+        "x": 7.5,
+        "y": 8.40093207277934
+      },
+      "finalSpeedWorldUnitsPerSecond": 0.9808205043936398,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 2,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 0.8999999999999986,
+      "start": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "target": {
+        "x": 7.5,
+        "y": 8.399999999999999
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 15,
+      "simulatedSeconds": 1.25,
+      "pathDistanceWorldUnits": 0.9009320727793491,
+      "finalPosition": {
+        "x": 7.5,
+        "y": 8.40093207277934
+      },
+      "finalSpeedWorldUnitsPerSecond": 0.9808205043936398,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 8,
+      "simulatedSeconds": 0.6666666666666666,
+      "pathDistanceWorldUnits": 1.111765768434211,
+      "finalPosition": {
+        "x": 1.1117657684342106,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.536426380971076,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999987.1999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.333333333333343
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 8,
+      "simulatedSeconds": 0.6666666666666666,
+      "pathDistanceWorldUnits": 1.111765768434211,
+      "finalPosition": {
+        "x": 1.1117657684342106,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.536426380971076,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999987.1999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.333333333333343
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 8,
+      "simulatedSeconds": 0.6666666666666666,
+      "pathDistanceWorldUnits": 1.111765768434211,
+      "finalPosition": {
+        "x": 1.1117657684342106,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.536426380971076,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999987.1999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.333333333333343
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 15,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 56,
+      "simulatedSeconds": 4.666666666666666,
+      "pathDistanceWorldUnits": 15.14247289088124,
+      "finalPosition": {
+        "x": 0.1424728908812476,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.6523664488799232,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999910.3999987,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 25.3333333333334
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 15,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 56,
+      "simulatedSeconds": 4.666666666666666,
+      "pathDistanceWorldUnits": 15.14247289088124,
+      "finalPosition": {
+        "x": 0.1424728908812476,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.6523664488799232,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999910.3999987,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 25.3333333333334
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 15,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 56,
+      "simulatedSeconds": 4.666666666666666,
+      "pathDistanceWorldUnits": 15.14247289088124,
+      "finalPosition": {
+        "x": 0.1424728908812476,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.6523664488799232,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999910.3999987,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 25.3333333333334
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 0,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 1.2727922061357855,
+      "start": {
+        "x": 1.7999999999999998,
+        "y": 1.7999999999999998
+      },
+      "target": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "direction": {
+        "x": -0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 9,
+      "simulatedSeconds": 0.75,
+      "pathDistanceWorldUnits": 1.335949451949396,
+      "finalPosition": {
+        "x": 0.8553410832041308,
+        "y": 0.8553410832041308
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.6902042021822203,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985.5999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.25000000000001
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 0,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 1.2727922061357855,
+      "start": {
+        "x": 1.7999999999999998,
+        "y": 1.7999999999999998
+      },
+      "target": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "direction": {
+        "x": -0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 9,
+      "simulatedSeconds": 0.75,
+      "pathDistanceWorldUnits": 1.335949451949396,
+      "finalPosition": {
+        "x": 0.8553410832041308,
+        "y": 0.8553410832041308
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.6902042021822203,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985.5999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.25000000000001
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 0,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 1.2727922061357855,
+      "start": {
+        "x": 1.7999999999999998,
+        "y": 1.7999999999999998
+      },
+      "target": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "direction": {
+        "x": -0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 9,
+      "simulatedSeconds": 0.75,
+      "pathDistanceWorldUnits": 1.335949451949396,
+      "finalPosition": {
+        "x": 0.8553410832041308,
+        "y": 0.8553410832041308
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.6902042021822203,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999985.5999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.25000000000001
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 1,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 9.333809511662427,
+      "start": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "target": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "direction": {
+        "x": 0.7071067811865476,
+        "y": 0.7071067811865476
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 37,
+      "simulatedSeconds": 3.083333333333333,
+      "pathDistanceWorldUnits": 9.365580259674637,
+      "finalPosition": {
+        "x": 7.522465311362808,
+        "y": 7.522465311362808
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.638063803967648,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999940.7999991,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 26.91666666666671
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 1,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 9.333809511662427,
+      "start": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "target": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "direction": {
+        "x": 0.7071067811865476,
+        "y": 0.7071067811865476
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 37,
+      "simulatedSeconds": 3.083333333333333,
+      "pathDistanceWorldUnits": 9.365580259674637,
+      "finalPosition": {
+        "x": 7.522465311362808,
+        "y": 7.522465311362808
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.638063803967648,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999940.7999991,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 26.91666666666671
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 1,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 9.333809511662427,
+      "start": {
+        "x": 0.8999999999999999,
+        "y": 0.8999999999999999
+      },
+      "target": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "direction": {
+        "x": 0.7071067811865476,
+        "y": 0.7071067811865476
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 37,
+      "simulatedSeconds": 3.083333333333333,
+      "pathDistanceWorldUnits": 9.365580259674637,
+      "finalPosition": {
+        "x": 7.522465311362808,
+        "y": 7.522465311362808
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.638063803967648,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999940.7999991,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 26.91666666666671
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 2,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 15,
+      "distanceWorldUnits": 0.8999999999999986,
+      "start": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "target": {
+        "x": 7.5,
+        "y": 8.399999999999999
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 7,
+      "simulatedSeconds": 0.5833333333333333,
+      "pathDistanceWorldUnits": 0.9003969033532879,
+      "finalPosition": {
+        "x": 7.5,
+        "y": 8.400396903353297
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.3580942487192305,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999988.7999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.416666666666675
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 2,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 15,
+      "distanceWorldUnits": 0.8999999999999986,
+      "start": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "target": {
+        "x": 7.5,
+        "y": 8.399999999999999
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 7,
+      "simulatedSeconds": 0.5833333333333333,
+      "pathDistanceWorldUnits": 0.9003969033532879,
+      "finalPosition": {
+        "x": 7.5,
+        "y": 8.400396903353297
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.3580942487192305,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999988.7999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.416666666666675
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "expanse",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "outer-circuit",
+      "legIndex": 2,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 15,
+      "distanceWorldUnits": 0.8999999999999986,
+      "start": {
+        "x": 7.5,
+        "y": 7.5
+      },
+      "target": {
+        "x": 7.5,
+        "y": 8.399999999999999
+      },
+      "direction": {
+        "x": 0,
+        "y": 1
+      },
+      "dtSeconds": 0.08333333333333333,
+      "steps": 7,
+      "simulatedSeconds": 0.5833333333333333,
+      "pathDistanceWorldUnits": 0.9003969033532879,
+      "finalPosition": {
+        "x": 7.5,
+        "y": 8.400396903353297
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.3580942487192305,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999988.7999998,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.416666666666675
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 14,
+      "simulatedSeconds": 1.4000000000000001,
+      "pathDistanceWorldUnits": 1.0336244951328972,
+      "finalPosition": {
+        "x": 1.0336244951329014,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 0.9756003254660751,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983.1999993,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 14,
+      "simulatedSeconds": 1.4000000000000001,
+      "pathDistanceWorldUnits": 1.0336244951328972,
+      "finalPosition": {
+        "x": 1.0336244951329014,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 0.9756003254660751,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983.1999993,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 14,
+      "simulatedSeconds": 1.4000000000000001,
+      "pathDistanceWorldUnits": 1.0336244951328972,
+      "finalPosition": {
+        "x": 1.0336244951329014,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 0.9756003254660751,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999983.1999993,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 25,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 249,
+      "simulatedSeconds": 24.900000000000002,
+      "pathDistanceWorldUnits": 25.069355032947456,
+      "finalPosition": {
+        "x": 0.06935503294709022,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0236339609373992,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999701.1999881,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 25,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 249,
+      "simulatedSeconds": 24.900000000000002,
+      "pathDistanceWorldUnits": 25.069355032947456,
+      "finalPosition": {
+        "x": 0.06935503294709022,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0236339609373992,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999701.1999881,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 25,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 249,
+      "simulatedSeconds": 24.900000000000002,
+      "pathDistanceWorldUnits": 25.069355032947456,
+      "finalPosition": {
+        "x": 0.06935503294709022,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0236339609373992,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999701.1999881,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 0,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 1.7677669529663689,
+      "start": {
+        "x": 2.5,
+        "y": 5
+      },
+      "target": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "direction": {
+        "x": 0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.1,
+      "steps": 22,
+      "simulatedSeconds": 2.2,
+      "pathDistanceWorldUnits": 1.83628825228284,
+      "finalPosition": {
+        "x": 3.798451875402389,
+        "y": 3.7015481245976183
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0152712728453055,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999973.599999,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 0,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 1.7677669529663689,
+      "start": {
+        "x": 2.5,
+        "y": 5
+      },
+      "target": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "direction": {
+        "x": 0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.1,
+      "steps": 22,
+      "simulatedSeconds": 2.2,
+      "pathDistanceWorldUnits": 1.83628825228284,
+      "finalPosition": {
+        "x": 3.798451875402389,
+        "y": 3.7015481245976183
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0152712728453055,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999973.599999,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 0,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 1.7677669529663689,
+      "start": {
+        "x": 2.5,
+        "y": 5
+      },
+      "target": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "direction": {
+        "x": 0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.1,
+      "steps": 22,
+      "simulatedSeconds": 2.2,
+      "pathDistanceWorldUnits": 1.83628825228284,
+      "finalPosition": {
+        "x": 3.798451875402389,
+        "y": 3.7015481245976183
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0152712728453055,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999973.599999,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 1,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 15.925608308632986,
+      "start": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "target": {
+        "x": 17,
+        "y": 18
+      },
+      "direction": {
+        "x": -0.7378054120312966,
+        "y": -0.6750134620711862
+      },
+      "dtSeconds": 0.1,
+      "steps": 160,
+      "simulatedSeconds": 16,
+      "pathDistanceWorldUnits": 15.959012780604631,
+      "finalPosition": {
+        "x": 16.9753539997933,
+        "y": 17.977451531725762
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0236339609373983,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999807.9999924,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 1,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 15.925608308632986,
+      "start": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "target": {
+        "x": 17,
+        "y": 18
+      },
+      "direction": {
+        "x": -0.7378054120312966,
+        "y": -0.6750134620711862
+      },
+      "dtSeconds": 0.1,
+      "steps": 160,
+      "simulatedSeconds": 16,
+      "pathDistanceWorldUnits": 15.959012780604631,
+      "finalPosition": {
+        "x": 16.9753539997933,
+        "y": 17.977451531725762
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0236339609373983,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999807.9999924,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "cruise",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 1,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 15.925608308632986,
+      "start": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "target": {
+        "x": 17,
+        "y": 18
+      },
+      "direction": {
+        "x": -0.7378054120312966,
+        "y": -0.6750134620711862
+      },
+      "dtSeconds": 0.1,
+      "steps": 160,
+      "simulatedSeconds": 16,
+      "pathDistanceWorldUnits": 15.959012780604631,
+      "finalPosition": {
+        "x": 16.9753539997933,
+        "y": 17.977451531725762
+      },
+      "finalSpeedWorldUnitsPerSecond": 1.0236339609373983,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999807.9999924,
+      "burnFuelMax": null,
+      "burnFuelRemaining": null
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 7,
+      "simulatedSeconds": 0.7000000000000001,
+      "pathDistanceWorldUnits": 1.200094131284761,
+      "finalPosition": {
+        "x": 1.2000941312847644,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.55587846462835,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999986.5600003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.29999999999999
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 7,
+      "simulatedSeconds": 0.7000000000000001,
+      "pathDistanceWorldUnits": 1.200094131284761,
+      "finalPosition": {
+        "x": 1.2000941312847644,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.55587846462835,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999986.5600003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.29999999999999
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "one-cell",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 1,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 7,
+      "simulatedSeconds": 0.7000000000000001,
+      "pathDistanceWorldUnits": 1.200094131284761,
+      "finalPosition": {
+        "x": 1.2000941312847644,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.55587846462835,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999986.5600003,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 29.29999999999999
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 25,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 75,
+      "simulatedSeconds": 7.5,
+      "pathDistanceWorldUnits": 25.043136481626057,
+      "finalPosition": {
+        "x": 0.04313648162606398,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.5837075113555446,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999856.0000032,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 22.499999999999893
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 25,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 75,
+      "simulatedSeconds": 7.5,
+      "pathDistanceWorldUnits": 25.043136481626057,
+      "finalPosition": {
+        "x": 0.04313648162606398,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.5837075113555446,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999856.0000032,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 22.499999999999893
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "full-width-crossing",
+      "routeId": null,
+      "legIndex": null,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 25,
+      "start": {
+        "x": 0,
+        "y": 0
+      },
+      "target": null,
+      "direction": {
+        "x": 1,
+        "y": 0
+      },
+      "dtSeconds": 0.1,
+      "steps": 75,
+      "simulatedSeconds": 7.5,
+      "pathDistanceWorldUnits": 25.043136481626057,
+      "finalPosition": {
+        "x": 0.04313648162606398,
+        "y": 0
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.5837075113555446,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999856.0000032,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 22.499999999999893
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 0,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 1.7677669529663689,
+      "start": {
+        "x": 2.5,
+        "y": 5
+      },
+      "target": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "direction": {
+        "x": 0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.1,
+      "steps": 10,
+      "simulatedSeconds": 1,
+      "pathDistanceWorldUnits": 2.0571026229106635,
+      "finalPosition": {
+        "x": 3.954591214256766,
+        "y": 3.5454087857432377
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.981899725088985,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999980.8000004,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 28.999999999999986
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 0,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 1.7677669529663689,
+      "start": {
+        "x": 2.5,
+        "y": 5
+      },
+      "target": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "direction": {
+        "x": 0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.1,
+      "steps": 10,
+      "simulatedSeconds": 1,
+      "pathDistanceWorldUnits": 2.0571026229106635,
+      "finalPosition": {
+        "x": 3.954591214256766,
+        "y": 3.5454087857432377
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.981899725088985,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999980.8000004,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 28.999999999999986
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 0,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 1.7677669529663689,
+      "start": {
+        "x": 2.5,
+        "y": 5
+      },
+      "target": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "direction": {
+        "x": 0.7071067811865475,
+        "y": -0.7071067811865475
+      },
+      "dtSeconds": 0.1,
+      "steps": 10,
+      "simulatedSeconds": 1,
+      "pathDistanceWorldUnits": 2.0571026229106635,
+      "finalPosition": {
+        "x": 3.954591214256766,
+        "y": 3.5454087857432377
+      },
+      "finalSpeedWorldUnitsPerSecond": 2.981899725088985,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999980.8000004,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 28.999999999999986
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 1,
+      "sampleIndex": 0,
+      "seed": 101,
+      "worldScale": 25,
+      "distanceWorldUnits": 15.925608308632986,
+      "start": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "target": {
+        "x": 17,
+        "y": 18
+      },
+      "direction": {
+        "x": -0.7378054120312966,
+        "y": -0.6750134620711862
+      },
+      "dtSeconds": 0.1,
+      "steps": 50,
+      "simulatedSeconds": 5,
+      "pathDistanceWorldUnits": 16.08409606980822,
+      "finalPosition": {
+        "x": 16.883066872064205,
+        "y": 17.89301862763319
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.583234438567813,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999904.0000021,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 24.99999999999993
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 1,
+      "sampleIndex": 1,
+      "seed": 202,
+      "worldScale": 25,
+      "distanceWorldUnits": 15.925608308632986,
+      "start": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "target": {
+        "x": 17,
+        "y": 18
+      },
+      "direction": {
+        "x": -0.7378054120312966,
+        "y": -0.6750134620711862
+      },
+      "dtSeconds": 0.1,
+      "steps": 50,
+      "simulatedSeconds": 5,
+      "pathDistanceWorldUnits": 16.08409606980822,
+      "finalPosition": {
+        "x": 16.883066872064205,
+        "y": 17.89301862763319
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.583234438567813,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999904.0000021,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 24.99999999999993
+    },
+    {
+      "schema": "x-d-travel-time-raw-run-v1",
+      "mapId": "deep-field",
+      "mode": "burst",
+      "probeKind": "representative-route-leg",
+      "routeId": "long-descent",
+      "legIndex": 1,
+      "sampleIndex": 2,
+      "seed": 303,
+      "worldScale": 25,
+      "distanceWorldUnits": 15.925608308632986,
+      "start": {
+        "x": 3.75,
+        "y": 3.75
+      },
+      "target": {
+        "x": 17,
+        "y": 18
+      },
+      "direction": {
+        "x": -0.7378054120312966,
+        "y": -0.6750134620711862
+      },
+      "dtSeconds": 0.1,
+      "steps": 50,
+      "simulatedSeconds": 5,
+      "pathDistanceWorldUnits": 16.08409606980822,
+      "finalPosition": {
+        "x": 16.883066872064205,
+        "y": 17.89301862763319
+      },
+      "finalSpeedWorldUnitsPerSecond": 3.583234438567813,
+      "initialDeltaV": 1000000000,
+      "finalDeltaV": 999999904.0000021,
+      "burnFuelMax": 30,
+      "burnFuelRemaining": 24.99999999999993
+    }
+  ]
+}

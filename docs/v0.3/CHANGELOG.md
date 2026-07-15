@@ -20,3 +20,7 @@
   `3136/4096` cells and an observed `323430/500000` snapshot bytes; client
   resources remain `192` fluid, `3` world units local, and `64` coarse.
 - Deferred the broader S24 population catalog to a later decision.
+
+## 2026-07-15
+
+- X-D measured current cruise and Breacher Burn travel at live profile dt for the 5x5, 15x15, and 25x25 registry, including raw runs, authority read radii, and a derived decisions-per-minute proxy; no gameplay constants changed.
