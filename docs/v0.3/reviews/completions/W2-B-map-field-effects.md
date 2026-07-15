@@ -10,6 +10,8 @@ Read with the [S9a/S9b review source](../v0.3.1-design-review.md), the
 ## Completion status
 
 - **Outcome:** Done as a design-only W2-B sketch; no field is implemented.
+- **What changed:** `W2-B-map-field-effects.md` records the map field effects
+  design artifact; behavior delta: none (design-only).
 - **Evidence:** Source links resolve, the accepted/open/later boundary is
   explicit, and the docs-only contradiction and diff checks pass.
 - **Deviations:** None from the accepted S9b boundary; no bespoke physics,
