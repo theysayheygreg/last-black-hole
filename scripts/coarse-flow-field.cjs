@@ -1,19 +1,15 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
+const { wrapPosition, wrappedDelta } = require("./sim/world-geometry.cjs");
+const { BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const FORCE_MIN_DIST = 0.15;
 
 function wrapWorld(value, worldScale) {
-  let wrapped = value;
-  while (wrapped < 0) wrapped += worldScale;
-  while (wrapped >= worldScale) wrapped -= worldScale;
-  return wrapped;
+  return wrapPosition(value, worldScale);
 }
 
 function worldDisplacement(a, b, worldScale) {
-  let delta = b - a;
-  if (delta > worldScale / 2) delta -= worldScale;
-  if (delta < -worldScale / 2) delta += worldScale;
-  return delta;
+  return wrappedDelta(a, b, worldScale);
 }
 
 function clamp01(value) {
@@ -38,6 +34,7 @@ function buildCoarseFlowField({
   wellGravityScale = 0.6,
   wellGravityFalloff = 1.5,
   wellGravityMaxRange = 1.2,
+  seededSea = null,
   waveShipPush = 0.8,
   waveWidth = 0.1,
 }) {
@@ -56,6 +53,8 @@ function buildCoarseFlowField({
       let gravityY = 0;
       let waveX = 0;
       let waveY = 0;
+      let ambientX = 0;
+      let ambientY = 0;
       let hazard = 0;
       let surf = 0;
       let signalShadow = 0;
@@ -110,6 +109,17 @@ function buildCoarseFlowField({
         }
       }
 
+      const ambient = sampleSeededSea(seededSea, wx, wy);
+      ambientX = ambient.x;
+      ambientY = ambient.y;
+      currentX += ambientX;
+      currentY += ambientY;
+      const ambientMagnitude = Math.hypot(ambientX, ambientY);
+      if (ambientMagnitude > bestCurrent) {
+        bestCurrent = ambientMagnitude;
+        sourceWellId = ambient.sourceWellId;
+      }
+
       const halfWidth = waveWidth * 0.5;
       for (const ring of waveRings) {
         const dx = worldDisplacement(ring.sourceWX, wx, worldScale);
@@ -133,6 +143,8 @@ function buildCoarseFlowField({
       cells[row * columns + col] = {
         currentX,
         currentY,
+        ambientX,
+        ambientY,
         gravityX,
         gravityY,
         waveX,
@@ -197,6 +209,8 @@ function sampleCoarseFlowField(field, wx, wy) {
 
   const currentX = bilerp("currentX");
   const currentY = bilerp("currentY");
+  const ambientX = bilerp("ambientX");
+  const ambientY = bilerp("ambientY");
   const gravityX = bilerp("gravityX");
   const gravityY = bilerp("gravityY");
   const waveX = bilerp("waveX");
@@ -225,6 +239,9 @@ function sampleCoarseFlowField(field, wx, wy) {
   return {
     currentX: bilerp("currentX"),
     currentY: bilerp("currentY"),
+    ambientX,
+    ambientY,
+    ambientMagnitude: Math.min(BASE_THRUST_ACCEL * 0.30, Math.hypot(ambientX, ambientY)),
     gravityX: bilerp("gravityX"),
     gravityY: bilerp("gravityY"),
     waveX: bilerp("waveX"),

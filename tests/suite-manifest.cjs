@@ -138,6 +138,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthoritativeField",
+    file: "authoritative-field.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "SeededSea",
     file: "seeded-sea.cjs",
     lanes: ["fast", "core", "static", "full"],

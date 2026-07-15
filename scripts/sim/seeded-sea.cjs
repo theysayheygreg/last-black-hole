@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { wrappedDelta } = require("./world-geometry.cjs");
 
 const SEEDED_SEA_SCHEMA_VERSION = 1;
 const SEEDED_SEA_STREAMS = Object.freeze({
@@ -11,6 +12,8 @@ const TAU = Math.PI * 2;
 const MIN_SWELL_COUNT = 2;
 const MAX_SWELL_COUNT = 4;
 const AMBIENT_FLOOR = 0.30;
+const BASE_THRUST_ACCEL = 2.5;
+const OUTSIDE_WELL_FLOOR_FACTOR = 0.2;
 
 function finite(value, fallback = 0) {
   const parsed = Number(value);
@@ -110,6 +113,63 @@ function advanceSeededSea(sea, dt) {
   };
 }
 
+function sampleSeededSea(sea, wx, wy) {
+  if (!sea || !Array.isArray(sea.trains) || sea.trains.length === 0) {
+    return { x: 0, y: 0, magnitude: 0, sourceWellId: null, wellInfluence: 0 };
+  }
+
+  const worldScale = Math.max(0.01, finite(sea.worldScale, 1));
+  const ambientCeiling = Math.max(0, Math.min(AMBIENT_FLOOR, finite(sea.ambientFloor, AMBIENT_FLOOR)));
+  let x = 0;
+  let y = 0;
+  let sourceWellId = null;
+  let strongest = 0;
+  let strongestInfluence = 0;
+
+  for (const train of sea.trains) {
+    const dx = wrappedDelta(train.sourceWX, wx, worldScale);
+    const dy = wrappedDelta(train.sourceWY, wy, worldScale);
+    const dist = Math.hypot(dx, dy);
+    const radius = Math.max(0.001, finite(train.influenceRadius, 1));
+    const wellInfluence = Math.max(0, Math.min(1, 1 - dist / radius));
+    const attenuation = OUTSIDE_WELL_FLOOR_FACTOR
+      + (1 - OUTSIDE_WELL_FLOOR_FACTOR) * wellInfluence;
+    const heading = finite(train.heading);
+    const wavelength = Math.max(0.001, finite(train.wavelength, 1));
+    const longitudinalDistance = dx * Math.cos(heading) + dy * Math.sin(heading);
+    const phase = finite(train.phase) + (TAU * longitudinalDistance / wavelength);
+    const contribution = BASE_THRUST_ACCEL
+      * ambientCeiling
+      * Math.max(0, finite(train.amplitude))
+      * attenuation
+      * Math.sin(phase);
+    x += Math.cos(heading) * contribution;
+    y += Math.sin(heading) * contribution;
+    const contributionMagnitude = Math.abs(contribution);
+    if (contributionMagnitude > strongest) {
+      strongest = contributionMagnitude;
+      sourceWellId = train.sourceWellId ?? null;
+      strongestInfluence = wellInfluence;
+    }
+  }
+
+  const magnitude = Math.hypot(x, y);
+  const maxMagnitude = BASE_THRUST_ACCEL * ambientCeiling;
+  if (magnitude > maxMagnitude && magnitude > 0) {
+    const scale = maxMagnitude / magnitude;
+    x *= scale;
+    y *= scale;
+  }
+
+  return {
+    x: stableNumber(x),
+    y: stableNumber(y),
+    magnitude: stableNumber(Math.hypot(x, y)),
+    sourceWellId,
+    wellInfluence: stableNumber(strongestInfluence),
+  };
+}
+
 function stableSerialize(value) {
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(",")}]`;
   if (value && typeof value === "object") {
@@ -130,10 +190,12 @@ function hashSeededSea(sea) {
 
 module.exports = {
   AMBIENT_FLOOR,
+  BASE_THRUST_ACCEL,
   SEEDED_SEA_SCHEMA_VERSION,
   SEEDED_SEA_STREAMS,
   advanceSeededSea,
   createSeededSea,
   hashSeededSea,
+  sampleSeededSea,
   serializeSeededSea,
 };

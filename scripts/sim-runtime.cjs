@@ -13,7 +13,12 @@ const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
 } = require("./coarse-flow-field.cjs");
-const { createSeededSea, hashSeededSea } = require("./sim/seeded-sea.cjs");
+const {
+  advanceSeededSea,
+  createSeededSea,
+  hashSeededSea,
+} = require("./sim/seeded-sea.cjs");
+const { decayWaveAmplitude, WAVE_HALF_LIFE_SECONDS } = require("./sim/event-wave.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PUBLIC_HULL_IDS,
@@ -287,7 +292,7 @@ const PLANETOID_SERVER = {
 const WAVE_SERVER = {
   waveSpeed: 0.4,
   waveWidth: 0.1,
-  waveDecay: 0.97,
+  waveHalfLife: WAVE_HALF_LIFE_SECONDS,
   waveMaxRadius: 2.0,
   waveShipPush: 0.8,
   growthWaveAmplitude: 1.0,
@@ -2490,6 +2495,7 @@ function spawnWaveRing(wx, wy, amplitude) {
     initialAmplitude: amplitude,
     alive: true,
   });
+  if (runtime.session?.status === "running") rebuildAuthoritativeField();
 }
 
 function tickWells(dt) {
@@ -2770,7 +2776,7 @@ function tickGrowth(dt) {
 function tickWaveRings(dt) {
   for (const ring of runtime.waveRings) {
     ring.radius += WAVE_SERVER.waveSpeed * dt;
-    ring.amplitude *= WAVE_SERVER.waveDecay;
+    ring.amplitude = decayWaveAmplitude(ring.amplitude, dt, WAVE_SERVER.waveHalfLife);
     if (ring.radius > WAVE_SERVER.waveMaxRadius || ring.amplitude < 0.01) {
       ring.alive = false;
     }
@@ -3062,27 +3068,11 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sw
 }
 
 function applyWaveRingPush(player, dt) {
-  if (runtime.session.useCoarseField && runtime.coarseField) {
+  if (runtime.coarseField) {
     const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
     player.vx += (field.wave?.x ?? field.waveX) * dt;
     player.vy += (field.wave?.y ?? field.waveY) * dt;
     return;
-  }
-  const halfWidth = WAVE_SERVER.waveWidth * 0.5;
-  const relevantRings = collectNearestByDistance(
-    player.wx,
-    player.wy,
-    runtime.waveRings,
-    runtime.session.maxWaveInfluencesPerPlayer || runtime.waveRings.length || 1,
-    (ring) => ({ wx: ring.sourceWX, wy: ring.sourceWY })
-  );
-  for (const { entity: ring } of relevantRings) {
-    const { dist, nx, ny } = worldDirection(ring.sourceWX, ring.sourceWY, player.wx, player.wy, runtime.session.worldScale);
-    const accel = waveBandForce(dist, ring.radius, halfWidth, WAVE_SERVER.waveShipPush, ring.amplitude);
-    if (accel > 0) {
-      player.vx += nx * accel * dt;
-      player.vy += ny * accel * dt;
-    }
   }
 }
 
@@ -4551,46 +4541,13 @@ function findSafeSpawn(mapState) {
   return { wx: best.wx, wy: best.wy };
 }
 
-// Analytical FlowSample estimate from well positions (no GPU needed).
+// Gameplay reads the server-owned field only; presentation has no authority seam.
 function estimateFlowSample(wx, wy) {
-  if (runtime.session.useCoarseField && runtime.coarseField) {
+  if (runtime.coarseField) {
     const sample = sampleCoarseFlowField(runtime.coarseField, wx, wy);
     return normalizeFlowSample(sample);
   }
-  const ws = runtime.session.worldScale;
-  let fx = 0, fy = 0;
-  let surf = 0;
-  let sourceWellId = null;
-  let bestCurrent = 0;
-  for (const well of runtime.mapState.wells) {
-    const dx = worldDisplacement(wx, well.wx, ws);
-    const dy = worldDisplacement(wy, well.wy, ws);
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.01) continue;
-    const dir = well.orbitalDir || 1;
-    const currentAccel = orbitalCurrentSpeed(
-      dist,
-      SERVER_WELLS.currentStrength,
-      well.mass || 1,
-      SERVER_WELLS.currentFalloff,
-      SERVER_WELLS.currentRange
-    );
-    if (currentAccel > 0) {
-      fx += (-dy / dist) * dir * currentAccel;
-      fy += (dx / dist) * dir * currentAccel;
-      surf = Math.max(surf, Math.max(0, Math.min(1, currentAccel / 2.5)));
-      if (Math.abs(currentAccel) > bestCurrent) {
-        bestCurrent = Math.abs(currentAccel);
-        sourceWellId = well.id ?? well.name ?? null;
-      }
-    }
-  }
-  return normalizeFlowSample({
-    current: { x: fx, y: fy },
-    surf,
-    sources: { wellId: sourceWellId, ringId: null, anchorId: null },
-    confidence: 1,
-  });
+  return normalizeFlowSample({ confidence: 0 });
 }
 
 function estimateFlow(wx, wy) {
@@ -5187,7 +5144,7 @@ function tickPlayerSlingshot(player, dt, input) {
 }
 
 function rebuildAuthoritativeField() {
-  if (!runtime.session.useCoarseField) {
+  if (!runtime.session?.worldScale || !runtime.session?.flowFieldCellSize) {
     runtime.coarseField = null;
     return;
   }
@@ -5196,13 +5153,14 @@ function rebuildAuthoritativeField() {
     cellSize: runtime.session.flowFieldCellSize,
     wells: runtime.mapState.wells,
     waveRings: runtime.waveRings,
+    seededSea: runtime.session.seededSea,
     wellGravityScale: SERVER_WELLS.shipPullStrength,
     wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
     wellGravityMaxRange: SERVER_WELLS.maxRange,
     wellCurrentScale: SERVER_WELLS.currentStrength,
     wellCurrentFalloff: SERVER_WELLS.currentFalloff,
     wellCurrentMaxRange: SERVER_WELLS.currentRange,
-    waveShipPush: WAVE_SERVER.waveShipPush * runtime.session.fieldFlowScale,
+    waveShipPush: WAVE_SERVER.waveShipPush,
     waveWidth: WAVE_SERVER.waveWidth,
   });
 }
@@ -6384,7 +6342,9 @@ function tickSim() {
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
-  runSystemAtRate("field", runtime.session.fieldTickHz || runtime.session.worldTickHz || runtime.session.tickHz, dt, rebuildAuthoritativeField);
+  runtime.session.seededSea = advanceSeededSea(runtime.session.seededSea, dt);
+  runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
+  rebuildAuthoritativeField();
   tickAIPlayers(dt);
   tickSentries(dt);
   tickFauna(dt);
