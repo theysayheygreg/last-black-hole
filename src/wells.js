@@ -7,6 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
+import { migrateCurrentWell } from './anomaly-catalog.js';
 
 // ---- Well name generation (foreboding) ----
 
@@ -30,6 +31,7 @@ export class Well {
   constructor(wx, wy, opts = {}) {
     this.wx = wx;
     this.wy = wy;
+    this.id = opts.id ?? null;
     this.name = generateWellName();
     this.mass = opts.mass ?? 1.0;
     this.startMass = this.mass;  // for kill radius growth calculation
@@ -44,6 +46,10 @@ export class Well {
     // Per-well growth rate: base + random variance for asymmetric growth
     this.growthRate = (opts.growthRate ?? CONFIG.events.growthAmount)
       + (Math.random() * 2 - 1) * CONFIG.universe.wellGrowthVariance;
+    const catalogWell = migrateCurrentWell(this, opts.catalogId);
+    this.catalogId = catalogWell.catalogId;
+    this.behaviorId = catalogWell.behaviorId;
+    this.catalogActivation = catalogWell.catalogActivation;
   }
 
   /** Recalculate kill radius from current mass vs starting mass. */

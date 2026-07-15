@@ -43,6 +43,10 @@ const {
 const { getSessionProfile } = require("./content/session-profiles.cjs");
 const { simUnitsToMeters } = require("./content/units.cjs");
 const {
+  selectAnomalyCast,
+  migrateCurrentWell,
+} = require("./anomaly-catalog.cjs");
+const {
   defaultRigLevels,
   normalizeRigLevels,
   BRAIN_DEFAULTS,
@@ -863,14 +867,21 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
   const parsedWorldScale = worldScaleOverride == null ? NaN : Number(worldScaleOverride);
   const worldScale = Number.isFinite(parsedWorldScale) && parsedWorldScale > 0 ? parsedWorldScale : map.worldScale;
+  const anomalyCatalog = selectAnomalyCast({
+    mapId: map.id,
+    seed: rngStreams.seed,
+    wellCount: map.wells.length,
+    rngStreams,
+  });
   const growthRng = rngStreams.rawStream('wellGrowthVar');
-  const wells = map.wells.map((well) => ({
+  const wells = map.wells.map((well, index) => migrateCurrentWell({
     ...well,
+    catalogId: anomalyCatalog.cast[index]?.catalogId,
     baseKillRadius: well.killRadius,
     startMass: well.mass,
     growthRate: (well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE,
     killRadius: well.killRadius,
-  }));
+  }, anomalyCatalog.cast[index]?.catalogId));
   const stars = map.stars.map((star) => ({
     ...star,
     alive: star.alive !== false,
@@ -904,6 +915,7 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     name: map.name,
     worldScale,
     fluidResolution: map.fluidResolution,
+    anomalyCatalog,
     wells,
     stars,
     wrecks,
@@ -1495,6 +1507,7 @@ function startSession(config = {}) {
     status: "running",
     mapId: mapState.id,
     mapName: mapState.name,
+    anomalyCatalog: mapState.anomalyCatalog,
     hostClientId: config.requesterId ? String(config.requesterId) : null,
     hostProfileId: config.requesterProfileId
       ? String(config.requesterProfileId)

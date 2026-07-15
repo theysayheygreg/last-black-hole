@@ -18,6 +18,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AnomalyCatalog",
+    file: "anomaly-catalog.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "RouteBriefing",
     file: "route-briefing.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],

@@ -1510,7 +1510,7 @@ function findSafeSpawn(minDist = 0.55) {
  * Every scene transition (title, map select, gameplay) calls this.
  * Nothing from the previous scene leaks into the next.
  */
-function loadScene(map) {
+function loadScene(map, { seed = 1 } = {}) {
   // 1. Revert previous scene's CONFIG overrides
   revertSceneOverrides();
 
@@ -1547,7 +1547,7 @@ function loadScene(map) {
   currentCameraMode = map.camera ?? 'follow';
   const mapResult = loadMap(currentMap, {
     wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
-  });
+  }, { seed });
   startingMasses = mapResult.startingMasses;
 
   // 7. Reset camera — 'locked' = world center, 'follow' = ship sets it later
@@ -1745,8 +1745,6 @@ function startGame(map, seed = null) {
   fixtureShipCandidates = [];
   rendererFixtureActive = false;
   activeRendererFixture = null;
-  loadScene(map);
-
   // Local-sim seed: use the previewed seed when one is supplied, otherwise
   // pick a fresh one. Same RNG primitives as the server so the previewed
   // signature/well names match what the local run actually uses.
@@ -1754,6 +1752,7 @@ function startGame(map, seed = null) {
     ? Number(seed)
     : Math.floor(Math.random() * 1e9);
   const localRng = createRNGStreams(localSeed);
+  loadScene(map, { seed: localSeed });
 
   // Local fallback presents the same seeded signature as authority would.
   currentSignature = computeSeedPreview(map, localSeed).signature;
@@ -2597,8 +2596,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteShipPresentation = null;
   fixtureShipCandidates = [];
 
-  loadScene(targetMapEntry.map);
   const briefingSeed = runningSession?.seed ?? previewSeed;
+  loadScene(targetMapEntry.map, { seed: briefingSeed });
   currentSignature = runningSession?.cosmicSignature
     ? { ...runningSession.cosmicSignature }
     : computeSeedPreview(targetMapEntry.map, briefingSeed).signature;

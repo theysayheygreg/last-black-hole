@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "catalogId": "lbh-anomaly-catalog",
+  "runtimeBehaviorIds": [
+    "base-well"
+  ],
+  "tunableContract": {
+    "unitSystem": "v0.3-provisional-meters",
+    "metersPerSimUnit": 1000,
+    "stepRule": "Every numeric knob declares a unit, range, step, and start bias.",
+    "sharedFieldFamily": "well",
+    "fields": {
+      "gravityStrength": {
+        "unit": "% base thrust",
+        "range": [0, 200],
+        "step": 5,
+        "startBias": "existing well gravity",
+        "source": "CONFIG.wells.shipPullStrength"
+      },
+      "gravityReach": {
+        "unit": "m",
+        "range": [0, 2000],
+        "step": 50,
+        "startBias": "existing well gravity reach",
+        "source": "CONFIG.wells.maxRange"
+      },
+      "currentStrength": {
+        "unit": "% base thrust",
+        "range": [0, 200],
+        "step": 5,
+        "startBias": "existing orbital current",
+        "source": "CONFIG.wells.currentStrength"
+      },
+      "currentReach": {
+        "unit": "m",
+        "range": [0, 2000],
+        "step": 50,
+        "startBias": "existing orbital current reach",
+        "source": "CONFIG.wells.currentRange"
+      },
+      "killRadius": {
+        "unit": "m",
+        "range": [0, 500],
+        "step": 25,
+        "startBias": "map-authored current well radius",
+        "source": "map.wells[].killRadius"
+      },
+      "growthAmount": {
+        "unit": "mass per growth event",
+        "range": [0, 1],
+        "step": 0.01,
+        "startBias": "existing growth amount",
+        "source": "CONFIG.events.growthAmount"
+      },
+      "growthInterval": {
+        "unit": "s",
+        "range": [0, 600],
+        "step": 5,
+        "startBias": "existing growth interval",
+        "source": "CONFIG.events.growthInterval"
+      },
+      "killRadiusGrowth": {
+        "unit": "radius multiplier per mass",
+        "range": [0, 2],
+        "step": 0.05,
+        "startBias": "existing kill-radius growth",
+        "source": "CONFIG.universe.wellKillRadiusGrowth"
+      },
+      "growthWaveAmplitude": {
+        "unit": "wave amplitude",
+        "range": [0, 10],
+        "step": 0.5,
+        "startBias": "existing growth tell",
+        "source": "CONFIG.events.growthWaveAmplitude"
+      }
+    }
+  },
+  "catalog": {
+    "base-well": {
+      "id": "base-well",
+      "label": "Gravity well",
+      "status": "shipping",
+      "activation": "phase-1",
+      "runtimeBehaviorId": "base-well",
+      "fabricSignature": {
+        "kind": "parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "radialGravity": "shared well gravity family",
+          "orbitalCurrent": "shared orbital current family",
+          "waveResponse": "growth emits the existing event ring"
+        }
+      },
+      "interactionVerb": {
+        "id": "slingshot",
+        "authority": "movement/slingshot",
+        "skillExpression": "engage, read the arc, and release with the existing bounded payoff"
+      },
+      "tell": {
+        "state": "named well with accretion ring and readable kill edge",
+        "growth": [
+          "the specific well's mass increases",
+          "its kill radius grows",
+          "its growth wave ring identifies the source"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "round-robin-mass-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
+        "perEntity": true,
+        "schedule": "existing growth tick",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {}
+      }
+    },
+    "micro-black-hole": {
+      "id": "micro-black-hole",
+      "label": "Micro black hole",
+      "status": "planned",
+      "activation": "phase-2",
+      "shipping": false,
+      "runtimeBehaviorId": "base-well",
+      "implementation": "deferred; metadata only in phase 1",
+      "fabricSignature": {
+        "kind": "deferred-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "plannedProfile": "tight fast vortex"
+        }
+      },
+      "interactionVerb": {
+        "id": "precision-slingshot",
+        "authority": "deferred",
+        "skillExpression": "deferred"
+      },
+      "tell": {
+        "state": "deferred",
+        "growth": [
+          "deferred"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "deferred",
+        "authority": "deferred",
+        "mode": "deferred",
+        "perEntity": true,
+        "schedule": "deferred",
+        "killRadiusFormula": "deferred",
+        "seaResponse": "deferred"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "status": "deferred"
+      }
+    },
+    "supermassive-black-hole": {
+      "id": "supermassive-black-hole",
+      "label": "Supermassive black hole",
+      "status": "planned",
+      "activation": "phase-2",
+      "shipping": false,
+      "runtimeBehaviorId": "base-well",
+      "implementation": "deferred; no time dilation and no per-player clock in phase 1",
+      "fabricSignature": {
+        "kind": "deferred-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "plannedProfile": "vast slow spiral"
+        }
+      },
+      "interactionVerb": {
+        "id": "long-orbit",
+        "authority": "deferred",
+        "skillExpression": "deferred"
+      },
+      "tell": {
+        "state": "deferred",
+        "growth": [
+          "deferred"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "deferred",
+        "authority": "deferred",
+        "mode": "deferred",
+        "perEntity": true,
+        "schedule": "deferred",
+        "killRadiusFormula": "deferred",
+        "seaResponse": "deferred"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "status": "deferred"
+      }
+    },
+    "pulsar": {
+      "id": "pulsar",
+      "label": "Pulsar",
+      "status": "planned",
+      "activation": "phase-2",
+      "shipping": false,
+      "runtimeBehaviorId": "base-well",
+      "implementation": "deferred; no periodic anomaly behavior in phase 1",
+      "fabricSignature": {
+        "kind": "deferred-parameter-vector",
+        "fieldFamily": "well",
+        "parameters": {
+          "plannedProfile": "periodic directional swell trains"
+        }
+      },
+      "interactionVerb": {
+        "id": "ride-the-beat",
+        "authority": "deferred",
+        "skillExpression": "deferred"
+      },
+      "tell": {
+        "state": "deferred",
+        "growth": [
+          "deferred"
+        ],
+        "hudIndependent": true
+      },
+      "growthBehavior": {
+        "id": "deferred",
+        "authority": "deferred",
+        "mode": "deferred",
+        "perEntity": true,
+        "schedule": "deferred",
+        "killRadiusFormula": "deferred",
+        "seaResponse": "deferred"
+      },
+      "tunables": {
+        "inheritFrom": "tunableContract",
+        "overrides": {},
+        "status": "deferred"
+      }
+    }
+  },
+  "mapPolicies": {
+    "shallows": {
+      "mode": "fixed-curated",
+      "drawStream": null,
+      "fixedCast": [
+        "base-well"
+      ],
+      "eligibleCatalogIds": [
+        "base-well"
+      ]
+    },
+    "expanse": {
+      "mode": "seeded-draw",
+      "drawStream": "anomalyCatalog",
+      "fixedCast": [],
+      "eligibleCatalogIds": [
+        "base-well",
+        "micro-black-hole",
+        "pulsar"
+      ]
+    },
+    "deep-field": {
+      "mode": "seeded-draw",
+      "drawStream": "anomalyCatalog",
+      "fixedCast": [],
+      "eligibleCatalogIds": [
+        "base-well",
+        "micro-black-hole",
+        "pulsar",
+        "supermassive-black-hole"
+      ]
+    }
+  }
+}
