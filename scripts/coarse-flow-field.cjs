@@ -16,6 +16,11 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
 }
 
+function signatureMultiplier(well, name) {
+  const value = Number(well?.fabricSignature?.parameters?.[name]);
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
 function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
   if (dist < 0.001 || dist > maxRange) return 0;
   const safeDist = Math.max(dist, FORCE_MIN_DIST);
@@ -49,6 +54,15 @@ function buildCoarseFlowField({
   const liveWavePushMultiplier = Number.isFinite(Number(collapseParameters.liveWavePushMultiplier))
     ? Number(collapseParameters.liveWavePushMultiplier)
     : 1;
+  const wellById = new Map(wells.map((well) => [String(well?.id ?? well?.name ?? ''), well]));
+  const seededSeaSourceMultipliers = Object.fromEntries(
+    wells
+      .filter((well) => well?.id != null || well?.name != null)
+      .map((well) => [
+        String(well.id ?? well.name),
+        signatureMultiplier(well, 'seededSeaAmbientMultiplier'),
+      ])
+  );
 
   for (let row = 0; row < rows; row++) {
     const wy = wrapWorld((row + 0.5) * safeCellSize, worldScale);
@@ -82,10 +96,10 @@ function buildCoarseFlowField({
         const dir = well.orbitalDir || 1;
         const currentAccel = orbitalCurrentSpeed(
           dist,
-          wellCurrentScale,
+          wellCurrentScale * signatureMultiplier(well, 'currentStrengthMultiplier'),
           well.mass || 1,
           wellCurrentFalloff,
-          wellCurrentMaxRange
+          wellCurrentMaxRange * signatureMultiplier(well, 'currentReachMultiplier')
         );
         if (currentAccel > 0) {
           currentX += (-dy / dist) * dir * currentAccel;
@@ -97,9 +111,9 @@ function buildCoarseFlowField({
         }
 
         const gravityStrength = wellGravityMagnitude("player", dist, well.mass || 1, {
-          strength: wellGravityScale,
+          strength: wellGravityScale * signatureMultiplier(well, 'gravityStrengthMultiplier'),
           falloff: wellGravityFalloff,
-          maxRange: wellGravityMaxRange,
+          maxRange: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),
         });
         gravityX += (dx / dist) * gravityStrength;
         gravityY += (dy / dist) * gravityStrength;
@@ -118,6 +132,7 @@ function buildCoarseFlowField({
 
       const ambient = sampleSeededSea(seededSea, wx, wy, {
         ambientMultiplier: seededSeaAmbientMultiplier,
+        sourceMultipliers: seededSeaSourceMultipliers,
       });
       ambientX = ambient.x;
       ambientY = ambient.y;
@@ -138,7 +153,9 @@ function buildCoarseFlowField({
         if (dist < 0.001 || distFromFront > halfWidth) continue;
         const bandPosition = distFromFront / halfWidth;
         const profile = Math.cos(bandPosition * Math.PI * 0.5);
-        const accel = waveShipPush * liveWavePushMultiplier * (ring.amplitude || 0) * profile;
+        const sourceWell = ring.sourceWellId == null ? null : wellById.get(String(ring.sourceWellId));
+        const ringMultiplier = signatureMultiplier(sourceWell, 'liveWavePushMultiplier');
+        const accel = waveShipPush * liveWavePushMultiplier * ringMultiplier * (ring.amplitude || 0) * profile;
         waveX += (dx / dist) * accel;
         waveY += (dy / dist) * accel;
         hazard = Math.max(hazard, clamp01(accel));

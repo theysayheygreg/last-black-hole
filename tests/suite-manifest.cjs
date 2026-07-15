@@ -24,6 +24,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "W2A3ShippingTrio",
+    file: "w2a3-shipping-trio.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "RouteBriefing",
     file: "route-briefing.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],

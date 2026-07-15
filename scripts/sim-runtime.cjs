@@ -885,7 +885,8 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     catalogId: anomalyCatalog.cast[index]?.catalogId,
     baseKillRadius: well.killRadius,
     startMass: well.mass,
-    growthRate: (well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE,
+    growthRate: ((well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE)
+      * (anomalyCatalog.cast[index]?.fabricSignature?.parameters?.growthRateMultiplier ?? 1),
     killRadius: well.killRadius,
   }, anomalyCatalog.cast[index]?.catalogId));
   const stars = map.stars.map((star) => ({
@@ -1998,6 +1999,7 @@ function buildSnapshotBody() {
       controlDebuff: player.controlDebuff || 0,
     })),
     world: {
+      anomalyCatalog: runtime.mapState.anomalyCatalog,
       wells: runtime.mapState.wells,
       stars: runtime.mapState.stars,
       wrecks: runtime.mapState.wrecks,
@@ -2016,6 +2018,7 @@ function buildSnapshotBody() {
         radius: ring.radius,
         amplitude: ring.amplitude,
         initialAmplitude: ring.initialAmplitude,
+        sourceWellId: ring.sourceWellId ?? null,
         alive: ring.alive !== false,
       })),
       collapseEpoch: runtime.collapseEpochState ? {
@@ -2543,7 +2546,7 @@ function commitPlayerOutcome(player, outcome) {
   return runResult;
 }
 
-function spawnWaveRing(wx, wy, amplitude) {
+function spawnWaveRing(wx, wy, amplitude, sourceWellId = null) {
   const ring = {
     id: nextSeededToken(`wave-${runtime.tick}`, "waveIds"),
     sourceWX: wx,
@@ -2551,6 +2554,7 @@ function spawnWaveRing(wx, wy, amplitude) {
     radius: 0,
     amplitude,
     initialAmplitude: amplitude,
+    sourceWellId: sourceWellId == null ? null : String(sourceWellId),
     alive: true,
   };
   runtime.waveRings.push(ring);
@@ -2864,7 +2868,13 @@ function applyWellGrowth(well, {
   });
   well.mass = growth.after.mass;
   well.killRadius = growth.after.killRadius;
-  const ring = spawnWaveRing(well.wx, well.wy, waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass);
+  const growthWaveMultiplier = well.fabricSignature?.parameters?.growthWaveAmplitudeMultiplier ?? 1;
+  const ring = spawnWaveRing(
+    well.wx,
+    well.wy,
+    (waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass) * growthWaveMultiplier,
+    well.id,
+  );
   return publishEvent("well.grew", createWellGrowthEvent({
     well,
     source,

@@ -1,8 +1,8 @@
-# v0.3 Anomaly Catalog Schema
+# v0.3 Anomaly Catalog Schema And Shipping Trio
 
-> Phase 2 shared substrate. This document defines the catalog boundary, seeded
-> selection policy, per-entity growth events, and provisional collapse epochs.
-> It still does not ship distinct micro/supermassive/pulsar physics.
+> Phase 2 shared substrate plus W2-A3 activation. This document defines the
+> catalog boundary, seeded selection policy, bounded fabric vectors, per-entity
+> growth events, and provisional collapse epochs.
 
 ## Source Of Truth
 
@@ -21,7 +21,7 @@ Every catalog entry contains:
 | `status` | `shipping` or `planned`. |
 | `activation` | Version/phase gate for the entry. |
 | `runtimeBehaviorId` | Existing behavior implementation used by the adapter. |
-| `fabricSignature` | Parameter-vector description over the existing field family. |
+| `fabricSignature` | Bounded parameter-vector description over the existing field/wave family. |
 | `interactionVerb` | The skilled interaction the anomaly invites. |
 | `tell` | State and growth telegraph, readable without HUD dependence. |
 | `growthBehavior` | Per-entity growth and sea-response contract. |
@@ -36,21 +36,45 @@ The shared `eventContracts.wellGrowth` entry declares the stable `well.grew`
 event type, `well-growth` tell identity, and `growth` wave family used by all
 current-well runtime behaviors.
 
-## Phase 1 Runtime Entry
+## Runtime Entries And Fabric Vectors
 
-`base-well` is the only shipping runtime behavior. It describes the existing
-well's radial gravity, orbital current, slingshot interaction, named
-accretion/kill-edge tell, additive per-entity growth, and growth wave ring.
-`migrateCurrentWell()` adds only `catalogId`, `behaviorId`, and
-`catalogActivation` to a well object. Existing mass, orbital direction,
-growth rate, kill radius, gravity reach, current reach, and renderer values
-remain owned by their existing systems.
+`base-well` remains the only runtime behavior implementation. The shipping
+trio deliberately resolves to that existing adapter: the catalog changes
+identity, parameter vectors, and tells, not the authority model or formula
+family. `migrateCurrentWell()` adds catalog identity plus a copied signature
+object to a well. Existing mass, orbital direction, kill radius, and renderer
+values remain owned by their existing systems.
 
-The `micro-black-hole`, `supermassive-black-hole`, and `pulsar` entries are
-planned metadata only. They are eligible for future map identity draws, but
-their `runtimeBehaviorId` resolves to `base-well` and their `shipping` flag is
-false. No time dilation, per-player clock, periodic pulsar behavior, or new
-anomaly physics is present in this phase.
+W2-A3 activates exactly three catalog-backed entries after base-well parity:
+`micro-black-hole`, `supermassive-black-hole`, and `pulsar`. All four shipping
+entries use `kind: bounded-parameter-vector`, `fieldFamily: well`, and the
+central `tunableContract.fabricSignatureParameters` contract. The authority
+applies only these existing terms:
+
+- gravity strength and reach in `buildCoarseFlowField()`;
+- orbital-current strength and reach in `buildCoarseFlowField()`;
+- source-weighted seeded-sea ambient in `sampleSeededSea()`;
+- source-weighted live wave push for growth rings;
+- existing additive growth rate and growth-ring amplitude.
+
+Every vector value has a unit, range, step, start bias, and source in the
+manifest. The vector is provisional where feel tuning remains. Base-well is
+the identity vector, so an unmigrated/identity well produces the same field
+and wave output as before.
+
+| Entry | Fabric vector `(gravity strength, gravity reach, current strength, current reach, seeded ambient, live wave, growth rate, growth wave)` | Verb | Growth behavior |
+|---|---|---|---|
+| `base-well` | `(1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00)` | `slingshot` | `round-robin-mass-growth` |
+| `micro-black-hole` | `(1.15, 0.75, 1.20, 0.80, 0.90, 0.95, 1.15, 0.90)` | `precision-slingshot` | `rapid-local-growth` |
+| `supermassive-black-hole` | `(0.95, 1.25, 0.80, 1.25, 0.95, 1.10, 0.85, 1.15)` | `long-orbit` | `slow-anchor-growth` |
+| `pulsar` | `(0.90, 0.90, 1.05, 1.00, 1.00, 1.20, 1.00, 1.20)` | `ride-the-beat` | `beat-growth` |
+
+The verbs are movement/read contracts over existing mechanics. Pulsar does not
+add a private timer or bespoke beam; its rhythm is the existing seeded sea and
+event-wave read. Supermassive does not add time dilation, a per-player clock,
+or a singular endgame owner. The trio's tell and growth metadata remains
+HUD-independent and identifies the changed well through its catalog identity
+and existing source growth ring.
 
 ## Phase 2 Growth Event Contract
 
@@ -103,9 +127,11 @@ safe growth/epoch event fields without exposing arbitrary event payloads.
   seed. This is the teaching overture and keeps the current cast stable.
 - **Expanse:** `seeded-draw`; each well gets a deterministic candidate order
   from `base-well`, `micro-black-hole`, and `pulsar` using the named
-  `anomalyCatalog` derivation.
+  `anomalyCatalog` derivation. Selected entries are shipping and resolve to
+  the shared base-well adapter with their catalog vector.
 - **Deep Field:** `seeded-draw`; each well draws from the Expanse pool plus
-  `supermassive-black-hole`.
+  `supermassive-black-hole`. Selected entries are shipping and resolve to the
+  shared base-well adapter with their catalog vector.
 
 The selection result carries both `eligibleMap` and `cast`. `eligibleMap` is
 the stable, reviewable candidate order per slot; `cast` is the selected
@@ -115,8 +141,8 @@ sea streams.
 
 ## Deferred Boundary
 
-Distinct anomaly-specific physics, the shipping trio's final behavior, and
-the collapse endgame/session-termination owner remain deferred. Any future entry
-must first replace its deferred metadata with a real parameter vector and a
-runtime behavior that passes the same parity and authority gates. The adapter
+The collapse endgame/session-termination owner remains deferred to W2-B design
+work. No exactly-one-supermassive or endgame-owner rule is encoded here. Any
+future entry must first replace its deferred metadata with a bounded vector and
+a runtime behavior that passes the same parity and authority gates. The adapter
 must not infer bespoke physics from catalog text.

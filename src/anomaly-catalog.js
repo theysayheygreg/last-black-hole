@@ -3,9 +3,15 @@ import {
   ANOMALY_CATALOG_DATA,
   ANOMALY_CATALOG,
   ANOMALY_MAP_POLICIES,
+  ANOMALY_FABRIC_PARAMETER_CONTRACT,
 } from './content/anomalies.js';
 
-export { ANOMALY_CATALOG_DATA, ANOMALY_CATALOG, ANOMALY_MAP_POLICIES };
+export {
+  ANOMALY_CATALOG_DATA,
+  ANOMALY_CATALOG,
+  ANOMALY_MAP_POLICIES,
+  ANOMALY_FABRIC_PARAMETER_CONTRACT,
+};
 export const ANOMALY_CATALOG_SCHEMA_VERSION = ANOMALY_CATALOG_DATA.schemaVersion;
 export const BASE_WELL_CATALOG_ID = 'base-well';
 
@@ -22,6 +28,14 @@ function hasObject(value) {
 
 function requiredString(value) {
   return typeof value === 'string' && value.length > 0;
+}
+
+function isStepAligned(value, declaration) {
+  const step = Number(declaration.step);
+  const minimum = Number(declaration.range?.[0]);
+  if (!Number.isFinite(step) || !Number.isFinite(minimum)) return false;
+  const quotient = (value - minimum) / step;
+  return Math.abs(quotient - Math.round(quotient)) <= 1e-9;
 }
 
 function catalogErrors(data) {
@@ -61,6 +75,56 @@ function catalogErrors(data) {
     if (!Number.isFinite(field.step) || field.step <= 0) errors.push(`${prefix}.step must be positive`);
     if (!requiredString(field.startBias)) errors.push(`${prefix}.startBias is required`);
     if (!requiredString(field.source)) errors.push(`${prefix}.source is required`);
+  }
+  const fabricParameters = data.tunableContract?.fabricSignatureParameters;
+  if (!hasObject(fabricParameters) || Object.keys(fabricParameters).length === 0) {
+    errors.push('tunableContract.fabricSignatureParameters must contain parameters');
+  }
+  for (const [key, parameter] of Object.entries(fabricParameters || {})) {
+    const prefix = `tunableContract.fabricSignatureParameters.${key}`;
+    if (!hasObject(parameter)) {
+      errors.push(`${prefix} must be an object`);
+      continue;
+    }
+    if (!requiredString(parameter.unit)) errors.push(`${prefix}.unit is required`);
+    if (!Array.isArray(parameter.range) || parameter.range.length !== 2
+      || !parameter.range.every(Number.isFinite) || parameter.range[1] < parameter.range[0]) {
+      errors.push(`${prefix}.range must be two ordered finite numbers`);
+    }
+    if (!Number.isFinite(parameter.step) || parameter.step <= 0) errors.push(`${prefix}.step must be positive`);
+    if (!requiredString(parameter.startBias)) errors.push(`${prefix}.startBias is required`);
+    if (!requiredString(parameter.source)) errors.push(`${prefix}.source is required`);
+  }
+  const fabricParameterNames = Object.keys(fabricParameters || {}).sort();
+  for (const [key, entry] of Object.entries(data.catalog || {})) {
+    if (entry?.status !== 'shipping') continue;
+    const prefix = `catalog.${key}.fabricSignature`;
+    const signature = entry.fabricSignature;
+    if (!hasObject(signature) || signature.kind !== 'bounded-parameter-vector'
+      || !requiredString(signature.id) || signature.fieldFamily !== 'well'
+      || !hasObject(signature.parameters)) {
+      errors.push(`${prefix} must be a bounded well parameter vector`);
+      continue;
+    }
+    const parameterNames = Object.keys(signature.parameters).sort();
+    if (JSON.stringify(parameterNames) !== JSON.stringify(fabricParameterNames)) {
+      errors.push(`${prefix}.parameters must match the central parameter contract`);
+    }
+    for (const name of fabricParameterNames) {
+      const value = signature.parameters[name];
+      const declaration = fabricParameters[name];
+      if (!hasObject(declaration)) continue;
+      if (!Number.isFinite(value)) {
+        errors.push(`${prefix}.parameters.${name} must be finite`);
+        continue;
+      }
+      if (!Array.isArray(declaration.range) || value < declaration.range[0] - 1e-9
+        || value > declaration.range[1] + 1e-9) {
+        errors.push(`${prefix}.parameters.${name} is outside its declared range`);
+      } else if (!isStepAligned(value, declaration)) {
+        errors.push(`${prefix}.parameters.${name} must align to its declared step`);
+      }
+    }
   }
   const growthEvent = data.eventContracts?.wellGrowth;
   if (!hasObject(growthEvent) || !requiredString(growthEvent.type)
@@ -111,13 +175,27 @@ export function getRuntimeBehaviorId(catalogId = BASE_WELL_CATALOG_ID) {
   return getAnomalyDefinition(catalogId).runtimeBehaviorId || BASE_WELL_CATALOG_ID;
 }
 
+export function getFabricSignature(catalogId = BASE_WELL_CATALOG_ID) {
+  const entry = getAnomalyDefinition(catalogId);
+  const signature = entry.fabricSignature || {};
+  return {
+    id: signature.id || `${entry.id}-signature`,
+    kind: signature.kind || 'bounded-parameter-vector',
+    fieldFamily: signature.fieldFamily || 'well',
+    parameters: { ...(signature.parameters || {}) },
+  };
+}
+
 export function migrateCurrentWell(well = {}, catalogId = well.catalogId || BASE_WELL_CATALOG_ID) {
   const entry = getAnomalyDefinition(catalogId);
+  const fabricSignature = getFabricSignature(entry.id);
   return {
     ...well,
     catalogId: entry.id,
     behaviorId: getRuntimeBehaviorId(entry.id),
     catalogActivation: entry.activation,
+    fabricSignatureId: fabricSignature.id,
+    fabricSignature,
   };
 }
 
@@ -155,6 +233,11 @@ export function selectAnomalyCast({ mapId, seed = 1, wellCount = 0, rngStreams =
       catalogId: entry.id,
       runtimeBehaviorId: getRuntimeBehaviorId(entry.id),
       shipping: entry.status === 'shipping',
+      fabricSignatureId: getFabricSignature(entry.id).id,
+      fabricSignature: getFabricSignature(entry.id),
+      interactionVerbId: entry.interactionVerb?.id || null,
+      tellId: entry.tell?.id || null,
+      growthBehaviorId: entry.growthBehavior?.id || null,
     });
   }
   return {

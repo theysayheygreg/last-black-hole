@@ -9,6 +9,64 @@
     "metersPerSimUnit": 1000,
     "stepRule": "Every numeric knob declares a unit, range, step, and start bias.",
     "sharedFieldFamily": "well",
+    "fabricSignatureParameters": {
+      "gravityStrengthMultiplier": {
+        "unit": "x base well gravity strength",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellGravityScale"
+      },
+      "gravityReachMultiplier": {
+        "unit": "x base well gravity reach",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellGravityMaxRange"
+      },
+      "currentStrengthMultiplier": {
+        "unit": "x base well orbital-current strength",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellCurrentScale"
+      },
+      "currentReachMultiplier": {
+        "unit": "x base well orbital-current reach",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:wellCurrentMaxRange"
+      },
+      "seededSeaAmbientMultiplier": {
+        "unit": "x seeded sea source term",
+        "range": [0.75, 1.0],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/sim/seeded-sea.cjs:sampleSeededSea"
+      },
+      "liveWavePushMultiplier": {
+        "unit": "x live wave source term",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well field",
+        "source": "scripts/coarse-flow-field.cjs:waveShipPush"
+      },
+      "growthRateMultiplier": {
+        "unit": "x mass per existing growth event",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well growth",
+        "source": "scripts/sim-runtime.cjs:well.growthRate"
+      },
+      "growthWaveAmplitudeMultiplier": {
+        "unit": "x existing growth wave amplitude",
+        "range": [0.75, 1.25],
+        "step": 0.05,
+        "startBias": "identity base-well growth tell",
+        "source": "scripts/sim-runtime.cjs:spawnWaveRing"
+      }
+    },
     "fields": {
       "gravityStrength": {
         "unit": "% base thrust",
@@ -145,13 +203,20 @@
       "status": "shipping",
       "activation": "phase-1",
       "runtimeBehaviorId": "base-well",
+      "shipping": true,
       "fabricSignature": {
-        "kind": "parameter-vector",
+        "id": "base-well",
+        "kind": "bounded-parameter-vector",
         "fieldFamily": "well",
         "parameters": {
-          "radialGravity": "shared well gravity family",
-          "orbitalCurrent": "shared orbital current family",
-          "waveResponse": "growth emits the existing event ring"
+          "gravityStrengthMultiplier": 1.0,
+          "gravityReachMultiplier": 1.0,
+          "currentStrengthMultiplier": 1.0,
+          "currentReachMultiplier": 1.0,
+          "seededSeaAmbientMultiplier": 1.0,
+          "liveWavePushMultiplier": 1.0,
+          "growthRateMultiplier": 1.0,
+          "growthWaveAmplitudeMultiplier": 1.0
         }
       },
       "interactionVerb": {
@@ -179,133 +244,170 @@
       },
       "tunables": {
         "inheritFrom": "tunableContract",
-        "overrides": {}
+        "overrides": {},
+        "vectorSource": "fabricSignature.parameters"
       }
     },
     "micro-black-hole": {
       "id": "micro-black-hole",
       "label": "Micro black hole",
-      "status": "planned",
-      "activation": "phase-2",
-      "shipping": false,
+      "status": "shipping",
+      "activation": "phase-2-shipping-trio",
+      "shipping": true,
       "runtimeBehaviorId": "base-well",
-      "implementation": "deferred; metadata only in phase 1",
+      "implementation": "base-well authority with a provisional bounded fabric vector",
       "fabricSignature": {
-        "kind": "deferred-parameter-vector",
+        "id": "micro-black-hole",
+        "kind": "bounded-parameter-vector",
         "fieldFamily": "well",
         "parameters": {
-          "plannedProfile": "tight fast vortex"
+          "gravityStrengthMultiplier": 1.15,
+          "gravityReachMultiplier": 0.75,
+          "currentStrengthMultiplier": 1.20,
+          "currentReachMultiplier": 0.80,
+          "seededSeaAmbientMultiplier": 0.90,
+          "liveWavePushMultiplier": 0.95,
+          "growthRateMultiplier": 1.15,
+          "growthWaveAmplitudeMultiplier": 0.90
         }
       },
       "interactionVerb": {
         "id": "precision-slingshot",
-        "authority": "deferred",
-        "skillExpression": "deferred"
+        "authority": "movement/slingshot",
+        "skillExpression": "thread the short capture line and chain a clean release"
       },
       "tell": {
-        "state": "deferred",
+        "id": "micro-vortex-tell",
+        "state": "tight accretion ring with a narrow gravity/current reach",
         "growth": [
-          "deferred"
+          "the specific well's mass and kill edge increase",
+          "a compact growth ring identifies this source"
         ],
         "hudIndependent": true
       },
       "growthBehavior": {
-        "id": "deferred",
-        "authority": "deferred",
-        "mode": "deferred",
+        "id": "rapid-local-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
         "perEntity": true,
-        "schedule": "deferred",
-        "killRadiusFormula": "deferred",
-        "seaResponse": "deferred"
+        "schedule": "existing round-robin growth tick",
+        "massParameter": "fabricSignature.parameters.growthRateMultiplier",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring, scaled by growthWaveAmplitudeMultiplier"
       },
       "tunables": {
         "inheritFrom": "tunableContract",
         "overrides": {},
-        "status": "deferred"
+        "vectorSource": "fabricSignature.parameters",
+        "status": "provisional"
       }
     },
     "supermassive-black-hole": {
       "id": "supermassive-black-hole",
       "label": "Supermassive black hole",
-      "status": "planned",
-      "activation": "phase-2",
-      "shipping": false,
+      "status": "shipping",
+      "activation": "phase-2-shipping-trio",
+      "shipping": true,
       "runtimeBehaviorId": "base-well",
-      "implementation": "deferred; no time dilation and no per-player clock in phase 1",
+      "implementation": "base-well authority with a provisional bounded fabric vector; no time dilation",
       "fabricSignature": {
-        "kind": "deferred-parameter-vector",
+        "id": "supermassive-black-hole",
+        "kind": "bounded-parameter-vector",
         "fieldFamily": "well",
         "parameters": {
-          "plannedProfile": "vast slow spiral"
+          "gravityStrengthMultiplier": 0.95,
+          "gravityReachMultiplier": 1.25,
+          "currentStrengthMultiplier": 0.80,
+          "currentReachMultiplier": 1.25,
+          "seededSeaAmbientMultiplier": 0.95,
+          "liveWavePushMultiplier": 1.10,
+          "growthRateMultiplier": 0.85,
+          "growthWaveAmplitudeMultiplier": 1.15
         }
       },
       "interactionVerb": {
         "id": "long-orbit",
-        "authority": "deferred",
-        "skillExpression": "deferred"
+        "authority": "movement/slingshot",
+        "skillExpression": "commit to a long orbit and release with the existing bounded payoff"
       },
       "tell": {
-        "state": "deferred",
+        "id": "supermassive-anchor-tell",
+        "state": "broad slow contour with a long readable reach",
         "growth": [
-          "deferred"
+          "the specific well's mass and kill edge increase",
+          "a wide growth ring identifies this source"
         ],
         "hudIndependent": true
       },
       "growthBehavior": {
-        "id": "deferred",
-        "authority": "deferred",
-        "mode": "deferred",
+        "id": "slow-anchor-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
         "perEntity": true,
-        "schedule": "deferred",
-        "killRadiusFormula": "deferred",
-        "seaResponse": "deferred"
+        "schedule": "existing round-robin growth tick",
+        "massParameter": "fabricSignature.parameters.growthRateMultiplier",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring, scaled by growthWaveAmplitudeMultiplier"
       },
       "tunables": {
         "inheritFrom": "tunableContract",
         "overrides": {},
-        "status": "deferred"
+        "vectorSource": "fabricSignature.parameters",
+        "status": "provisional"
       }
     },
     "pulsar": {
       "id": "pulsar",
       "label": "Pulsar",
-      "status": "planned",
-      "activation": "phase-2",
-      "shipping": false,
+      "status": "shipping",
+      "activation": "phase-2-shipping-trio",
+      "shipping": true,
       "runtimeBehaviorId": "base-well",
-      "implementation": "deferred; no periodic anomaly behavior in phase 1",
+      "implementation": "base-well authority with a provisional bounded fabric vector; no bespoke periodic clock",
       "fabricSignature": {
-        "kind": "deferred-parameter-vector",
+        "id": "pulsar",
+        "kind": "bounded-parameter-vector",
         "fieldFamily": "well",
         "parameters": {
-          "plannedProfile": "periodic directional swell trains"
+          "gravityStrengthMultiplier": 0.90,
+          "gravityReachMultiplier": 0.90,
+          "currentStrengthMultiplier": 1.05,
+          "currentReachMultiplier": 1.00,
+          "seededSeaAmbientMultiplier": 1.00,
+          "liveWavePushMultiplier": 1.20,
+          "growthRateMultiplier": 1.00,
+          "growthWaveAmplitudeMultiplier": 1.20
         }
       },
       "interactionVerb": {
         "id": "ride-the-beat",
-        "authority": "deferred",
-        "skillExpression": "deferred"
+        "authority": "field/wave",
+        "skillExpression": "read the existing swell front and cross it on the favorable line"
       },
       "tell": {
-        "state": "deferred",
+        "id": "pulsar-beat-tell",
+        "state": "directional swell fronts make the source's rhythm readable in the fabric",
         "growth": [
-          "deferred"
+          "the specific well's mass and kill edge increase",
+          "a strong growth ring identifies this source"
         ],
         "hudIndependent": true
       },
       "growthBehavior": {
-        "id": "deferred",
-        "authority": "deferred",
-        "mode": "deferred",
+        "id": "beat-growth",
+        "authority": "scripts/sim-runtime.cjs",
+        "mode": "additive mass",
         "perEntity": true,
-        "schedule": "deferred",
-        "killRadiusFormula": "deferred",
-        "seaResponse": "deferred"
+        "schedule": "existing round-robin growth tick",
+        "massParameter": "fabricSignature.parameters.growthRateMultiplier",
+        "killRadiusFormula": "baseKillRadius * (1 + max(0, mass - startMass) * wellKillRadiusGrowth)",
+        "seaResponse": "existing growth wave ring, scaled by growthWaveAmplitudeMultiplier"
       },
       "tunables": {
         "inheritFrom": "tunableContract",
         "overrides": {},
-        "status": "deferred"
+        "vectorSource": "fabricSignature.parameters",
+        "status": "provisional"
       }
     }
   },
