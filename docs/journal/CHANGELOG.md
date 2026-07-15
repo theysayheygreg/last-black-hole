@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-14 — Exposure-lensed main push gate
+
+- Main pushes now classify the complete Git range and automatically skip the
+  all-platform release build for recognized docs, tests, and process-only work.
+- Runtime, content, dependency, build, non-fast-forward, and unknown ranges
+  still fail closed into the release artifact gate.
+- Added a cheap static PushScope contract to the fast/core/static lanes.
+
 > **Journal policy from 2026-07-14:** this file records project-wide releases,
 > version promotions, and large revisions merged between version lines.
 > Detailed branch work belongs in that version line's changelog. Existing

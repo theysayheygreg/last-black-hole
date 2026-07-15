@@ -48,8 +48,9 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
   build must exist
 - `npm run release:status` — print the current public train, hash build version,
   and whether the matching all-target release artifact already exists
-- `LBH_SKIP_RELEASE_PREP=1 git push origin main` — intentional docs/process-only
-  push that does not publish a new build
+- `git push origin main` — the tracked hook automatically skips release
+  preparation when the complete pushed range is recognized docs, tests, or
+  process-only; runtime/build/content changes still require the release build
 
 `npm run build` currently defaults to `release` mode.
 
@@ -174,7 +175,7 @@ If you are only pushing docs/process cleanup with no new build handoff, skip the
 guard explicitly instead of manufacturing a new patch:
 
 ```sh
-LBH_SKIP_RELEASE_PREP=1 git push origin main
+git push origin main
 ```
 
 The underlying lightweight verification lane should be green:

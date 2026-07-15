@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-07-14 — Main push release preparation is exposure-lensed
+
+**Decision:** Classify the complete `origin/main` pushed range before invoking
+release preparation. Recognized docs, tests, Git hooks/workflows, and named
+process helpers skip the all-platform artifact gate automatically. Any runtime,
+content, dependency, build, new-ref, non-fast-forward, empty, or unrecognized
+range fails closed into the existing release check.
+
+**Why:** Requiring a macOS, Windows, Linux, web, and iPad package rebuild for a
+documentation or orchestration receipt spent more human and model time on
+verification than on the game. Git already supplies the immutable exposure
+range, so the hook can use that evidence without a manual environment-variable
+bypass.
+
+**Where it landed:** `.githooks/pre-push`, `scripts/push-scope.cjs`,
+`tests/push-scope.cjs`, and the main push/build documentation.
+
+**Door status:** Closed for ordinary main pushes. Candidate and release claims
+still require the full artifact gate.
+
 ## 2026-07-14 — Cross-version operations require Greg's approval
 
 **Decision:** No actor may merge, cross-version cherry-pick, rebase, or promote

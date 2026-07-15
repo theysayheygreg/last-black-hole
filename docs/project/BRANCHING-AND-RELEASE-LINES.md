@@ -96,8 +96,10 @@ The tracked `.githooks/pre-push` policy is ref-aware:
 
 - an `origin/main` update runs `node scripts/release.cjs prepush` once;
 - a v0.3/v0.4 or other non-main branch push skips release preparation;
-- a deliberate docs/process-only main push may use
-  `LBH_SKIP_RELEASE_PREP=1 git push origin main`;
+- a main push whose full changed-path range is recognized docs, tests, or
+  process-only skips release preparation automatically;
+- any runtime, content, dependency, build, or unrecognized path fails closed
+  into the release-build gate;
 - a candidate/release push never uses that skip.
 
 This is a release-build gate, not CI for every branch commit. GitHub branch

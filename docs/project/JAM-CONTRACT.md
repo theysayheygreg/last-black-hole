@@ -580,8 +580,9 @@ The remote repo must stay current. This is a shared workspace — other agents, 
   handoff blocker before push.
 - **Use the pre-push guard for public publication.** The tracked hook invokes
   release preparation only for an `origin/main` update. Version-branch pushes
-  stay cheap. For an intentional main-line docs/process push that does not
-  publish a build, use `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
+  stay cheap. Main-line docs, tests, and process-only ranges are detected from
+  the pushed Git diff and skip release preparation automatically. Runtime,
+  content, dependency, build, and unrecognized paths require the release gate.
 - **Public version bumps are Greg calls.** `npm run release:public` advances the
   third number (`0.2.x`). Commit that bump, then build. Large decisive `0.3` or
   `1.0` moves are by Greg's explicit call only.

@@ -325,9 +325,10 @@ git config core.hooksPath .githooks
 
 For now, the version shape is `major.minor.public.commit`. Internal commits chew
 up the hash field automatically. Public release increments chew up the third
-field. Large decisive `0.3` or `1.0` moves are by Greg's call only. Intentional
-main-line docs/process-only pushes that do not publish a build can use
-`LBH_SKIP_RELEASE_PREP=1 git push origin main`.
+field. Large decisive `0.3` or `1.0` moves are by Greg's call only. The tracked
+hook automatically skips release preparation when the complete pushed range is
+limited to recognized docs, tests, or process files; any runtime/build/content
+path still requires the hash-named release artifact.
 
 With `git config core.hooksPath .githooks` installed, every commit prints the
 new hash build version and whether its all-target artifact already exists. That
