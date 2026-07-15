@@ -98,7 +98,7 @@ progress belongs in commits and task receipts, not status churn here.
 |---|---|---|---|
 | Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `codex/lbh-ci-policy-main` shared process integration and cross-workstream routing | Own this contract, route goals and CI, synthesize status for Greg; preserve `codex/lbh-ci-policy` as source history only |
 | v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Stalled in the pre-contract P5 turn after `372be4e`; preserve it and do not depend on its uncommitted context |
-| v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from stable product commit `f9f6075` | P5B accepted and fast-forwarded; P5C terminal results residency routed through Luna xhigh |
+| v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from stable product commit `2d52341` | P5B/P5C accepted and fast-forwarded; P5D party-preserving rematch routed through Luna xhigh |
 | v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3.1-movement-truth` in `/private/tmp/lbh-v031-movement-truth` | W1-A1 accepted at `45331aa`; W1-A2 shared gravity family routed through one Luna xhigh |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
 
