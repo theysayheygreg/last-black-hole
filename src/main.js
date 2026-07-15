@@ -264,6 +264,7 @@ let currentMap = MAP_SHALLOWS;
 let remoteAuthorityActive = false;
 let remoteMapId = null;
 let remoteSnapshot = null;
+let remoteAuthoritativeField = null;
 let remotePlayers = [];
 let fixtureShipCandidates = [];
 let remoteLastAckSeq = 0;
@@ -1410,25 +1411,24 @@ function seedInitialFluid() {
     const [wellFU, wellFV] = worldToFluidUV(well.wx, well.wy);
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2;
-      const dist = 0.015 + Math.random() * 0.04;
+      const dist = 0.015 + ((i % 4) / 3) * 0.04;
       const x = wellFU + Math.cos(angle) * dist;
       const y = wellFV + Math.sin(angle) * dist;
-      fluid.splat(
+      fluid.visualSplat(
         x, y,
-        Math.cos(angle) * 0.0005, Math.sin(angle) * 0.0005,
         0.001,
-        0.15 + Math.random() * 0.25 * well.mass,
-        0.08 + Math.random() * 0.15,
-        0.03 + Math.random() * 0.08
+        0.15 + 0.25 * well.mass,
+        0.08 + 0.15,
+        0.03 + 0.08,
       );
     }
   }
-  // Broader ambient density scattered across the fluid field
+  // Deterministic ambient dye only; no random velocity/current splats.
   for (let i = 0; i < 25; i++) {
-    fluid.splat(
-      0.05 + Math.random() * 0.9,
-      0.05 + Math.random() * 0.9,
-      0, 0, 0.003,
+    fluid.visualSplat(
+      0.05 + ((i * 17) % 90) / 100,
+      0.05 + ((i * 29) % 90) / 100,
+      0.003,
       0.04, 0.12, 0.18
     );
   }
@@ -1728,6 +1728,7 @@ function startGame(map, seed = null) {
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
+  remoteAuthoritativeField = null;
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -2412,9 +2413,6 @@ function applyRemoteEvents(events) {
         break;
       case 'star.consumed':
         if (Array.isArray(payload.starColor) && typeof payload.starName === 'string') {
-          if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-            waveRings.spawn(payload.wx, payload.wy, 3.0);
-          }
           const [cr, cg, cb] = payload.starColor;
           showWarning(`${payload.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
           _starFlashTimer = 0.8;
@@ -2422,14 +2420,8 @@ function applyRemoteEvents(events) {
         }
         break;
       case 'planetoid.consumed':
-        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-          waveRings.spawn(payload.wx, payload.wy, 0.2);
-        }
         break;
       case 'well.grew':
-        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy) && Number.isFinite(payload.mass)) {
-          waveRings.spawn(payload.wx, payload.wy, CONFIG.events.growthWaveAmplitude * payload.mass);
-        }
         break;
       case 'scavenger.extracted':
         showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
@@ -2466,6 +2458,20 @@ function applyRemoteInventoryAction(action) {
 
 function syncRemoteWorldState(world) {
   if (!world) return;
+
+  remoteAuthoritativeField = world.authoritativeField || null;
+
+  if (Array.isArray(world.waveRings)) {
+    waveRings.rings = world.waveRings.map((remote) => ({
+      sourceWX: remote.sourceWX,
+      sourceWY: remote.sourceWY,
+      radius: remote.radius ?? 0,
+      amplitude: remote.amplitude ?? 0,
+      initialAmplitude: remote.initialAmplitude ?? remote.amplitude ?? 0,
+      alive: remote.alive !== false,
+      id: remote.id || null,
+    }));
+  }
 
   if (Array.isArray(world.wells)) {
     for (let i = 0; i < Math.min(world.wells.length, wellSystem.wells.length); i++) {
@@ -2574,6 +2580,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
 
   rendererFixtureActive = false;
   remoteAuthorityActive = true;
+  remoteAuthoritativeField = null;
   remoteMapId = targetMapEntry.id;
   remoteSnapshot = null;
   remotePlayers = [];
@@ -3860,6 +3867,17 @@ function gameLoop(now) {
   // resume local simulation of those server-owned entities.
   const remoteVisualMode = remoteAuthorityActive;
 
+  // Register the last server field before any fixed step runs. FluidSim
+  // forces from this texture after each step, so visual detail cannot become
+  // a second gameplay current between snapshots.
+  if (fluid) {
+    if (remoteAuthorityActive && remoteAuthoritativeField) {
+      fluid.setAuthoritativeCoarseField(remoteAuthoritativeField);
+    } else {
+      fluid.clearAuthoritativeCoarseField();
+    }
+  }
+
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
     const simStart = performance.now();
@@ -3873,9 +3891,6 @@ function gameLoop(now) {
     });
     if (remoteVisualMode) {
       combatSystem.update(dt);
-      combatSystem.applyDisruptions(fluid);
-      waveRings.update(dt);
-      waveRings.injectIntoFluid(fluid);
     } else if (!rendererFixtureActive) {
       planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings, camX, camY);
     }
@@ -4606,22 +4621,14 @@ function gameLoop(now) {
   _prevConsumable1 = consumable1Now;
   _prevConsumable2 = consumable2Now;
 
-  // 6a. Sync fluid camera + coarse field. The fluid grid is a
-  //     camera-anchored window; the coarse field is a world-anchored,
-  //     low-res velocity memory that feeds the window boundary.
+  // 6a. Sync the fluid camera. The authority texture is registered above,
+  //     before simulation ticks, and remains world-anchored for boundary
+  //     inflow when the camera scrolls.
   //
-  //     Order each frame:
-  //       1. Refresh the coarse field from the live fluid + a well-driven
-  //          baseline. In-window cells capture transient features; cells
-  //          outside the window retain prior coarse velocity with decay.
-  //       2. If the camera moved, translate the fluid by the camera UV
-  //          delta. Texels scrolling in from outside read from the coarse
-  //          field at the corresponding world position.
-  //       3. Advance the fluid camera state so the next frame's
-  //          worldToFluidUV() calls produce the correct mapping.
+  //     Camera translation still reads the authority field for off-window
+  //     inflow; it never regenerates a client-side well baseline.
   if (fluid) {
     const [prevFcamX, prevFcamY] = getFluidCamera();
-    fluid.updateCoarseField([prevFcamX, prevFcamY], GRID_WINDOW, WORLD_SCALE, wellSystem.wells);
 
     let dCamX = camX - prevFcamX;
     let dCamY = camY - prevFcamY;

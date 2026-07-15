@@ -144,6 +144,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RendererAuthority",
+    file: "renderer-authority.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "SeededSea",
     file: "seeded-sea.cjs",
     lanes: ["fast", "core", "static", "full"],

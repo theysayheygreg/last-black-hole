@@ -20,6 +20,9 @@ const ADJ = ['Ascending', 'Crystalline', 'Shattered', 'Infinite', 'Dreaming',
 const NOUN = ['Chorus', 'Lattice', 'Meridian', 'Archive', 'Theorem',
   'Garden', 'Beacon', 'Chrysalis', 'Mandate', 'Confluence',
   'Helix', 'Axiom', 'Tempest', 'Orbit', 'Zenith'];
+// Preserve the obstruction lever for a later authority decision; a zero
+// velocity splat currently implies a current the field never authored.
+const WRECK_OBSTRUCTION_SPLAT_ENABLED = false;
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -157,10 +160,12 @@ export class WreckSystem {
       const [fu, fv] = worldToFluidUV(wreck.wx, wreck.wy);
       const sizeP = SIZE_PARAMS[wreck.size] || SIZE_PARAMS.medium;
 
-      // Zero-velocity splat — fluid obstacle (creates lee zone + vortex shedding)
-      fluid.splat(fu, fv, 0, 0, sizeP.splatRadius * s2,
-        0, 0, 0  // no density from obstruction itself
-      );
+      if (WRECK_OBSTRUCTION_SPLAT_ENABLED) {
+        // Deferred presentation lever: never emit the old zero-velocity lie.
+        fluid.splat(fu, fv, 0, 0, sizeP.splatRadius * s2,
+          0, 0, 0
+        );
+      }
 
       // Visual glow — visual buffer, type-colored
       if (!wreck.looted) {

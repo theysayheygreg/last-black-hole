@@ -149,6 +149,11 @@ export function fluidUVToWorld(fu, fv) {
   return [wx, wy];
 }
 
+/** Convert normalized world Y (top-left, down) to texture V (bottom-left, up). */
+export function worldYToFluidTextureV(worldY) {
+  return 1 - worldY;
+}
+
 // ---- World <-> Screen ----
 
 /**
@@ -326,6 +331,11 @@ export function shouldCull(entityWX, entityWY, camX, camY, margin = 0.3) {
 
 /** Fluid velocity is Y-up; screen/world velocity is Y-down. Negate Y component. */
 export function fluidVelToScreen(fvx, fvy) { return [fvx, -fvy]; }
+
+/** Convert world-space velocity to reference-scaled fluid velocity. */
+export function worldVelToFluid(wvx, wvy) {
+  return [wvx / FLUID_REF_SCALE, -wvy / FLUID_REF_SCALE];
+}
 
 // ---- Unit conversion helpers ----
 // Use these instead of inline * GRID_WINDOW or / GRID_WINDOW.

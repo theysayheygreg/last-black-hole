@@ -20,6 +20,9 @@ import { proximityForce, applyForceToShip } from './physics.js';
 
 const COMET_PREFIXES = ['Comet', 'Wanderer', 'Drifter'];
 const GREEK = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta'];
+// Greg-decision bow-shock/wake levers remain in the code but are disabled
+// until the effect is ratified as an authority field term.
+const PLANETOID_WAKE_ENABLED = false;
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -185,7 +188,7 @@ export class PlanetoidSystem {
 
       const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
       const injectFluid = speed >= 0.001 && !shouldCull(p.wx, p.wy, camX, camY, 0.45);
-      if (injectFluid) {
+      if (injectFluid && PLANETOID_WAKE_ENABLED) {
         const dirX = p.vx / speed;
         const dirY = p.vy / speed;
 

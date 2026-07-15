@@ -12,6 +12,7 @@ const SEEDED_GEN = require("./seeded-generation.cjs");
 const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
+  serializeCoarseFlowField,
 } = require("./coarse-flow-field.cjs");
 const {
   advanceSeededSea,
@@ -1178,6 +1179,7 @@ const runtime = {
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
+  authorityFieldPacket: null,
   conductor: null,
   inhibitorSchedule: null,
   portalSchedule: null,
@@ -1686,6 +1688,7 @@ function startSession(config = {}) {
   runtime._wreckRepeatWaveCount = 0;
   runtime.waveRings = [];
   runtime.coarseField = null;
+  runtime.authorityFieldPacket = null;
   rebuildAuthoritativeField();
   telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
@@ -1862,6 +1865,17 @@ function promoteHostIfNeeded() {
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
+function getAuthorityFieldPacket() {
+  if (!runtime.coarseField) return null;
+  if (runtime.authorityFieldPacket?.field === runtime.coarseField
+    && runtime.authorityFieldPacket.tick === runtime.tick) {
+    return runtime.authorityFieldPacket.payload;
+  }
+  const payload = serializeCoarseFlowField(runtime.coarseField, runtime.tick);
+  runtime.authorityFieldPacket = { field: runtime.coarseField, tick: runtime.tick, payload };
+  return payload;
+}
+
 function buildSnapshotBody() {
   return {
     type: "snapshot",
@@ -1969,6 +1983,16 @@ function buildSnapshotBody() {
       scavengers: runtime.mapState.scavengers,
       fauna: runtime.mapState.fauna,
       sentries: runtime.mapState.sentries,
+      waveRings: runtime.waveRings.map((ring) => ({
+        id: ring.id,
+        sourceWX: ring.sourceWX,
+        sourceWY: ring.sourceWY,
+        radius: ring.radius,
+        amplitude: ring.amplitude,
+        initialAmplitude: ring.initialAmplitude,
+        alive: ring.alive !== false,
+      })),
+      authoritativeField: getAuthorityFieldPacket(),
     },
     inhibitor: {
       form: runtime.inhibitor.form,

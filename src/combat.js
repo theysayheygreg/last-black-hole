@@ -14,6 +14,10 @@ import { CONFIG } from './config.js';
 import { worldToFluidUV, worldToScreen, worldDistance, worldDirectionTo,
          uvScale, wrapWorld } from './coords.js';
 
+// The pulse ring is the authority-driven shockwave. Keep the old disruption
+// lever present, but zero its presentation force until it is ratified.
+const PULSE_WELL_DISRUPTION_PRESENTATION_FORCE = 0;
+
 export class CombatSystem {
   constructor() {
     /** Seconds remaining on player pulse cooldown. */
@@ -65,24 +69,7 @@ export class CombatSystem {
     const s = uvScale();
     const s2 = s * s;
     const [fu, fv] = worldToFluidUV(wx, wy);
-    const numSplats = 16;
-    const pulseSplatOffset = 0.01;
-
-    for (let i = 0; i < numSplats; i++) {
-      const angle = (i / numSplats) * Math.PI * 2;
-      const dist = pulseSplatOffset * s;
-      const px = fu + Math.cos(angle) * dist;
-      const py = fv + Math.sin(angle) * dist;
-      fluid.splat(
-        px, py,
-        Math.cos(angle) * cfg.pulseForce * s,
-        Math.sin(angle) * cfg.pulseForce * s,
-        cfg.pulseRadius * s2,
-        0.8, 0.6, 0.3
-      );
-    }
-
-    waveRings.spawn(wx, wy, 1.5);
+    fluid.visualSplat(fu, fv, cfg.pulseRadius * s2, 0.8, 0.6, 0.3);
 
     for (const well of wellSystem.wells) {
       const d = worldDistance(wx, wy, well.wx, well.wy);
@@ -113,29 +100,9 @@ export class CombatSystem {
    * Call once per frame after update(), before fluid step.
    */
   applyDisruptions(fluid) {
-    const s = uvScale();
-    const s2 = s * s;
-
-    for (const d of this.wellDisruptions) {
-      const [fu, fv] = worldToFluidUV(d.well.wx, d.well.wy);
-
-      // Counter-radial splats push density outward, breaking the accretion ring.
-      // All UV-space values scaled by s/s2 per GPU SPLAT SCALING RULE.
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2 + d.timer * 3;
-        const disruptDist = 0.02;    // UV-space: how far from well center to inject
-        const disruptForce = 0.001;  // UV-space: velocity magnitude of scatter
-        const disruptRadius = 0.003; // UV-space: splat gaussian radius
-        fluid.splat(
-          fu + Math.cos(angle) * disruptDist * s * d.well.mass,
-          fv + Math.sin(angle) * disruptDist * s * d.well.mass,
-          Math.cos(angle) * disruptForce * s,
-          Math.sin(angle) * disruptForce * s,
-          disruptRadius * s2,
-          0, 0, 0   // no density — just scatter velocity
-        );
-      }
-    }
+    if (PULSE_WELL_DISRUPTION_PRESENTATION_FORCE <= 0) return;
+    // Deliberately disabled: well disruption must not contradict the field.
+    void fluid;
   }
 
   /**
@@ -194,23 +161,9 @@ export class CombatSystem {
     const s = uvScale();
     const s2 = s * s;
 
-    // --- 1. Fluid force injection: radial outward splats (GPU SPLAT SCALING RULE) ---
+    // --- 1. Honest pulse dye; the field owns the shockwave velocity ---
     const [fu, fv] = worldToFluidUV(wx, wy);
-    const numSplats = 16;
-    const pulseSplatOffset = 0.01;  // UV-space: how far from center to place each radial splat
-    for (let i = 0; i < numSplats; i++) {
-      const angle = (i / numSplats) * Math.PI * 2;
-      const dist = pulseSplatOffset * s;
-      const px = fu + Math.cos(angle) * dist;
-      const py = fv + Math.sin(angle) * dist;
-      fluid.splat(
-        px, py,
-        Math.cos(angle) * cfg.pulseForce * s,
-        Math.sin(angle) * cfg.pulseForce * s,
-        cfg.pulseRadius * s2,
-        0.8, 0.6, 0.3  // bright amber flash
-      );
-    }
+    fluid.visualSplat(fu, fv, cfg.pulseRadius * s2, 0.8, 0.6, 0.3);
 
     // --- 2. Wave ring for visible shockwave propagation ---
     waveRings.spawn(wx, wy, 1.5);

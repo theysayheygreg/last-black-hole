@@ -1,7 +1,7 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
 const { wrapPosition, wrappedDelta } = require("./sim/world-geometry.cjs");
-const { BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
+const { AMBIENT_FLOOR, BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const FORCE_MIN_DIST = 0.15;
 
 function wrapWorld(value, worldScale) {
@@ -163,7 +163,30 @@ function buildCoarseFlowField({
     cellSize: safeCellSize,
     columns,
     rows,
+    authorityFloor: BASE_THRUST_ACCEL * AMBIENT_FLOOR,
     cells,
+  };
+}
+
+function serializeCoarseFlowField(field, tick = null) {
+  if (!field) return null;
+  const packed = Buffer.allocUnsafe(field.cells.length * 8);
+  for (let index = 0; index < field.cells.length; index += 1) {
+    const cell = field.cells[index];
+    packed.writeFloatLE(Number(cell.currentX) || 0, index * 8);
+    packed.writeFloatLE(Number(cell.currentY) || 0, index * 8 + 4);
+  }
+  return {
+    schemaVersion: 1,
+    tick: Number.isInteger(tick) ? tick : null,
+    encoding: "float32le-current-y-down-row-major-v1",
+    worldScale: field.worldScale,
+    cellSize: field.cellSize,
+    columns: field.columns,
+    rows: field.rows,
+    authorityFloor: field.authorityFloor,
+    cellCount: field.cells.length,
+    data: packed.toString("base64"),
   };
 }
 
@@ -256,4 +279,5 @@ function sampleCoarseFlowField(field, wx, wy) {
 module.exports = {
   buildCoarseFlowField,
   sampleCoarseFlowField,
+  serializeCoarseFlowField,
 };
