@@ -48,6 +48,26 @@ function resultHash(value) {
   return crypto.createHash("sha256").update(stableJson(value)).digest("hex");
 }
 
+function runRecordKey(runId, profileId) {
+  if (!runId) return null;
+  if (!profileId) return String(runId);
+  return `${encodeURIComponent(String(runId))}:${encodeURIComponent(String(profileId))}`;
+}
+
+function persistRunRecord(runs, entry) {
+  const legacyKey = String(entry.runId);
+  const compositeKey = runRecordKey(entry.runId, entry.profileId);
+  const legacyEntry = runs[legacyKey];
+  if (legacyEntry && legacyEntry.profileId !== entry.profileId) {
+    // Lazily move a pre-P5B single-player record when a second owner appears
+    // in the same run. This keeps old JSON readers working for solo records
+    // without allowing a shared run to retain a runId-only collision.
+    delete runs[legacyKey];
+    runs[runRecordKey(legacyEntry.runId, legacyEntry.profileId)] = legacyEntry;
+  }
+  runs[legacyEntry && legacyEntry.profileId === entry.profileId ? legacyKey : compositeKey] = entry;
+}
+
 function createProfileSkeleton(profileId, name = "Pilot") {
   const now = nowIso();
   return {
@@ -437,7 +457,9 @@ class ControlPlaneStore {
         runResult,
         result,
       });
-      this.state.runs[entry.runId] = entry;
+      // A multiplayer run has one private record per profile. The public run
+      // identity is shared, but it is not the durable record identity.
+      persistRunRecord(this.state.runs, entry);
     }
     const committed = { profile: clone(saved), result: clone(result) };
     if (settlementKey) {

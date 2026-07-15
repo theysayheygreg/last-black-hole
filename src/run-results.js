@@ -72,6 +72,51 @@ function cargoForOutcome(result, fallbackCargo, outcome) {
   return Array.isArray(result?.cargoLost) ? result.cargoLost : fallbackCargo;
 }
 
+function nonnegativeInteger(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : fallback;
+}
+
+function settlementView(runResult) {
+  const rawSettlement = runResult?.settlement;
+  const hasSettlementState = rawSettlement != null || runResult?.settlementStatus != null;
+  const rawStatus = typeof rawSettlement === 'string'
+    ? rawSettlement
+    : rawSettlement?.status || runResult?.settlementStatus;
+  // Local/offline results predate the remote acknowledgement envelope and
+  // remain settled by their synchronous profile write. Remote results always
+  // carry an explicit state; unknown explicit states fail closed to pending.
+  const status = !hasSettlementState
+    ? 'settled'
+    : ['pending', 'settled', 'failed'].includes(rawStatus)
+      ? rawStatus
+      : 'pending';
+  const estimatedEmEarned = Number.isFinite(Number(runResult?.emEarned))
+    ? nonnegativeInteger(runResult.emEarned)
+    : 0;
+  const exactEmCredited = nonnegativeInteger(
+    rawSettlement?.emCredited ?? runResult?.emCredited,
+    estimatedEmEarned,
+  );
+  const exactOverflowValue = nonnegativeInteger(
+    rawSettlement?.overflowValue ?? runResult?.overflowValue,
+    0,
+  );
+  const settled = status === 'settled';
+  return {
+    status,
+    settled,
+    estimatedEmEarned,
+    emCredited: settled ? exactEmCredited : 0,
+    overflowValue: settled ? exactOverflowValue : 0,
+    statusLabel: status.toUpperCase(),
+    pillLabel: settled
+      ? `+${exactEmCredited} EM`
+      : status === 'failed' ? 'EM FAILED' : 'EM PENDING',
+    ledgerLabel: settled ? `${exactEmCredited} EM` : status === 'failed' ? 'NOT SETTLED' : 'PENDING',
+  };
+}
+
 export function buildRunResultsViewModel({
   runResult = null,
   crewResult = null,
@@ -87,9 +132,13 @@ export function buildRunResultsViewModel({
   const signalZone = runResult?.signalPeakZone || 'ghost';
   const inhibitorForm = Math.max(0, Math.min(3, Number(runResult?.inhibitorFormReached) || 0));
   const survivalTime = runResult?.survivalTime ?? fallbackSurvivalTime ?? 0;
-  const emEarned = Number.isFinite(Number(runResult?.emEarned))
-    ? Math.max(0, Math.round(Number(runResult.emEarned)))
-    : Math.max(0, Math.round(Number(fallbackEmEarned) || 0));
+  const settlement = settlementView(runResult);
+  const fallbackEarned = nonnegativeInteger(fallbackEmEarned);
+  const estimatedEmEarned = settlement.estimatedEmEarned || fallbackEarned;
+  const hasExactCredit = runResult?.settlement?.emCredited != null || runResult?.emCredited != null;
+  const emEarned = settlement.settled
+    ? (hasExactCredit ? settlement.emCredited : estimatedEmEarned)
+    : 0;
 
   const aiOutcomes = Array.isArray(runResult?.aiOutcomes) ? runResult.aiOutcomes : [];
   const notables = Array.isArray(runResult?.notables) ? runResult.notables : [];
@@ -131,7 +180,14 @@ export function buildRunResultsViewModel({
     cargoCount: cargo.length,
     cargoValue: totalCargoValue(cargo),
     cargoLabels: cargo.map(itemLabel),
+    settlementStatus: settlement.status,
+    settlementStatusLabel: settlement.statusLabel,
+    settlementSettled: settlement.settled,
+    estimatedEmEarned,
     emEarned,
+    overflowValue: settlement.overflowValue,
+    creditPillLabel: settlement.pillLabel,
+    ledgerValueLabel: settlement.ledgerLabel,
     deathCause: !extracted && runResult?.deathCause
       ? (deathEntityLabel ? `${runResult.deathCause}: ${deathEntityLabel}` : runResult.deathCause)
       : null,
@@ -238,7 +294,10 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
   drawStatusPill(ctx, { x: cx - 138, y: panelY + 114, w: 118, h: 26 }, mapLabel, { role, alpha: contentAlpha });
   drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
-  drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, `+${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, view.creditPillLabel, {
+    role: view.settlementStatus === 'failed' ? 'danger' : 'salvage',
+    alpha: contentAlpha,
+  });
 
   let y = panelY + 160;
 
@@ -263,7 +322,14 @@ export function drawRunResultsOverlay(ctx, canvas, {
   y += 18;
   drawSectionLabel(ctx, 'LEDGER', leftX, y, { role: 'salvage', alpha: contentAlpha });
   y += 25;
-  drawKeyValueRow(ctx, success ? 'credited' : 'residue', `${view.emEarned} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
+  drawKeyValueRow(ctx, view.settlementSettled ? (success ? 'credited' : 'residue') : 'settlement', view.ledgerValueLabel, leftX, y, {
+    alpha: contentAlpha,
+    valueRole: view.settlementStatus === 'failed' ? 'danger' : view.settlementSettled ? 'salvage' : 'flow',
+  });
+  y += 18;
+  if (view.settlementSettled) {
+    drawKeyValueRow(ctx, 'overflow', `${view.overflowValue} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
+  }
 
   let ry = panelY + 160;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });

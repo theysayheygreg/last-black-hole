@@ -2174,8 +2174,8 @@ function shutdownForIdle() {
 
 function trackControlPlaneWrite(promise) {
   // Control-plane writes are intentionally fire-and-track rather than awaited
-  // in the tick loop. Run truth stays in the sim; persistence catches up
-  // asynchronously and the pending set is drained during shutdown.
+  // in the tick loop. Run truth stays in the sim; settlement publication is
+  // chained to its acknowledgement and the pending set drains at shutdown.
   const tracked = Promise.resolve(promise)
     .catch((error) => {
       console.error(`[${LOG_LABEL}] control plane: ${error.message}`);
@@ -2620,14 +2620,79 @@ function commitPlayerOutcome(player, outcome) {
 
   const runResult = buildRunResult(player, outcome);
 
-  trackControlPlaneWrite(controlPlane.applyOutcome({
+  // The first local result is deliberately marked pending. It lets the owner
+  // see the private run details without turning the sim's estimate into a
+  // durable ledger claim. Only the applyOutcome acknowledgement may publish
+  // exact credited/overflow truth.
+  publishEvent("run.result", {
+    clientId: player.clientId,
     profileId: player.profileId,
-    player,
-    outcome,
-    runDuration: runtime.simTime,
-    session: runtime.session,
-    runResult, // full result package for persistence
-  }));
+    ...runResult,
+    settlement: { status: "pending" },
+  });
+
+  const settlementWrite = Promise.resolve()
+    .then(() => controlPlane.applyOutcome({
+      profileId: player.profileId,
+      player,
+      outcome,
+      runDuration: runtime.simTime,
+      session: runtime.session,
+      runResult, // full result package for persistence
+    }))
+    .then((committed) => {
+      if (!committed?.result) throw new Error("Control-plane settlement acknowledgement was incomplete");
+      const emCredited = Math.max(0, Math.round(Number(committed.result.emCredited) || 0));
+      const overflowValue = Math.max(0, Math.round(Number(committed.result.overflowValue) || 0));
+      const settlement = { status: "settled", emCredited, overflowValue };
+      const settledRunResult = {
+        ...runResult,
+        emCredited,
+        overflowValue,
+        settlement,
+      };
+
+      telemetry.info("player.outcomeCommitted", {
+        sessionId: runtime.session?.id || null,
+        clientId: player.clientId,
+        profileId: player.profileId,
+        outcome,
+        hullType: player.hullType,
+        cargoCount: getCargoCount(player),
+        emCredited,
+        overflowValue,
+      });
+      publishEvent("profile.updated", {
+        clientId: player.clientId,
+        profileId: player.profileId,
+        outcome,
+        settlement,
+      });
+      publishEvent("run.result", {
+        clientId: player.clientId,
+        profileId: player.profileId,
+        ...settledRunResult,
+      });
+      return settledRunResult;
+    })
+    .catch((error) => {
+      const errorCode = String(error?.code || "SETTLEMENT_FAILED");
+      telemetry.error("player.outcomeSettlementFailed", {
+        sessionId: runtime.session?.id || null,
+        clientId: player.clientId,
+        profileId: player.profileId,
+        outcome,
+        errorCode,
+      });
+      publishEvent("run.result", {
+        clientId: player.clientId,
+        profileId: player.profileId,
+        ...runResult,
+        settlement: { status: "failed", errorCode },
+      });
+      return null;
+    });
+  trackControlPlaneWrite(settlementWrite);
 
   // Chronicle echo wreck: persist on death only. Extractions do not
   // leave echoes (they reached the door — the universe does not need
@@ -2642,19 +2707,10 @@ function commitPlayerOutcome(player, outcome) {
     }
   }
 
-  // Existing consumers depend on profile.updated to know the write finished
-  telemetry.info("player.outcomeCommitted", { sessionId: runtime.session?.id || null, clientId: player.clientId, profileId: player.profileId, outcome, hullType: player.hullType, cargoCount: getCargoCount(player) });
-  publishEvent("profile.updated", {
-    clientId: player.clientId,
-    profileId: player.profileId,
-    outcome,
-  });
-  publishEvent("run.result", {
-    clientId: player.clientId,
-    profileId: player.profileId,
+  return {
     ...runResult,
-  });
-  return runResult;
+    settlement: { status: "pending" },
+  };
 }
 
 function spawnWaveRing(wx, wy, amplitude) {
