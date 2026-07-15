@@ -152,6 +152,14 @@ iCloud, but it is not repository evidence for the current RC hash.
 
 ### Steam Deck Side-by-side Comparison
 
+Latest local v0.3 package candidate: source `f56175f6`, build
+`0.3.0.f56175f6`. All five targets built and `test:package` passed staged and
+extracted boot. The playtest ZIP SHA-256 is
+`5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`.
+The Deck was offline during the 2026-07-15 preflight, so the installed Preview
+row below remains the prior checksum-verified build; no remote files or Steam
+shortcuts were changed.
+
 Installed and checksum-verified on 2026-07-10:
 
 | Steam entry | Source | Install directory | App id |

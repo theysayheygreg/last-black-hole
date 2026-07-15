@@ -1,6 +1,6 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-14. This is branch acceptance
+> Document revision: v0.3. Updated 2026-07-15. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
@@ -25,6 +25,25 @@ until the session is explicitly released. Fresh authority, controller, Three
 renderer, fast, and package gates pass with that fix.
 
 ## Current Evidence
+
+Latest package evidence from the consolidated 2026-07-15 candidate:
+
+- Source `f56175f6e0571e8b7ed51a383695ad64229d2440` includes the accepted
+  title/map boot correction and remains on `codex/v0.3-ballpark-roadmap`.
+- `release:internal` built web, iPad, macOS arm64, Windows x64, and Linux x64 as
+  `0.3.0.f56175f6`; its fast gate included Three smoke `6/6`.
+- `release:status` found the hash-named release, and `test:package` passed
+  staged plus extracted authority/client boot under protocol `lbh-local-v2`.
+- Playtest ZIP SHA-256:
+  `5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`.
+- Linux `resources/app.asar` SHA-256:
+  `cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`.
+- The no-retry full lane was stopped after 215 seconds because its isolated
+  checkout lacked Python audio packages, `three`, and Electron packager
+  dependencies. It was not retried and is not claimed green for this hash.
+- Deck preflight found `steamdeck.tail1ac9cf.ts.net` offline: Tailscale ping,
+  SSH, and direct probes timed out. No deploy or shortcut refresh occurred;
+  physical review remains open and v0.2 was untouched.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 

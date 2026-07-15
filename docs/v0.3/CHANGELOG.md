@@ -23,6 +23,24 @@
 
 ## 2026-07-15
 
+- **Consolidated RC boot correction:** fixed the merged title-scene path so
+  id-less presentation fixtures preserve their authored scale while anomaly
+  lookup receives canonical `shallows` identity. Playable 5/15/25 maps remain
+  strict. Accepted source commit `ba39606f` is integrated at `f56175f6`.
+- **RC build receipt:** `release:internal`, `release:status`, and
+  `test:package` are green for all five targets at build
+  `0.3.0.f56175f6`. The playtest ZIP SHA-256 is
+  `5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`;
+  Linux `resources/app.asar` is
+  `cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`.
+- **Evidence boundary:** the no-retry full lane was stopped after 215 seconds
+  when its isolated checkout lacked Python audio packages, `three`, and
+  Electron packager dependencies. It was not retried. Package boot is green;
+  broad RC CI remains unclaimed for this hash.
+- **Deck boundary:** preflight resolved the Deck at `100.77.19.24`, but
+  Tailscale ping and SSH port 22 timed out. No deployment or Gaming Mode update
+  occurred, and the v0.2 Demo slot remains untouched.
+
 - X-D measured current cruise and Breacher Burn travel at live profile dt for the 5x5, 15x15, and 25x25 registry, including raw runs, authority read radii, and a derived decisions-per-minute proxy; no gameplay constants changed.
 - X-A completed the bounded config red-flag audit: movement drag, wreck drift,
   and signal rates now use readable units with exact parity conversions; dead
