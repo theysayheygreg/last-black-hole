@@ -1,10 +1,18 @@
 # Test Harness
 
-> Document revision: v0.3. The Three renderer and authoritative sim are the
+> Document revision: v0.3. Updated 2026-07-14. The Three renderer and authoritative sim are the
 > release validation targets. The original headless-only plan in
 > `AGENT-TESTING.md` is historical context.
 
 ## Position
+
+The harness is CI for a pre-release game, not a multiple-nines release
+certification system. Feature threads should spend roughly 80-90% of their time
+implementing. They run focused changed-contract proof and a launch smoke when
+needed; broad lanes run asynchronously at integration or release checkpoints.
+Non-critical failures become separate QA/debug work instead of blocking the
+feature builder. Codex task `019f6315-910b-7e03-99c3-a50a3ed8efa6` owns the
+detailed throughput redesign behind this policy.
 
 The harness is split by the question being asked. Fast data invariants, browser
 boot checks, authority-process checks, renderer visual fixtures, and real
@@ -32,7 +40,9 @@ The harness should let agents play, look, and understand LBH well enough that
 Greg is the last stop for feel, taste, and polish, not the first person to
 discover that a feature does not work.
 
-That means every meaningful feature should have evidence in three layers:
+That means every meaningful feature should eventually have evidence in three
+layers. Only the focused changed-contract proof blocks an implementation
+commit; playable and visual proof are checkpoint receipts:
 
 1. **Contract proof** — deterministic tests prove the sim, renderer, protocol,
    or UI contract that changed.

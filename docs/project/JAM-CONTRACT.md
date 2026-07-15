@@ -1,6 +1,6 @@
 # Game Jam Contract: Shifts, Checkpoints, and Agent Orchestration
 
-> Status: v0.2/v0.3 branch process contract. This began as the 7-day jam
+> Status: v0.2/v0.3 branch process contract. Updated 2026-07-14. This began as the 7-day jam
 > coordination doc; keep that historical context, but current agent work is
 > centered on the Three renderer, authoritative sim, platform targets,
 > next-version branch work, and periodic architecture hygiene.
@@ -91,11 +91,26 @@ behavior.
 
 ## Agent QA North Star
 
+### Feature-Flow Validation Policy
+
+LBH is a pre-release game without public players or a production reliability
+contract. Feature threads should spend roughly 80-90% of their time building
+the game. During implementation, only the changed contract and any affected
+launch path are blocking proof.
+
+Broad authority, network, soak, package, visual-matrix, agent-eval, and full
+lanes behave like CI: run them asynchronously at integration and release
+checkpoints. A non-critical failure opens a bounded QA/debug task; it does not
+hold the feature builder in a serial repair loop. Codex task
+`019f6315-910b-7e03-99c3-a50a3ed8efa6` is the resolution source for the detailed
+throughput redesign.
+
 Agents should verify that features work before Greg plays them. Greg's time is
 for feel, taste, art direction, and product judgment, not first-contact QA.
 
-Before handing over meaningful gameplay, renderer, UI, platform, or architecture
-work, the responsible agent should leave three kinds of evidence:
+Before a release or Greg-facing handoff, the responsible agent should leave
+three kinds of evidence. These are checkpoint receipts, not requirements after
+every feature commit:
 
 - the deterministic contract lane that matches the changed system;
 - a playable or visual artifact showing the feature in context;
@@ -120,7 +135,9 @@ idle authority alive through the attract-screen wait, and launch a human run.
 
 ## Review Protocol: Audit → Codex
 
-After any feature build that touches >200 lines or adds a new system, run a two-pass review before reporting done. The passes catch different classes of bugs.
+At integration checkpoints for a feature that touches >200 lines or adds a new
+system, run a two-pass review. Ordinary implementation commits use focused
+review and keep moving; the passes below must not serialize the feature loop.
 
 ### Pass 1: Design Audit (Orrery)
 
@@ -171,9 +188,10 @@ camera, or renderer projection gets one extra checklist before Greg playtests:
 4. **Fresh-process evidence** — movement/playtest evidence comes from a fresh
    browser and fresh sim unless the task is explicitly a long-run stability
    probe. Reloading a page is not a clean process boundary.
-5. **Representative lanes** — run `npm test`, `npm run test:playtest`, and
-   `npm run test:authority` for movement/sim work. Add `npm run test:visual`
-   when camera, renderer, radius, or scene projection changes.
+5. **Representative lanes** — during implementation, run the focused contract
+   for the changed movement, sim, coordinate, or presentation behavior. Queue
+   `test:playtest`, `test:authority`, and `test:visual` as parallel checkpoint
+   receipts when the slice is integrated.
 
 If the player dies to an invisible well, spawns off-route, gets pulled by a
 thing they cannot see, or bounces between positions, treat that as a contract

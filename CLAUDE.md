@@ -172,12 +172,14 @@ See `docs/project/JAM-CONTRACT.md` for full "When Done" checklist, journal trigg
 
 ## Testing
 
-- **Automated:** `node tests/run-all.cjs` — manifest-driven Node/CDP smoke, physics, renderer, and gameplay tests. Run after every commit. See `docs/design/TEST-HARNESS.md`.
+- **Feature loop:** run the smallest focused check that proves the changed behavior, plus a boot smoke when the launch path changed. Do not run or debug the full harness after every commit.
+- **CI/checkpoints:** broad authority, visual, package, soak, agent-eval, and full lanes run asynchronously at integration or release checkpoints. A non-critical failure creates follow-up work; it does not trap the feature thread.
+- **Resolution source:** Codex task `019f6315-910b-7e03-99c3-a50a3ed8efa6` owns the detailed test-throughput redesign.
 - **Manual:** playtesting for feel, art direction, balance. No unit test framework.
 - `console.log` is fine. Remove before ship day (Sunday).
 - Performance matters: 60fps on a mid-range laptop. Profile if you're unsure.
 - Expose `window.__TEST_API` for automated test access to game state (see AGENT-TESTING.md).
-- Self-verify: run tests + open the game in browser, confirm your change works, then commit.
+- Self-verify the changed feature in its narrowest representative path, then commit and keep building.
 
 ## Playtest Notes
 
