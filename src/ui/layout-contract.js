@@ -1,0 +1,166 @@
+import { UI_DECK_GEOMETRY } from './design-tokens.js';
+
+export function rect(x = 0, y = 0, w = 0, h = 0) {
+  return { x: Number(x) || 0, y: Number(y) || 0, w: Number(w) || 0, h: Number(h) || 0 };
+}
+
+export function rectContains(container, child, padding = 0) {
+  const pad = Math.max(0, Number(padding) || 0);
+  return child.x >= container.x + pad
+    && child.y >= container.y + pad
+    && child.x + child.w <= container.x + container.w - pad
+    && child.y + child.h <= container.y + container.h - pad;
+}
+
+export function rectsOverlap(a, b, separation = 0) {
+  const gap = Math.max(0, Number(separation) || 0);
+  return a.x < b.x + b.w + gap
+    && a.x + a.w + gap > b.x
+    && a.y < b.y + b.h + gap
+    && a.y + a.h + gap > b.y;
+}
+
+export function sizeCompound({
+  textWidth = 0,
+  detailWidth = 0,
+  artWidth = 0,
+  valueWidth = 0,
+  textHeight = 0,
+  detailHeight = 0,
+  artHeight = 0,
+  valueHeight = 0,
+  minWidth = 0,
+  minHeight = 0,
+  paddingX = UI_DECK_GEOMETRY.listRow.paddingX,
+  paddingY = UI_DECK_GEOMETRY.listRow.paddingY,
+  gap = UI_DECK_GEOMETRY.listRow.gap,
+} = {}) {
+  const widths = [textWidth, detailWidth, artWidth, valueWidth].map((value) => Math.max(0, Number(value) || 0));
+  const occupied = widths.filter((value) => value > 0);
+  const contentWidth = occupied.reduce((sum, value) => sum + value, 0)
+    + Math.max(0, occupied.length - 1) * gap;
+  const contentHeight = Math.max(textHeight, detailHeight, artHeight, valueHeight, 0);
+  return {
+    w: Math.max(minWidth, contentWidth + paddingX * 2),
+    h: Math.max(minHeight, contentHeight + paddingY * 2),
+    contentWidth,
+    contentHeight,
+  };
+}
+
+export function glyphBounds(container, size = UI_DECK_GEOMETRY.actionGlyph.minHeight) {
+  const source = rect(container?.x, container?.y, container?.w, container?.h);
+  const glyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight, Number(size) || 0);
+  return rect(
+    source.x,
+    source.y + Math.max(0, (source.h - glyphSize) / 2),
+    glyphSize,
+    glyphSize,
+  );
+}
+
+export function deckPanelLayout(width, height, kind = 'home', viewportWidth = width) {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const compact = viewportWidth < 984;
+  const marginX = compact ? Math.max(UI_DECK_GEOMETRY.panel.paddingX, w * 0.025) : Math.max(34, Math.min(64, w * 0.045));
+  const top = Math.max(kind === 'home' ? 28 : 30, h * (kind === 'home' ? 0.05 : 0.052));
+  const bottom = h - Math.max(kind === 'home' ? 28 : 32, h * (kind === 'home' ? 0.045 : 0.048));
+  const gap = compact ? UI_DECK_GEOMETRY.separation + 2 : 18;
+  const leftW = kind === 'home'
+    ? (compact ? Math.max(196, w * 0.18) : Math.min(220, Math.max(190, w * 0.17)))
+    : (compact ? Math.max(232, w * 0.22) : Math.min(300, Math.max(248, w * 0.23)));
+  const rightW = kind === 'home'
+    ? (compact ? Math.max(252, w * 0.24) : Math.min(324, Math.max(284, w * 0.245)))
+    : (compact ? Math.max(258, w * 0.25) : Math.min(336, Math.max(292, w * 0.25)));
+  const centerW = Math.max(320, w - marginX * 2 - leftW - rightW - gap * 2);
+  const panelH = Math.max(1, bottom - top);
+  const left = rect(marginX, top, leftW, panelH);
+  const center = rect(left.x + left.w + gap, top, centerW, panelH);
+  const right = rect(center.x + center.w + gap, top, rightW, panelH);
+  return { compact, width: w, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH, left, center, right };
+}
+
+export function profileSurfaceLayout(width, height) {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const panelW = Math.min(560, Math.max(500, w * 0.42));
+  const panelH = Math.min(410, Math.max(382, h - 180));
+  const panel = rect((w - panelW) / 2, Math.max(72, (h - panelH) * 0.44), panelW, panelH);
+  const innerX = panel.x + UI_DECK_GEOMETRY.panel.paddingX;
+  const rowW = panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
+  const rowH = Math.max(64, UI_DECK_GEOMETRY.listRow.minHeight + 16);
+  const rowGap = UI_DECK_GEOMETRY.panel.gap;
+  const rows = Array.from({ length: 3 }, (_, index) => rect(
+    innerX,
+    panel.y + 94 + index * (rowH + rowGap),
+    rowW,
+    rowH,
+  ));
+  return { panel, rows, heading: rect(innerX, panel.y + 48, rowW, UI_DECK_GEOMETRY.heading.minHeight), promptY: panel.y + panel.h - 20 };
+}
+
+export function titleSurfaceLayout(width, height, layout = 'left') {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const sideAligned = layout !== 'center';
+  const gutterX = Math.max(72, Math.min(116, Math.round(w * 0.075)));
+  const gutterY = Math.max(56, Math.min(92, Math.round(h * 0.085)));
+  const panelW = sideAligned ? Math.min(560, Math.max(500, Math.round(w * 0.43))) : Math.min(900, Math.round(w * 0.74));
+  const panelH = sideAligned ? 310 : 282;
+  const panelX = layout === 'right' ? w - gutterX - panelW : layout === 'center' ? (w - panelW) / 2 : gutterX;
+  const panelY = sideAligned ? gutterY + 70 : h / 2 - 154;
+  const textInset = sideAligned ? 40 : 0;
+  const align = layout === 'right' ? 'right' : layout === 'center' ? 'center' : 'left';
+  const textX = align === 'right' ? panelX + panelW - textInset : align === 'left' ? panelX + textInset : w / 2;
+  const textWidth = panelW - (sideAligned ? textInset * 2 : 96);
+  const titleY = panelY + (sideAligned ? 88 : 86);
+  const statusW = Math.min(430, textWidth);
+  const commandW = Math.min(352, textWidth);
+  const commandX = align === 'right' ? textX - commandW : align === 'left' ? textX : textX - commandW / 2;
+  const versionW = 232;
+  const versionX = align === 'right' ? textX - versionW : align === 'left' ? textX : textX - versionW / 2;
+  return {
+    layout, align, gutterX, gutterY, panelX, panelY, panelW, panelH, textX, textWidth, titleY,
+    titleFontSize: sideAligned ? 50 : 58,
+    statusW,
+    commandRect: rect(commandX, titleY + 130, commandW, UI_DECK_GEOMETRY.button.minHeight),
+    versionRect: rect(versionX, h - gutterY - 24, versionW, 24),
+  };
+}
+
+export function resultsSurfaceLayout(width, height) {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const panelW = Math.min(880, Math.max(760, w - 48));
+  const panelH = Math.min(560, Math.max(500, h - 40));
+  const panel = rect((w - panelW) / 2, (h - panelH) / 2, panelW, panelH);
+  const pad = UI_DECK_GEOMETRY.panel.paddingX + 6;
+  const columnGap = UI_DECK_GEOMETRY.panel.gap + 10;
+  const columnW = (panel.w - pad * 2 - columnGap) / 2;
+  const leftX = panel.x + pad;
+  const rightX = leftX + columnW + columnGap;
+  const buttonW = Math.max(UI_DECK_GEOMETRY.button.minWidth, Math.min(320, panel.w - pad * 2));
+  return {
+    panel,
+    pad,
+    columnGap,
+    columnW,
+    leftX,
+    rightX,
+    button: rect((w - buttonW) / 2, panel.y + panel.h - 98, buttonW, UI_DECK_GEOMETRY.button.minHeight),
+    cargoRowH: UI_DECK_GEOMETRY.listRow.minHeight - 12,
+    cargoGap: UI_DECK_GEOMETRY.separation,
+  };
+}
+
+export function hudSurfaceLayout(width, height) {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const edge = 18;
+  const vitals = rect(edge, 118, 286, 188);
+  const portals = rect(w - edge - 320, edge, 320, 74);
+  const actions = rect(w - edge - 360, h - edge - 260, 360, 260);
+  const interaction = rect(actions.x - UI_DECK_GEOMETRY.panel.gap - 380, h - edge - 84, 380, 70);
+  return { edge, vitals, portals, actions, interaction };
+}

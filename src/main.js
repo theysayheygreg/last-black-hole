@@ -79,6 +79,7 @@ import {
   drawStatusPill,
   drawUiPanel,
   drawScanlines as drawUiScanlines,
+  drawActionFooter,
   fitUiText,
   roleColor,
   withAlpha,
@@ -95,7 +96,9 @@ import {
   staggerProgress,
   typeOnText,
 } from './ui/motion.js';
-import { ctaLabel, isDeckMode, movementHint, promptLabel } from './ui/input-prompts.js';
+import { actionDescriptor, ctaLabel, isDeckMode, promptLabel } from './ui/input-prompts.js';
+import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
+import { deckPanelLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
 
@@ -679,7 +682,7 @@ function drawMapRoutePreview(ctx, map, rect, {
 
   for (const well of wells) {
     const [px, py] = toPx(well);
-    const rr = Math.max(5, Math.min(18, (Number(well.killRadius) || 0.04) / scale * plot.w * 5));
+    const rr = Math.max(5, Math.min(12, (Number(well.killRadius) || 0.04) / scale * plot.w * 4));
     ctx.fillStyle = roleColor('danger', 0.12);
     ctx.beginPath();
     ctx.arc(px, py, rr * 1.9, 0, Math.PI * 2);
@@ -719,7 +722,7 @@ function drawMapRoutePreview(ctx, map, rect, {
     ctx.strokeStyle = roleColor('flow', 0.92);
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.arc(px, py, 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = roleColor('text', 0.94);
@@ -777,19 +780,8 @@ function profilePromptText() {
 }
 
 function threePanelLayout(width, height, kind, viewportWidth = width) {
-  const compact = viewportWidth < 984;
-  const marginX = compact ? Math.max(18, width * 0.025) : Math.max(34, Math.min(64, width * 0.045));
-  const top = Math.max(kind === 'home' ? 28 : 30, height * (kind === 'home' ? 0.05 : 0.052));
-  const bottom = height - Math.max(kind === 'home' ? 28 : 32, height * (kind === 'home' ? 0.045 : 0.048));
-  const gap = compact ? 10 : 18;
-  const leftW = kind === 'home'
-    ? (compact ? Math.max(150, width * 0.18) : Math.min(220, Math.max(190, width * 0.17)))
-    : (compact ? Math.max(180, width * 0.22) : Math.min(300, Math.max(248, width * 0.23)));
-  const rightW = kind === 'home'
-    ? (compact ? Math.max(210, width * 0.24) : Math.min(324, Math.max(284, width * 0.245)))
-    : (compact ? Math.max(220, width * 0.25) : Math.min(336, Math.max(292, width * 0.25)));
-  const centerW = width - marginX * 2 - leftW - rightW - gap * 2;
-  return { compact, width, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH: bottom - top };
+  const layout = deckPanelLayout(width, height, kind, viewportWidth);
+  return { ...layout, leftW: layout.left.w, rightW: layout.right.w, centerW: layout.center.w };
 }
 
 function currentUiFocusKey() {
@@ -2869,53 +2861,7 @@ function normalizeTitleLayout(value) {
 
 function titleLayoutMetrics(w, h, layoutName = titleLayout) {
   const layout = normalizeTitleLayout(layoutName);
-  const gutterX = Math.max(72, Math.min(116, Math.round(w * 0.075)));
-  const gutterY = Math.max(56, Math.min(92, Math.round(h * 0.085)));
-  const sideAligned = layout !== 'center';
-  const panelW = sideAligned ? Math.min(560, Math.max(500, Math.round(w * 0.43))) : Math.min(900, Math.round(w * 0.74));
-  const panelH = sideAligned ? 292 : 266;
-  const panelX = layout === 'right' ? w - gutterX - panelW : layout === 'center' ? (w - panelW) / 2 : gutterX;
-  const panelY = sideAligned ? gutterY + 70 : h / 2 - 154;
-  const textInset = sideAligned ? 40 : 0;
-  const align = layout === 'right' ? 'right' : layout === 'center' ? 'center' : 'left';
-  const textX = align === 'right'
-    ? panelX + panelW - textInset
-    : align === 'left'
-      ? panelX + textInset
-      : w / 2;
-  const textWidth = panelW - (sideAligned ? textInset * 2 : 96);
-  const titleY = panelY + (sideAligned ? 88 : 86);
-  const statusW = Math.min(430, textWidth);
-  const commandW = Math.min(352, textWidth);
-  const commandX = align === 'right'
-    ? textX - commandW
-    : align === 'left'
-      ? textX
-      : textX - commandW / 2;
-  const versionW = 232;
-  const versionX = align === 'right'
-    ? textX - versionW
-    : align === 'left'
-      ? textX
-      : textX - versionW / 2;
-
-  return {
-    layout,
-    align,
-    gutterX,
-    gutterY,
-    panelX,
-    panelY,
-    panelW,
-    panelH,
-    textX,
-    textWidth,
-    titleY,
-    titleFontSize: sideAligned ? 50 : 58,
-    statusW,
-    commandRect: { x: commandX, y: titleY + 130, w: commandW, h: 46 },
-    versionRect: { x: versionX, y: h - gutterY - 24, w: versionW, h: 24 },
-  };
+  return titleSurfaceLayout(w, h, layout);
 }
 
 function titleCameraOffsetForLayout(layoutName = titleLayout) {
@@ -3393,7 +3339,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
 
   if (readyAlpha > 0) {
     drawCommandButtonMotion(ctx, layout.commandRect, 'select pilot', {
-      hotkey: promptLabel('confirm', currentPromptOptions()),
+      action: actionDescriptor('confirm', currentPromptOptions()),
       role: 'flow',
       active: true,
       alpha: readyAlpha * promptPulse,
@@ -5550,7 +5496,7 @@ function gameLoop(now) {
   // === PROFILE SELECT SCREEN ===
   if (!rendererFixtureActive && gamePhase === 'profileSelect') {
     const cx = overlayCanvas.width / 2;
-    let y = overlayCanvas.height * 0.25;
+    const profileLayout = profileSurfaceLayout(overlayCanvas.width, overlayCanvas.height);
 
     ctx.save();
     const w = overlayCanvas.width, h = overlayCanvas.height;
@@ -5568,7 +5514,7 @@ function gameLoop(now) {
       reducedMotion: motion.reducedMotion,
     });
     const focusPulse = uiFocusPulseAmount();
-    const panelRect = { x: cx - 220, y: y - 30, w: 440, h: 340 };
+    const panelRect = profileLayout.panel;
     drawTerminalWindow(ctx, panelRect, {
       state: windowState,
       origin: 'top-left',
@@ -5581,14 +5527,12 @@ function gameLoop(now) {
 
     ctx.fillStyle = 'rgba(160, 230, 245, 0.95)';
     ctx.font = canvasFont(22, { role: 'display', weight: '700' });
-    ctx.fillText('SELECT PILOT', cx, y);
-    y += 45;
+    ctx.fillText('SELECT PILOT', cx, profileLayout.heading.y + 24);
 
     for (let i = 0; i < 3; i++) {
       const selected = (profileCursor === i);
       const profile = profileManager.slots[i];
-      const boxY = y;
-      const boxH = 60;
+      const row = profileLayout.rows[i];
       const rowReveal = staggerProgress(uiMotionTimer, i, {
         delay: 0.22,
         stagger: motion.rowStagger,
@@ -5600,57 +5544,59 @@ function gameLoop(now) {
       // Selection highlight
       if (selected) {
         ctx.fillStyle = `rgba(60, 80, 120, ${(0.4 + 0.12 * focusPulse).toFixed(3)})`;
-        ctx.fillRect(cx - 200, boxY - 5, 400, boxH);
+        ctx.fillRect(row.x, row.y, row.w, row.h);
         ctx.strokeStyle = `rgba(100, 150, 255, ${(0.6 + 0.25 * focusPulse).toFixed(3)})`;
         ctx.lineWidth = 1;
-        ctx.strokeRect(cx - 200, boxY - 5, 400, boxH);
+        ctx.strokeRect(row.x, row.y, row.w, row.h);
       }
 
       if (profile) {
         ctx.fillStyle = selected ? 'rgba(230, 240, 255, 1)' : 'rgba(180, 190, 210, 0.85)';
-        ctx.font = canvasFont(15, { weight: 'bold' });
-        ctx.fillText(profile.name, cx, boxY + 18);
-        ctx.font = canvasFont(11);
+        ctx.font = canvasFont(18, { weight: 'bold' });
+        ctx.fillText(fitUiText(ctx, profile.name, row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), cx, row.y + 30);
+        ctx.font = canvasFont(14);
         ctx.fillStyle = selected ? 'rgba(255, 225, 110, 0.95)' : 'rgba(180, 170, 140, 0.6)';
-        ctx.fillText(`${profile.exoticMatter} EM  |  ${profile.totalExtractions} extractions`, cx, boxY + 38);
+        ctx.fillText(fitUiText(ctx, `${profile.exoticMatter} EM  |  ${profile.totalExtractions} extractions`, row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), cx, row.y + 55);
       } else {
         ctx.fillStyle = selected ? 'rgba(170, 195, 220, 0.9)' : 'rgba(120, 130, 150, 0.5)';
-        ctx.font = canvasFont(13);
-        ctx.fillText('— empty slot —', cx, boxY + 25);
+        ctx.font = canvasFont(16);
+        ctx.fillText('— empty slot —', cx, row.y + 35);
       }
 
-      y += boxH + 10;
       ctx.restore();
     }
 
     // Name input overlay
     if (nameInputActive) {
-      drawUiPanel(ctx, { x: cx - 200, y: overlayCanvas.height * 0.45, w: 400, h: 80 }, {
+      drawUiPanel(ctx, { x: cx - 220, y: profileLayout.panel.y + profileLayout.panel.h - 92, w: 440, h: 76 }, {
         role: 'flow', fillAlpha: 0.86, borderAlpha: 0.62, cornerLength: 22,
       });
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
       ctx.font = canvasFont(12);
-      ctx.fillText('type pilot name', cx, overlayCanvas.height * 0.45 + 25);
+      ctx.fillText('type pilot name', cx, profileLayout.panel.y + profileLayout.panel.h - 67);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
       ctx.font = canvasFont(18);
       const blink = Math.sin(totalTime * 6) > 0 ? '|' : '';
-      ctx.fillText(nameInputBuffer + blink, cx, overlayCanvas.height * 0.45 + 55);
+      ctx.fillText(nameInputBuffer + blink, cx, profileLayout.panel.y + profileLayout.panel.h - 37);
     }
 
     // Delete confirmation overlay
     if (deleteConfirmSlot >= 0) {
-      drawUiPanel(ctx, { x: cx - 180, y: overlayCanvas.height * 0.45, w: 360, h: 70 }, {
+      drawUiPanel(ctx, { x: cx - 200, y: profileLayout.panel.y + profileLayout.panel.h - 82, w: 400, h: 68 }, {
         role: 'danger', fillAlpha: 0.86, borderAlpha: 0.64, cornerLength: 22,
       });
       ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
       ctx.font = canvasFont(13);
-      ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, overlayCanvas.height * 0.45 + 28);
+      ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, profileLayout.panel.y + profileLayout.panel.h - 54);
     }
 
-    // Controls hint
-    ctx.fillStyle = roleColor('muted', 0.76);
-    ctx.font = canvasFont(12);
-    ctx.fillText(profilePromptText(), cx, panelRect.y + panelRect.h - 18);
+    // Controls hint: glyphs remain separate from the selected action label.
+    drawActionFooter(ctx, profileLayout.panel.x + UI_DECK_GEOMETRY.panel.paddingX, profileLayout.promptY - 12, [
+      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'select' },
+      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'confirm' },
+      { descriptor: actionDescriptor('delete', currentPromptOptions()), verb: 'delete' },
+      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back' },
+    ], { alpha: 0.76, maxWidth: profileLayout.panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2 });
 
     ctx.restore();
   }
@@ -5670,10 +5616,9 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const { marginX, top, gap, leftW, rightW, centerW, panelH } = threePanelLayout(w, h, 'home', window.innerWidth);
-    const leftPanel = { x: marginX, y: top, w: leftW, h: panelH };
-    const centerPanel = { x: leftPanel.x + leftPanel.w + gap, y: top, w: centerW, h: panelH };
-    const rightPanel = { x: centerPanel.x + centerPanel.w + gap, y: top, w: rightW, h: panelH };
+    const panelLayout = threePanelLayout(w, h, 'home', window.innerWidth);
+    const { gap, panelH } = panelLayout;
+    const { left: leftPanel, center: centerPanel, right: rightPanel } = panelLayout;
 
     drawTerminalWindow(ctx, leftPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
@@ -5708,10 +5653,10 @@ function gameLoop(now) {
     ctx.fillStyle = roleColor('muted', 0.78);
     ctx.fillText(`${hullName} // ${totalRuns} cycles`, leftPanel.x + 18, leftPanel.y + 74);
 
-    const tabY = leftPanel.y + 106;
+    const tabY = leftPanel.y + 104;
     for (let i = 0; i < HOME_TABS.length; i++) {
       const role = homeTabRole(i);
-      const row = { x: leftPanel.x + 14, y: tabY + i * 54, w: leftPanel.w - 28, h: 42 };
+      const row = { x: leftPanel.x + UI_DECK_GEOMETRY.panel.paddingX, y: tabY + i * 60, w: leftPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, h: 52 };
       const active = homeTab === i;
       drawSelectedRow(ctx, row, {
         role,
@@ -5721,23 +5666,23 @@ function gameLoop(now) {
         borderAlpha: active ? 0.70 + focusPulse * 0.12 : 0.14,
         railWidth: active ? 5 : 2,
       });
-      ctx.font = canvasFont(active ? 14 : 12, { weight: active ? '700' : '500' });
+      ctx.font = canvasFont(active ? 16 : 14, { weight: active ? '700' : '500' });
       ctx.fillStyle = active ? roleColor('text', 0.95) : roleColor('muted', 0.72);
-      ctx.fillText(HOME_TABS[i], row.x + 14, row.y + 17);
-      ctx.font = canvasFont(9);
+      ctx.fillText(HOME_TABS[i], row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 23);
+      ctx.font = canvasFont(11);
       ctx.fillStyle = roleColor(role, active ? 0.75 : 0.36);
       const tabCopy = i === 0 ? 'loadout / hull'
         : i === 1 ? `${vaultCount}/${vaultCapacity} vault`
           : i === 2 ? 'upgrade tracks'
             : i === 3 ? 'records / echoes'
               : 'risk gate';
-      ctx.fillText(tabCopy.toUpperCase(), row.x + 14, row.y + 32);
+      ctx.fillText(fitUiText(ctx, tabCopy.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 42);
     }
 
     ctx.textAlign = 'left';
-    const centerX = centerPanel.x + 28;
+    const centerX = centerPanel.x + UI_DECK_GEOMETRY.panel.paddingX;
     const centerY = centerPanel.y + 54;
-    const centerTextW = centerPanel.w - 56;
+    const centerTextW = centerPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
     drawSectionLabel(ctx, HOME_TABS[homeTab], centerX, centerPanel.y + 32, { role: homeTabRole(homeTab), alpha: 0.94 });
     if (p) {
       if (homeTab === 0) {
@@ -5795,12 +5740,15 @@ function gameLoop(now) {
       sy += 22;
 
       drawSectionLabel(ctx, 'loadout', centerX, sy, { role: 'salvage', alpha: 0.86 });
-      sy += 20;
+      sy += 24;
+      const loadoutRowH = UI_DECK_GEOMETRY.listRow.minHeight;
+      const loadoutRowGap = UI_DECK_GEOMETRY.separation;
       ctx.font = canvasFont(12);
       for (let i = 0; i < 2; i++) {
         const eq = p.loadout.equipped[i];
         const sel = (homeShipCursor === i);
-        drawSelectedRow(ctx, { x: centerX - 6, y: sy - 15, w: centerTextW * 0.66, h: 22 }, {
+        const row = { x: centerX - 6, y: sy, w: centerTextW * 0.72, h: loadoutRowH };
+        drawSelectedRow(ctx, row, {
           role: 'salvage',
           active: true,
           alpha: sel ? 0.82 + focusPulse * 0.18 : 0.28,
@@ -5810,14 +5758,15 @@ function gameLoop(now) {
         });
         ctx.fillStyle = eq ? roleColor('salvage', 0.9) : roleColor('muted', 0.48);
         const action = (sel && eq) ? `  [${prompt('confirm', 'unequip')}]` : '';
-        if (eq) drawItemIcon(ctx, eq, { x: centerX, y: sy - 16, w: 20, h: 20 }, { state: 'equipped', selected: sel });
-        ctx.fillText(fitUiText(ctx, `equip ${i + 1}: ${eq ? eq.name : '- empty -'}${action}`, centerTextW * 0.58), centerX + 26, sy);
-        sy += 25;
+        if (eq) drawItemIcon(ctx, eq, { x: centerX, y: sy + 4, w: UI_DECK_GEOMETRY.iconCell.minWidth, h: UI_DECK_GEOMETRY.iconCell.minHeight }, { state: 'equipped', selected: sel });
+        ctx.fillText(fitUiText(ctx, `equip ${i + 1}: ${eq ? eq.name : '- empty -'}${action}`, row.w - 58), centerX + 54, sy + 29);
+        sy += loadoutRowH + loadoutRowGap;
       }
       for (let i = 0; i < 2; i++) {
         const con = p.loadout.consumables[i];
         const sel = (homeShipCursor === i + 2);
-        drawSelectedRow(ctx, { x: centerX - 6, y: sy - 15, w: centerTextW * 0.66, h: 22 }, {
+        const row = { x: centerX - 6, y: sy, w: centerTextW * 0.72, h: loadoutRowH };
+        drawSelectedRow(ctx, row, {
           role: 'anomaly',
           active: true,
           alpha: sel ? 0.82 + focusPulse * 0.18 : 0.26,
@@ -5827,9 +5776,9 @@ function gameLoop(now) {
         });
         ctx.fillStyle = con ? roleColor('anomaly', 0.86) : roleColor('muted', 0.48);
         const action = (sel && con) ? `  [${prompt('confirm', 'remove')}]` : '';
-        if (con) drawItemIcon(ctx, con, { x: centerX, y: sy - 16, w: 20, h: 20 }, { state: 'consumable', selected: sel });
-        ctx.fillText(fitUiText(ctx, `hotbar ${i + 1}: ${con ? con.name : '- empty -'}${action}`, centerTextW * 0.58), centerX + 26, sy);
-        sy += 25;
+        if (con) drawItemIcon(ctx, con, { x: centerX, y: sy + 4, w: UI_DECK_GEOMETRY.iconCell.minWidth, h: UI_DECK_GEOMETRY.iconCell.minHeight }, { state: 'consumable', selected: sel });
+        ctx.fillText(fitUiText(ctx, `hotbar ${i + 1}: ${con ? con.name : '- empty -'}${action}`, row.w - 58), centerX + 54, sy + 29);
+        sy += loadoutRowH + loadoutRowGap;
       }
 
     } else if (homeTab === 1 && p) {
@@ -5839,12 +5788,13 @@ function gameLoop(now) {
       ctx.fillText(`VAULT ${p.vault.length}/${p.vaultCapacity}`, centerX, centerY);
       ctx.font = canvasFont(12);
       let vy = centerY + 34;
-      const maxVisible = Math.min(p.vault.length, 10);
+      const maxVisible = Math.min(p.vault.length, Math.max(4, Math.floor((centerPanel.h - 220) / (UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation))));
       const scrollStart = Math.max(0, homeVaultCursor - 6);
       for (let i = scrollStart; i < Math.min(p.vault.length, scrollStart + maxVisible); i++) {
         const item = p.vault[i];
         const selected = (i === homeVaultCursor);
-        drawSelectedRow(ctx, { x: centerX - 6, y: vy - 15, w: centerTextW, h: 22 }, {
+        const row = { x: centerX - 6, y: vy - 6, w: centerTextW, h: UI_DECK_GEOMETRY.listRow.minHeight };
+        drawSelectedRow(ctx, row, {
           role: 'salvage',
           active: true,
           alpha: selected ? 0.82 + focusPulse * 0.18 : 0.26,
@@ -5853,23 +5803,23 @@ function gameLoop(now) {
           railWidth: selected ? 4 : 2,
         });
         const tierColor = TIER_COLORS[item.tier] || 'rgba(180, 180, 190, 0.8)';
-        drawItemIcon(ctx, item, { x: centerX, y: vy - 17, w: 22, h: 22 }, { state: 'vault', selected });
+        drawItemIcon(ctx, item, { x: centerX, y: row.y + 4, w: UI_DECK_GEOMETRY.iconCell.minWidth, h: UI_DECK_GEOMETRY.iconCell.minHeight }, { state: 'vault', selected });
         ctx.fillStyle = tierColor;
         const tierLabel = typeof item.tier === 'number' ? `T${item.tier} ` : '';
         const affinityTag = item.affinity ? ` [${item.affinity}]` : '';
-        ctx.fillText(fitUiText(ctx, `${tierLabel}${item.name}${affinityTag}`, centerTextW - 154), centerX + 28, vy);
+        ctx.fillText(fitUiText(ctx, `${tierLabel}${item.name}${affinityTag}`, centerTextW - 184), centerX + 56, vy + 24);
         ctx.fillStyle = roleColor('muted', 0.72);
         ctx.textAlign = 'right';
-        ctx.fillText(`${item.value || '?'} EM`, centerX + centerTextW - 12, vy);
+        ctx.fillText(`${item.value || '?'} EM`, centerX + centerTextW - 12, vy + 24);
         ctx.textAlign = 'left';
         if (selected) {
           let action = 'sell';
           if (item.subcategory === 'equippable') action = 'equip';
           else if (item.subcategory === 'consumable') action = 'load';
           ctx.fillStyle = roleColor('salvage', 0.86);
-          ctx.fillText(`[${prompt('confirm', action)}]`, centerX + centerTextW - 220, vy);
+          ctx.fillText(`[${prompt('confirm', action)}]`, centerX + centerTextW - 220, vy + 24);
         }
-        vy += 25;
+        vy += UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation;
       }
       if (p.vault.length === 0) {
         ctx.fillStyle = roleColor('muted', 0.48);
@@ -6046,7 +5996,7 @@ function gameLoop(now) {
         w: rightPanel.w - 36,
         h: 50,
       }, 'select destination', {
-        hotkey: promptLabel('confirm', currentPromptOptions()),
+        action: actionDescriptor('confirm', currentPromptOptions()),
         role: 'salvage',
         active: true,
         alpha: 0.96,
@@ -6057,9 +6007,9 @@ function gameLoop(now) {
       });
     } else {
       drawSectionLabel(ctx, 'next operation', rightPanel.x + 24, sideY + 8, { role: 'salvage', alpha: 0.82 });
-      ctx.font = canvasFont(12);
-      ctx.fillStyle = roleColor('muted', 0.78);
-      ctx.fillText(fitUiText(ctx, `${promptLabel('tabs', homePromptOptions)} to LAUNCH`, rightPanel.w - 48), rightPanel.x + 24, sideY + 34);
+      drawActionFooter(ctx, rightPanel.x + 24, sideY + 18, [
+        { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'to launch' },
+      ], { alpha: 0.78 });
     }
     sideY += 82;
     drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM`, sidebarX, sideY, { labelWidth: 136, valueRole: 'salvage' });
@@ -6093,9 +6043,12 @@ function gameLoop(now) {
     ctx.font = canvasFont(11);
     ctx.fillStyle = roleColor('muted', 0.74);
     ctx.fillText(fitUiText(ctx, launchActive ? 'map briefing opens on confirm' : 'tab to LAUNCH when ready', rightPanel.w - 42), sidebarX, sideY);
-    ctx.fillText(`${promptLabel('tabs', homePromptOptions)} tabs`, sidebarX, rightPanel.y + rightPanel.h - 52);
-    ctx.fillText(`${promptLabel('select', homePromptOptions)} select`, sidebarX, rightPanel.y + rightPanel.h - 36);
-    ctx.fillText(`${promptLabel('confirm', homePromptOptions)} confirm   ${promptLabel('back', homePromptOptions)} back`, sidebarX, rightPanel.y + rightPanel.h - 20);
+    drawActionFooter(ctx, sidebarX, rightPanel.y + rightPanel.h - 72, [
+      { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'tabs' },
+      { descriptor: actionDescriptor('select', homePromptOptions), verb: 'select' },
+      { descriptor: actionDescriptor('confirm', homePromptOptions), verb: 'confirm' },
+      { descriptor: actionDescriptor('back', homePromptOptions), verb: 'back' },
+    ], { alpha: 0.62, gap: 10, maxWidth: rightPanel.w - 36 });
 
     ctx.restore();
   }
@@ -6119,10 +6072,8 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const { marginX, top, gap, leftW, rightW, centerW, panelH } = threePanelLayout(w, h, 'map', window.innerWidth);
-    const listPanel = { x: marginX, y: top, w: leftW, h: panelH };
-    const previewPanel = { x: listPanel.x + listPanel.w + gap, y: top, w: centerW, h: panelH };
-    const briefPanel = { x: previewPanel.x + previewPanel.w + gap, y: top, w: rightW, h: panelH };
+    const panelLayout = threePanelLayout(w, h, 'map', window.innerWidth);
+    const { left: listPanel, center: previewPanel, right: briefPanel } = panelLayout;
 
     drawTerminalWindow(ctx, listPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
@@ -6150,7 +6101,7 @@ function gameLoop(now) {
         stagger: motion.rowStagger,
         reducedMotion: motion.reducedMotion,
       });
-      const row = { x: listPanel.x + 14, y: listY - 18, w: listPanel.w - 28, h: 58 };
+      const row = { x: listPanel.x + UI_DECK_GEOMETRY.panel.paddingX, y: listY - 18, w: listPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, h: 64 };
       ctx.save();
       ctx.globalAlpha *= rowReveal;
       drawSelectedRow(ctx, row, {
@@ -6161,36 +6112,38 @@ function gameLoop(now) {
         borderAlpha: selected ? 0.66 + focusPulse * 0.12 : 0.12,
         railWidth: selected ? 5 : 2,
       });
-      ctx.font = canvasFont(selected ? 16 : 14, { role: selected ? 'display' : 'body', weight: selected ? '700' : '600' });
+      ctx.font = canvasFont(selected ? 17 : 15, { role: selected ? 'display' : 'body', weight: selected ? '700' : '600' });
       ctx.fillStyle = selected ? roleColor('text', 0.96) : roleColor('muted', 0.72);
-      ctx.fillText(fitUiText(ctx, map.name.toUpperCase(), row.w - 26), row.x + 14, row.y + 22);
+      ctx.fillText(fitUiText(ctx, map.name.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 25);
 
       const stats = `${map.worldScale}x${map.worldScale} // ${map.wells.length} wells // ${(map.wrecks || []).length} wrecks`;
-      ctx.font = canvasFont(10);
+      ctx.font = canvasFont(12);
       ctx.fillStyle = roleColor(role, selected ? 0.78 : 0.42);
-      ctx.fillText(fitUiText(ctx, stats.toUpperCase(), row.w - 26), row.x + 14, row.y + 42);
+      ctx.fillText(fitUiText(ctx, stats.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 47);
       ctx.restore();
-      listY += 70;
+      listY += row.h + UI_DECK_GEOMETRY.separation;
     }
 
     ctx.font = canvasFont(11);
     ctx.fillStyle = roleColor('muted', 0.72);
-    ctx.fillText(`${promptLabel('select', promptOptions)} select`, listPanel.x + 16, listPanel.y + listPanel.h - 40);
-    ctx.fillText(
-      fitUiText(ctx, `${promptLabel('confirm', promptOptions)} launch   ${promptLabel('reroll', promptOptions)} reroll   ${promptLabel('back', promptOptions)} back`, listPanel.w - 32),
-      listPanel.x + 16,
-      listPanel.y + listPanel.h - 24
-    );
+    drawActionFooter(ctx, listPanel.x + UI_DECK_GEOMETRY.panel.paddingX, listPanel.y + listPanel.h - 58, [
+      { descriptor: actionDescriptor('select', promptOptions), verb: 'select' },
+      { descriptor: actionDescriptor('confirm', promptOptions), verb: 'launch' },
+      { descriptor: actionDescriptor('reroll', promptOptions), verb: 'reroll' },
+      { descriptor: actionDescriptor('back', promptOptions), verb: 'back' },
+    ], { alpha: 0.72, gap: 10, maxWidth: listPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2 });
 
-    const briefX = briefPanel.x + 20;
+    const briefX = briefPanel.x + UI_DECK_GEOMETRY.panel.paddingX;
     let by = briefPanel.y + 58;
     ctx.font = canvasFont(21, { role: 'display', weight: '800' });
     ctx.fillStyle = roleColor('text', 0.96);
     ctx.fillText(fitUiText(ctx, selectedMap.name.toUpperCase(), briefPanel.w - 40), briefX, by);
     by += 34;
     const pillY = by - 6;
-    drawStatusPill(ctx, { x: briefX + 69, y: pillY, w: 138, h: 24 }, mapRiskLabel(selectedMap), { role: routeRole, alpha: 0.92 });
-    drawStatusPill(ctx, { x: briefX + 216, y: pillY, w: 132, h: 24 }, `${selectedMap.worldScale}x${selectedMap.worldScale}`, { role: 'flow', alpha: 0.82 });
+    const statusGap = UI_DECK_GEOMETRY.valueBlock.gap;
+    const statusW = (briefPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2 - statusGap) / 2;
+    drawStatusPill(ctx, { x: briefX + statusW / 2, y: pillY, w: statusW, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, mapRiskLabel(selectedMap), { role: routeRole, alpha: 0.92, minWidth: statusW });
+    drawStatusPill(ctx, { x: briefX + statusW + statusGap + statusW / 2, y: pillY, w: statusW, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, `${selectedMap.worldScale}x${selectedMap.worldScale}`, { role: 'flow', alpha: 0.82, minWidth: statusW });
     by += 34;
 
     drawKeyValueRow(ctx, 'seed', String(previewSeed), briefX, by, { labelWidth: 94, valueRole: 'flow' });
@@ -6271,11 +6224,11 @@ function gameLoop(now) {
 
     drawCommandButtonMotion(ctx, {
       x: briefX,
-      y: briefPanel.y + briefPanel.h - 70,
-      w: briefPanel.w - 40,
-      h: 42,
+      y: briefPanel.y + briefPanel.h - UI_DECK_GEOMETRY.button.minHeight - UI_DECK_GEOMETRY.button.gap,
+      w: briefPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2,
+      h: UI_DECK_GEOMETRY.button.minHeight,
     }, 'begin drop', {
-      hotkey: promptLabel('confirm', promptOptions),
+        action: actionDescriptor('confirm', promptOptions),
       role: routeRole === 'danger' ? 'salvage' : routeRole,
       active: true,
       alpha: 0.96,
@@ -6299,6 +6252,7 @@ function gameLoop(now) {
       totalTime,
       lingerDuration: DEATH_LINGER_DURATION,
       motionSettings: currentUiMotionSettings(),
+      promptOptions: currentPromptOptions(),
     });
   }
 
@@ -6398,7 +6352,7 @@ function gameLoop(now) {
         w: 300,
         h: 42,
       }, 'drop back in', {
-        hotkey: promptLabel('confirm', currentPromptOptions()),
+        action: actionDescriptor('confirm', currentPromptOptions()),
         role: 'flow',
         active: true,
         alpha: blink * Math.min((t - promptT) * 2, 1),
@@ -6477,15 +6431,17 @@ function gameLoop(now) {
       ctx.fillText(currentSignature.mechanical, cx, cy + 72);
     }
 
-    // Controls reference (compact)
-    ctx.font = canvasFont(11);
-    ctx.fillStyle = 'rgba(150, 155, 185, 0.55)';
-    ctx.fillText(movementHint(currentPromptOptions()), cx, cy + 110);
-
-    // Navigation hint
-    ctx.fillStyle = 'rgba(130, 130, 170, 0.4)';
-    ctx.font = canvasFont(12);
-    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select  ·  ${prompt('confirm', 'confirm')}  ·  ${prompt('back', 'resume')}`, cx, cy + 130);
+    drawActionFooter(ctx, cx - 170, cy + 98, [
+      { descriptor: actionDescriptor('thrust', currentPromptOptions()), verb: 'thrust' },
+      { descriptor: actionDescriptor('brake', currentPromptOptions()), verb: 'brake' },
+      { descriptor: actionDescriptor('pulse', currentPromptOptions()), verb: 'pulse' },
+      { descriptor: actionDescriptor('tabs', currentPromptOptions()), verb: 'abilities' },
+    ], { alpha: 0.84, gap: 10 });
+    drawActionFooter(ctx, cx - 130, cy + 128, [
+      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'select' },
+      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'confirm' },
+      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'resume' },
+    ], { alpha: 0.72, gap: 10 });
 
     ctx.restore();
   }

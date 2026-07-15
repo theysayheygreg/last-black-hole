@@ -12,7 +12,7 @@ import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
-import { affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
+import { actionDescriptor, actionGlyphMarkup, affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
 import { itemIconMarkup, preloadInventoryIcons, preloadUiAssets } from './ui/asset-kit.js';
 
@@ -958,12 +958,13 @@ function _renderInventoryPanel(inv) {
     const isSel = (sel === globalIdx);
     const item = inv.consumables[i];
     const rowStyle = inventorySelectionStyle(isSel);
-    const slotLabel = promptLabel(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
+    const slotAction = actionDescriptor(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
+    const slotGlyph = actionGlyphMarkup(slotAction);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'consumable', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${slotLabel} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'consumable', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${slotGlyph} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
     } else {
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotLabel} — empty —</span></div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotGlyph} — empty —</span></div>`;
     }
   }
   html += '</div>';

@@ -48,6 +48,10 @@ function createRecordingContext() {
     strokeRect: (...args) => calls.push(['strokeRect', ...args]),
     drawImage: (...args) => calls.push(['drawImage', ...args]),
     beginPath: () => calls.push(['beginPath']),
+    arc: (...args) => calls.push(['arc', ...args]),
+    arcTo: (...args) => calls.push(['arcTo', ...args]),
+    closePath: () => calls.push(['closePath']),
+    rect: (...args) => calls.push(['rect', ...args]),
     moveTo: (...args) => calls.push(['moveTo', ...args]),
     lineTo: (...args) => calls.push(['lineTo', ...args]),
     stroke: () => calls.push(['stroke']),
@@ -106,7 +110,9 @@ async function run() {
     const ctx = createRecordingContext();
     mod.drawUiPanel(ctx, { x: 10, y: 12, w: 180, h: 90 }, { title: 'status', role: 'flow' });
     mod.drawSelectedRow(ctx, { x: 12, y: 40, w: 120, h: 22 }, { role: 'danger' });
-    mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', { hotkey: 'space' });
+    mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', {
+      action: { actionId: 'confirm', inputFamily: 'keyboard', glyphKind: 'keycap', fallbackLabel: 'Space' },
+    });
     mod.drawSegmentedGauge(ctx, { x: 20, y: 120, w: 160, h: 8 }, { value: 6, max: 10, segments: 10 });
     mod.drawWarningStrip(ctx, { x: 20, y: 140, w: 220, h: 46 }, { title: 'collapse', body: 'the exits are closing' });
     mod.drawStatusPill(ctx, { x: 160, y: 210, w: 90, h: 20 }, '10x10');
@@ -123,14 +129,14 @@ async function run() {
 
   await runner.run('Command buttons separate action labels from input prompts', async () => {
     const ctx = createRecordingContext();
-    mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', { hotkey: 'space' });
+    mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', {
+      action: { actionId: 'confirm', inputFamily: 'keyboard', glyphKind: 'keycap', fallbackLabel: 'Space' },
+    });
     const labels = ctx.calls.filter((call) => call[0] === 'fillText');
     const action = labels.find((call) => call[1] === 'CONTINUE');
-    const prompt = labels.find((call) => call[1] === 'SPACE CONTINUE');
     assert(action, 'Expected clean button action label');
-    assert(prompt, 'Expected separate input subprompt');
-    assert(prompt[3] > 70 + 34, 'Input prompt should draw below the button rect');
-    assert(!labels.some((call) => call[1] === 'SPACE  CONTINUE'), 'Input prompt must not be fused into the button label');
+    assert(ctx.calls.some((call) => call[0] === 'arcTo' || (call[0] === 'rect' && call[3] >= 24)), 'Expected a drawn keycap glyph below the button');
+    assert(!labels.some((call) => call[1] === 'SPACE CONTINUE'), 'Input prompt must be graphical, not plain fused text');
   });
 
   const allPassed = runner.summary();

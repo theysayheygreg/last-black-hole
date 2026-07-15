@@ -16,6 +16,7 @@ function makeRecordingContext() {
     save() { calls.push(['save']); },
     restore() { calls.push(['restore']); },
     beginPath() { calls.push(['beginPath']); },
+    arc(x, y, radius, start, end) { calls.push(['arc', x, y, radius, start, end]); },
     rect(x, y, w, h) { calls.push(['rect', x, y, w, h]); },
     clip() { calls.push(['clip']); },
     moveTo(x, y) { calls.push(['moveTo', x, y]); },
@@ -47,6 +48,7 @@ function makeRecordingContext() {
     typeOnText,
     withRevealClip,
   } = await import('../src/ui/motion.js');
+  const { actionDescriptor } = await import('../src/ui/input-prompts.js');
 
   assert.strictEqual(motionProgress(0.1, { delay: 0.2, duration: 1 }), 0);
   assert.strictEqual(advanceMotionClock(0.2, 5), 0.45, 'suspended tabs must not skip UI motion');
@@ -121,15 +123,15 @@ function makeRecordingContext() {
 
   const buttonCtx = makeRecordingContext();
   drawCommandButtonMotion(buttonCtx, { x: 0, y: 0, w: 160, h: 34 }, 'continue', {
-    hotkey: 'A',
+    action: actionDescriptor('confirm', { deck: true }),
     progress: 1,
     pulseTime: 0.1,
     active: true,
   });
   assert(buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1].includes('CONTINUE')), 'button label should render');
-  assert(buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A CONTINUE' && call[3] > 34),
-    'button input prompt should render as subheading below the button');
-  assert(!buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A  CONTINUE'),
+  assert(buttonCtx.calls.some((call) => call[0] === 'arc' || call[0] === 'rect'),
+    'button input prompt should render a graphical glyph below the button');
+  assert(!buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A CONTINUE'),
     'button label must not fuse input affordance into the main action text');
   assert(buttonCtx.calls.some((call) => call[0] === 'strokeRect'), 'button pulse should draw an edge');
 

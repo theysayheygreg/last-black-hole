@@ -85,6 +85,57 @@ export const UI_DECK = {
   commandHeight: 44,
 };
 
+// Minimum geometry is a product contract at 1280x720/800 Deck scale. Text can
+// fit inside these shapes; it cannot define their footprint by itself.
+export const UI_DECK_GEOMETRY = {
+  panel: {
+    paddingX: 18,
+    paddingY: 14,
+    gap: 14,
+  },
+  heading: {
+    minHeight: 32,
+    paddingX: 14,
+    paddingY: 8,
+    gap: 8,
+  },
+  button: {
+    minWidth: 220,
+    minHeight: 52,
+    paddingX: 18,
+    paddingY: 10,
+    gap: 10,
+  },
+  listRow: {
+    minHeight: 48,
+    paddingX: 12,
+    paddingY: 8,
+    gap: 10,
+  },
+  iconCell: {
+    minWidth: 40,
+    minHeight: 40,
+  },
+  artCell: {
+    minWidth: 112,
+    minHeight: 96,
+  },
+  valueBlock: {
+    minWidth: 116,
+    minHeight: 46,
+    paddingX: 12,
+    paddingY: 8,
+    gap: 8,
+  },
+  actionGlyph: {
+    minWidth: 28,
+    minHeight: 28,
+    paddingX: 6,
+    gap: 8,
+  },
+  separation: 8,
+};
+
 export const UI_TIERS = {
   common: 'rgba(234, 247, 255, 0.82)',
   uncommon: 'rgba(56, 245, 138, 0.9)',

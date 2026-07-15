@@ -685,10 +685,13 @@ asset/capture manifests, and audio priority budgets.
 
 ## 2026-06-28 — Command buttons separate actions from input affordances
 
-**Decision:** Command-button labels are action labels only. Keyboard/controller
-affordances render as smaller support text below the button, using the active
-input mode from `src/ui/input-prompts.js`. Examples: button label `BEGIN DROP`
-with subprompt `A begin drop` on Deck, or `Space begin drop` on keyboard.
+**Decision:** Command-button labels are action labels only. A structured action
+descriptor from `src/ui/input-prompts.js` selects the active input family,
+binding/origin id, glyph kind, and fallback label. Canvas and DOM consumers draw
+the shared glyph primitive below the button; duplicate action verbs are
+suppressed. Deck/controller mode never emits keyboard glyphs. The descriptor
+keeps a future Steam Input origin adapter boundary, but the browser does not
+call the native SDK today.
 
 **Why:** Fusing prompts into labels (`SPACE BEGIN DROP`, `A RETURN HOME`) makes
 the button harder to scan, reads keyboard-first on Deck, and fights Steam
@@ -701,8 +704,9 @@ and the current input binding second.
 `docs/design/UI-VISUAL-SYSTEM.md`, `docs/reference/STEAM-DECK-RUNBOOK.md`, and
 `docs/reference/DEPLOY-TO-DECK.md`.
 
-**Door status:** Closed for command buttons. Open for future Steam Input glyph
-art, where the subprompt may become an icon+text row instead of plain text.
+**Door status:** Closed for plain-text command affordances. Open for native
+Steam Input origin art once an adapter can supply origin data; current glyphs
+are the active graphical contract.
 
 ## 2026-06-28 — UI readability lands before more motion polish
 

@@ -214,9 +214,13 @@ At Deck size item signals resolve: **family silhouette → tier rail → selecte
   states change color and add pattern/label.
 - **Buttons:** large command slabs only for real actions. Small options stay as
   rows or tabs. The slab label is the action only (`BEGIN DROP`, `RETURN HOME`);
-  keyboard/controller affordances render as smaller support text below the
-  slab (`A begin drop`, `Space return home`). Never fuse prompts into the main
-  button label as `A BEGIN DROP` or `SPACE RETURN HOME`.
+  a shared graphical action glyph renders below it for the active input family.
+  Supporting copy may name a different verb, but never repeats the action
+  label. Deck/controller surfaces never show keyboard glyphs.
+- **Action glyphs:** face buttons, shoulder/trigger keycaps, View/Menu, D-pad,
+  and keyboard keycaps come from one structured action descriptor. Its binding
+  and optional origin id leave room for native Steam Input data without making
+  the browser call the SDK.
 - **Icons:** simple geometric/pixel glyphs aligned with entity categories.
 
 ## Required Review Matrix
