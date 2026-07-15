@@ -168,6 +168,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "Conductor",
+    file: "conductor.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "BallparkMirror",
     file: "ballpark-mirror.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],
