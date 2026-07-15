@@ -1,0 +1,183 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>html,body{margin:0;background:#070a16;overflow:hidden}canvas{display:block}</style>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+// THE UNDERTOW — 15s concept animatic (deterministic). Orrery 2026-07-15.
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const W = 1280, H = 720, CW = 10, CH = 15, COLS = W/CW|0, ROWS = H/CH|0;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rng = mulberry32(0x0FA11);
+
+// ---- flow field: wellspring (source, NW) -> drain (sink+swirl, SE)
+const SRC = {x:0.16,y:0.14}, SNK = {x:0.80,y:0.76};
+function flow(px, py, t, accel){
+  let vx=0, vy=0;
+  let dx=px-SRC.x, dy=py-SRC.y, d2=dx*dx+dy*dy+0.004;
+  vx += 0.030*dx/d2; vy += 0.030*dy/d2;                 // out of the spring
+  dx=px-SNK.x; dy=py-SNK.y; d2=dx*dx+dy*dy+0.004;
+  vx -= 0.040*dx/d2; vy -= 0.040*dy/d2;                 // into the drain
+  vx += -0.028*dy/d2; vy += 0.028*dx/d2;                // swirl at the drain
+  vx += 0.012; vy += 0.007;                              // the fall (anisotropy)
+  const m = Math.hypot(vx,vy)||1, cap = 0.11*(1+accel);
+  const s = Math.min(m,cap)/m;
+  return {x:vx*s, y:vy*s};
+}
+// ---- particles (the sea made visible)
+const N = 1100, P = [];
+for(let i=0;i<N;i++) P.push({x:rng(),y:rng(),a:0.25+0.75*rng(),w:rng()<0.06});
+// ---- wreck clusters (gold glints)
+const WRECKS = []; for(let i=0;i<26;i++){ WRECKS.push({x:rng(),y:rng(),ph:rng()*6.28}); }
+const GLYPH_DIR = ['—','\\','|','/','—','\\','|','/'];
+const RAMP = ' ·:-=+*#%@';
+
+let simT = 0;
+function step(dt, accel){
+  for(const p of P){
+    const v = flow(p.x,p.y,simT,accel);
+    p.x += v.x*dt; p.y += v.y*dt;
+    // recycle into the spring's slack rim when eaten by the drain or off-grid
+    const ddx=p.x-SNK.x, ddy=p.y-SNK.y;
+    if(ddx*ddx+ddy*ddy<0.0012 || p.x<-0.02||p.x>1.02||p.y<-0.02||p.y>1.02){
+      const a = rng()*6.28, r = 0.03+0.10*rng();
+      p.x = SRC.x+Math.cos(a)*r; p.y = SRC.y+Math.sin(a)*r;
+    }
+  }
+  for(const w of WRECKS){ const v=flow(w.x,w.y,simT,accel*0.4); w.x+=v.x*dt*0.35; w.y+=v.y*dt*0.35;
+    if(Math.hypot(w.x-SNK.x,w.y-SNK.y)<0.05){w.x=rng()*0.5;w.y=rng()*0.5;} }
+  simT += dt;
+}
+function ease(a,b,t){t=Math.max(0,Math.min(1,t));t=t*t*(3-2*t);return a+(b-a)*t}
+function txt(s, x, y, size, col, alpha, spacing){
+  g.save(); g.globalAlpha=alpha; g.fillStyle=col;
+  g.font=`${size}px "SF Mono", Menlo, monospace`; g.textAlign='center';
+  if(spacing){ let total=0; for(const ch of s) total+=g.measureText(ch).width+spacing; total-=spacing;
+    let cx=x-total/2; for(const ch of s){ g.textAlign='left'; g.fillText(ch,cx,y); cx+=g.measureText(ch).width+spacing; } }
+  else g.fillText(s,x,y);
+  g.restore();
+}
+// ---- ship path (beats 3 & 5)
+const HOLE = {x:0.38,y:0.47};
+function shipPos(t){ // beat 3: 5.5–8.5 dive, orbit, release
+  if(t<5.5||t>=8.5) return null;
+  const u=(t-5.5)/3;
+  if(u<0.34){ const k=u/0.34; return {x:ease(0.06,HOLE.x-0.09,k), y:ease(0.30,HOLE.y-0.06,k), phase:'dive'}; }
+  if(u<0.62){ const k=(u-0.34)/0.28, a=ease(2.6,-0.9,k), r=0.085;
+    return {x:HOLE.x+Math.cos(a)*r, y:HOLE.y+Math.sin(a)*r*0.82, phase:'orbit', k}; }
+  const k=(u-0.62)/0.38;
+  return {x:ease(HOLE.x+0.05,0.96,k), y:ease(HOLE.y-0.075,0.30,k), phase:'release', k};
+}
+function climbPos(t){ // beat 5: 11.5–13.8 climb upstream
+  if(t<11.5||t>13.9) return null; const k=(t-11.5)/2.4;
+  return {x:ease(0.72,SRC.x+0.02,k), y:ease(0.70,SRC.y+0.03,k), k};
+}
+const trail=[];
+// ---- master render
+window.renderFrame = function(t){
+  const accel = t>11.5 ? ease(0,2.2,(t-11.5)/2.2) : (t>10?0.3:0);
+  const dt = 1/30; step(dt, accel);
+  // background
+  g.fillStyle = '#070a16'; g.fillRect(0,0,W,H);
+  const worldA = t<2.2?0 : ease(0,1,(t-2.2)/1.6);           // world fades in beat 2
+  const dim = t>13.8 ? ease(1,0.06,(t-13.8)/0.5) : 1;        // smash to title
+  // drain rim-glow (sunken sun, SE)
+  if(worldA>0){ const rg = g.createRadialGradient(SNK.x*W,SNK.y*H,40,SNK.x*W,SNK.y*H,H*0.85);
+    const glow = 0.16 + (t>15?0:accel*0.10) + (t>3.8&&t<4.5?0.05:0);
+    rg.addColorStop(0,`rgba(226,140,60,${glow*worldA*dim})`); rg.addColorStop(0.35,`rgba(120,60,90,${0.08*worldA*dim})`); rg.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=rg; g.fillRect(0,0,W,H); }
+  // wellspring flare (beat 5)
+  if(t>11.8){ const k=ease(0,1,(t-11.8)/1.6);
+    const rg=g.createRadialGradient(SRC.x*W,SRC.y*H,10,SRC.x*W,SRC.y*H,340);
+    rg.addColorStop(0,`rgba(190,255,220,${0.30*k*dim})`); rg.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=rg; g.fillRect(0,0,W,H);
+    for(let i=0;i<24;i++){ const a=i/24*6.28+t*0.4, r=30+((t*90+i*37)%260);
+      g.globalAlpha=(1-r/300)*0.5*k*dim; g.fillStyle='#cfeee0';
+      g.font='13px Menlo, monospace'; g.fillText('↑', SRC.x*W+Math.cos(a)*r*0.5, SRC.y*H-r*0.8+40); }
+    g.globalAlpha=1; }
+  // Bell pulse (t≈4.0): the screen breathes
+  const bell = (t>3.9&&t<4.9)? Math.sin((t-3.9)*Math.PI)*0.35 : 0;
+  // ---- the sea: flow-aligned glyphs
+  if(worldA>0){
+    g.font='13px Menlo, monospace';
+    for(const p of P){
+      const v=flow(p.x,p.y,t,accel), m=Math.hypot(v.x,v.y);
+      const dir=GLYPH_DIR[(Math.round(Math.atan2(v.y,v.x)/(Math.PI/4))+8)%8];
+      const b=Math.min(1, m*11)*p.a;
+      const lean = accel>0 ? 0.25*accel : 0;
+      g.globalAlpha=(0.10+0.55*b+bell*0.3)*worldA*dim;
+      g.fillStyle = p.w? '#e8b44a' : '#c7d3e0';
+      g.fillText(p.w?'¤':dir, p.x*W+lean*8, p.y*H);
+    }
+    // wrecks
+    for(const w of WRECKS){ const tw=0.5+0.5*Math.sin(t*2+w.ph);
+      g.globalAlpha=(0.35+0.4*tw)*worldA*dim; g.fillStyle='#e8b44a';
+      g.fillText('◆', w.x*W, w.y*H); g.globalAlpha=0.25*worldA*dim; g.fillText('·', w.x*W+8, w.y*H+6); }
+    g.globalAlpha=1;
+  }
+  // ---- beat 1: the ripple + whisper
+  if(t<3.2){ const k=t/2.5, r=k*420;
+    g.strokeStyle=`rgba(200,215,235,${(1-k)*0.8})`; g.lineWidth=1.5;
+    g.beginPath(); g.ellipse(W/2,H/2,r,r*0.62,0,0,6.29); g.stroke();
+    g.beginPath(); g.ellipse(W/2,H/2,r*0.55,r*0.34,0,0,6.29); g.strokeStyle=`rgba(200,215,235,${(1-k)*0.45})`; g.stroke();
+    txt('the universe is draining.', W/2, H/2+6, 24, '#c7d3e0', Math.min(1,t/0.8)*(t<2.4?1:ease(1,0,(t-2.4)/0.7)), 3); }
+  // ---- beat 3: micro hole + slingshot telegraph chain
+  if(t>5.0&&t<9.2){
+    const hx=HOLE.x*W, hy=HOLE.y*H, a=ease(0,1,(t-5.0)/0.5)*dim;
+    g.globalAlpha=0.9*a; g.fillStyle='#05060c';
+    g.beginPath(); g.arc(hx,hy,12,0,6.29); g.fill();
+    g.strokeStyle=`rgba(150,170,200,${0.7*a})`; g.setLineDash([4,5]); g.lineWidth=1.2;
+    g.beginPath(); g.arc(hx,hy,66,0,6.29); g.stroke(); g.setLineDash([]);   // captureRadius ring
+    txt('capture 60 m', hx, hy-74, 12, '#8fa4bd', 0.7*a, 1);
+    const s=shipPos(t);
+    if(s){ trail.push({x:s.x,y:s.y,t}); while(trail.length&&t-trail[0].t>0.8) trail.shift();
+      for(const q of trail){ const k=1-(t-q.t)/0.8; g.globalAlpha=k*0.5*dim; g.fillStyle='#7fd8e8'; g.fillText('·', q.x*W, q.y*H); }
+      g.globalAlpha=dim; g.fillStyle='#dff4f8'; g.font='16px Menlo, monospace'; g.fillText('◄►', s.x*W-8, s.y*H+5);
+      if(s.phase==='orbit'){ g.strokeStyle=`rgba(127,216,232,${0.8*dim})`; g.lineWidth=2;
+        g.beginPath(); g.arc(hx,hy,66,-0.9,-0.9+s.k*4.2); g.stroke();
+        txt('energy banked', hx, hy+92, 12, '#7fd8e8', 0.8*dim, 1); }
+      if(s.phase==='release'){ const gx=ease(hx/W+0.05,1.15,s.k*1.4);
+        g.globalAlpha=0.5*(1-s.k)*dim; g.fillStyle='#dff4f8'; g.fillText('◄►', gx*W, ease(hy/H-0.075,0.3,s.k*1.35)*H); // release ghost
+        for(let i=0;i<5;i++){ g.globalAlpha=(0.5-i*0.09)*dim; g.fillText('—', s.x*W-14-i*11, s.y*H+4); } }
+      g.globalAlpha=1; }
+  }
+  // ---- beat 4: the Ark reveal + rivals
+  if(t>8.5){ const a=ease(0,1,(t-8.5)/0.9)*dim, cx=0.70*W, cy=0.60*H, R=170;
+    g.font='15px Menlo, monospace';
+    const segs=[[-2.9,-2.2],[-2.0,-1.15],[-0.95,-0.15],[0.15,0.9],[1.15,1.75]];
+    segs.forEach((seg,i)=>{ const lit = i===2 && t>9.6;
+      for(let a2=seg[0]; a2<seg[1]; a2+=0.055){
+        const px=cx+Math.cos(a2)*R, py=cy+Math.sin(a2)*R*0.62;
+        g.globalAlpha=(lit?0.95:0.55)*a; g.fillStyle=lit?'#ffd97a':'#9fb0c4';
+        g.fillText(lit?'▓':'█', px, py); } });
+    if(t>9.6){ const p=0.5+0.5*Math.sin((t-9.6)*5);
+      txt('stage 3 // unsealed', cx, cy-R*0.62-26, 13, '#ffd97a', (0.5+0.5*p)*a, 2); }
+    // rival glints turning toward it
+    if(t>10.1){ const k=ease(0,1,(t-10.1)/0.9);
+      [[0.22,0.78],[0.90,0.24]].forEach(([rx,ry],i)=>{
+        const tx=ease(rx,0.70,k*0.25), ty=ease(ry,0.60,k*0.25);
+        g.globalAlpha=0.9*a; g.fillStyle='#ffffff'; g.font='13px Menlo, monospace'; g.fillText('◄►', tx*W, ty*H);
+        g.globalAlpha=0.8*a; g.fillStyle='#ff5d5d'; g.fillText('!', tx*W+(i?-12:12), ty*H-10); });
+      g.globalAlpha=1; }
+  }
+  // ---- beat 5: the climb
+  const c=climbPos(t);
+  if(c){ g.globalAlpha=dim; g.fillStyle='#dff4f8'; g.font='16px Menlo, monospace';
+    g.fillText('◄►', c.x*W-8, c.y*H+5);
+    for(let i=0;i<4;i++){ g.globalAlpha=(0.4-i*0.08)*dim; g.fillText('·', c.x*W+10+i*9, c.y*H+6+i*7); }
+    g.globalAlpha=1; }
+  // ---- title card
+  if(t>13.9){ const k=ease(0,1,(t-13.9)/0.5);
+    txt('THE UNDERTOW', W/2, H/2-8, 64, '#e8eef5', k, 14);
+    txt('the way out is against the fall', W/2, H/2+44, 20, '#8fa4bd', k*0.9, 3);
+    txt('last singularity', W/2, H-40, 14, '#5a6a80', k*0.7, 6); }
+  // vignette + faint scanlines (identity)
+  const vg=g.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.55)');
+  g.fillStyle=vg; g.fillRect(0,0,W,H);
+  g.globalAlpha=0.05; g.fillStyle='#000';
+  for(let y=0;y<H;y+=3) g.fillRect(0,y,W,1); g.globalAlpha=1;
+};
+// warm the sea so beat 2 opens with established streams
+(function(){ for(let i=0;i<420;i++) step(1/30, 0); })();
+window.renderFrame(0);
+</script>
