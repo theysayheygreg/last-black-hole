@@ -2,26 +2,31 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
+const {
+  PLAYABLE_MAP_IDS,
+  getMapScaleDefinition,
+  assertMapDefinitionParity,
+} = require("./content/map-scales.cjs");
+const { migrateAuthoredMap } = require("./map-migration.cjs");
+const { CLIENT_PERF_PROFILES } = require("./content/session-profiles.cjs");
+
 const ROOT = path.resolve(__dirname, "..");
 const MAP_DIR = path.join(ROOT, "src", "maps");
 
-const PLAYABLE_MAP_FILES = [
-  { id: "shallows", file: "shallows-3x3.js" },
-  { id: "expanse", file: "expanse-5x5.js" },
-  { id: "deep-field", file: "deep-field-10x10.js" },
-];
-
-function readMapObjectLiteral(filepath) {
+function readAuthoredMapObjectLiteral(filepath) {
   const source = fs.readFileSync(filepath, "utf8");
-  const match = source.match(/export const MAP =\s*({[\s\S]*?});\s*$/);
+  const match = source.match(/export const AUTHORED_MAP =\s*({[\s\S]*?});\s*export const MAP =/);
   if (!match) {
-    throw new Error(`Could not parse MAP export from ${filepath}`);
+    throw new Error(`Could not parse AUTHORED_MAP export from ${filepath}`);
   }
   return match[1];
 }
 
-function loadMapDefinition(filepath) {
-  const literal = readMapObjectLiteral(filepath);
+function loadAuthoredMap(mapId) {
+  const definition = getMapScaleDefinition(mapId);
+  if (!definition) throw new Error(`Unknown active map id: ${mapId}`);
+  const filepath = path.join(MAP_DIR, definition.sourceFile);
+  const literal = readAuthoredMapObjectLiteral(filepath);
   return vm.runInNewContext(`(${literal})`, {}, { filename: filepath });
 }
 
@@ -33,12 +38,29 @@ function cloneEntityArray(list = [], prefix, mapper) {
   return list.map((item, index) => mapper(item, index, makeEntityId(prefix, index)));
 }
 
-function normalizeMap(mapId, map) {
+function assertPositionBounds(map, definition) {
+  const { width, height } = definition.dimensions;
+  for (const family of ["wells", "stars", "wrecks"]) {
+    for (const point of map[family] || []) {
+      if (!(point.x >= 0 && point.x < width && point.y >= 0 && point.y < height)) {
+        throw new Error(`${map.id} ${family} position is outside ${width}x${height}`);
+      }
+    }
+  }
+}
+
+function normalizeMap(mapId, authoredMap) {
+  const map = migrateAuthoredMap(authoredMap, mapId);
+  const definition = assertMapDefinitionParity(map);
+  assertPositionBounds(map, definition);
   return {
-    id: mapId,
+    id: definition.mapId,
+    mapClass: definition.mapClass,
+    profileId: definition.profileId,
+    dimensions: { ...definition.dimensions },
     name: map.name,
     worldScale: map.worldScale,
-    fluidResolution: map.fluidResolution || 256,
+    fluidResolution: map.fluidResolution || CLIENT_PERF_PROFILES.fixedGrid.fluidResolution,
     // Route metadata is static map truth. Runtime entities still own every
     // gameplay consequence; the route only names their intended sequence.
     route: map.route ? JSON.parse(JSON.stringify(map.route)) : null,
@@ -76,16 +98,20 @@ function normalizeMap(mapId, map) {
   };
 }
 
+function loadAuthoredMaps() {
+  const maps = {};
+  for (const mapId of PLAYABLE_MAP_IDS) maps[mapId] = loadAuthoredMap(mapId);
+  return maps;
+}
+
 function loadPlayableMaps() {
   const maps = {};
-  for (const entry of PLAYABLE_MAP_FILES) {
-    const filepath = path.join(MAP_DIR, entry.file);
-    const map = loadMapDefinition(filepath);
-    maps[entry.id] = normalizeMap(entry.id, map);
-  }
+  for (const mapId of PLAYABLE_MAP_IDS) maps[mapId] = normalizeMap(mapId, loadAuthoredMap(mapId));
   return maps;
 }
 
 module.exports = {
+  loadAuthoredMap,
+  loadAuthoredMaps,
   loadPlayableMaps,
 };

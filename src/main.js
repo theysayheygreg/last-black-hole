@@ -1,7 +1,7 @@
 /**
  * main.js — Game loop, canvas setup, wiring.
  *
- * V3: 3x3 world-space with camera follow. Portals + planetoids.
+ * V3: canonical map-scale worlds with camera follow. Portals + planetoids.
  *
  * Architecture:
  *   - WebGL canvas: fluid sim rendering (Layer 0)
@@ -57,15 +57,16 @@ import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js'
 import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
-import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
-import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
-import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
+import { MAP as MAP_SHALLOWS } from './maps/shallows-5x5.js';
+import { MAP as MAP_EXPANSE } from './maps/expanse-15x15.js';
+import { MAP as MAP_DEEP } from './maps/deep-field-25x25.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
+import { MAP_SCALE_REGISTRY, PLAYABLE_MAP_IDS } from './content/map-scales.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -110,11 +111,17 @@ function reportBootFailure(message, detail) {
   console.error(`[LBH boot] ${message}`, formattedDetail);
 }
 
-const PLAYABLE_MAPS = [
-  { id: 'shallows', map: MAP_SHALLOWS },
-  { id: 'expanse', map: MAP_EXPANSE },
-  { id: 'deep-field', map: MAP_DEEP },
-];
+const MAP_MODULES = Object.freeze({
+  shallows: MAP_SHALLOWS,
+  expanse: MAP_EXPANSE,
+  'deep-field': MAP_DEEP,
+});
+const PLAYABLE_MAPS = PLAYABLE_MAP_IDS.map((id) => {
+  const map = MAP_MODULES[id];
+  const registry = MAP_SCALE_REGISTRY[id];
+  if (!map || !registry) throw new Error(`Missing canonical map module: ${id}`);
+  return { id, map, ...registry };
+});
 const MAP_LIST = PLAYABLE_MAPS.map((entry) => entry.map);
 
 function getPlayableMapEntryById(id) {
@@ -541,9 +548,8 @@ function homeTabRole(index) {
 }
 
 function mapRiskRole(map) {
-  const wellCount = Array.isArray(map?.wells) ? map.wells.length : 0;
-  if (wellCount >= 10 || Number(map?.worldScale) >= 8) return 'danger';
-  if (wellCount >= 7 || Number(map?.worldScale) >= 5) return 'salvage';
+  if (map?.mapClass === 'deep-field') return 'danger';
+  if (map?.mapClass === 'expanse') return 'salvage';
   return 'flow';
 }
 
@@ -948,7 +954,7 @@ function init() {
   // shader's naturally out-of-range highlights, then tonemap compresses
   // to LDR before ASCII quantizes. The rich default is documented in
   // docs/reference/RENDER-PIPELINE.md; ?minimalrender=1 keeps a cheap
-  // baseline for 5x5/10x10 perf comparisons.
+  // baseline for 15x15/25x25 perf comparisons.
   // Gameplay render chain. Default is the rich chain (Art-Is-Product
   // identity: bloom highlights, color grade, vignette, CRT aberration
   // + scanlines). Pass ?minimalrender=1 to fall back to the bare

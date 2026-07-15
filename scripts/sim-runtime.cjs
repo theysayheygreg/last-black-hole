@@ -40,7 +40,10 @@ const {
   survivalBonusEm,
   runEmEarned,
 } = require("./content/balance.cjs");
-const { getSessionProfile } = require("./content/session-profiles.cjs");
+const {
+  getSessionProfile,
+  CLIENT_PERF_PROFILES,
+} = require("./content/session-profiles.cjs");
 const { simUnitsToMeters } = require("./content/units.cjs");
 const {
   selectAnomalyCast,
@@ -872,7 +875,10 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   if (!rngStreams) throw new Error("Map state cloning requires seeded RNG streams");
   const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
   const parsedWorldScale = worldScaleOverride == null ? NaN : Number(worldScaleOverride);
-  const worldScale = Number.isFinite(parsedWorldScale) && parsedWorldScale > 0 ? parsedWorldScale : map.worldScale;
+  if (Number.isFinite(parsedWorldScale) && parsedWorldScale !== map.worldScale) {
+    throw new Error(`Map ${map.id} is canonical at ${map.worldScale} world units; scale override ${parsedWorldScale} rejected`);
+  }
+  const worldScale = map.worldScale;
   const anomalyCatalog = selectAnomalyCast({
     mapId: map.id,
     seed: rngStreams.seed,
@@ -919,6 +925,9 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
 
   return {
     id: map.id,
+    mapClass: map.mapClass,
+    profileId: map.profileId,
+    dimensions: { ...map.dimensions },
     name: map.name,
     worldScale,
     fluidResolution: map.fluidResolution,
@@ -1575,6 +1584,13 @@ function startSession(config = {}) {
     maxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     simScaleProfile: scaleProfile.profileId,
     clientPerfProfile: scaleProfile.clientPerfProfile,
+    localFluidResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].fluidResolution,
+    localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].localWindowWorldUnits,
+    coarseTextureResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].coarseTextureResolution,
+    maxCoarseFieldCells: scaleProfile.maxCoarseFieldCells,
+    snapshotBudgetBytes: scaleProfile.snapshotBudgetBytes,
+    snapshotBudgetBytesPerSecond: scaleProfile.snapshotBudgetBytesPerSecond,
+    ballparkSyncBudgetMs: scaleProfile.ballparkSyncBudgetMs,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   // Attach seed + rng to the live session. rng stored non-enumerably so
@@ -6723,6 +6739,9 @@ const server = http.createServer(async (req, res) => {
           const profile = getSessionProfile(map.id, map.worldScale);
           return {
             id: map.id,
+            mapClass: map.mapClass,
+            profileId: map.profileId,
+            dimensions: { ...map.dimensions },
             name: map.name,
             worldScale: map.worldScale,
             fluidResolution: map.fluidResolution,
@@ -6756,6 +6775,13 @@ const server = http.createServer(async (req, res) => {
             maxWaveInfluencesPerPlayer: profile.maxWaveInfluencesPerPlayer,
             maxPickupChecksPerPlayer: profile.maxPickupChecksPerPlayer,
             maxPortalChecksPerPlayer: profile.maxPortalChecksPerPlayer,
+            localFluidResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].fluidResolution,
+            localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[profile.clientPerfProfile].localWindowWorldUnits,
+            coarseTextureResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].coarseTextureResolution,
+            maxCoarseFieldCells: profile.maxCoarseFieldCells,
+            snapshotBudgetBytes: profile.snapshotBudgetBytes,
+            snapshotBudgetBytesPerSecond: profile.snapshotBudgetBytesPerSecond,
+            ballparkSyncBudgetMs: profile.ballparkSyncBudgetMs,
           };
         }),
       });

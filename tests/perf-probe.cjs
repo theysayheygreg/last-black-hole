@@ -13,22 +13,22 @@ const {
   launchGame,
 } = require("./helpers.cjs");
 const { CLIENT_PERF_PROFILES } = require("../scripts/content/session-profiles.cjs");
+const { PLAYABLE_MAP_IDS, MAP_SCALE_REGISTRY } = require("../scripts/content/map-scales.cjs");
 
 const SIM_PORT = 8794;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const EXPECTED_FLUID_RESOLUTION = CLIENT_PERF_PROFILES.fixedGrid.fluidResolution;
-const MAPS = [
-  { index: 0, id: "shallows", label: "3x3", scale: 3 },
-  { index: 1, id: "expanse", label: "5x5", scale: 5 },
-  { index: 2, id: "deep-field", label: "10x10", scale: 10 },
-];
+const MAPS = PLAYABLE_MAP_IDS.map((id, index) => {
+  const scale = MAP_SCALE_REGISTRY[id].dimensions.width;
+  return { index, id, label: `${scale}x${scale}`, scale };
+});
 // Headless Chrome timing on shared developer machines is noisy. This gate is
 // for catastrophic render regressions; the JSON output remains the real tuning
 // evidence when judging whether the game is back near 60fps interactively.
 const MIN_FPS = {
-  "3x3": 20,
-  "5x5": 20,
-  "10x10": 20,
+  shallows: 20,
+  expanse: 20,
+  "deep-field": 20,
 };
 const MAX_THREE_CALLS = 700;
 const MAX_POOLED_MESHES = 600;
@@ -137,8 +137,8 @@ async function run() {
       if (scenario.perf.visibleWellCount > scenario.perf.totalWellCount) {
         throw new Error(`${scenario.map} ${scenario.htmlFile} visible wells exceed total wells`);
       }
-      if (scenario.map === "10x10" && scenario.perf.visibleWellCount >= scenario.perf.totalWellCount) {
-        throw new Error(`10x10 ${scenario.htmlFile} rendered all wells directly; expected off-window coarse-field path`);
+      if (scenario.map === "25x25" && scenario.perf.visibleWellCount >= scenario.perf.totalWellCount) {
+        throw new Error(`25x25 ${scenario.htmlFile} rendered all wells directly; expected off-window coarse-field path`);
       }
       const three = scenario.perf.three;
       if (three?.calls > MAX_THREE_CALLS) {
@@ -150,7 +150,7 @@ async function run() {
       if ((three?.entityAssets?.loadErrors || 0) > 0) {
         throw new Error(`${scenario.map} ${scenario.htmlFile} failed to load generated entity assets`);
       }
-      const floor = MIN_FPS[scenario.map];
+      const floor = MIN_FPS[MAPS.find((map) => map.label === scenario.map)?.id];
       if (scenario.fps < floor) {
         throw new Error(`${scenario.map} ${scenario.htmlFile} FPS ${scenario.fps.toFixed(1)} below floor ${floor}`);
       }

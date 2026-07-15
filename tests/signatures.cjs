@@ -2,6 +2,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { TestRunner, assert } = require("./helpers.cjs");
 const serverManifest = require("../scripts/content/signatures.cjs");
+const { PLAYABLE_MAP_IDS, getMapScaleDefinition } = require("../scripts/content/map-scales.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
@@ -14,16 +15,16 @@ async function run() {
   const runner = new TestRunner("Signatures");
   const signatures = await loadSignatureModule();
 
-  await runner.run("rollSignature uses map-size pools and stable ids", async () => {
-    const first3 = signatures.rollSignature(3, () => 0);
+  await runner.run("rollSignature uses canonical map-id pools and stable ids", async () => {
+    const first3 = signatures.rollSignature("shallows", () => 0);
     assert(first3.id === "slow_tide", `Expected slow_tide, got ${first3.id}`);
     assert(first3.name === "the slow tide", `Unexpected name ${first3.name}`);
 
-    const next3 = signatures.rollSignature(3, () => 0);
+    const next3 = signatures.rollSignature("shallows", () => 0);
     assert(next3.id === "shattered_merge", `Expected streak-protected shattered_merge, got ${next3.id}`);
 
-    const first10 = signatures.rollSignature(10, () => 0);
-    assert(serverManifest.SIGNATURE_POOLS_BY_MAP_SIZE[10].includes(first10.id), "10x10 signature was not in server pool");
+    const first10 = signatures.rollSignature("deep-field", () => 0);
+    assert(serverManifest.SIGNATURE_POOLS_BY_MAP_ID["deep-field"].includes(first10.id), "Deep Field signature was not in server pool");
     assert(!["slow_tide", "thick_dark", "rush"].includes(first10.id), `10x10 excluded signature rolled: ${first10.id}`);
   });
 
@@ -43,6 +44,10 @@ async function run() {
       JSON.stringify(signatures.SIGNATURE_POOLS_BY_MAP_SIZE) === JSON.stringify(serverManifest.SIGNATURE_POOLS_BY_MAP_SIZE),
       "Runtime SIGNATURE_POOLS_BY_MAP_SIZE drifted from server manifest"
     );
+    assert(
+      JSON.stringify(signatures.SIGNATURE_POOLS_BY_MAP_ID) === JSON.stringify(serverManifest.SIGNATURE_POOLS_BY_MAP_ID),
+      "Runtime SIGNATURE_POOLS_BY_MAP_ID drifted from server manifest"
+    );
   });
 
   await runner.run("seeded signatures carry player-facing briefing copy", async () => {
@@ -55,8 +60,10 @@ async function run() {
   });
 
   await runner.run("run briefings use real map counts and stable named streams", async () => {
-    const { MAP: shallows } = await import(pathToFileURL(path.join(ROOT, "src", "maps", "shallows-3x3.js")).href);
-    const { MAP: deepField } = await import(pathToFileURL(path.join(ROOT, "src", "maps", "deep-field-10x10.js")).href);
+    const shallowDefinition = getMapScaleDefinition("shallows");
+    const deepDefinition = getMapScaleDefinition("deep-field");
+    const { MAP: shallows } = await import(pathToFileURL(path.join(ROOT, "src", "maps", shallowDefinition.sourceFile)).href);
+    const { MAP: deepField } = await import(pathToFileURL(path.join(ROOT, "src", "maps", deepDefinition.sourceFile)).href);
     const first = signatures.buildRunBriefing(shallows, 424242);
     const repeat = signatures.buildRunBriefing(shallows, 424242);
     const deep = signatures.buildRunBriefing(deepField, 424242);

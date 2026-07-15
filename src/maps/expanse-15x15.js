@@ -1,11 +1,9 @@
-/**
- * expanse-5x5.js — Medium map. 8 wells, 3 stars, 6 loot, 3 portals.
- * World scale 5.0 — camera still shows 1 unit, so ~25× more area than visible at once.
- */
-export const MAP = {
+import { migrateAuthoredMap } from './map-migration.js';
+
+/** Authored route layout; target dimensions come from the canonical registry. */
+export const AUTHORED_MAP = {
   id: 'expanse',
   name: 'The Expanse',
-  worldScale: 5.0,
   route: {
     id: 'outer-circuit',
     name: 'the outer circuit',
@@ -85,3 +83,5 @@ export const MAP = {
     { type: 'figure8', wellA: 4, wellB: 6 },
   ],
 };
+
+export const MAP = migrateAuthoredMap(AUTHORED_MAP, 'expanse');

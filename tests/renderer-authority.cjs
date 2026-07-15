@@ -6,6 +6,7 @@ const {
   serializeCoarseFlowField,
 } = require("../scripts/coarse-flow-field.cjs");
 const { createSeededSea } = require("../scripts/sim/seeded-sea.cjs");
+const { getSessionProfile } = require("../scripts/content/session-profiles.cjs");
 
 async function run() {
   const runner = new TestRunner("RendererAuthority");
@@ -46,6 +47,7 @@ async function run() {
   });
 
   await runner.run("packed authority delivery is bounded and row-major", async () => {
+    const profile = getSessionProfile("deep-field", 25);
     const wells = Array.from({ length: 8 }, (_, index) => ({
       id: `well-${index + 1}`,
       wx: (index % 4) + 0.5,
@@ -55,14 +57,14 @@ async function run() {
     }));
     const sea = createSeededSea({
       seed: 424242,
-      mapId: "expanse",
-      worldScale: 10,
+      mapId: "deep-field",
+      worldScale: 25,
       wells,
       rngStreams: createRNGStreams(424242),
     });
     const field = buildCoarseFlowField({
-      worldScale: 10,
-      cellSize: 0.45,
+      worldScale: 25,
+      cellSize: profile.flowFieldCellSize,
       wells,
       waveRings: [],
       seededSea: sea,
@@ -70,8 +72,9 @@ async function run() {
     const packet = serializeCoarseFlowField(field, 12);
     const bytes = Buffer.byteLength(JSON.stringify(packet));
     assert(packet.encoding === "float32le-current-y-down-row-major-v1", "Expected packed field encoding");
-    assert(packet.cellCount === 529, `Expected 529 cells, got ${packet.cellCount}`);
-    assert(bytes === 5827, `Expected stable 10x10 packet size, got ${bytes}`);
+    assert(packet.cellCount === 3136, `Expected 3136 cells, got ${packet.cellCount}`);
+    assert(bytes <= profile.snapshotBudgetBytes,
+      `Expected bounded 25x25 packet <= ${profile.snapshotBudgetBytes} bytes, got ${bytes}`);
     assert(Buffer.from(packet.data, "base64").byteLength === packet.cellCount * 8,
       "Packed current must use exactly two float32 values per cell");
     assert(sampleAuthoritativeCurrent(packet, 0.2, 0.3).every(Number.isFinite),

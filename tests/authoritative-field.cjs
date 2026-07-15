@@ -129,7 +129,7 @@ async function run() {
     for (const profile of Object.values(SESSION_PROFILES)) {
       assert(profile.fieldFlowScale === 1.0, `Expected unified fieldFlowScale, got ${profile.fieldFlowScale}`);
     }
-    assert(getSessionProfile("shallows", 3).fieldFlowScale === getSessionProfile("deep-field", 10).fieldFlowScale,
+    assert(getSessionProfile("shallows", 5).fieldFlowScale === getSessionProfile("deep-field", 25).fieldFlowScale,
       "Expected map profiles to expose one normalized field scale");
   });
 

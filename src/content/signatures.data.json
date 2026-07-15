@@ -5,9 +5,9 @@
       "name": "the slow tide",
       "flavor": "currents run long here. take your time — spacetime will not.",
       "mechanical": "low gravity / high drift / extended collapse",
-      "mapSizes": [
-        3,
-        5
+      "mapIds": [
+        "shallows",
+        "expanse"
       ],
       "config": {
         "fluid": {
@@ -35,10 +35,10 @@
       "name": "the shattered merge",
       "flavor": "the mergers have already begun. find your exit.",
       "mechanical": "fast well growth / frequent wave events / short collapse",
-      "mapSizes": [
-        3,
-        5,
-        10
+      "mapIds": [
+        "shallows",
+        "expanse",
+        "deep-field"
       ],
       "config": {
         "events": {
@@ -61,9 +61,9 @@
       "name": "the thick dark",
       "flavor": "spacetime is already thickening. every move costs more than it should.",
       "mechanical": "high viscosity / heavy drift / extra exits",
-      "mapSizes": [
-        3,
-        5
+      "mapIds": [
+        "shallows",
+        "expanse"
       ],
       "config": {
         "fluid": {
@@ -85,10 +85,10 @@
       "name": "the graveyard",
       "flavor": "civilizations fell like rain here. their wealth remains. their exits do not.",
       "mechanical": "many wrecks / few exits / slow collapse",
-      "mapSizes": [
-        3,
-        5,
-        10
+      "mapIds": [
+        "shallows",
+        "expanse",
+        "deep-field"
       ],
       "config": {
         "universe": {
@@ -110,9 +110,9 @@
       "name": "the rush",
       "flavor": "the exits are already closing. move.",
       "mechanical": "fast portal decay / many scavengers / short window",
-      "mapSizes": [
-        3,
-        5
+      "mapIds": [
+        "shallows",
+        "expanse"
       ],
       "config": {
         "universe": {
@@ -135,9 +135,9 @@
       "name": "the deep",
       "flavor": "the distances here are immense. plan your route or drift forever.",
       "mechanical": "strong gravity / high inertia / long run",
-      "mapSizes": [
-        5,
-        10
+      "mapIds": [
+        "expanse",
+        "deep-field"
       ],
       "config": {
         "wells": {
@@ -156,15 +156,15 @@
       }
     }
   },
-  "SIGNATURE_POOLS_BY_MAP_SIZE": {
-    "3": [
+  "SIGNATURE_POOLS_BY_MAP_ID": {
+    "shallows": [
       "slow_tide",
       "shattered_merge",
       "thick_dark",
       "graveyard",
       "rush"
     ],
-    "5": [
+    "expanse": [
       "slow_tide",
       "shattered_merge",
       "thick_dark",
@@ -172,7 +172,7 @@
       "rush",
       "deep"
     ],
-    "10": [
+    "deep-field": [
       "shattered_merge",
       "graveyard",
       "deep"

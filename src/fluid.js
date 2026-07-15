@@ -599,7 +599,7 @@ export class FluidSim {
     // fluid grid's inflow boundary. Ping-pong so captured transient flow
     // can decay toward the well baseline instead of disappearing as soon
     // as a cell leaves the live fluid window.
-    this.coarseRes = 64;
+    this.coarseRes = CONFIG.fluid.coarseResolution;
     this.coarseField = this._createDoubleFBO(this.coarseRes, this.coarseRes);
     this._clearTarget(this.coarseField.read, 0, 0, 0, 0);
     this._clearTarget(this.coarseField.write, 0, 0, 0, 0);

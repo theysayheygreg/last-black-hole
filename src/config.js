@@ -1,4 +1,5 @@
 import { MOVEMENT } from './content/movement.js';
+import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 
 /**
  * CONFIG — single source of truth for every tunable value.
@@ -89,7 +90,8 @@ export const CONFIG = {
 
   fluid: {
     viscosity: 0.0001,        // Navier-Stokes viscosity. Higher = syrupy, damps small eddies.
-    resolution: 192,          // GPU sim grid size. ASCII hides 192 well; 256 was too heavy locally.
+    resolution: CLIENT_PERF_PROFILES.fixedGrid.fluidResolution,
+    coarseResolution: CLIENT_PERF_PROFILES.fixedGrid.coarseTextureResolution,
     pressureIterations: 16,   // Jacobi solver passes. Lower keeps the local Three path playable.
     curl: 0.3,                // Vorticity confinement strength. Amplifies small-scale swirl.
     dissipation: 0.999,       // Velocity persistence per sim step. 0.99 = fast fade, 0.999 = long travel.

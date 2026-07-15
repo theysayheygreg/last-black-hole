@@ -7,6 +7,7 @@
 
 import { setWorldScale } from './coords.js';
 import { selectAnomalyCast } from './anomaly-catalog.js';
+import { assertMapDefinitionParity } from './content/map-scales.js';
 
 function applyPlanetoidOverrides(planetoid, data = {}) {
   if (!planetoid) return planetoid;
@@ -35,9 +36,10 @@ function applyPlanetoidOverrides(planetoid, data = {}) {
  */
 export function loadMap(map, systems, { seed = 1 } = {}) {
   const { wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid } = systems;
+  const mapDefinition = assertMapDefinitionParity(map);
 
   // 1. Set world scale (live binding — all importers see the new value)
-  setWorldScale(map.worldScale);
+  setWorldScale(mapDefinition.dimensions.width);
 
   // 2. Clear all entity arrays
   wellSystem.wells = [];

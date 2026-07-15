@@ -1,13 +1,9 @@
-/**
- * deep-field-10x10.js — Large map. 20 wells, 6 stars, 12 loot, 5 portals.
- * World scale 10.0. Fluid grid is camera-anchored at GRID_WINDOW = 3 world
- * units, so this map runs at the same fluid cost as 3x3 — no per-map sim
- * Hz / fluid res / pressure overrides needed.
- */
-export const MAP = {
+import { migrateAuthoredMap } from './map-migration.js';
+
+/** Authored route layout; target dimensions come from the canonical registry. */
+export const AUTHORED_MAP = {
   id: 'deep-field',
   name: 'Deep Field',
-  worldScale: 10.0,
   route: {
     id: 'long-descent',
     name: 'the long descent',
@@ -144,3 +140,5 @@ export const MAP = {
     { type: 'figure8', wellA: 3, wellB: 4 },
   ],
 };
+
+export const MAP = migrateAuthoredMap(AUTHORED_MAP, 'deep-field');

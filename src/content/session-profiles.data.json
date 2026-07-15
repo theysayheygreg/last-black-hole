@@ -25,12 +25,18 @@
     "maxWaveInfluencesPerPlayer",
     "maxPickupChecksPerPlayer",
     "maxPortalChecksPerPlayer",
-    "clientPerfProfile"
+    "clientPerfProfile",
+    "maxCoarseFieldCells",
+    "snapshotBudgetBytes",
+    "snapshotBudgetBytesPerSecond",
+    "ballparkSyncBudgetMs"
   ],
   "CLIENT_PERF_PROFILES": {
     "fixedGrid": {
       "id": "fixedGrid",
       "fluidResolution": 192,
+      "localWindowWorldUnits": 3,
+      "coarseTextureResolution": 64,
       "remotePresentationExtrapolateLimit": 0.75,
       "perfSmoothing": 0.12
     }
@@ -62,7 +68,11 @@
       "maxWaveInfluencesPerPlayer": 6,
       "maxPickupChecksPerPlayer": 4,
       "maxPortalChecksPerPlayer": 4,
-      "clientPerfProfile": "fixedGrid"
+      "clientPerfProfile": "fixedGrid",
+      "maxCoarseFieldCells": 256,
+      "snapshotBudgetBytes": 200000,
+      "snapshotBudgetBytesPerSecond": 2000000,
+      "ballparkSyncBudgetMs": 8
     },
     "medium": {
       "profileId": "medium",
@@ -90,7 +100,11 @@
       "maxWaveInfluencesPerPlayer": 5,
       "maxPickupChecksPerPlayer": 3,
       "maxPortalChecksPerPlayer": 3,
-      "clientPerfProfile": "fixedGrid"
+      "clientPerfProfile": "fixedGrid",
+      "maxCoarseFieldCells": 1024,
+      "snapshotBudgetBytes": 350000,
+      "snapshotBudgetBytesPerSecond": 2800000,
+      "ballparkSyncBudgetMs": 10
     },
     "large": {
       "profileId": "large",
@@ -118,12 +132,11 @@
       "maxWaveInfluencesPerPlayer": 4,
       "maxPickupChecksPerPlayer": 2,
       "maxPortalChecksPerPlayer": 2,
-      "clientPerfProfile": "fixedGrid"
+      "clientPerfProfile": "fixedGrid",
+      "maxCoarseFieldCells": 4096,
+      "snapshotBudgetBytes": 500000,
+      "snapshotBudgetBytesPerSecond": 4000000,
+      "ballparkSyncBudgetMs": 12
     }
-  },
-  "MAP_SESSION_PROFILES": {
-    "shallows": "small",
-    "expanse": "medium",
-    "deep-field": "large"
   }
 }

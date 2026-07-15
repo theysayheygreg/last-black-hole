@@ -30,6 +30,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "W2A4MapScale",
+    file: "w2a4-map-scale.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "RouteBriefing",
     file: "route-briefing.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],
