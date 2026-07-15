@@ -2828,7 +2828,14 @@ function snapRemotePresentationToAuthority(snapshot) {
 }
 
 function applyCoveredTerminalEvents(decision) {
-  if (decision?.terminalEvent) applyRemoteEvents([decision.terminalEvent]);
+  const resumedRunId = decision?.snapshot?.runId || decision?.snapshot?.session?.runId || null;
+  if (!resumedRunId || decision?.eventRunId !== resumedRunId) return;
+
+  remoteLastEventSeq = 0;
+  const terminalRunId = decision?.terminalEvent?.runId
+    || decision?.terminalEvent?.payload?.runId
+    || null;
+  if (terminalRunId === resumedRunId) applyRemoteEvents([decision.terminalEvent]);
   remoteLastEventSeq = Math.max(remoteLastEventSeq, decision?.eventWatermark || 0);
 }
 

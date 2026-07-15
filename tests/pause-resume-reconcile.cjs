@@ -61,6 +61,7 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   ], { clientId: 'pilot', runId: 'run-a' });
   check(coveredEvents.terminalEvent?.payload?.outcome === 'dead', 'covered events retain only the current terminal result');
   check(coveredEvents.eventWatermark === 8, 'covered event intake advances a discard watermark');
+  check(coveredEvents.eventRunId === 'run-a', 'covered event cache records its authority run');
 
   const short = reconcilePauseResume(coveredEvents, { now: 900, snapshot: newer, playerId: 'pilot' });
   check(short.decision.awayMs === 800, 'short resume reports elapsed-away wall time');
@@ -75,6 +76,45 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   check(long.decision.snapshot === newer, 'long resume uses newest truth atomically');
   const rematched = reconcilePauseResume(entered, { now: 200, snapshot: alive('run-b', 1, 1), playerId: 'pilot' });
   check(rematched.decision.rematched === true, 'run identity change is explicit');
+  const runBAlive = reconcilePauseResume(coveredEvents, {
+    now: 200,
+    snapshot: alive('run-b', 1, 1),
+    playerId: 'pilot',
+  });
+  check(runBAlive.decision.phase === 'playing', 'run-a terminal cannot poison run-b alive truth');
+  check(runBAlive.decision.terminalEvent === null, 'run change clears the prior terminal event');
+  check(runBAlive.decision.eventWatermark === 0 && runBAlive.decision.eventRunId === 'run-b', 'run change resets and re-scopes the event watermark');
+  const runBDeadSnapshot = {
+    ...alive('run-b', 2, 2),
+    players: [{ clientId: 'pilot', status: 'dead' }],
+  };
+  const runBDead = reconcilePauseResume(coveredEvents, {
+    now: 200,
+    snapshot: runBDeadSnapshot,
+    playerId: 'pilot',
+  });
+  check(runBDead.decision.phase === 'dead' && runBDead.decision.terminalEvent === null, 'run-b dead truth routes without run-a result data');
+  const runBEscapedSnapshot = {
+    ...alive('run-b', 3, 3),
+    players: [{ clientId: 'pilot', status: 'escaped' }],
+  };
+  const runBEscaped = reconcilePauseResume(coveredEvents, {
+    now: 200,
+    snapshot: runBEscapedSnapshot,
+    playerId: 'pilot',
+  });
+  check(runBEscaped.decision.phase === 'escaped' && runBEscaped.decision.terminalEvent === null, 'run-b escaped truth routes without run-a result data');
+  const runBEvents = observePauseEvents(observePauseSnapshot(coveredEvents, runBDeadSnapshot), [
+    { seq: 2, runId: 'run-a', type: 'run.result', payload: { clientId: 'pilot', runId: 'run-a', outcome: 'dead' } },
+    { seq: 3, runId: 'run-b', type: 'run.result', payload: { clientId: 'pilot', runId: 'run-b', outcome: 'dead' } },
+  ], { clientId: 'pilot', runId: 'run-b' });
+  const currentRunTerminal = reconcilePauseResume(runBEvents, {
+    now: 200,
+    snapshot: runBDeadSnapshot,
+    playerId: 'pilot',
+  });
+  check(currentRunTerminal.decision.terminalEvent?.payload?.runId === 'run-b', 'current-run terminal result remains eligible on resume');
+  check(currentRunTerminal.decision.eventWatermark === 3, 'current-run watermark excludes prior-run events');
   const terminal = reconcilePauseResume(entered, {
     now: 200,
     snapshot: { ...alive('run-a', 4, 4), session: { runId: 'run-a', status: 'ended' } },
@@ -94,6 +134,8 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   check(mainSource.includes('const localSandboxPaused = gamePhase === \'paused\' && !remoteAuthorityActive;'), 'local debug freeze remains separate');
   check(mainSource.includes('requestRemoteSnapshot();'), 'remote snapshot intake remains live under pause');
   check(mainSource.includes('applyCoveredTerminalEvents(decision);'), 'resume applies only current terminal result events');
+  check(mainSource.includes('decision?.eventRunId !== resumedRunId'), 'resume rejects a terminal cache from another run');
+  check(mainSource.includes('terminalRunId === resumedRunId'), 'resume applies terminal events only to their snapshot run');
   check(mainSource.includes('fluid?.clear();') && mainSource.includes('setFluidCamera(camX, camY);'), 'long resume resets fluid anchor with camera snap');
   check(mainSource.includes('WORLD CONTINUES') && mainSource.includes('awaySeconds'), 'pause panel exposes live authority and elapsed-away status');
   check(mainSource.includes("sampleTerminalWindow(uiMotionTimer") && mainSource.includes('reducedMotion: motion.reducedMotion'), 'pause and recovery surfaces honor reduced motion');

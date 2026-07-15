@@ -19,6 +19,10 @@ function snapshotIdentity(snapshot) {
   };
 }
 
+function eventRunId(event) {
+  return event?.runId || event?.payload?.runId || null;
+}
+
 function isNewerSnapshot(next, previous) {
   if (!next) return false;
   if (!previous) return true;
@@ -59,6 +63,7 @@ export function createPauseResumeState({ now = 0, snapshot = null } = {}) {
     inputNeutralized: false,
     terminalEvent: null,
     eventWatermark: 0,
+    eventRunId: identity.runId,
     ...identity,
     createdAt: Math.max(0, finite(now)),
   };
@@ -80,16 +85,24 @@ export function enterPause(state, { now = 0, snapshot = null } = {}) {
     inputNeutralized: false,
     terminalEvent: null,
     eventWatermark: 0,
+    eventRunId: identity.runId,
     ...identity,
   };
 }
 
 export function observePauseSnapshot(state, snapshot) {
   if (!snapshot || !isNewerSnapshot(snapshot, state?.latestSnapshot)) return state;
+  const identity = snapshotIdentity(snapshot);
+  const runChanged = snapshotIdentity(state?.latestSnapshot).runId !== identity.runId;
   return {
     ...state,
     latestSnapshot: snapshot,
-    ...snapshotIdentity(snapshot),
+    ...(runChanged ? {
+      terminalEvent: null,
+      eventWatermark: 0,
+      eventRunId: identity.runId,
+    } : {}),
+    ...identity,
     connectionOk: true,
   };
 }
@@ -99,19 +112,25 @@ export function observePauseConnection(state, connectionOk) {
 }
 
 export function observePauseEvents(state, events, { clientId = null, runId = null } = {}) {
-  const entries = Array.isArray(events) ? events : [];
+  const authorityRunId = runId || snapshotIdentity(state?.latestSnapshot).runId || null;
+  const sameRun = state?.eventRunId === authorityRunId;
+  const entries = (Array.isArray(events) ? events : []).filter((event) => (
+    !authorityRunId || eventRunId(event) === authorityRunId
+  ));
   const terminalEvents = entries.filter((event) => {
     if (event?.type !== 'run.result') return false;
     const payload = event.payload || {};
-    return (!clientId || payload.clientId === clientId) && (!runId || payload.runId === runId);
+    return (!clientId || payload.clientId === clientId)
+      && (!authorityRunId || eventRunId(event) === authorityRunId);
   });
   return {
     ...state,
+    eventRunId: authorityRunId,
     eventWatermark: Math.max(
-      Math.max(0, Math.floor(finite(state?.eventWatermark))),
+      sameRun ? Math.max(0, Math.floor(finite(state?.eventWatermark))) : 0,
       ...entries.map((event) => Math.max(0, Math.floor(finite(event?.seq)))),
     ),
-    terminalEvent: terminalEvents.at(-1) || state?.terminalEvent || null,
+    terminalEvent: terminalEvents.at(-1) || (sameRun ? state?.terminalEvent : null) || null,
   };
 }
 
@@ -159,6 +178,7 @@ export function reconcilePauseResume(state, {
       snapshotIdentity: identity,
       terminalEvent: observed.terminalEvent,
       eventWatermark: observed.eventWatermark,
+      eventRunId: observed.eventRunId,
     },
   };
 }
