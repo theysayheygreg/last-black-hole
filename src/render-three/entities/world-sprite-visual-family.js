@@ -45,7 +45,7 @@ export class WorldSpriteVisualFamily extends VisualFamilyLifecycle {
         const entity = entities[index];
         if (draw.sprite(group, selectAsset(entity), entity.world.x, entity.world.y,
           selectRadius(entity), selectRotation(entity), name, entity)) {
-          this.countObject(4);
+          this.countObject(1);
           active += 1;
         }
       }

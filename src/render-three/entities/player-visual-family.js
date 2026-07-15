@@ -29,8 +29,8 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     const player = frame.localPlayer;
     if (remaining > 0 && player && player.status !== 'dead') {
       const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
-        0.044, -player.movement.facing - Math.PI * 0.5, 'player');
-      if (core) { this.countObject(4); remaining -= 1; }
+        0.044, -player.movement.facing - Math.PI * 0.5, 'player', player);
+      if (core) { this.countObject(1); remaining -= 1; }
     }
 
     let candidateIndex = 0;
@@ -49,8 +49,8 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
       const remote = remotePlayers[remoteIndex];
       if (remote.status === 'dead') continue;
       const core = draw.sprite(this.group, selectPlayerAsset(remote, { remote: true }),
-        remote.world.x, remote.world.y, 0.040, heading(remote) - Math.PI * 0.5, 'remotePlayers');
-      if (core) { this.countObject(4); remaining -= 1; }
+        remote.world.x, remote.world.y, 0.040, heading(remote) - Math.PI * 0.5, 'remotePlayers', remote);
+      if (core) { this.countObject(1); remaining -= 1; }
     }
     this.drop(remotePlayers.length - remoteIndex);
 

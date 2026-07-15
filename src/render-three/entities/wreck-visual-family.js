@@ -20,8 +20,8 @@ export class WreckVisualFamily extends VisualFamilyLifecycle {
       const wreck = wrecks[index];
       const size = wreck.size === 'large' ? 0.042 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.020 : 0.030;
       const core = draw.sprite(this.group, selectWreckAsset(wreck), wreck.world.x, wreck.world.y,
-        size * 1.35, 0, 'wrecks');
-      if (core) this.countObject(4);
+        size * 1.35, 0, 'wrecks', wreck);
+      if (core) this.countObject(1);
     }
     this.drop(wrecks.length - index);
     return this.getStats();

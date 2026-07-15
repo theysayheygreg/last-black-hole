@@ -13,27 +13,19 @@ function makeResources() {
   return {
     group: { name: 'test-group' },
     geometries: {
-      triangle: { id: 'triangle' },
-      square: { id: 'square' },
       ring: { id: 'ring' },
     },
     materials: {
       ship: { id: 'ship' },
-      shipHalo: { id: 'ship-halo' },
-      shipRim: { id: 'ship-rim' },
       remoteShip: { id: 'remote' },
-      remoteShipHalo: { id: 'remote-halo' },
       surfRing: { id: 'surf-ring' },
       tether: { id: 'tether' },
       wreck: { id: 'wreck' },
-      wreckHalo: { id: 'wreck-halo' },
-      wreckRim: { id: 'wreck-rim' },
       lootedWreck: { id: 'looted-wreck' },
-      lootedWreckHalo: { id: 'looted-wreck-halo' },
       portal: { id: 'route-cyan-portal' },
-      portalHalo: { id: 'route-cyan-halo' },
       riftPortal: { id: 'rift-white' },
-      riftPortalHalo: { id: 'rift-cyan' },
+      portalBlockedState: { id: 'portal-blocked-state' },
+      portalFinalState: { id: 'portal-final-state' },
     },
   };
 }
@@ -63,7 +55,39 @@ async function run() {
   const { PortalVisualFamily } = await importModule('src/render-three/entities/portal-visual-family.js');
   const { WorldSpriteVisualFamily } = await importModule('src/render-three/entities/world-sprite-visual-family.js');
   const assets = await importModule('src/render-three/entity-assets.js');
+  const visualStyle = await importModule('src/render-three/visual-style.js');
   const { createWorldProjection } = await importModule('src/render-three/world-projection.js');
+
+  await runner.run('Product sprite seam has one alpha core and no universal vector parts', async () => {
+    const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const styleSource = fs.readFileSync(path.join(ROOT, 'src/render-three/visual-style.js'), 'utf8');
+    const seam = rendererSource.slice(rendererSource.indexOf('  _addSpriteEntity'), rendererSource.indexOf('  _addLine'));
+    assert(!rendererSource.includes('ENTITY_SPRITE_TREATMENTS'), 'Legacy universal sprite treatment table must be removed');
+    assert(!seam.includes('entityGeometries.disc') && !seam.includes('entityGeometries.ring'),
+      'Sprite seam must not submit generic disc or ring parts');
+    assert(seam.includes('entityGeometries.spriteCard') && seam.includes('entityOpacity'),
+      'Sprite seam must submit a sprite card and carry presentation opacity');
+    assert(rendererSource.includes('mesh.onBeforeRender = NOOP_ON_BEFORE_RENDER')
+      && rendererSource.includes('baseOpacity'),
+    'Pooled role changes must clear sprite opacity hooks and restore material opacity');
+    assert(styleSource.includes('matteContact') && !styleSource.includes('matteHeavy'),
+      'Sprite separation must use one low-alpha contact matte');
+    for (const [family, treatment] of Object.entries(visualStyle.ENTITY_CONTACT_MATTE_TREATMENTS)) {
+      assert(!('halo' in treatment) && !('rim' in treatment), `${family} retained a legacy halo/rim treatment`);
+    }
+  });
+
+  await runner.run('Well primitives are diagnostic-only and state rings stay family-owned', async () => {
+    const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const portalSource = fs.readFileSync(path.join(ROOT, 'src/render-three/entities/portal-visual-family.js'), 'utf8');
+    assert(rendererSource.includes("const diagnosticView = this.getViewMode() === 'scene';"),
+      'Well diagnostics must have an explicit raw-scene gate');
+    assert(portalSource.includes("portal.visualState === 'blocked'")
+      && portalSource.includes("portal.visualState === 'final'"),
+    'Portal blocked/final state accents must remain family-specific');
+    assert(rendererSource.includes('wellDebugPrimitiveCount'),
+      'Renderer stats must expose well diagnostic primitive counts');
+  });
 
   await runner.run('Player family prioritizes local ship and stays inside its object budget', async () => {
     const resources = makeResources();
