@@ -165,7 +165,7 @@ explicit presentation contracts.
   embedded control plane and sim runtimes.
 - Package tests stage the actual resources and boot both authority processes;
   string-presence checks are not accepted as closure evidence.
-- The semantic train is `0.3.0`; internal artifacts use `0.3.0.<commit-hash>`.
+- The semantic train is `0.3.1`; internal artifacts use `0.3.1.<commit-hash>`.
 - Deep Field has explicit tick, snapshot latency/size, transport, heap-growth,
   and Ballpark-sync budgets.
 

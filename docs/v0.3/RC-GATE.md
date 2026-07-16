@@ -180,7 +180,7 @@ npm run release:status
 npm run test:package
 ```
 
-- [x] Artifact version is `0.3.0.<final-commit-hash>`.
+- [ ] Artifact version is `0.3.1.<final-commit-hash>` for the next candidate.
 - [x] Artifact checksum and path are reported by `npm run test:package` and
   verified by `npm run release:status`.
 - [x] Embedded control plane and sim boot from staged and extracted package

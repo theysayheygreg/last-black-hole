@@ -2,6 +2,9 @@
 
 ## 2026-07-16
 
+- **Version train:** development now targets `0.3.1`; internal candidates use
+  `0.3.1.<commit-hash>`. The deployed `0.3.0.f56175f6` Preview keeps its
+  existing identity until a real `0.3.1` artifact replaces it.
 - **Deck deploy:** reused the checksum-verified `0.3.0.f56175f6` Linux artifact
   without rebuilding and deployed it to
   `/home/deck/Games/last-singularity-v03`. Remote executable and `app.asar`
