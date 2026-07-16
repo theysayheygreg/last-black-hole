@@ -1495,6 +1495,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     deltaVBurnEff: brain.deltaVBurnEff || BRAIN_DEFAULTS.deltaVBurnEff,
     deltaVBurnRate: brain.deltaVBurnRate || BRAIN_DEFAULTS.deltaVBurnRate,
     timeSinceThrust: 999,
+    deltaVRecovering: false,
   };
 }
 

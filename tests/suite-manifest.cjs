@@ -264,6 +264,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "FuelRecovery",
+    file: "fuel-recovery.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "MovementContract",
     file: "movement-contract.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
