@@ -876,7 +876,8 @@ function updatePlanetoidState(planetoid, wells, dt, worldScale) {
 
 function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   if (!rngStreams) throw new Error("Map state cloning requires seeded RNG streams");
-  const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
+  const map = PLAYABLE_MAPS[mapId];
+  if (!map) throw new Error(`Unknown active map id: ${mapId}`);
   const parsedWorldScale = worldScaleOverride == null ? NaN : Number(worldScaleOverride);
   if (Number.isFinite(parsedWorldScale) && parsedWorldScale !== map.worldScale) {
     throw new Error(`Map ${map.id} is canonical at ${map.worldScale} world units; scale override ${parsedWorldScale} rejected`);

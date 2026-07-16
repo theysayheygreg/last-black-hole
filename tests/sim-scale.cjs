@@ -7,6 +7,7 @@
 const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers.cjs");
 const { SESSION_PROFILES } = require("../scripts/content/session-profiles.cjs");
 const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
+const { serializedJsonBytes } = require("../scripts/sim/serialization-budget.cjs");
 
 const SIM_PORT = 8789;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
@@ -166,10 +167,36 @@ async function run() {
         "Expected large-map coarse-field cell ceiling");
       assert(body.session.snapshotBudgetBytes === LARGE_PROFILE.snapshotBudgetBytes,
         "Expected large-map snapshot budget");
-      const snapshot = await getJson("/snapshot");
-      assert(snapshot.status === 200, `Expected /snapshot 200, got ${snapshot.status}`);
-      assert(snapshot.bytes <= LARGE_PROFILE.snapshotBudgetBytes,
-        `Deep Field snapshot exceeds budget: ${snapshot.bytes}/${LARGE_PROFILE.snapshotBudgetBytes}`);
+      const join = await getJson("/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          runId: body.session.runId,
+          joinTicket: body.joinTicket,
+          clientId: "sim-scale-deck-proof",
+          name: "Deck Proof",
+        }),
+      });
+      assert(join.status === 200 && join.body.ok === true, "Expected Deck-representative player join");
+
+      const observedBytes = [];
+      for (let i = 0; i < 6; i += 1) {
+        const snapshot = await getJson("/snapshot");
+        assert(snapshot.status === 200, `Expected repeated /snapshot ${i + 1} 200, got ${snapshot.status}`);
+        assert(snapshot.body.session?.mapId === "deep-field",
+          `Expected repeated snapshot map identity deep-field, got ${snapshot.body.session?.mapId}`);
+        assert(snapshot.body.session?.simScaleProfile === "large",
+          `Expected repeated snapshot large tier, got ${snapshot.body.session?.simScaleProfile}`);
+        const serializedBytes = serializedJsonBytes(snapshot.body, { pretty: true, trailingNewline: true });
+        observedBytes.push(serializedBytes);
+        assert(serializedBytes <= LARGE_PROFILE.snapshotBudgetBytes,
+          `Deep Field serialized snapshot exceeds large tier: ${serializedBytes}/${LARGE_PROFILE.snapshotBudgetBytes}`);
+        assert((snapshot.body.world?.stars || []).every((star) => typeof star.type === "string"),
+          "Deep Field snapshot star type data must remain wire-compatible");
+        await new Promise((resolve) => setTimeout(resolve, 180));
+      }
+      assert(Math.max(...observedBytes) > 0, "Expected exact repeated snapshot byte observations");
+      console.log(`Deep Field repeated snapshot bytes: ${observedBytes.join(", ")} / ${LARGE_PROFILE.snapshotBudgetBytes}`);
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {
