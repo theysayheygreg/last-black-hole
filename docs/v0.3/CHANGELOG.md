@@ -2,12 +2,17 @@
 
 ## 2026-07-16
 
-- **Deck deploy resume:** reused the checksum-verified
-  `0.3.0.f56175f6` Linux artifact without rebuilding. Two allowed preflight
-  attempts resolved `steamdeck.tail1ac9cf.ts.net` to `100.77.19.24`, but
-  Tailscale reported the peer offline and SSH port 22 timed out after roughly
-  19 seconds each. No deployment or Gaming Mode shortcut refresh ran; remote
-  checksums, logs, coredumps, and current v0.2 preservation remain unverified.
+- **Deck deploy:** reused the checksum-verified `0.3.0.f56175f6` Linux artifact
+  without rebuilding and deployed it to
+  `/home/deck/Games/last-singularity-v03`. Remote executable and `app.asar`
+  hashes match local. Gaming Mode entry `Last Singularity v0.3 Preview` remains
+  app id `3771676273`; Steam userdata `31747533` was backed up before shortcut
+  key `19` was refreshed.
+- **Side-by-side preservation:** the v0.2 Demo remains at
+  `/home/deck/Games/last-singularity-v02`, shortcut key `18`, app id
+  `2947990413`. The v0.3 log namespace and launchers exist and no Last
+  Singularity coredumps were recorded after deployment. Current candidate boot,
+  controls, readability, suspend/resume, feel, and audio remain Greg gates.
 
 ## 2026-07-14
 

@@ -31,11 +31,10 @@ idle authority resident through an extended attract-screen wait, and joins a
 live run through normal keyboard input. `npm run release:status` is the
 authority for the exact current HEAD hash.
 
-**Physical Steam Deck status:** pending deployment and Gaming Mode acceptance.
-Automated 1280x800 evidence exists; that is not a substitute for the real
-device. On 2026-07-16 both allowed preflight attempts resolved the Deck at
-`100.77.19.24`, but Tailscale reported it offline and SSH port 22 timed out.
-The current candidate has not been deployed.
+**Physical Steam Deck status:** candidate deployed; Gaming Mode acceptance is
+pending. Automated 1280x800 evidence and checksum identity exist, but they are
+not substitutes for an in-hand launch, controller, readability, suspend/resume,
+feel, or audio review.
 
 **Human status:** Greg has not yet made the final movement-feel or visual-taste
 call.
@@ -157,23 +156,27 @@ Latest local v0.3 package candidate: source `f56175f6`, build
 `0.3.0.f56175f6`. All five targets built and `test:package` passed staged and
 extracted boot. The playtest ZIP SHA-256 is
 `5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`.
-The Deck remained unreachable during two allowed 2026-07-16 preflight attempts,
-so the installed Preview row below remains the prior checksum-verified build.
-No deploy or Steam shortcut command ran. The current remote v0.2 installation,
-logs, and coredump state could not be inspected in this attempt.
+The exact existing Linux artifact was deployed without rebuilding. Remote
+`app.asar` SHA-256 matches local at
+`cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`;
+the executable matches at
+`b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
+The v0.3 launcher, executable, desktop entry, and isolated log namespace exist;
+no Last Singularity coredumps were recorded after deployment. Existing logs are
+not treated as fresh candidate boot evidence until Greg launches it.
 
-Installed and checksum-verified on 2026-07-10:
+Installed and checksum-verified on 2026-07-16:
 
 | Steam entry | Source | Install directory | App id |
 |---|---|---|---:|
 | Last Singularity v0.2 Demo | `main` at `83953aa`, build `0.2.2.83953aa` | `/home/deck/Games/last-singularity-v02` | `2947990413` |
-| Last Singularity v0.3 Preview | v0.3 at `fb2432a`, build `0.3.0.fb2432a` | `/home/deck/Games/last-singularity-v03` | `3771676273` |
+| Last Singularity v0.3 Preview | v0.3 at `f56175f6`, build `0.3.0.f56175f6` | `/home/deck/Games/last-singularity-v03` | `3771676273` |
 
-Both branches passed their clean `release:internal` gate from detached
-worktrees. The v0.3 package also passed `test:package`. Remote executable and
-`app.asar` SHA-256 values match the local artifacts. The two launchers use
-separate log and Electron user-data namespaces, so profiles and caches do not
-contaminate the comparison.
+The current v0.3 package passed `release:internal`, `release:status`, and
+`test:package`; its remote executable and `app.asar` hashes match local. The
+v0.2 directory and shortcut remain key `18`, app id `2947990413`; v0.3 remains
+key `19`, app id `3771676273`. The two launchers use separate log and Electron
+user-data namespaces, so profiles and caches do not contaminate the comparison.
 
 This proves installation and shortcut identity, not physical Gaming Mode
 acceptance. Steam was shut down safely while `shortcuts.vdf` was updated;

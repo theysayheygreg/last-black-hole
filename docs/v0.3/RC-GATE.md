@@ -41,13 +41,20 @@ Latest package evidence from the consolidated 2026-07-15 candidate:
 - The no-retry full lane was stopped after 215 seconds because its isolated
   checkout lacked Python audio packages, `three`, and Electron packager
   dependencies. It was not retried and is not claimed green for this hash.
-- The 2026-07-16 deploy resume reused the verified artifact without rebuilding.
-  Both allowed preflight attempts resolved
-  `steamdeck.tail1ac9cf.ts.net` to `100.77.19.24`, but Tailscale reported the
-  peer offline and SSH port 22 timed out after roughly 19 seconds. No deploy or
-  shortcut refresh occurred. Remote checksums, launcher, logs, coredumps, and
-  current v0.2 preservation could not be inspected; physical review remains
-  open.
+- The 2026-07-16 deploy reused the verified artifact without rebuilding and
+  installed it at `/home/deck/Games/last-singularity-v03`. Remote `app.asar`
+  SHA-256 matches local at
+  `cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`;
+  the executable matches at
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
+- Gaming Mode shortcut key `19` for Steam userdata `31747533` retains app id
+  `3771676273`; backup
+  `/home/deck/.steam/steam/userdata/31747533/config/shortcuts.vdf.lbh-backup-20260716231447`
+  preceded the write. The v0.2 Demo remains key `18`, app id `2947990413`, at
+  `/home/deck/Games/last-singularity-v02`.
+- Executable, launcher, desktop entry, and isolated log namespace exist. No
+  Last Singularity coredumps were recorded after deployment. Logs are not
+  claimed as a fresh candidate boot until Greg launches it.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 
@@ -195,14 +202,15 @@ LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck
 LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
 
-- [ ] Deck is reachable over Tailscale.
+- [x] Deck is reachable over Tailscale and the exact candidate is installed.
 - [ ] Build launches from Non-Steam Games in Gaming Mode.
 - [ ] Embedded authority reports healthy on loopback.
 - [ ] Steam Input reaches title, Home, map select, flight, pause, extraction,
   results, and quit.
 - [ ] 1280x800 text and prompts are readable in hand.
 - [ ] Suspend/resume preserves or cleanly abandons the run.
-- [ ] No new coredump; logs exist under the documented state directory.
+- [x] No post-deploy coredump; log files exist under the isolated v0.3 state
+  directory. Fresh candidate log content awaits launch.
 
 If the Deck is unavailable, record this entire section as residual physical
 device risk. Do not mark it passed from desktop screenshots.
