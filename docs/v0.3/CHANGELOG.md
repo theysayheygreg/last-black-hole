@@ -1,5 +1,14 @@
 # v0.3 Changelog
 
+## 2026-07-16
+
+- **Deck deploy resume:** reused the checksum-verified
+  `0.3.0.f56175f6` Linux artifact without rebuilding. Two allowed preflight
+  attempts resolved `steamdeck.tail1ac9cf.ts.net` to `100.77.19.24`, but
+  Tailscale reported the peer offline and SSH port 22 timed out after roughly
+  19 seconds each. No deployment or Gaming Mode shortcut refresh ran; remote
+  checksums, logs, coredumps, and current v0.2 preservation remain unverified.
+
 ## 2026-07-14
 
 - W2-A4 made `shallows`, `expanse`, and `deep-field` authoritative at 5x5,

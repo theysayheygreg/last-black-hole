@@ -41,9 +41,13 @@ Latest package evidence from the consolidated 2026-07-15 candidate:
 - The no-retry full lane was stopped after 215 seconds because its isolated
   checkout lacked Python audio packages, `three`, and Electron packager
   dependencies. It was not retried and is not claimed green for this hash.
-- Deck preflight found `steamdeck.tail1ac9cf.ts.net` offline: Tailscale ping,
-  SSH, and direct probes timed out. No deploy or shortcut refresh occurred;
-  physical review remains open and v0.2 was untouched.
+- The 2026-07-16 deploy resume reused the verified artifact without rebuilding.
+  Both allowed preflight attempts resolved
+  `steamdeck.tail1ac9cf.ts.net` to `100.77.19.24`, but Tailscale reported the
+  peer offline and SSH port 22 timed out after roughly 19 seconds. No deploy or
+  shortcut refresh occurred. Remote checksums, launcher, logs, coredumps, and
+  current v0.2 preservation could not be inspected; physical review remains
+  open.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 

@@ -31,10 +31,11 @@ idle authority resident through an extended attract-screen wait, and joins a
 live run through normal keyboard input. `npm run release:status` is the
 authority for the exact current HEAD hash.
 
-**Physical Steam Deck status:** pending Gaming Mode acceptance. Automated
-1280x800 evidence exists; that is not a substitute for the real device. The
-review-fix replacement was packaged on 2026-07-14, but the Deck was offline on
-Tailscale and has not received it yet.
+**Physical Steam Deck status:** pending deployment and Gaming Mode acceptance.
+Automated 1280x800 evidence exists; that is not a substitute for the real
+device. On 2026-07-16 both allowed preflight attempts resolved the Deck at
+`100.77.19.24`, but Tailscale reported it offline and SSH port 22 timed out.
+The current candidate has not been deployed.
 
 **Human status:** Greg has not yet made the final movement-feel or visual-taste
 call.
@@ -156,9 +157,10 @@ Latest local v0.3 package candidate: source `f56175f6`, build
 `0.3.0.f56175f6`. All five targets built and `test:package` passed staged and
 extracted boot. The playtest ZIP SHA-256 is
 `5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`.
-The Deck was offline during the 2026-07-15 preflight, so the installed Preview
-row below remains the prior checksum-verified build; no remote files or Steam
-shortcuts were changed.
+The Deck remained unreachable during two allowed 2026-07-16 preflight attempts,
+so the installed Preview row below remains the prior checksum-verified build.
+No deploy or Steam shortcut command ran. The current remote v0.2 installation,
+logs, and coredump state could not be inspected in this attempt.
 
 Installed and checksum-verified on 2026-07-10:
 
