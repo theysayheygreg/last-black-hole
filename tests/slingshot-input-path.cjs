@@ -252,7 +252,9 @@ async function run() {
       assert(releaseScene.slingshot?.telegraph?.releaseGhost, 'Release ghost did not reach the visible scene state');
 
       const routeEvents = (await events(baselineSeq)).filter((event) => event.payload?.clientId === clientId && event.type.startsWith('player.slingshot'));
-      assert.deepStrictEqual(routeEvents.map((event) => event.type), ['player.slingshotEngaged', 'player.slingshotReleased']);
+      const routeEventTypes = routeEvents.map((event) => event.type);
+      assert(JSON.stringify(routeEventTypes) === JSON.stringify(['player.slingshotEngaged', 'player.slingshotReleased']),
+        `Expected slingshot engage/release order, got ${JSON.stringify(routeEventTypes)}`);
       assert((await edgeAcks(page)).length === initialAckCount + 3, 'Expected no-anchor, engage, and release edge acknowledgements');
       assert.strictEqual(errors.length, 0, `browser errors: ${errors.join('; ')}`);
       console.log(JSON.stringify({
