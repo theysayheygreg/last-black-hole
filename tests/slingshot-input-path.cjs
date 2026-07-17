@@ -88,6 +88,27 @@ async function waitForPlayer(clientId, predicate, label, timeout = 8000) {
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(last)}`);
 }
 
+async function captureSlingshotPrompt(page) {
+  return page.evaluate(() => {
+    const element = document.getElementById('hud-interaction');
+    const glyph = element?.querySelector('[data-action-id="slingshot"]');
+    const copy = glyph?.nextElementSibling?.classList.contains('ui-action-copy')
+      ? glyph.nextElementSibling.textContent.trim()
+      : null;
+    return {
+      text: element?.textContent || '',
+      visible: getComputedStyle(element).display !== 'none',
+      glyph: glyph ? {
+        action: glyph.dataset.actionId,
+        inputFamily: glyph.dataset.inputFamily,
+        label: glyph.textContent.trim(),
+        copy,
+      } : null,
+      scene: window.__TEST_API.getThreeSceneState(),
+    };
+  });
+}
+
 function wrappedDelta(from, to, worldScale) {
   let delta = to - from;
   if (delta > worldScale / 2) delta -= worldScale;
@@ -154,8 +175,16 @@ async function steerToRing(page, clientId, anchor) {
         recharging,
       };
 
+      if (next.slingshot?.aim) {
+        await setPad(page);
+        const prompt = await captureSlingshotPrompt(page);
+        return { start, end: last, closest, target: { ...target }, aim: next.slingshot.aim, prompt };
+      }
+
       if (distance <= radius && allowFlyby) {
-        return { start, end: last, closest, target: { ...target } };
+        await setPad(page);
+        await sleep(110);
+        continue;
       }
 
       const nx = distance > 1e-6 ? tx / distance : 1;
@@ -228,25 +257,8 @@ async function run() {
           - wrappedDistance(initial.player, right, initial.snapshot.session.worldScale))[0];
       assert(routeAnchor, 'Shallows route well is missing');
       const approach = await steerToRing(page, clientId, routeAnchor);
-      const aim = await waitForPlayer(clientId, (player) => Boolean(player.slingshot?.aim), 'authoritative aim affordance');
-      const promptBefore = await page.evaluate(() => {
-        const element = document.getElementById('hud-interaction');
-        const glyph = element?.querySelector('[data-action-id="slingshot"]');
-        const copy = glyph?.nextElementSibling?.classList.contains('ui-action-copy')
-          ? glyph.nextElementSibling.textContent.trim()
-          : null;
-        return {
-          text: element?.textContent || '',
-          visible: getComputedStyle(element).display !== 'none',
-          glyph: glyph ? {
-            action: glyph.dataset.actionId,
-            inputFamily: glyph.dataset.inputFamily,
-            label: glyph.textContent.trim(),
-            copy,
-          } : null,
-          scene: window.__TEST_API.getThreeSceneState(),
-        };
-      });
+      const aim = approach.aim;
+      const promptBefore = approach.prompt;
       assert(promptBefore.visible && /well in range/i.test(promptBefore.text), `Missing in-world slingshot prompt: ${JSON.stringify(promptBefore)}`);
       assert(JSON.stringify(promptBefore.glyph) === JSON.stringify({
         action: 'slingshot',
@@ -317,7 +329,7 @@ async function run() {
         promptBefore: promptBefore.text,
         promptDuring,
         anchor: { id: routeAnchor.id, type: routeAnchor.type || 'well' },
-        approach: { target: approach.target, aimDistance: aim.player.slingshot.aim.distance },
+        approach: { target: approach.target, aimDistance: aim.distance },
         timingsMs: {
           engageToLock: lockSeenAt - engageStartedAt,
           lockToArc: arcSeenAt - lockSeenAt,
