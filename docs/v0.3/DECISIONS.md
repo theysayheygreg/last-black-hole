@@ -132,3 +132,12 @@ The five gameplay values remain centralized in
 Lock telegraph (`0.25 s`) and release ghost (`1.0 s`) are internal
 presentation durations. This ratification preserves server authority and the
 accepted movement, sea, Conductor, timeSlow, and unit contracts.
+
+Fixed-step coyote interpretation: the canonical gameplay value remains `50 ms`,
+but authority derives the runtime eligibility window as
+`max(50 ms, current authority dt)`. Aim retention, affordance lookup, and
+remaining-time telemetry use that effective duration, so a presented aim
+survives the next fixed step even when the step is wider than the design value.
+For Shallows (`dt = 1/15 s`, about `66.7 ms`), the next-tick edge is accepted;
+an edge beyond that effective window is rejected. This changes no capture
+radius or broader movement behavior.

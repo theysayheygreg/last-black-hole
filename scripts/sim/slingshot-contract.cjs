@@ -124,6 +124,15 @@ function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSH
   return duration > 0 && finite(nowSeconds) - finite(lastAimSeenSeconds, -Infinity) <= duration;
 }
 
+// Fixed-step authority treats coyote time as a minimum grace duration so a
+// presented aim survives the next tick even when that tick is wider than the
+// player-facing contract value.
+function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, fixedStepSeconds = 0) {
+  const duration = Math.max(0, finite(coyoteTimeMs));
+  if (duration <= 0) return 0;
+  return Math.max(duration, Math.max(0, finite(fixedStepSeconds)) * 1000);
+}
+
 function resolveChainCount({
   nowSeconds,
   lastReleaseSeconds,
@@ -184,6 +193,7 @@ module.exports = {
   boundedReleaseDelta,
   captureRadiusWorld,
   coyoteWindowOpen,
+  effectiveCoyoteTimeMs,
   quarterTurnsFromArc,
   releaseSpeedCap,
   resolveChainCount,

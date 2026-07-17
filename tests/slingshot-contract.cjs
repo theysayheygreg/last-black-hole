@@ -6,6 +6,7 @@ const {
   boundedReleaseDelta,
   captureRadiusWorld,
   coyoteWindowOpen,
+  effectiveCoyoteTimeMs,
   releaseSpeedCap,
   resolveChainCount,
   rotateToward,
@@ -51,6 +52,12 @@ function run() {
   assert(coyoteWindowOpen(10.049, 10, SLINGSHOT_VALUES.coyoteTime));
   assert(!coyoteWindowOpen(10.051, 10, SLINGSHOT_VALUES.coyoteTime));
   assert(!coyoteWindowOpen(10.1, 10, 0), "zero coyote time is truthfully disabled");
+  const shallowsDt = 1 / 15;
+  const effectiveCoyoteMs = effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, shallowsDt);
+  assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "canonical coyote value must remain 50 ms");
+  assert(Math.abs(effectiveCoyoteMs - (1000 / 15)) < 1e-9, `Expected one-tick coyote grace, got ${effectiveCoyoteMs} ms`);
+  assert(coyoteWindowOpen(10 + shallowsDt, 10, effectiveCoyoteMs), "66.7 ms authority tick must retain the presented aim");
+  assert(!coyoteWindowOpen(10 + shallowsDt + 0.000001, 10, effectiveCoyoteMs), "coyote must reject beyond the effective tick window");
   assert.strictEqual(resolveChainCount({
     nowSeconds: 2.49,
     lastReleaseSeconds: 2,

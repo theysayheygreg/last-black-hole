@@ -50,11 +50,16 @@ only that delta. It never writes a maximum speed or teleports the player, and
 it has no facing-versus-velocity branch.
 
 The deterministic state path is `aim -> lock -> arc -> release-ghost`.
-Capture updates `lastAimSeenTime`; coyote is a real 50 ms boundary checked by
-the shared pure helper. Chain count is resolved from the prior authoritative
-release anchor and the five-knob chain window. The ratified v0.3.1 internal
-presentation durations are a 0.25 s lock telegraph and a 1.0 s release ghost;
-they are not tunables.
+Capture updates `lastAimSeenTime`; coyote retains its canonical 50 ms value but
+uses the fixed-step runtime interpretation `max(50 ms, current authority dt)`
+for aim retention, affordance lookup, and remaining telemetry. This keeps a
+presented aim alive through the next Shallows authority tick (`dt = 1/15 s`,
+about 66.7 ms) without changing capture radius or movement. The shared pure
+helper and server edge fixture accept that next-tick edge and reject an edge
+beyond the effective window. Chain count is resolved from the prior
+authoritative release anchor and the five-knob chain window. The ratified
+v0.3.1 internal presentation durations are a 0.25 s lock telegraph and a 1.0 s
+release ghost; they are not tunables.
 
 The authoritative telegraph carries `aimCue`, `lock`, `ownedArc`, and
 `releaseGhost` payloads as their phases become active. The renderer uses the

@@ -72,6 +72,55 @@ function wrap(value, worldScale) {
   return ((value % worldScale) + worldScale) % worldScale;
 }
 
+function wrappedDelta(from, to, worldScale) {
+  let delta = to - from;
+  if (delta > worldScale / 2) delta -= worldScale;
+  if (delta < -worldScale / 2) delta += worldScale;
+  return delta;
+}
+
+function wrappedDistance(left, right, worldScale) {
+  return Math.hypot(
+    wrappedDelta(left.wx, right.wx, worldScale),
+    wrappedDelta(left.wy, right.wy, worldScale),
+  );
+}
+
+function coyoteProbe(world, worldScale) {
+  const anchors = [
+    ...(world.wells || []).map((anchor) => ({ ...anchor, range: 0.45, type: "well" })),
+    ...(world.stars || []).filter((anchor) => anchor.alive !== false)
+      .map((anchor) => ({ ...anchor, range: 0.3, type: "star" })),
+    ...(world.planetoids || []).filter((anchor) => anchor.alive !== false)
+      .map((anchor) => ({ ...anchor, range: 0.18, type: "planetoid" })),
+  ];
+  const exclusive = (point, anchor) => anchors.every((other) => other === anchor
+    || wrappedDistance(point, other, worldScale) > other.range + 1e-6);
+  for (const anchor of anchors) {
+    for (let index = 0; index < 24; index += 1) {
+      const angle = (index / 24) * Math.PI * 2;
+      const unit = { x: Math.cos(angle), y: Math.sin(angle) };
+      const inside = {
+        wx: wrap(anchor.wx + unit.x * anchor.range * 0.8, worldScale),
+        wy: wrap(anchor.wy + unit.y * anchor.range * 0.8, worldScale),
+      };
+      const outside = {
+        wx: wrap(anchor.wx + unit.x * anchor.range * 1.04, worldScale),
+        wy: wrap(anchor.wy + unit.y * anchor.range * 1.04, worldScale),
+      };
+      if (exclusive(inside, anchor) && exclusive(outside, anchor)) {
+        return {
+          anchor,
+          inside,
+          outside,
+          velocity: { x: -unit.y * 1.2, y: unit.x * 1.2 },
+        };
+      }
+    }
+  }
+  throw new Error("Could not find an isolated slingshot coyote probe");
+}
+
 async function run() {
   const runner = new TestRunner("SlingshotEdgeQueue");
 
@@ -141,6 +190,96 @@ async function run() {
       const player = final.body.players?.find((entry) => entry.clientId === "slingshot-edge-queue-test");
       assert(player?.slingshot?.engaged === false, "Expected second queued edge to leave slingshot released");
       assert(player?.pendingSlingshotEdgeCount === 0, `Expected no queued edges left, got ${player?.pendingSlingshotEdgeCount}`);
+    } finally {
+      await stopSimServer(SIM_PORT).catch(() => null);
+    }
+  });
+
+  await runner.run("Fixed-step coyote grace accepts the next-tick edge and rejects after its effective window", async () => {
+    await startSimServer(SIM_PORT, { keepAlive: true });
+    try {
+      const start = await postJson("/session/start", {
+        mapId: "shallows",
+        requesterId: "slingshot-coyote-test",
+        requesterName: "Slingshot Coyote Test",
+        seed: 7415,
+      });
+      assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
+      const join = await postJson("/join", {
+        runId: start.body.session.runId,
+        clientId: "slingshot-coyote-test",
+        joinTicket: start.body.joinTicket,
+        name: "Slingshot Coyote Test",
+      });
+      assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
+      const authority = join.body.authority;
+      const initial = await waitForSnapshot((body) => body.players?.some((player) => player.clientId === "slingshot-coyote-test"));
+      const worldScale = initial.session.worldScale;
+      const probe = coyoteProbe(initial.world, worldScale);
+      const dt = 1 / initial.session.tickHz;
+      assert(Math.abs(dt - (1 / 15)) < 1e-9, `Expected Shallows dt=66.7 ms, got ${dt * 1000} ms`);
+
+      const setPlayer = (point, resetSlingshot = false) => postJson("/debug/player-state", {
+        clientId: "slingshot-coyote-test",
+        wx: point.wx,
+        wy: point.wy,
+        vx: probe.velocity.x,
+        vy: probe.velocity.y,
+        deltaV: 40,
+        status: "alive",
+        resetSlingshot,
+      });
+
+      const movedInside = await setPlayer(probe.inside, true);
+      assert(movedInside.status === 200 && movedInside.body.ok === true, "Expected inside coyote probe placement");
+      const aimed = await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-coyote-test" && player.slingshot?.phase === "aim"));
+      const aimedPlayer = aimed.players.find((player) => player.clientId === "slingshot-coyote-test");
+      assert(aimedPlayer.slingshot.telegraph.aimCue.coyoteRemainingMs >= (dt * 1000) - 1e-6,
+        "Aim telemetry must expose the effective one-tick coyote remainder");
+      const nextTickWatermark = maxEventSeq((await getJson("/events")).body);
+      const movedOutside = await setPlayer(probe.outside);
+      assert(movedOutside.status === 200 && movedOutside.body.ok === true, "Expected next-tick coyote probe placement");
+      const nextTickEdge = await postCommand("/input", authority, 1, {
+        seq: 1,
+        moveX: 0,
+        moveY: 1,
+        thrust: 0,
+        brake: 0,
+        slingshot: false,
+        slingshotEdges: [201],
+        timestamp: Date.now(),
+      });
+      assert(nextTickEdge.status === 200 && nextTickEdge.body.ok === true, "Expected next-tick coyote edge input acceptance");
+      const engagedEvents = await waitForEvents(nextTickWatermark, (events) =>
+        events.some((event) => event.type === "player.slingshotEngaged"));
+      assert(engagedEvents.some((event) => event.type === "player.slingshotEngaged"),
+        "Expected next-tick edge to engage from the previous presented aim");
+
+      const reset = await setPlayer(probe.inside, true);
+      assert(reset.status === 200 && reset.body.ok === true, "Expected coyote rejection reset");
+      await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-coyote-test" && player.slingshot?.phase === "aim"));
+      const rejectionWatermark = maxEventSeq((await getJson("/events")).body);
+      await setPlayer(probe.outside);
+      await sleep(140);
+      const lateEdge = await postCommand("/input", authority, 2, {
+        seq: 2,
+        moveX: 0,
+        moveY: 1,
+        thrust: 0,
+        brake: 0,
+        slingshot: false,
+        slingshotEdges: [202],
+        timestamp: Date.now(),
+      });
+      assert(lateEdge.status === 200 && lateEdge.body.ok === true, "Expected late edge input to reach authority");
+      await sleep(120);
+      const lateEvents = (await getJson(`/events?since=${rejectionWatermark}`)).body.events || [];
+      assert(!lateEvents.some((event) => event.type === "player.slingshotEngaged"),
+        "Expected edge beyond the effective coyote window to reject");
+      const final = (await getJson("/snapshot")).body.players?.find((player) => player.clientId === "slingshot-coyote-test");
+      assert(final?.slingshot?.engaged !== true, "Late edge must not engage slingshot");
     } finally {
       await stopSimServer(SIM_PORT).catch(() => null);
     }
