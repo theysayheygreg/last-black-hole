@@ -40,7 +40,7 @@ import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
-import { ScavengerSystem } from './scavengers.js';
+import { ScavengerSystem, normalizeScavengerPresentation } from './scavengers.js';
 import { CombatSystem } from './combat.js';
 import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
@@ -2512,10 +2512,11 @@ function syncRemoteWorldState(world) {
   }
 
   if (Array.isArray(world.scavengers)) {
-    scavengerSystem.scavengers = world.scavengers.map((remote) => ({
-      ...remote,
-      alive: remote.alive !== false,
-    }));
+    const previousScavengers = new Map(scavengerSystem.scavengers.map((scavenger) => [scavenger.id, scavenger]));
+    scavengerSystem.scavengers = world.scavengers.map((remote, index) => {
+      const previous = previousScavengers.get(remote.id) || scavengerSystem.scavengers[index] || {};
+      return normalizeScavengerPresentation(remote, previous);
+    });
   }
 
   if (Array.isArray(world.fauna)) {

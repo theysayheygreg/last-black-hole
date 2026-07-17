@@ -1,5 +1,12 @@
 # v0.3 Changelog
 
+## 2026-07-17
+
+- **Lane A payoff crash guard:** compact remote scavenger rows now restore the
+  client-owned death presentation anchor when authority provides it, while
+  partial rows remain safe to render and update without inventing gameplay
+  state. Focused coverage lives in `tests/renderer-authority.cjs`.
+
 ## 2026-07-16
 
 - **Lane B fuel recovery:** the shared authority/browser movement step now
