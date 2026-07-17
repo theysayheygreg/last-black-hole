@@ -132,6 +132,9 @@ function rulerFacts(source = null) {
         implemented: coyote.implemented === true,
         durationMs: Math.max(0, finite(coyote.duration_ms)),
         remainingMs: Math.max(0, finite(coyote.remaining_ms)),
+        effectiveDurationMs: Math.max(0, finite(coyote.effective_duration_ms)),
+        effectiveRemainingMs: Math.max(0, finite(coyote.effective_remaining_ms)),
+        transportRemainingMs: Math.max(0, finite(coyote.transport_remaining_ms)),
       }),
       payoffCurve: Object.freeze({
         active: payoff.active === true,
@@ -201,6 +204,9 @@ function telegraph(source = null) {
       distance: Math.max(0, finite(source.aimCue.distance)),
       coyoteActive: source.aimCue.coyoteActive === true,
       coyoteRemainingMs: Math.max(0, finite(source.aimCue.coyoteRemainingMs)),
+      canonicalCoyoteRemainingMs: Math.max(0, finite(source.aimCue.canonicalCoyoteRemainingMs)),
+      effectiveCoyoteDurationMs: Math.max(0, finite(source.aimCue.effectiveCoyoteDurationMs)),
+      transportCoyoteRemainingMs: Math.max(0, finite(source.aimCue.transportCoyoteRemainingMs)),
     }) : null,
     lock: lock ? Object.freeze({
       anchor: normalizeAnchor(lock.anchor),

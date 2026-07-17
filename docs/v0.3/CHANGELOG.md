@@ -8,10 +8,10 @@
   Deck/controller input family, and report a visible no-anchor range gate on
   an otherwise valid press. Focused proof covers normal F/Y action input,
   authority engagement, and deliberate release without debug injection. The
-  runtime coyote seam keeps the canonical `50 ms` value while quantizing
-  eligibility to at least one current fixed authority tick, preserving a
-  presented aim through the Shallows `66.7 ms` step without changing range or
-  movement.
+  runtime coyote seam keeps the canonical `50 ms` value while allowing the
+  internal prompt-to-command transport allowance of two current authority
+  ticks, preserving the presented aim across the Shallows `66.7 ms` snapshot
+  and command hops without changing range or movement.
 
 - **Locked physical units:** `src/content/units.data.json` is now the sole
   shared authority for `1000 m` per sim/world unit, `12 m` Drifter length, and

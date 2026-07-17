@@ -133,11 +133,12 @@ Lock telegraph (`0.25 s`) and release ghost (`1.0 s`) are internal
 presentation durations. This ratification preserves server authority and the
 accepted movement, sea, Conductor, timeSlow, and unit contracts.
 
-Fixed-step coyote interpretation: the canonical gameplay value remains `50 ms`,
-but authority derives the runtime eligibility window as
-`max(50 ms, current authority dt)`. Aim retention, affordance lookup, and
-remaining-time telemetry use that effective duration, so a presented aim
-survives the next fixed step even when the step is wider than the design value.
-For Shallows (`dt = 1/15 s`, about `66.7 ms`), the next-tick edge is accepted;
-an edge beyond that effective window is rejected. This changes no capture
-radius or broader movement behavior.
+Fixed-step transport interpretation: the canonical gameplay value remains
+`50 ms`, but prompt-originated edge eligibility uses the internal runtime
+allowance `50 ms + 2 * current authority dt`. Aim retention, affordance lookup,
+and effective/transport remaining-time telemetry use that duration; telemetry
+keeps canonical coyote and transport allowance distinct. For Shallows
+(`dt = 1/15 s`, about `66.7 ms`), an edge within `183.3 ms` is accepted and an
+edge beyond that effective window is rejected. The two-tick allowance is
+transport behavior, not a new gameplay knob, and changes no capture radius or
+broader movement behavior.

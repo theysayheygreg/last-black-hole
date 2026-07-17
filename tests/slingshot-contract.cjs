@@ -55,9 +55,12 @@ function run() {
   const shallowsDt = 1 / 15;
   const effectiveCoyoteMs = effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, shallowsDt);
   assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "canonical coyote value must remain 50 ms");
-  assert(Math.abs(effectiveCoyoteMs - (1000 / 15)) < 1e-9, `Expected one-tick coyote grace, got ${effectiveCoyoteMs} ms`);
-  assert(coyoteWindowOpen(10 + shallowsDt, 10, effectiveCoyoteMs), "66.7 ms authority tick must retain the presented aim");
-  assert(!coyoteWindowOpen(10 + shallowsDt + 0.000001, 10, effectiveCoyoteMs), "coyote must reject beyond the effective tick window");
+  assert(Math.abs(effectiveCoyoteMs - (50 + (2 * 1000 / 15))) < 1e-9,
+    `Expected coyote plus two transport ticks, got ${effectiveCoyoteMs} ms`);
+  assert(coyoteWindowOpen(10 + (effectiveCoyoteMs - 0.001) / 1000, 10, effectiveCoyoteMs),
+    "edge within coyote plus two authority ticks must remain eligible");
+  assert(!coyoteWindowOpen(10 + (effectiveCoyoteMs + 0.001) / 1000, 10, effectiveCoyoteMs),
+    "coyote must reject beyond the effective transport window");
   assert.strictEqual(resolveChainCount({
     nowSeconds: 2.49,
     lastReleaseSeconds: 2,

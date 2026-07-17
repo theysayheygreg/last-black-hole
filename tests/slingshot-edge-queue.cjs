@@ -1,4 +1,5 @@
 const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers.cjs");
+const { SLINGSHOT_VALUES, effectiveCoyoteTimeMs } = require("../scripts/sim/slingshot-contract.cjs");
 
 const SIM_PORT = 8807;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
@@ -44,14 +45,14 @@ function maxEventSeq(eventsBody) {
   return Math.max(0, ...(eventsBody.events || []).map((event) => event.seq || 0));
 }
 
-async function waitForSnapshot(predicate, timeoutMs = 8000) {
+async function waitForSnapshot(predicate, timeoutMs = 8000, pollingMs = 80) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
     const { body } = await getJson("/snapshot");
     last = body;
     if (predicate(body)) return body;
-    await sleep(80);
+    await sleep(pollingMs);
   }
   throw new Error(`Timed out waiting for snapshot. Last tick=${last?.tick} simTime=${last?.simTime}`);
 }
@@ -195,7 +196,7 @@ async function run() {
     }
   });
 
-  await runner.run("Fixed-step coyote grace accepts the next-tick edge and rejects after its effective window", async () => {
+  await runner.run("Transport coyote allowance accepts within two ticks and rejects beyond it", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {
       const start = await postJson("/session/start", {
@@ -218,6 +219,8 @@ async function run() {
       const probe = coyoteProbe(initial.world, worldScale);
       const dt = 1 / initial.session.tickHz;
       assert(Math.abs(dt - (1 / 15)) < 1e-9, `Expected Shallows dt=66.7 ms, got ${dt * 1000} ms`);
+      const effectiveCoyoteMs = effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, dt);
+      assert(SLINGSHOT_VALUES.coyoteTime === 50, "Canonical coyote time must remain 50 ms");
 
       const setPlayer = (point, resetSlingshot = false) => postJson("/debug/player-state", {
         clientId: "slingshot-coyote-test",
@@ -235,11 +238,15 @@ async function run() {
       const aimed = await waitForSnapshot((body) => body.players?.some((player) =>
         player.clientId === "slingshot-coyote-test" && player.slingshot?.phase === "aim"));
       const aimedPlayer = aimed.players.find((player) => player.clientId === "slingshot-coyote-test");
-      assert(aimedPlayer.slingshot.telegraph.aimCue.coyoteRemainingMs >= (dt * 1000) - 1e-6,
-        "Aim telemetry must expose the effective one-tick coyote remainder");
+      assert(aimedPlayer.slingshot.telegraph.aimCue.coyoteRemainingMs >= effectiveCoyoteMs - 1e-6,
+        "Aim telemetry must expose the effective transport remainder");
+      assert(aimedPlayer.slingshot.telegraph.aimCue.canonicalCoyoteRemainingMs >= SLINGSHOT_VALUES.coyoteTime - 1e-6,
+        "Aim telemetry must retain the canonical coyote remainder separately");
       const nextTickWatermark = maxEventSeq((await getJson("/events")).body);
       const movedOutside = await setPlayer(probe.outside);
-      assert(movedOutside.status === 200 && movedOutside.body.ok === true, "Expected next-tick coyote probe placement");
+      assert(movedOutside.status === 200 && movedOutside.body.ok === true, "Expected transport coyote probe placement");
+      await waitForSnapshot((body) => body.tick === aimed.tick + 1
+        && body.players?.some((player) => player.clientId === "slingshot-coyote-test" && player.slingshot?.phase === "aim"), 1000, 10);
       const nextTickEdge = await postCommand("/input", authority, 1, {
         seq: 1,
         moveX: 0,
@@ -250,7 +257,7 @@ async function run() {
         slingshotEdges: [201],
         timestamp: Date.now(),
       });
-      assert(nextTickEdge.status === 200 && nextTickEdge.body.ok === true, "Expected next-tick coyote edge input acceptance");
+      assert(nextTickEdge.status === 200 && nextTickEdge.body.ok === true, "Expected within-two-tick coyote edge input acceptance");
       const engagedEvents = await waitForEvents(nextTickWatermark, (events) =>
         events.some((event) => event.type === "player.slingshotEngaged"));
       assert(engagedEvents.some((event) => event.type === "player.slingshotEngaged"),
@@ -258,11 +265,11 @@ async function run() {
 
       const reset = await setPlayer(probe.inside, true);
       assert(reset.status === 200 && reset.body.ok === true, "Expected coyote rejection reset");
-      await waitForSnapshot((body) => body.players?.some((player) =>
+      const lateAim = await waitForSnapshot((body) => body.players?.some((player) =>
         player.clientId === "slingshot-coyote-test" && player.slingshot?.phase === "aim"));
       const rejectionWatermark = maxEventSeq((await getJson("/events")).body);
       await setPlayer(probe.outside);
-      await sleep(140);
+      await waitForSnapshot((body) => body.tick >= lateAim.tick + 3, 1500, 10);
       const lateEdge = await postCommand("/input", authority, 2, {
         seq: 2,
         moveX: 0,

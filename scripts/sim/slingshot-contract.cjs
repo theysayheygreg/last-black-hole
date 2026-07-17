@@ -124,13 +124,12 @@ function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSH
   return duration > 0 && finite(nowSeconds) - finite(lastAimSeenSeconds, -Infinity) <= duration;
 }
 
-// Fixed-step authority treats coyote time as a minimum grace duration so a
-// presented aim survives the next tick even when that tick is wider than the
-// player-facing contract value.
+// Prompt presentation and command delivery each cross an authority tick. The
+// allowance is internal transport behavior, not a sixth gameplay knob.
 function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, fixedStepSeconds = 0) {
   const duration = Math.max(0, finite(coyoteTimeMs));
   if (duration <= 0) return 0;
-  return Math.max(duration, Math.max(0, finite(fixedStepSeconds)) * 1000);
+  return duration + Math.max(0, finite(fixedStepSeconds)) * 1000 * 2;
 }
 
 function resolveChainCount({

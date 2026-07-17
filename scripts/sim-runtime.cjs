@@ -1937,7 +1937,9 @@ function buildSnapshotBody() {
     simTime: runtime.simTime,
     serverTime: Date.now(),
     lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
-    players: Array.from(runtime.players.values()).map((player) => ({
+    players: Array.from(runtime.players.values()).map((player) => {
+      const coyote = player.slingshot ? slingshotCoyoteTelemetry(player.slingshot) : null;
+      return ({
       clientId: player.clientId,
       profileId: player.profileId || null,
       name: player.name,
@@ -1999,7 +2001,10 @@ function buildSnapshotBody() {
           anchorRange: player.slingshot.aimAnchorRange,
           distance: player.slingshot.aimDistance,
           coyoteActive: Boolean(player.slingshot.coyoteActive),
-          coyoteRemainingMs: Math.max(0, (player.slingshot.coyoteUntil - runtime.simTime) * 1000),
+          coyoteRemainingMs: coyote.transportRemainingMs,
+          canonicalCoyoteRemainingMs: coyote.canonicalRemainingMs,
+          effectiveCoyoteDurationMs: coyote.effectiveDurationMs,
+          transportCoyoteRemainingMs: coyote.transportRemainingMs,
         } : null,
         telegraph: buildSlingshotTelegraph(player),
       } : null,
@@ -2022,7 +2027,8 @@ function buildSnapshotBody() {
       portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
       signal: player.signal,
       controlDebuff: player.controlDebuff || 0,
-    })),
+    });
+    }),
     world: {
       anomalyCatalog: runtime.mapState.anomalyCatalog,
       wells: runtime.mapState.wells,
@@ -4744,6 +4750,26 @@ function ensurePlayerSlingshot(player) {
   return player.slingshot;
 }
 
+function slingshotCoyoteTelemetry(state) {
+  const canonicalDurationMs = Math.max(0, SLINGSHOT_SERVER.coyoteTime);
+  const hasAimTime = Number.isFinite(state.lastAimSeenTime);
+  const canonicalRemainingMs = hasAimTime
+    ? Math.max(0, (state.lastAimSeenTime + canonicalDurationMs / 1000 - runtime.simTime) * 1000)
+    : 0;
+  const transportRemainingMs = Number.isFinite(state.coyoteUntil)
+    ? Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000)
+    : 0;
+  const effectiveDurationMs = hasAimTime && Number.isFinite(state.coyoteUntil)
+    ? Math.max(0, (state.coyoteUntil - state.lastAimSeenTime) * 1000)
+    : 0;
+  return {
+    canonicalDurationMs,
+    canonicalRemainingMs,
+    effectiveDurationMs,
+    transportRemainingMs,
+  };
+}
+
 function slingshotAnchorKey(anchor) {
   return anchor ? `${anchor.type}:${anchor.id ?? anchor.index ?? "unknown"}` : null;
 }
@@ -4925,6 +4951,7 @@ function slingshotAnchorTelemetry(state, prefix = "anchor") {
 
 function buildSlingshotTelegraph(player) {
   const state = ensurePlayerSlingshot(player);
+  const coyote = slingshotCoyoteTelemetry(state);
   const aimAnchor = slingshotAnchorTelemetry(state, "aim");
   const activeAnchor = slingshotAnchorTelemetry(state, "");
   const releaseGhost = state.releaseGhost ? {
@@ -4937,7 +4964,10 @@ function buildSlingshotTelegraph(player) {
       anchor: aimAnchor,
       distance: state.aimDistance || 0,
       coyoteActive: Boolean(state.coyoteActive),
-      coyoteRemainingMs: Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000),
+      coyoteRemainingMs: coyote.transportRemainingMs,
+      canonicalCoyoteRemainingMs: coyote.canonicalRemainingMs,
+      effectiveCoyoteDurationMs: coyote.effectiveDurationMs,
+      transportCoyoteRemainingMs: coyote.transportRemainingMs,
     } : null,
     lock: state.engaged || state.phase === "lock" ? {
       anchor: activeAnchor,
@@ -4959,6 +4989,7 @@ function buildSlingshotTelegraph(player) {
 
 function buildPlayerRulerFacts(player) {
   const state = ensurePlayerSlingshot(player);
+  const coyote = slingshotCoyoteTelemetry(state);
   const mods = slingshotHullMods(player);
   const effectiveChainWindow = SLINGSHOT_SERVER.chainWindow * mods.chainWindowMult;
   const chainElapsed = runtime.simTime - (state.lastReleaseTime ?? -Infinity);
@@ -4998,7 +5029,10 @@ function buildPlayerRulerFacts(player) {
       coyoteTime: {
         implemented: SLINGSHOT_SERVER.coyoteTime > 0,
         duration_ms: SLINGSHOT_SERVER.coyoteTime,
-        remaining_ms: Math.max(0, (state.coyoteUntil - runtime.simTime) * 1000),
+        effective_duration_ms: coyote.effectiveDurationMs,
+        remaining_ms: coyote.canonicalRemainingMs,
+        effective_remaining_ms: coyote.transportRemainingMs,
+        transport_remaining_ms: coyote.transportRemainingMs,
       },
       payoffCurve: {
         active: Boolean(livePayoff),
