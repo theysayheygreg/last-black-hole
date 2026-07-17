@@ -336,8 +336,8 @@ function createReport() {
       probes: "one cell = 1 current registry world unit; full-width = one toroidal map circumference; route legs use current authored route anchors and shortest toroidal distance",
     },
     units: {
-      currentRegistry: "map dimensions are world units; current measurement uses 1 wu = 1 provisional cell for placement math",
-      fictionScale: "unresolved and intentionally not ratified; no meters conversion is claimed",
+      currentRegistry: "map dimensions are world units; current measurement uses 1 wu = 1 measurement cell for placement math",
+      fictionScale: "locked in src/content/units.data.json; this probe does not apply meters conversion",
     },
     summary: summarize(rawRuns),
     rawRuns,

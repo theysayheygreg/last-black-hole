@@ -10,6 +10,7 @@ const {
   resolveChainCount,
   rotateToward,
 } = require("../scripts/sim/slingshot-contract.cjs");
+const { simUnitsToMeters } = require("../scripts/content/units.cjs");
 
 function run() {
   const names = Object.keys(SLINGSHOT_KNOB_CONTRACT);
@@ -19,7 +20,7 @@ function run() {
     [25, 5, 50, 0.1, 0.5],
   );
   assert.deepStrictEqual(SLINGSHOT_VALUES, {
-    captureRadius: 450,
+    captureRadius: simUnitsToMeters(0.45),
     magnetism: 30,
     coyoteTime: 50,
     payoffCurve: 1.4,

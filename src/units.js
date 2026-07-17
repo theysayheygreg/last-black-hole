@@ -1,11 +1,12 @@
 import { worldPixelScale, worldRadiusToScreen } from './coords.js';
-import { UNIT_SCALE } from './content/units.js';
+import { UNITS_DATA, UNIT_SCALE } from './content/units.js';
 
 export const METERS_PER_SIM_UNIT = UNIT_SCALE.metersPerSimUnit;
 export const DRIFTER_HULL_LENGTH_METERS = UNIT_SCALE.drifterHullLengthMeters;
 export const DRIFTER_HULL_LENGTH_SIM_UNITS = UNIT_SCALE.drifterHullLengthSimUnits;
-export const RULER_SCALE_BAR_METERS = UNIT_SCALE.scaleBarMeters;
+export const RULER_SCALE_BAR_METERS = UNIT_SCALE.rulerPresentationDefaultMeters;
 export const UNIT_SCALE_STATUS = UNIT_SCALE.status;
+export const UNIT_SCALE_METADATA = UNITS_DATA.ratification;
 
 export function simUnitsToMeters(value) {
   return Number(value || 0) * METERS_PER_SIM_UNIT;

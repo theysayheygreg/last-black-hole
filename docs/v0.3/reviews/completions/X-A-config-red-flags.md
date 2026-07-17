@@ -51,7 +51,7 @@ panel ranges and steps. They were not behaviorally changed.
   are not promoted to gameplay authority by this change and retain a separate
   presentation/config pass boundary.
 - The accepted X-D travel probe remains measurement evidence only. Its
-  `wu/cell` interpretation is provisional, and it does not authorize meters
+  `wu/cell` interpretation is a measurement convention, and it does not authorize meters
   conversion or gameplay tuning here.
 
 ## Focused Proof

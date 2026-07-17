@@ -1,8 +1,15 @@
 {
-  "status": "provisional",
-  "metersPerSimUnit": 1000,
-  "drifterHullLengthMeters": 12,
-  "drifterHullLengthSimUnits": 0.012,
-  "scaleBarMeters": 100,
-  "source": "v0.3.1 S4 units doctrine plus Greg/Primary W1-E ruling, 2026-07-14"
+  "schemaVersion": 1,
+  "catalogId": "lbh-physical-units",
+  "ratification": {
+    "status": "locked",
+    "owner": "Greg",
+    "date": "2026-07-17",
+    "source": "Greg decision 2026-07-17: LOCK Drifter hull length=12m, 1 sim/world unit=1000m, ruler presentation default=100m"
+  },
+  "inputs": {
+    "metersPerSimUnit": 1000,
+    "drifterHullLengthMeters": 12,
+    "rulerPresentationDefaultMeters": 100
+  }
 }

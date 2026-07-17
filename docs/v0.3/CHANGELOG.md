@@ -2,6 +2,12 @@
 
 ## 2026-07-17
 
+- **Locked physical units:** `src/content/units.data.json` is now the sole
+  shared authority for `1000 m` per sim/world unit, `12 m` Drifter length, and
+  the `100 m` ruler default, with Greg/date/source ratification metadata.
+  Browser and CommonJS wrappers derive the `0.012` sim-unit hull length and
+  keep ruler, force-ledger, dev-panel, fixture, and runtime conversions in
+  parity without changing gameplay geometry.
 - **Lane A payoff crash guard:** compact remote scavenger rows now restore the
   client-owned death presentation anchor when authority provides it, while
   partial rows remain safe to render and update without inventing gameplay

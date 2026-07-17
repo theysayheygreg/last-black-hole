@@ -21,7 +21,10 @@ The movement lane uses the existing `AUTHORED_MAP_CONTRACT.travel.sufficientDelt
 
 ## Measurement Table
 
-All times are seconds. `wu` means current registry world units. `cell` equals 1 wu only as the W1-E provisional placement equivalence; this does not ratify a fiction/meters scale.
+All times are seconds. `wu` means current registry world units. `cell` equals 1
+wu as the W1-E placement equivalence. Fictional meters are now locked separately
+by `src/content/units.data.json`; this probe does not retune or reinterpret its
+world-unit measurements.
 
 | Map | dt | Cruise s/cell | Burst s/cell | Cruise full-width | Burst full-width | Authority read radius wu/cells | DPM proxy |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -40,10 +43,10 @@ Representative route legs, direct raw medians across the three deterministic lab
 ## Derived And Unresolved
 
 - Directly measured: the raw one-cell, full-width, and route-leg tick counts/times in the JSON artifact; current profile dt; current authority read radius values.
-- Derived: seconds per cell is the median of the three identical one-cell runs; route rows are medians of the three identical leg runs; DPM proxy is `60 / (cruise seconds per cell * authority read radius in provisional cells)`, treating one newly entered sensor-radius horizon as one decision opportunity.
+- Derived: seconds per cell is the median of the three identical one-cell runs; route rows are medians of the three identical leg runs; DPM proxy is `60 / (cruise seconds per cell * authority read radius in measurement cells)`, treating one newly entered sensor-radius horizon as one decision opportunity.
 - The read radius is `session profile entityRelevanceRadius` (`1.4/1.2/1.0 wu`). The player `brain.sensorRange` hull stat is not wired as a general human sensor-read radius in this lineage; it is not substituted into the table. That is a product gap, not an unresolved number to fabricate.
 - The later encounter-generation spacing section says a flag-tier read should be within approximately 30 seconds and calls for this probe. That section is present only at exact source commit `a4efcee8f4f4ee39727e8bee8d0d21ec2f2f4bb3`, not on this worktree lineage, so no later-doc file was edited. The later section remains dependent on this receipt for exact current values and on a future authority/movement rebinding after W1-A.
-- The measurement uses the current registry's 1 wu = 1 provisional cell placement equivalence. Fictional meters or physical scale remain unresolved.
+- The measurement uses the current registry's 1 wu = 1 cell placement equivalence. Physical meter conversion belongs only to the locked units manifest and is not part of this travel-time claim.
 - Slingshot is unresolved for this probe: current authored routes contain slingshot-labeled stages, but no deterministic fixture route with valid engage/hold/release inputs and a target crossing contract exists on this lineage. The reported burst is only Breacher Burn.
 
 ## Evidence
