@@ -53,6 +53,15 @@ function compareTimedRecords(a, b) {
   return (a.waveIndex || 0) - (b.waveIndex || 0);
 }
 
+function resolveOffsetGuardSeconds({ offsetGuardSeconds = 0, matchDurationSeconds } = {}) {
+  const guard = nonNegativeNumber(offsetGuardSeconds, "offsetGuardSeconds");
+  if (matchDurationSeconds === undefined) return guard;
+  const duration = positiveNumber(matchDurationSeconds, "matchDurationSeconds");
+  // A short fixture still needs a non-zero impossible-overlap guard, but its
+  // start and final-exfil fronts cannot be farther apart than the match.
+  return Math.min(guard, duration);
+}
+
 class EventFrontConflictError extends RangeError {
   constructor(first, second, offsetGuardSeconds) {
     super(
@@ -368,13 +377,15 @@ function selectToroidalSpawn({
 }
 
 class Conductor {
-  constructor({ seed = 1, conductorId = "match-conductor", offsetGuardSeconds = 0, worldScale } = {}) {
+  constructor({ seed = 1, conductorId = "match-conductor", offsetGuardSeconds = 0, matchDurationSeconds, worldScale } = {}) {
     this.rngStreams = createRNGStreams(seed);
     this.seed = this.rngStreams.seed;
     this.id = String(conductorId || "").trim();
     if (!this.id) throw new TypeError("conductorId must not be empty");
     this.worldScale = worldScale === undefined ? undefined : positiveNumber(worldScale, "worldScale");
-    this.events = new EventFrontRegistry({ offsetGuardSeconds });
+    this.events = new EventFrontRegistry({
+      offsetGuardSeconds: resolveOffsetGuardSeconds({ offsetGuardSeconds, matchDurationSeconds }),
+    });
     this._severityWaves = [];
     this._windows = [];
     this._collapseEpochs = [];
@@ -500,5 +511,6 @@ module.exports = {
   createSeverityWaves: createSeverityWaveSchedule,
   createTimedWindowSchedule,
   createThresholdField,
+  resolveOffsetGuardSeconds,
   selectToroidalSpawn,
 };

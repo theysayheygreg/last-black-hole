@@ -7,6 +7,7 @@ const {
   createIntervalLerp,
   createSeverityWaveSchedule,
   createThresholdField,
+  resolveOffsetGuardSeconds,
   selectToroidalSpawn,
 } = require("../scripts/sim/conductor.cjs");
 
@@ -81,6 +82,20 @@ async function run() {
     assert(error instanceof EventFrontConflictError, `Expected EventFrontConflictError, got ${error.name}`);
     assert(error.code === "EVENT_FRONT_OFFSET_CONFLICT", `Expected conflict code, got ${error.code}`);
     assert(registry.ordered().length === 1, "Expected failed registration to leave the registry unchanged");
+  });
+
+  await runner.run("offset guard resolves against short match duration without allowing overlap", async () => {
+    assert(resolveOffsetGuardSeconds({ offsetGuardSeconds: 10, matchDurationSeconds: 2 }) === 2,
+      "Expected the short-match guard to resolve to the match duration");
+    assert(resolveOffsetGuardSeconds({ offsetGuardSeconds: 10, matchDurationSeconds: 600 }) === 10,
+      "Expected a normal match to retain the ten-second guard");
+    const conductor = new Conductor({ seed: 12, offsetGuardSeconds: 10, matchDurationSeconds: 2 });
+    conductor.registerEventFront({ id: "match-start", time: 0 });
+    conductor.registerEventFront({ id: "final-exfil", time: 2 });
+    assert(conductor.getSchedule().offsetGuardSeconds === 2, "Expected the schedule to publish the resolved guard");
+    expectThrows(() => conductor.registerEventFront({ id: "overlap", time: 3.999 }), "at least 2 seconds apart");
+    assert(JSON.stringify(conductor.getSchedule().eventFronts.map((front) => front.id)) === JSON.stringify(["match-start", "final-exfil"]),
+      "Expected rejected overlap registration to leave deterministic ordering unchanged");
   });
 
   await runner.run("threshold fields expose inactive, active, and normalized boundaries", async () => {

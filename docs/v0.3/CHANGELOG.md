@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+## 2026-07-17
+
+- **Lane B Wave-1 gate repair:** Conductor event-front spacing now resolves its
+  ten-second production guard against short match fixtures, preserving stable
+  ordering and overlap rejection; the live ruler proof derives force activity
+  from authoritative `{x, y}` snapshot vectors; and the eight Wave-1 contract
+  suites are registered under their narrow authority, static, or browser lanes.
+
 ## 2026-07-16
 
 - **Lane B fuel recovery:** the shared authority/browser movement step now
