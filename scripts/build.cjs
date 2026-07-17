@@ -11,6 +11,7 @@ const {
   currentBuildVersion,
   currentPublicVersion,
 } = require('./version.cjs');
+const { buildFlagsForMode } = require('./build-flags.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const BUILD_ROOT = path.join(ROOT, 'builds');
@@ -183,30 +184,7 @@ function makeBuildInfo(base) {
   };
 }
 
-function buildFlagsForMode(mode) {
-  return {
-    dev: {
-      mode,
-      enableDevPanel: true,
-      enableTestAPI: true,
-      enableDebugOverlay: true,
-    },
-    test: {
-      mode,
-      enableDevPanel: false,
-      enableTestAPI: true,
-      enableDebugOverlay: false,
-    },
-    release: {
-      mode,
-      enableDevPanel: false,
-      enableTestAPI: false,
-      enableDebugOverlay: false,
-    },
-  }[mode];
-}
-
-function copyWebRuntime(rendererDir, mode) {
+function copyWebRuntime(rendererDir, mode, target = 'browser') {
   ensureDir(rendererDir);
   fs.copyFileSync(path.join(ROOT, 'index-a.html'), path.join(rendererDir, 'index.html'));
   fs.copyFileSync(path.join(ROOT, 'index-a.html'), path.join(rendererDir, 'index-a.html'));
@@ -215,7 +193,7 @@ function copyWebRuntime(rendererDir, mode) {
   copyThreeRuntime(rendererDir);
   fs.writeFileSync(
     path.join(rendererDir, 'src', 'build-flags.js'),
-    `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode), null, 2)};\n`
+    `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode, target), null, 2)};\n`
   );
 }
 
@@ -486,7 +464,7 @@ function buildWeb(targetRoot, mode) {
   removeIfExists(webDir);
   ensureDir(webDir);
 
-  copyWebRuntime(webDir, mode);
+  copyWebRuntime(webDir, mode, 'browser');
 
   const info = makeBuildInfo({
     target: 'web',
@@ -510,7 +488,7 @@ function buildCloudflareDrop(targetRoot, mode) {
   removeIfExists(dropDir);
   ensureDir(dropDir);
 
-  copyWebRuntime(dropDir, mode);
+  copyWebRuntime(dropDir, mode, 'sandbox');
   injectStaticSandboxBootstrap(path.join(dropDir, 'index.html'), 'Cloudflare Drop index');
   injectStaticSandboxBootstrap(path.join(dropDir, 'index-a.html'), 'Cloudflare Drop debug index');
 
@@ -576,7 +554,9 @@ function buildIpadWebApp(targetRoot, mode) {
   removeIfExists(ipadDir);
   ensureDir(ipadDir);
 
-  copyWebRuntime(ipadDir, mode);
+  copyWebRuntime(ipadDir, mode, 'sandbox');
+  injectStaticSandboxBootstrap(path.join(ipadDir, 'index.html'), 'iPad web-app index');
+  injectStaticSandboxBootstrap(path.join(ipadDir, 'index-a.html'), 'iPad web-app debug index');
 
   const indexPath = path.join(ipadDir, 'index.html');
   const source = fs.readFileSync(indexPath, 'utf8');
@@ -686,7 +666,7 @@ function stageElectronShell(mode) {
     );
   }
 
-  copyWebRuntime(path.join(STAGING_ROOT, 'renderer'), mode);
+  copyWebRuntime(path.join(STAGING_ROOT, 'renderer'), mode, 'desktop');
 
   stageDesktopAuthorityRuntime(STAGING_ROOT);
 }
@@ -850,5 +830,6 @@ if (require.main === module) {
 module.exports = {
   DESKTOP_SERVER_DIRECTORIES,
   DESKTOP_SERVER_SCRIPTS,
+  buildFlagsForMode,
   stageDesktopAuthorityRuntime,
 };

@@ -784,6 +784,26 @@ function getConfiguredSimServerUrl() {
   return localStorage.getItem('lbh.simServerUrl') || '';
 }
 
+function resetRemoteLaunchState() {
+  remoteAuthorityActive = false;
+  remoteMapId = null;
+  remoteSnapshot = null;
+  remoteAuthoritativeField = null;
+  remotePlayers = [];
+  remoteSessionHealth = null;
+  remotePendingExtractConfirm = false;
+  remotePendingSlingshotEdges = [];
+  remoteNextSlingshotEdgeId = 1;
+  remoteShipPresentation = null;
+}
+
+function authorityLaunchWarning(error) {
+  const detail = String(error?.message || 'local authority unavailable')
+    .split(/\r?\n/, 1)[0]
+    .slice(0, 120);
+  return `authority unavailable: ${detail}; retry or return home`;
+}
+
 // ---- Init ----
 
 function init() {
@@ -2530,8 +2550,12 @@ function syncRemoteWorldState(world) {
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   resetPhantomForNewSession();
   if (!simClient?.enabled) {
-    startGame(mapEntry.map, previewSeed);
-    return;
+    if (RUNTIME_FLAGS.allowLegacySoloFallback) {
+      console.warn('[LBH] legacy solo fallback enabled by explicit dev/sandbox gate');
+      startGame(mapEntry.map, previewSeed);
+      return;
+    }
+    throw new Error('local authority is required for this build');
   }
 
   const health = await refreshRemoteSessionHealth(true);
@@ -2623,17 +2647,16 @@ function transitionToRemoteGame(mapEntry, options = {}) {
   triggerTransition(() => {
     void startRemoteGame(mapEntry, options).catch((err) => {
       console.error('[LBH] remote start failed:', err);
-      showWarning(`remote sim failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
-      remoteAuthorityActive = false;
-      remoteMapId = null;
-      remoteSnapshot = null;
-      remotePlayers = [];
-      remoteSessionHealth = null;
-      remotePendingExtractConfirm = false;
-      remotePendingSlingshotEdges = [];
-      remoteNextSlingshotEdgeId = 1;
-      remoteShipPresentation = null;
-      startGame(mapEntry.map, previewSeed);
+      resetRemoteLaunchState();
+      if (RUNTIME_FLAGS.allowLegacySoloFallback) {
+        console.warn('[LBH] authority launch failed; using explicit dev/sandbox legacy solo fallback');
+        startGame(mapEntry.map, previewSeed);
+        return;
+      }
+      gamePhase = 'mapSelect';
+      loadingMapName = '';
+      showHUD();
+      showWarning(authorityLaunchWarning(err), 'rgba(255, 100, 80, 0.95)', 8000);
     });
   });
 }
@@ -4199,8 +4222,7 @@ function gameLoop(now) {
           inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
           inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
         }
-        if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
-        else transitionToGame(selectedEntry.map, previewSeed);
+        transitionToRemoteGame(selectedEntry);
       }
     }
     if (!transitionActive && inputManager.deletePressed && !_prevDelete && simClient?.enabled) {

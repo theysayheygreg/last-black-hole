@@ -41,6 +41,7 @@
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
     "test:agent-eval:visible": "node scripts/run-visible-agent-eval.cjs",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",
+    "test:solo-authority": "node tests/solo-authority-launch.cjs",
     "test:telemetry": "node tests/telemetry-smoke.cjs",
     "test:renderer": "node tests/renderer.cjs \"index-a.html?renderer=three\"",
     "test:renderer:legacy": "node tests/renderer.cjs \"index-a.html?renderer=legacy\"",
