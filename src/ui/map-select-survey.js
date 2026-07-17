@@ -5,43 +5,36 @@
  * module is the deliberate information boundary for the survey terminal: it
  * emits only coarse, aggregate, and uncertain facts suitable for a preview.
  */
+import { getMapScaleDefinition } from '../content/map-scales.js';
 
-// Interim presentation input for the survey terminal. W2-A4 is the owner of
-// the canonical authority scale registry; this seam keeps the preview schema
-// compatible without claiming that the authority maps have moved to 5/15/25.
-export const SURVEY_SCALE_PRESENTATION_INPUT = Object.freeze({
-  shallows: Object.freeze({
-    mapClass: 'shallows',
-    label: 'THE SHALLOWS',
-    authorityCells: 3,
-    scale: Object.freeze({ cells: 5, label: '5x5', band: 'LOCAL' }),
-    topology: Object.freeze({ grid: 5, miniGlyphCells: 3, regionCount: 4, voidBias: 0.16, densityBias: 0.72 }),
-    riskBand: 'LOW',
-  }),
-  expanse: Object.freeze({
-    mapClass: 'expanse',
-    label: 'THE EXPANSE',
-    authorityCells: 5,
-    scale: Object.freeze({ cells: 15, label: '15x15', band: 'REGIONAL' }),
-    topology: Object.freeze({ grid: 7, miniGlyphCells: 4, regionCount: 7, voidBias: 0.30, densityBias: 0.56 }),
-    riskBand: 'MEDIUM',
-  }),
-  'deep-field': Object.freeze({
-    mapClass: 'deep-field',
-    label: 'DEEP FIELD',
-    authorityCells: 10,
-    scale: Object.freeze({ cells: 25, label: '25x25', band: 'DEEP' }),
-    topology: Object.freeze({ grid: 9, miniGlyphCells: 5, regionCount: 10, voidBias: 0.48, densityBias: 0.38 }),
-    riskBand: 'HIGH',
-  }),
-});
-
-export function resolveSurveyScalePresentation(mapOrId, canonicalRegistry = null) {
+export function resolveSurveyPresentation(mapOrId) {
   const id = typeof mapOrId === 'string' ? mapOrId : mapOrId?.id;
-  const canonical = canonicalRegistry?.[id];
-  if (canonical?.surveyScale) return { ...canonical.surveyScale, source: 'canonical' };
-  const input = SURVEY_SCALE_PRESENTATION_INPUT[id];
-  return input ? { ...input.scale, authorityCells: input.authorityCells, source: 'interim-presentation-input' } : null;
+  const definition = getMapScaleDefinition(id);
+  const survey = definition?.survey;
+  if (!definition || !survey) return null;
+  const width = definition.dimensions.width;
+  const height = definition.dimensions.height;
+  return {
+    source: 'canonical',
+    mapClass: definition.mapClass,
+    label: survey.label,
+    authorityCells: width,
+    scale: {
+      cells: width,
+      label: `${width}x${height}`,
+      band: survey.scaleBand,
+      grid: survey.topology.grid,
+    },
+    topology: { ...survey.topology },
+    riskBand: survey.riskBand,
+    description: survey.description,
+    contents: survey.contents.map((content) => ({ ...content })),
+  };
+}
+
+export function resolveSurveyScalePresentation(mapOrId) {
+  const presentation = resolveSurveyPresentation(mapOrId);
+  return presentation ? { ...presentation.scale, authorityCells: presentation.authorityCells, source: presentation.source } : null;
 }
 
 export const LOCKED_SECTOR_REGISTRY = Object.freeze([
@@ -54,6 +47,7 @@ const SURVEY_KEYS = Object.freeze([
   'schemaVersion',
   'mapClass',
   'scale',
+  'description',
   'aggregateRanges',
   'signature',
   'coarseRegions',
@@ -127,17 +121,18 @@ function coarseRegions(registry, rng) {
   return regions;
 }
 
-function contactFamilies(registry, rng) {
-  const deep = registry.scale.cells >= 25;
-  const regional = registry.scale.cells >= 15;
-  const families = [
-    { id: 'gravity', label: 'GRAVITY WELLS', role: 'flow', range: range(regional ? 4 : 2, deep ? 18 : regional ? 10 : 6, rng, 2) },
-    { id: 'derelict', label: 'DERELICT FIELDS', role: 'salvage', range: range(regional ? 5 : 3, deep ? 24 : regional ? 14 : 8, rng, 3) },
-    { id: 'stellar', label: 'STELLAR CONTACTS', role: 'amber', range: range(regional ? 2 : 1, deep ? 16 : regional ? 9 : 5, rng, 2) },
-    { id: 'scavenger', label: 'SCAVENGER PRESSURE', role: 'danger', range: range(regional ? 1 : 0, deep ? 8 : regional ? 5 : 3, rng, 1) },
-    { id: 'anomaly', label: 'ANOMALY TRACE', role: 'anomaly', range: range(0, deep ? 6 : regional ? 4 : 2, rng, 1) },
-  ];
-  return families.map((family) => ({ ...family, likelihood: family.range.max > 0 ? (family.range.min > 0 ? 'LIKELY' : 'POSSIBLE') : 'UNCERTAIN' }));
+function contentFamilies(registry, aggregates) {
+  return registry.contents.map((content) => {
+    const contentRange = aggregates[content.rangeKey] || { min: 0, max: 0 };
+    return {
+      id: content.id,
+      label: content.label,
+      description: content.description,
+      role: content.role,
+      range: contentRange,
+      likelihood: contentRange.max > 0 ? (contentRange.min > 0 ? 'LIKELY' : 'POSSIBLE') : 'UNCERTAIN',
+    };
+  });
 }
 
 function safeSignature(signature) {
@@ -202,6 +197,7 @@ export function sanitizeSurveyPreview(candidate) {
       band: String(scale.band || 'UNKNOWN'),
       grid: Math.max(1, Math.floor(Number(scale.grid) || 1)),
     },
+    description: String(candidate?.description || 'Survey contacts remain unresolved.'),
     aggregateRanges: {},
     signature: safeSignature(candidate?.signature),
     coarseRegions: sanitizeRegions(candidate?.coarseRegions),
@@ -219,6 +215,7 @@ export function sanitizeSurveyPreview(candidate) {
       ? candidate.possibleContactFamilies.map((family) => ({
         id: String(family?.id || 'unknown'),
         label: String(family?.label || 'UNKNOWN CONTACT'),
+        description: String(family?.description || 'possible read'),
         role: String(family?.role || 'muted'),
         likelihood: String(family?.likelihood || 'UNCERTAIN'),
         range: {
@@ -260,17 +257,19 @@ export function buildSurveyPreview(map, briefing, seed) {
   const rng = createSurveyRng(seed, registry.mapClass);
   const densityValue = clamp(registry.topology.densityBias + (rng() - 0.5) * 0.22, 0.08, 0.94);
   const uncertaintyValue = clamp(0.26 + rng() * 0.48 + registry.topology.voidBias * 0.18, 0.2, 0.9);
+  const aggregates = surveyAggregates(map, registry, rng);
   const candidate = {
     mapClass: safeMapClass(registry),
     scale: registry.scale,
-    aggregateRanges: surveyAggregates(map, registry, rng),
+    description: registry.description,
+    aggregateRanges: aggregates,
     signature: safeSignature(briefing?.signature),
     coarseRegions: coarseRegions(registry, rng),
     density: { band: densityValue > 0.65 ? 'DENSE' : densityValue > 0.4 ? 'MIXED' : 'SPARSE', value: Number(densityValue.toFixed(2)) },
     uncertainty: { band: uncertaintyValue > 0.62 ? 'HIGH' : uncertaintyValue > 0.42 ? 'PARTIAL' : 'LOW', value: Number(uncertaintyValue.toFixed(2)) },
     confidence: Math.round(clamp(100 - uncertaintyValue * 56 - registry.topology.voidBias * 14 + rng() * 8, 18, 86)),
     riskBand: registry.riskBand,
-    possibleContactFamilies: contactFamilies(registry, rng),
+    possibleContactFamilies: contentFamilies(registry, aggregates),
   };
   const safe = sanitizeSurveyPreview(candidate);
   assertSurveyPreviewSafe(safe);
@@ -310,13 +309,7 @@ export function surveySelectionState(entry, briefing, seed) {
 }
 
 export function surveyScaleForMap(mapOrId) {
-  const id = typeof mapOrId === 'string' ? mapOrId : mapOrId?.id;
-  const input = SURVEY_SCALE_PRESENTATION_INPUT[id];
-  if (!input) return null;
-  return {
-    ...input,
-    scale: { ...input.scale, ...resolveSurveyScalePresentation(id), grid: input.topology.grid },
-  };
+  return resolveSurveyPresentation(mapOrId);
 }
 
 export function surveySchemaKeys() {

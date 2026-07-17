@@ -11,6 +11,7 @@ async function run() {
   const layout = await import(pathToFileURL(path.join(ROOT, 'src/ui/layout-contract.js')).href);
   const tokens = await import(pathToFileURL(path.join(ROOT, 'src/ui/design-tokens.js')).href);
   const mapLoader = await import(pathToFileURL(path.join(ROOT, 'src/maps/playable-map-loader.js')).href);
+  const mapScales = await import(pathToFileURL(path.join(ROOT, 'src/content/map-scales.js')).href);
   const maps = mapLoader.PLAYABLE_MAPS.map(({ map }) => ({ MAP: map }));
 
   const briefing = { signature: { id: 'test-signal', name: 'Test Signal' } };
@@ -44,6 +45,34 @@ async function run() {
   assert(shallows.aggregateRanges.gravityWells.max > 0 && deep.aggregateRanges.derelictFields.max >= shallows.aggregateRanges.derelictFields.max,
     'survey contents must be derived from canonical map populations');
 
+  for (const [index, mapId] of mapScales.PLAYABLE_MAP_IDS.entries()) {
+    const canonical = mapScales.MAP_SCALE_REGISTRY[mapId];
+    const resolved = survey.resolveSurveyPresentation(mapId);
+    const scale = survey.resolveSurveyScalePresentation(mapId);
+    const preview = previews[index];
+    assert.strictEqual(resolved.source, 'canonical', `${mapId}: survey descriptor must resolve canonically`);
+    assert.strictEqual(scale.source, 'canonical', `${mapId}: scale descriptor must resolve canonically`);
+    assert.deepStrictEqual(
+      { cells: resolved.scale.cells, label: resolved.scale.label, band: resolved.scale.band },
+      { cells: canonical.dimensions.width, label: `${canonical.dimensions.width}x${canonical.dimensions.height}`, band: canonical.survey.scaleBand },
+      `${mapId}: scale presentation drifted from canonical dimensions`,
+    );
+    assert.strictEqual(resolved.riskBand, canonical.survey.riskBand, `${mapId}: risk presentation drifted`);
+    assert.deepStrictEqual(resolved.topology, canonical.survey.topology, `${mapId}: topology presentation drifted`);
+    assert.strictEqual(resolved.description, canonical.survey.description, `${mapId}: survey description drifted`);
+    assert.deepStrictEqual(
+      resolved.contents.map(({ id, label, description, role, rangeKey }) => ({ id, label, description, role, rangeKey })),
+      canonical.survey.contents,
+      `${mapId}: visible content descriptions drifted`,
+    );
+    assert.strictEqual(preview.description, canonical.survey.description, `${mapId}: sanitized preview lost canonical description`);
+    assert.deepStrictEqual(
+      preview.possibleContactFamilies.map(({ id, label, description, role }) => ({ id, label, description, role })),
+      canonical.survey.contents.map(({ id, label, description, role }) => ({ id, label, description, role })),
+      `${mapId}: sanitized preview content copy drifted`,
+    );
+  }
+
   const valid = survey.buildValidSurveySelection({ id: 'expanse', map: maps[1].MAP }, briefing, 42);
   const locked = survey.buildLockedSurveySelection({ id: 'sector-04', label: 'SECTOR 04', status: 'UNRESOLVED' });
   assert.strictEqual(valid.state, 'valid');
@@ -51,13 +80,6 @@ async function run() {
   assert.strictEqual(locked.state, 'locked');
   assert.strictEqual(locked.surveyPreview, null, 'locked selection must not preview hidden layout');
   assert.strictEqual(locked.entry.available, false);
-
-  const resolved = survey.resolveSurveyScalePresentation('expanse', {
-    expanse: { surveyScale: { cells: 99, label: 'CANONICAL' } },
-  });
-  assert.strictEqual(resolved.source, 'canonical', 'canonical registry seam was not honored');
-  assert.strictEqual(resolved.label, 'CANONICAL');
-  assert.strictEqual(survey.resolveSurveyScalePresentation('expanse').source, 'interim-presentation-input');
 
   const surface = layout.mapSelectSurfaceLayout(960, 720, 960, 6);
   assert(surface.rows.length === 6, 'Map Select must contain six destination rows');
@@ -74,7 +96,7 @@ async function run() {
   assert(layout.rectContains(surface.right, glyph), 'controller glyph escaped right panel');
   assert(!layout.rectsOverlap(surface.left, surface.center, 0) && !layout.rectsOverlap(surface.center, surface.right, 0), 'three panels overlap');
 
-  console.log('MapSelectSurvey: 18 focused schema/seed/state/scale/layout assertions passed.');
+  console.log('MapSelectSurvey: canonical metadata, schema, seed, state, scale, and layout assertions passed for all 3 maps.');
 }
 
 run().catch((error) => {

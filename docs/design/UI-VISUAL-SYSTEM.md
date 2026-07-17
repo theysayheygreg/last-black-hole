@@ -181,13 +181,16 @@ three-panel hierarchy is stable:
 - **Right rail:** selected map identity, scale class, broad risk band, a short
   description, `POSSIBLE CONTENTS`, and `SURVEY CONFIDENCE`. Contents use
   aggregate ranges derived from canonical map populations with plain-language
-  descriptions. They are not promises about a particular run; decorative
-  chunk meters are not valid evidence. Confidence is deliberately incomplete
-  and must communicate uncertainty rather than exact layout truth.
+  descriptions. Scale, risk, topology tuning, and visible survey copy come from
+  each map's canonical `survey` descriptor in `map-scales.data.json`; the UI
+  does not own a parallel map-presentation table. They are not promises about a
+  particular run; decorative chunk meters are not valid evidence. Confidence
+  is deliberately incomplete and must communicate uncertainty rather than
+  exact layout truth.
 
 The active presentation labels are `5x5` for Shallows, `15x15` for Expanse, and
-`25x25` for Deep Field. These are the player-facing scale labels; the separate
-W2-A4 authority-parity dependency remains the production source-of-truth gate.
+`25x25` for Deep Field. They derive mechanically from the canonical map
+dimensions and share the same registry seam as the survey metadata.
 
 Valid rows show the survey reconstruction and a launch-ready right rail. Locked
 rows remain readable but switch the center to withheld/redacted data and the

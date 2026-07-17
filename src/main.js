@@ -6386,28 +6386,21 @@ function gameLoop(now) {
       drawKeyValueRow(ctx, 'signature', preview.signature.name, briefX, briefPanel.y + 128, { labelWidth: 88, valueRole: 'anomaly' });
       ctx.font = canvasFont(10);
       ctx.fillStyle = roleColor('muted', 0.74);
-      ctx.fillText(fitUiText(ctx, 'A coarse fabric read. Exact contacts remain unresolved.', briefW), briefX, briefPanel.y + 151);
+      ctx.fillText(fitUiText(ctx, preview.description, briefW), briefX, briefPanel.y + 151);
       drawSectionLabel(ctx, 'possible contents', briefX, briefPanel.y + 180, { role: 'flow', alpha: 0.86 });
-      const contentReads = [
-        ['gravityWells', 'GRAVITY WELLS', 'broad massing', 'flow'],
-        ['derelictFields', 'DERELICT FIELDS', 'salvage traces', 'salvage'],
-        ['stellarContacts', 'STELLAR CONTACTS', 'bright bodies', 'amber'],
-        ['possibleExits', 'POSSIBLE EXITS', 'aperture traces', 'flow'],
-      ];
       const contactY = briefPanel.y + 210;
-      for (const [index, [key, label, detail, role]] of contentReads.entries()) {
+      for (const [index, family] of preview.possibleContactFamilies.entries()) {
         const y = contactY + index * 39;
-        const range = preview.aggregateRanges?.[key] || { min: 0, max: 0 };
         ctx.font = canvasFont(10, { weight: '700' });
-        ctx.fillStyle = roleColor(role, 0.86);
-        ctx.fillText(fitUiText(ctx, label, Math.max(100, briefW - 64)), briefX, y);
+        ctx.fillStyle = roleColor(family.role, 0.86);
+        ctx.fillText(fitUiText(ctx, family.label, Math.max(100, briefW - 64)), briefX, y);
         ctx.textAlign = 'right';
         ctx.fillStyle = roleColor('text', 0.82);
-        ctx.fillText(`${range.min}-${range.max}`, briefX + briefW, y);
+        ctx.fillText(`${family.range.min}-${family.range.max}`, briefX + briefW, y);
         ctx.textAlign = 'left';
         ctx.font = canvasFont(10);
         ctx.fillStyle = roleColor('muted', 0.68);
-        ctx.fillText(fitUiText(ctx, `${detail} // ${index === 3 ? 'not guaranteed' : 'possible read'}`, briefW), briefX, y + 16);
+        ctx.fillText(fitUiText(ctx, family.description, briefW), briefX, y + 16);
       }
       const authorityY = commandY - 116;
       const authorityActions = remoteControl?.canHostReset ? [{

@@ -180,7 +180,7 @@ line, or a path sequence.
 
 The left rail lists Shallows `5x5`, Expanse `15x15`, and Deep Field `25x25`, then
 generic locked sectors. The right rail explains what the selected survey may
-contain using broad families or ranges under `POSSIBLE CONTACTS`, plus a broad
+contain using broad families or ranges under `POSSIBLE CONTENTS`, plus a broad
 risk band and deliberately incomplete `SURVEY CONFIDENCE`. Possible contents
 are not guaranteed objects, and signal pressure is not a Map Select promise.
 
@@ -189,9 +189,9 @@ readable, corrupt the center into withheld/redacted data, redact the right rail,
 and expose no launch action or fake input prompt. Reduced motion uses a static
 corrupted frame rather than flashing.
 
-The W2-A4 branch `codex/v0.3-map-scale-5-15-25` remains the production
-authority-parity dependency for those scale labels. This branch's survey source
-does not claim branch-local runtime authority parity.
+The canonical map registry owns dimensions plus each map's survey risk,
+topology tuning, and visible descriptions. Map Select derives `5x5`, `15x15`,
+and `25x25` from those dimensions and consumes that survey descriptor directly.
 
 ### In-Match HUD
 
@@ -401,9 +401,9 @@ Shipped slice:
 ## Pass 5 - Map Select / Survey Terminal
 
 Status: v0.3 survey-terminal source and accepted visual proof complete on
-2026-07-15; style-guide consistency is recorded here. Production authority
-scale parity still depends on W2-A4, and physical Deck plus Greg taste review
-remain open.
+2026-07-15; style-guide consistency is recorded here. Canonical map/survey
+metadata parity is source-complete; physical Deck plus Greg taste review remain
+open.
 
 Tasks:
 
@@ -435,7 +435,8 @@ Shipped survey-terminal slice:
   incomplete confidence, and the shared `BEGIN DROP` graphical glyph contract
   for valid selections.
 - Possible-content ranges are text reads from canonical aggregate populations;
-  the right rail does not use decorative segmented chunk bars.
+  labels and descriptions come from the same canonical map survey descriptor,
+  and the right rail does not use decorative segmented chunk bars.
 - Locked rows show redacted/withheld center and right-rail data and expose no
   launch action. Reduced motion holds the corruption as a static frame.
 
