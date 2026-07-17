@@ -4480,7 +4480,7 @@ function gameLoop(now) {
           }
         }
         if (ship.slingshotEngaged) {
-          const dv = slingshotSystem.applyEngagedForces(ship, shipDt, hullSlingMods);
+          const dv = slingshotSystem.applyEngagedForces(ship, dt, hullSlingMods);
           if (dv) {
             ship.vx += dv.vx;
             ship.vy += dv.vy;
@@ -4488,8 +4488,8 @@ function gameLoop(now) {
         }
       }
 
-      starSystem.applyToShip(ship, shipDt);
-      planetoidSystem.applyToShip(ship, shipDt);
+      starSystem.applyToShip(ship, dt);
+      planetoidSystem.applyToShip(ship, dt);
 
       // Star consumption events — dramatic flash + stellar remnant wreck
       for (const evt of starSystem.consumptionEvents) {
