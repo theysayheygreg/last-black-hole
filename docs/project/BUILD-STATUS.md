@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.3. Updated 2026-07-16. This file answers “what can I
+> Document revision: v0.3. Updated 2026-07-17. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -16,29 +16,31 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
-**Source status:** feature-stability candidate. Orrery's S0/S1 findings are
-fixed on the v0.3 line. Fresh remote-authority (18/18), controller (3/3), Three
-renderer (5/5), and fast gates pass. A fresh autonomous journey no longer
-crashes after extraction; one later run missed its portal after exhausting
-most of its fuel, so the complete no-retry promotion gate remains open rather
-than being hidden behind evaluator retuning.
+**Source status:** focused-contract green after the 2026-07-17 blocker pass.
+The v0.3 line now includes the Orrery source fixes, packaged local-authority
+Solo path, locked physical units, retired per-player time dilation, ratified
+normal-input slingshot path, and map-relative 480/600/720-second schedule. The
+new source has not yet completed package or physical Deck acceptance.
 
-**Package status:** green. `release:internal` built all targets, the release
+**Package status:** green only for the older `0.3.1.2b93b077` hash.
+`release:internal` built all targets, the release
 checker found the matching hash directory, and the Linux artifact's actual
 `app.asar` booted its embedded control plane and `lbh-local-v2` sim with live
 registration. The macOS package also reaches a rendered Three title, keeps its
 idle authority resident through an extended attract-screen wait, and joins a
 live run through normal keyboard input. `npm run release:status` is the
-authority for the exact current HEAD hash.
+authority for an exact built hash. A new package must be produced from the
+current source before package-green can be claimed for this candidate.
 
-**Physical Steam Deck status:** the v0.3.1 candidate is deployed and
-checksum-verified. Steam did not exit within the supported shortcut-refresh
+**Physical Steam Deck status:** the older `0.3.1.2b93b077` candidate is
+deployed and checksum-verified, but Greg marked that build needs-fix. Steam did
+not exit within the supported shortcut-refresh
 timeout, so the Gaming Mode entry still displays the prior v0.3 Preview name.
 That metadata refresh and physical launch, controller, readability,
 suspend/resume, feel, and audio acceptance remain pending.
 
-**Human status:** Greg has not yet made the final movement-feel or visual-taste
-call.
+**Human status:** Greg approved the v0.3.1 slingshot and schedule baselines;
+final movement feel, visual taste, audio, and updated Deck acceptance remain.
 
 ### What Is Implemented
 

@@ -1,22 +1,24 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-16. This is branch acceptance
+> Document revision: v0.3. Updated 2026-07-17. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
 
-**Feature-stability and packaged candidates are green. The complete autonomous
-promotion gate, physical-device acceptance, and Greg's final review remain.**
+**The v0.3.1 source candidate is focused-contract green. A new package, Deck
+deploy, physical-device acceptance, and Greg's final review remain.**
 
 `codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
 protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
 agent-eval work, plus the v0.3 generated visual kit and UI motion system.
 `main` remains the v0.2 public/demo line.
 
-The review-fix commit has a matching packaged artifact whose extracted
-authority and Electron client boot. A physical Steam Deck Gaming Mode pass and
-Greg's feel/taste pass are explicit residual gates, not claims automation
-should fake.
+The previously deployed `0.3.1.2b93b077` artifact remains valid evidence for
+that older hash, but Greg marked it needs-fix. The current source adds the
+Orrery blocker fixes, locked units, retired time dilation, ratified normal-input
+slingshot path, and map-relative schedule. It has no matching package or Deck
+deployment yet, so those gates are open rather than inherited from the older
+artifact.
 
 Orrery's review exposed a client ownership bug during extraction: after the
 phase changed, local `SimCore` could advance server-owned snapshot entities.
@@ -26,7 +28,7 @@ renderer, fast, and package gates pass with that fix.
 
 ## Current Evidence
 
-Latest package evidence from the consolidated 2026-07-16 candidate:
+Latest package evidence, superseded as the current RC by newer source:
 
 - Source `2b93b07781d3f123ff818826884f8fe1a4067e39` includes the accepted
   v0.3.1 fuel recovery, Deck snapshot/star repair, Deck UI, and Map Select
@@ -57,6 +59,16 @@ Latest package evidence from the consolidated 2026-07-16 candidate:
 - Executable, launcher, desktop entry, and isolated log namespace exist. No
   recent Last Singularity coredumps were recorded. Existing logs predate this
   deployment and are not claimed as fresh candidate boot evidence.
+
+Current source-only evidence after that package:
+
+- normal-input slingshot proof exercised keyboard F engagement and controller
+  Y release through InputManager, SimClient, local authority, and visible
+  lock/arc/release-ghost presentation;
+- Conductor `14/14`, map-relative schedule `2/2`, Inhibitor `6/6`, portal clock
+  `3/3`, and bounded Deep Field `1/1` pass for the 480/600/720-second schedule;
+- current-source package boot, deployment identity, and physical Deck behavior
+  are not yet claimed.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 
@@ -182,8 +194,9 @@ npm run release:status
 npm run test:package
 ```
 
-- [x] Artifact version is `0.3.1.2b93b077` for this candidate.
-- [x] Artifact checksum and path are reported by `npm run test:package` and
+- [ ] Build a hash-named artifact from the current source candidate.
+- [x] Artifact version `0.3.1.2b93b077` is preserved as prior-hash evidence.
+- [x] Its checksum and path are reported by `npm run test:package` and
   verified by `npm run release:status`.
 - [x] Embedded control plane and sim boot from staged and extracted package
   resources.
@@ -204,7 +217,8 @@ LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck
 LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
 
-- [x] Deck is reachable over Tailscale and the exact candidate is installed.
+- [ ] Deploy the new source candidate; the installed build is the older
+  `0.3.1.2b93b077` artifact.
 - [ ] Gaming Mode shortcut display name is refreshed to `Last Singularity
   v0.3.1 Preview`; Steam must first be closed manually in Desktop Mode.
 - [ ] Build launches from Non-Steam Games in Gaming Mode.

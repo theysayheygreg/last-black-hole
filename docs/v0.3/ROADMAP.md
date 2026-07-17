@@ -11,12 +11,14 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** consolidated v0.3.1 development candidate. Accepted W1/W2,
-5/15/25 map authority, Map Select, Deck UI, pause/resume, entity-visual, config,
-measurement, and design-versioning branches are integrated through `7a215537`.
-Focused merged-surface checks are green. Broad browser, visual, package, soak,
-platform, and physical Deck evidence remain asynchronous RC work rather than a
-feature-development blocker. Promotion into `main` remains closed until Greg's
+**Current state:** consolidated v0.3.1 source candidate through the map-relative
+schedule merge `dca8beac`. Accepted W1/W2, 5/15/25 map authority, Map Select,
+Deck UI, pause/resume, entity visuals, config, measurement, design versioning,
+Orrery blocker fixes, locked units, retired per-player time dilation, and the
+ratified normal-input slingshot path are integrated. Focused merged-surface
+checks are green. The newer source has not yet replaced the deployed
+`0.3.1.2b93b077` package; browser, visual, package, platform, and physical Deck
+evidence remain RC work. Promotion into `main` remains closed until Greg's
 explicit version call; movement feel and visual taste remain Greg's final calls.
 
 The v0.3.1 map-relative schedule migration is source-complete: map-scale
