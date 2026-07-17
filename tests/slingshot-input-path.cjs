@@ -194,12 +194,12 @@ async function run() {
         };
       });
       assert(promptBefore.visible && /well in range/i.test(promptBefore.text), `Missing in-world slingshot prompt: ${JSON.stringify(promptBefore)}`);
-      assert.deepStrictEqual(promptBefore.glyph, {
+      assert(JSON.stringify(promptBefore.glyph) === JSON.stringify({
         action: 'slingshot',
         inputFamily: 'deck',
         label: 'Y',
         copy: 'engage',
-      }, `Deck prompt did not expose semantic Y engage state: ${JSON.stringify(promptBefore.glyph)}`);
+      }), `Deck prompt did not expose semantic Y engage state: ${JSON.stringify(promptBefore.glyph)}`);
       assert(promptBefore.scene.slingshot?.affordance, 'Three scene did not expose the authoritative aim affordance');
 
       const engageStartedAt = Date.now();
@@ -234,12 +234,12 @@ async function run() {
           } : null,
         };
       });
-      assert.deepStrictEqual(promptDuring.glyph, {
+      assert(JSON.stringify(promptDuring.glyph) === JSON.stringify({
         action: 'slingshot',
         inputFamily: 'deck',
         label: 'Y',
         copy: 'release',
-      }, `Controller prompt did not expose semantic Y release state: ${JSON.stringify(promptDuring.glyph)}`);
+      }), `Controller prompt did not expose semantic Y release state: ${JSON.stringify(promptDuring.glyph)}`);
       const releaseAckCount = (await edgeAcks(page)).length;
       const releaseStartedAt = Date.now();
       await setPad(page, { x: 1, y: 0, slingshot: true });
