@@ -61,6 +61,28 @@ S24 catalog population is explicitly deferred. W2-A4 only proves the current
 authored population is playable under the density/travel contract; it does not
 begin a new encounter catalog or add a Map Select surface.
 
+## Locked Physical Units Centralization
+
+Decision: lock the physical presentation scale for v0.3.1. The sole shared
+code-data authority is `src/content/units.data.json`, whose `inputs` are:
+
+| Input | Locked value |
+|---|---:|
+| meters per sim/world unit | `1000 m` |
+| Drifter hull length | `12 m` |
+| ruler presentation default | `100 m` |
+
+The manifest's `ratification` records owner `Greg`, date `2026-07-17`, status
+`locked`, and the decision source. Browser and CommonJS wrappers expose the
+same raw manifest and derive `drifterHullLengthSimUnits` as `12 / 1000`.
+Ruler, measurement, dev-panel, force-ledger, fixture, and runtime consumers
+must import or derive from those wrappers. The wrappers also retain the
+existing flat `UNIT_SCALE` compatibility view for callers already on this
+version line; derived values are never stored in the manifest.
+
+This locks labels and conversion math only. It does not retune physics, maps,
+cameras, sprites, collision, or radii.
+
 ## Pause And Resume Reconciliation
 
 **Status:** accepted on `341268b17f76a58303531c57743b461b4d7c9e83`.

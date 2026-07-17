@@ -28,9 +28,10 @@ Every catalog entry contains:
 | `tunables` | Link to the shared tunable contract plus future overrides. |
 
 The shared tunable contract requires a unit, range, step, start bias, and
-runtime source for every numeric knob. v0.3 uses the provisional
-`1 sim unit = 1000 m` peg. The base entry records the current well values by
-source; it does not copy or retune those values.
+runtime source for every numeric knob. v0.3 uses the locked physical-units
+contract in `src/content/units.data.json` (`1 sim unit = 1000 m`). The base
+entry records the current well values by source; it does not copy or retune
+those values.
 
 The shared `eventContracts.wellGrowth` entry declares the stable `well.grew`
 event type, `well-growth` tell identity, and `growth` wave family used by all

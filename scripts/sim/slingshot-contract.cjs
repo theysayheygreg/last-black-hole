@@ -1,13 +1,15 @@
 // W1-D is intentionally a five-knob contract. Everything under INTERNAL is
 // implementation detail: it has no dev-panel registration or player-facing
 // tuning surface.
+const { UNIT_SCALE, simUnitsToMeters } = require('../content/units.cjs');
+
 const SLINGSHOT_KNOB_CONTRACT = Object.freeze({
   captureRadius: Object.freeze({
     unit: "m",
-    min: 100,
-    max: 1000,
+    min: UNIT_SCALE.rulerPresentationDefaultMeters,
+    max: UNIT_SCALE.metersPerSimUnit,
     step: 25,
-    value: 450,
+    value: simUnitsToMeters(0.45),
     startBias: "medium",
   }),
   magnetism: Object.freeze({
@@ -52,7 +54,6 @@ const SLINGSHOT_VALUES = Object.freeze(Object.fromEntries(
 // one capture-radius knob. These factors are not tunables.
 const ANCHOR_RANGE_FACTORS = Object.freeze({ well: 1, star: 2 / 3, planetoid: 0.4 });
 const INTERNAL = Object.freeze({
-  unitScaleMeters: 1000,
   minimumTangentialSpeed: 0.05,
   energyAccrualRate: 3.5,
   releaseFillMultiplier: 4.5,
@@ -115,7 +116,7 @@ function rotateToward(value, target, maxDegrees) {
 
 function captureRadiusWorld(anchorType, captureRadiusMeters = SLINGSHOT_VALUES.captureRadius) {
   const factor = ANCHOR_RANGE_FACTORS[anchorType] ?? 1;
-  return Math.max(0, finite(captureRadiusMeters) * factor / INTERNAL.unitScaleMeters);
+  return Math.max(0, finite(captureRadiusMeters) * factor / UNIT_SCALE.metersPerSimUnit);
 }
 
 function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime) {

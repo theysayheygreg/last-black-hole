@@ -5,8 +5,7 @@
     "base-well"
   ],
   "tunableContract": {
-    "unitSystem": "v0.3-provisional-meters",
-    "metersPerSimUnit": 1000,
+    "unitSystem": "lbh-locked-physical-units",
     "stepRule": "Every numeric knob declares a unit, range, step, and start bias.",
     "sharedFieldFamily": "well",
     "fabricSignatureParameters": {

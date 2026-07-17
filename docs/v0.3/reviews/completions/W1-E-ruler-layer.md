@@ -28,18 +28,17 @@ past the slingshot window; a clean rerun is deferred under the verification cap.
 
 ## Scale Decision
 
-The scale is **PROVISIONAL**, per Greg/Primary on 2026-07-14. The 12 m Drifter
+The scale is **LOCKED**, per Greg's 2026-07-17 decision. The 12 m Drifter
 fiction peg follows the S4 example and makes the 25 m spatial step about two
-hull lengths. Existing S4 capture-radius code already mapped `0.45` to `450 m`,
-so the shared scale is `450 / 0.45 = 1000 m per sim unit`. This changes only
+hull lengths. Existing S4 capture-radius code maps `0.45` to `450 m`, so the
+shared scale is `450 / 0.45 = 1000 m per sim unit`. This changes only
 conversion, labels, debug geometry, and tuning presentation. Physics constants,
 movement order, and gameplay behavior were not retuned.
 
-Migration is centralized: a later fiction-scale decision changes
-`src/content/units.data.json` and corresponding labels/projections. Existing
-sim values remain untouched unless a separately authorized gameplay migration
-explicitly chooses otherwise. The provisional decision is also recorded on the
-active v0.3 decision surface in `docs/v0.3/OPEN-DECISIONS.md`.
+Centralization is now enforced by `src/content/units.data.json`: it owns the
+three irreducible inputs and ratification metadata, while browser and CommonJS
+wrappers derive the hull sim length and expose compatibility aliases. Existing
+sim values remain untouched.
 
 ## Contract Coverage
 
@@ -57,7 +56,7 @@ chain preview sliders use `0 = authority`; they do not tune the sim.
 
 ## Focused Proof
 
-- `node tests/ruler-contract.cjs`: 4/4 passed.
+- `node tests/ruler-contract.cjs`: 5/5 passed.
 - `node tests/force-ledger.cjs`: 3/3 passed.
 - `node tests/presentation-frame.cjs`: 4 passed, 0 failed.
 - `node tests/movement-contract.cjs`: 2 passed, 0 failed.
@@ -91,7 +90,9 @@ capture remains deferred evidence for the final non-overlap layout.
 
 ## Deferred and Open
 
-- The 12 m peg and resulting `1000 m/sim unit` scale remain provisional.
+- The 12 m peg and resulting `1000 m/sim unit` scale are locked in
+  `src/content/units.data.json`; the 2026-07-17 centralization proof covers
+  browser/CJS parity and derived ruler values.
 - S4's five gameplay ranges and final starting values remain owned by W1-D;
   W1-E does not resolve or retune them.
 - Coyote time remains a registered, drawable disabled contract until its
