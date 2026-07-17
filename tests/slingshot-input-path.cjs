@@ -174,7 +174,10 @@ async function run() {
       assert(routeAnchor, 'Shallows route well is missing');
       const approach = await steerToRing(page, clientId, routeAnchor);
       const aim = await waitForPlayer(clientId, (player) => Boolean(player.slingshot?.aim), 'authoritative aim affordance');
-      await tapKey(page, 'KeyW', 40);
+      await setPad(page, { x: 1, y: 0 });
+      await sleep(60);
+      await setPad(page);
+      await sleep(120);
       const promptBefore = await page.evaluate(() => {
         const element = document.getElementById('hud-interaction');
         const glyph = element?.querySelector('[data-action-id="slingshot"]');
@@ -196,10 +199,10 @@ async function run() {
       assert(promptBefore.visible && /well in range/i.test(promptBefore.text), `Missing in-world slingshot prompt: ${JSON.stringify(promptBefore)}`);
       assert(JSON.stringify(promptBefore.glyph) === JSON.stringify({
         action: 'slingshot',
-        inputFamily: 'deck',
+        inputFamily: 'controller',
         label: 'Y',
         copy: 'engage',
-      }), `Deck prompt did not expose semantic Y engage state: ${JSON.stringify(promptBefore.glyph)}`);
+      }), `Controller prompt did not expose semantic Y engage state: ${JSON.stringify(promptBefore.glyph)}`);
       assert(promptBefore.scene.slingshot?.affordance, 'Three scene did not expose the authoritative aim affordance');
 
       const engageStartedAt = Date.now();
@@ -236,7 +239,7 @@ async function run() {
       });
       assert(JSON.stringify(promptDuring.glyph) === JSON.stringify({
         action: 'slingshot',
-        inputFamily: 'deck',
+        inputFamily: 'controller',
         label: 'Y',
         copy: 'release',
       }), `Controller prompt did not expose semantic Y release state: ${JSON.stringify(promptDuring.glyph)}`);
