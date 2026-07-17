@@ -41,7 +41,7 @@ const MODES = {
     name: "local-sandbox",
     description: "Deprecated client-only sandbox for renderer and harness debugging.",
     services: ["dev"],
-    query: { localSandbox: "1" },
+    query: { localSandbox: "1", legacySolo: "1" },
   },
   "local-host": {
     name: "local-host",

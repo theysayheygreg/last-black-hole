@@ -17,7 +17,8 @@ Deprecated client-only browser play against no authority stack.
 
 - starts: dev server
 - does not start: control plane, sim
-- opens with `?localSandbox=1`, which clears any stored `simServer` URL
+- opens with `?localSandbox=1&legacySolo=1`, which clears any stored `simServer`
+  URL and explicitly enables the legacy solo fallback for this deprecated mode
 - use when: renderer/HUD debugging that intentionally does not need authority
 
 Command:
@@ -59,6 +60,12 @@ Packaged Electron app with embedded authority.
 - use when: local packaged desktop playtests
 
 This is not launched through `npm run stack:*`; it is the packaged app behavior.
+Packaged desktop builds require the embedded local authority for every normal
+Solo/Launch session. If that authority is unavailable, the app stays on a
+visible retry/home error surface and never switches to legacy solo.
+
+The source development page can opt into the legacy path only with
+`?legacySolo=1`; that gate is unavailable to packaged desktop build identity.
 
 ### `test-harness`
 

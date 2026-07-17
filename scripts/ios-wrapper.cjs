@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFileSync, spawnSync } = require('child_process');
 const { currentBuildVersion, currentPublicVersion } = require('./version.cjs');
+const { buildFlagsForMode } = require('./build-flags.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const IOS_ROOT = path.join(ROOT, 'ios');
@@ -49,29 +50,6 @@ function removeIfExists(target) {
 
 function copyIfExists(from, to) {
   if (fs.existsSync(from)) fs.cpSync(from, to, { recursive: true });
-}
-
-function buildFlagsForMode(mode) {
-  return {
-    dev: {
-      mode,
-      enableDevPanel: true,
-      enableTestAPI: true,
-      enableDebugOverlay: true,
-    },
-    test: {
-      mode,
-      enableDevPanel: false,
-      enableTestAPI: true,
-      enableDebugOverlay: false,
-    },
-    release: {
-      mode,
-      enableDevPanel: false,
-      enableTestAPI: false,
-      enableDebugOverlay: false,
-    },
-  }[mode];
 }
 
 function normalizeMode(value) {
@@ -134,7 +112,7 @@ function syncWebApp(args = {}) {
 
   fs.writeFileSync(
     path.join(WEBAPP_DIR, 'src', 'build-flags.js'),
-    `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode), null, 2)};\n`
+    `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode, 'sandbox'), null, 2)};\n`
   );
 
   writeJson(path.join(WEBAPP_DIR, 'manifest.webmanifest'), {

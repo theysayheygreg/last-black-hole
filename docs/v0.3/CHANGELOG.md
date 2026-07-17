@@ -1,5 +1,14 @@
 # v0.3 Changelog
 
+## 2026-07-17
+
+- **Lane C packaged Solo authority:** normal Map Select launch now always uses
+  the local protocol-v2 authority path. Desktop renderer builds carry a
+  required-authority identity, and authority startup or launch failures return
+  visibly to Map Select with a retry/home warning instead of starting the
+  legacy analytic solo path. The old path remains available only to the
+  explicit development gate `?legacySolo=1` or the named sandbox target.
+
 ## 2026-07-16
 
 - **Lane B fuel recovery:** the shared authority/browser movement step now

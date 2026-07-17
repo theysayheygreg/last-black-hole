@@ -56,6 +56,10 @@ function stageItchHtml5Artifact(source) {
     '    (() => {',
     '      const url = new URL(window.location.href);',
     "      url.searchParams.set('localSandbox', '1');",
+    "      if (window.__LBH_BUILD_FLAGS__) {",
+    "        window.__LBH_BUILD_FLAGS__.buildTarget = 'sandbox';",
+    "        window.__LBH_BUILD_FLAGS__.authorityMode = 'sandbox';",
+    '      }',
     "      window.history.replaceState(null, '', url.toString());",
     "      localStorage.removeItem('lbh.simServerUrl');",
     '    })();',
@@ -68,6 +72,9 @@ function stageItchHtml5Artifact(source) {
   );
   if (!fs.readFileSync(indexPath, 'utf8').includes("localSandbox', '1'")) {
     throw new Error('Failed to inject itch localSandbox bootstrap into index.html.');
+  }
+  if (!fs.readFileSync(indexPath, 'utf8').includes("authorityMode = 'sandbox'")) {
+    throw new Error('Failed to stamp itch sandbox authority identity into index.html.');
   }
 
   fs.writeFileSync(
