@@ -234,6 +234,7 @@ export function drawRulerOverlay(ctx, { presentation, canvasW, canvasH, reducedM
     forceLedger: player.forceLedger,
     playerScreen: { x: playerX, y: playerY },
     forceCursor: { x: playerX, y: playerY },
+    runClock: presentation.runClock,
     rows: [],
     geometry: {},
     reducedMotion: Boolean(reducedMotion),
@@ -248,6 +249,7 @@ export function drawRulerOverlay(ctx, { presentation, canvasW, canvasH, reducedM
     handlerCount: results.filter((result) => result.drawn).length,
     handlerIds: Object.freeze(results.map((result) => result.id)),
     forceTick: player.forceLedger?.tick ?? null,
+    runClock: state.runClock,
     geometry: Object.freeze({ ...state.geometry }),
     reducedMotion: state.reducedMotion,
   });

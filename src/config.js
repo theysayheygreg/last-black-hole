@@ -338,7 +338,8 @@ export const CONFIG = {
   },
 
   universe: {
-    runDuration: 600,           // seconds — hard cap, final portal expires here
+    // Resolved from the selected map-scale registry when a scene loads.
+    runDuration: null,
     wellGrowthVariance: 0.01,   // random range added to per-well growth rate
     wellKillRadiusGrowth: 0.3,  // kill radius expansion factor per unit mass gained
     planetoidSpawnAccel: 0.5,   // how much spawn rate increases over the run (0=constant, 1=doubles by end)

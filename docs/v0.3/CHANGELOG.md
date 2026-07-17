@@ -2,6 +2,12 @@
 
 ## 2026-07-17
 
+- **v0.3.1 map-relative schedule:** canonical map durations are now `480s`,
+  `600s`, and `720s` across ESM/CJS, server, build, snapshot, UI clock, and
+  results consumers. Whole-run collapse, Inhibitor, optional portal, and final
+  exfil fronts resolve from normalized progress; local intervals remain
+  absolute. The 600-second Expanse anchor is preserved, with epoch 3 at 75%.
+
 - **W1-D slingshot input-path RC:** preserved the five-knob authority contract,
   ratified the internal `0.25 s` lock telegraph and `1.0 s` release ghost,
   added an authoritative aim/engage/release prompt that follows keyboard or

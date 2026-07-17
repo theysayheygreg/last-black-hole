@@ -134,12 +134,12 @@ async function run() {
       assert(waves.every((wave, index) =>
         wave.announced === true && wave.tier === index + 1 && wave.metadata?.phase === index + 1
       ), `Expected announced tiered waves, got ${JSON.stringify(waves)}`);
-      assert(JSON.stringify(waves.map((wave) => wave.time)) === JSON.stringify([90, 180, 270]),
-        `Expected 90-second grace and even 90-second phases, got ${waves.map((wave) => wave.time)}`);
+      assert(JSON.stringify(waves.map((wave) => wave.time)) === JSON.stringify([72, 144, 216]),
+        `Expected normalized Shallows phase fronts, got ${waves.map((wave) => wave.time)}`);
       const portalSchedule = first.portalSchedule;
       const finalWindow = portalSchedule?.windows?.find((window) => window.metadata?.finalExfil);
-      assert(finalWindow?.openTime === 600 && finalWindow?.closeTime === 660,
-        "Expected the guaranteed final exfil to be declared at the main timer with a 60-second window");
+      assert(finalWindow?.openTime === 480 && finalWindow?.closeTime === 540,
+        "Expected the guaranteed final exfil to open at the Shallows timer with a 60-second window");
       assert(waves.every((wave, index) => index === 0 || wave.time > waves[index - 1].time),
         "Expected strictly ordered wave times");
       assert(waves.every((wave) => Number.isFinite(wave.budget) && wave.budget > 0),
@@ -168,7 +168,7 @@ async function run() {
       await postDebugPlayerState({ wx: 0.7, wy: 0.7, signalLevel: 0.25 });
       const before = await getSnapshot();
       const finalWindow = before.portalSchedule.windows.find((window) => window.metadata?.finalExfil);
-      assert(finalWindow.openTime === 600, "Expected final exfil schedule front at the main timer");
+      assert(finalWindow.openTime === 480, "Expected final exfil schedule front at the Shallows timer");
       await postDebugInhibitorState({ form: 3, wx: 4.2, wy: 4.2 });
       const after = await getSnapshot();
       assert(after.inhibitor.finalPortalSpawned === false,

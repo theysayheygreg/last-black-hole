@@ -83,14 +83,14 @@ async function run() {
 
       const optional = schedule.windows.filter((window) => !window.metadata.finalExfil);
       const finalWindow = schedule.windows.find((window) => window.metadata.finalExfil);
-      assert(JSON.stringify(optional.map((window) => window.openTime)) === JSON.stringify([45, 165, 285, 405, 525]),
-        "Expected the evenly spread optional open cadence");
-      assert(JSON.stringify(optional.map((window) => window.closeTime)) === JSON.stringify([135, 240, 321, 432, 543]),
-        "Expected declarative late-phase shortening in the registered close fronts");
-      assert(JSON.stringify(optional.map((window) => window.metadata.effectiveCountRange)) === JSON.stringify([[2, 3], [1, 2], [0, 0], [0, 0], [0, 0]]),
+      assert(JSON.stringify(optional.map((window) => window.openTime)) === JSON.stringify([36, 226, 281, 327, 420]),
+        "Expected normalized optional targets with the absolute guard resolved forward");
+      assert(JSON.stringify(optional.map((window) => window.closeTime)) === JSON.stringify([126, 271, 317, 354, 438]),
+        "Expected absolute portal durations with declarative late-phase shortening");
+      assert(JSON.stringify(optional.map((window) => window.metadata.effectiveCountRange)) === JSON.stringify([[2, 3], [0, 0], [0, 0], [0, 0], [0, 0]]),
         "Expected deterministic late-phase count thinning");
-      assert(finalWindow.openTime === 600 && finalWindow.closeTime === 660,
-        "Final exfil must open at the main timer and close after its declared duration");
+      assert(finalWindow.openTime === 480 && finalWindow.closeTime === 540,
+        "Final exfil must open at the Shallows timer and close after its declared duration");
       assert(finalWindow.openId.endsWith(":open") && finalWindow.closeId.endsWith(":close"),
         "Expected stable final open/close event identities");
       assertGuarded(schedule.eventFronts, schedule.offsetGuardSeconds);

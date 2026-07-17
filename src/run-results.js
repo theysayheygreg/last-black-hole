@@ -78,6 +78,7 @@ export function buildRunResultsViewModel({
   phase = 'dead',
   fallbackCargo = [],
   fallbackSurvivalTime = 0,
+  fallbackRunDurationSeconds = 0,
   fallbackEmEarned = 0,
 } = {}) {
   const outcome = normalizeOutcome(runResult?.outcome, phase);
@@ -87,6 +88,7 @@ export function buildRunResultsViewModel({
   const signalZone = runResult?.signalPeakZone || 'ghost';
   const inhibitorForm = Math.max(0, Math.min(3, Number(runResult?.inhibitorFormReached) || 0));
   const survivalTime = runResult?.survivalTime ?? fallbackSurvivalTime ?? 0;
+  const runDurationSeconds = Number(runResult?.runDurationSeconds ?? fallbackRunDurationSeconds) || 0;
   const emEarned = Number.isFinite(Number(runResult?.emEarned))
     ? Math.max(0, Math.round(Number(runResult.emEarned)))
     : Math.max(0, Math.round(Number(fallbackEmEarned) || 0));
@@ -106,6 +108,7 @@ export function buildRunResultsViewModel({
     tone: extracted ? 'extract' : 'death',
     survival: formatTime(survivalTime),
     survivalSeconds: survivalTime,
+    runDurationSeconds,
     signalPeakLabel: `${String(signalZone).toUpperCase()} (${formatSignal(signalPeak)})`,
     inhibitorLabel: INHIBITOR_FORMS[inhibitorForm] || 'dormant',
     wellsVisited: runResult?.wellsVisited ?? null,

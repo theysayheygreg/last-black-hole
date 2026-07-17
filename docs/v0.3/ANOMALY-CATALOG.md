@@ -105,7 +105,7 @@ boundaries are match-progress fractions, not player clocks:
 | `collapse-epoch-0` | `0.00` | `0s` | `1.00x` | `1.00x` |
 | `collapse-epoch-1` | `0.25` | `150s` | `1.08x` | `1.05x` |
 | `collapse-epoch-2` | `0.50` | `300s` | `1.16x` | `1.10x` |
-| `collapse-epoch-3` | `0.65` | `390s` | `1.24x` | `1.15x` |
+| `collapse-epoch-3` | `0.75` | `450s` | `1.24x` | `1.15x` |
 
 The two vector components are bounded, named multipliers over existing
 authoritative field machinery only:
@@ -121,6 +121,15 @@ Snapshots expose `world.collapseEpoch` and `world.collapseEpochSchedule` next
 to the existing wells and wave rings. Presentation normalization preserves
 the current epoch, schedule identities, catalog-backed well mass/radius, and
 safe growth/epoch event fields without exposing arbitrary event payloads.
+
+The schedule is map-relative. The canonical registry supplies `480s`, `600s`,
+and `720s` for Shallows, Expanse, and Deep Field, producing collapse fronts at
+`0/120/240/360s`, `0/150/300/450s`, and `0/180/360/540s` respectively. The
+600-second Expanse row is the preserved anchor; only its epoch-3 boundary moves
+from the former 65% to 75%. Inhibitor and portal whole-run fronts use the same
+resolved duration, while local portal durations and other real-time intervals
+remain absolute. The baseline is locked for v0.3.1; later multiplier balance
+remains playtest-tunable.
 
 ## Map Selection
 

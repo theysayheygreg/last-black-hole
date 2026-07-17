@@ -1,6 +1,6 @@
 # v0.3 Open Decisions
 
-> Document revision: v0.3. Updated 2026-07-10. Resolved implementation choices
+> Document revision: v0.3. Updated 2026-07-17. Resolved implementation choices
 > are listed first so they are not repeatedly reopened during release work.
 
 ## Resolved For v0.3
@@ -18,6 +18,18 @@ Resolved on 2026-07-17. `src/content/units.data.json` locks `1 sim/world unit
 The client and server derive `0.012` sim units for the hull, `0.45` sim units
 as `450 m`, and `0.1` sim units as `100 m`. The decision changes no physics,
 collision, camera, or enlarged readability glyph dimensions.
+
+### Map-Relative Run Schedule
+
+Resolved on 2026-07-17. The map-scale registry owns the product duration:
+Shallows `480s`, Expanse `600s`, and Deep Field `720s`. Collapse, Inhibitor,
+optional portal targets, and final exfil open are normalized to the selected
+run; the final exfil closes 60 seconds after the 100% front. The prior Expanse
+600-second schedule remains the anchor, with epoch 3 intentionally corrected to
+75%. Portal durations, tells, cooldowns, action windows, effect lifetimes,
+offset guards, and reconnect/reservation timers remain absolute. The locked
+baseline is accepted for focused proof, while later multiplier balance remains
+playtest-tunable.
 
 ### Teaching Route
 

@@ -61,6 +61,8 @@ async function run() {
         seed: 7804,
       });
       assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
+      assert(start.body.session.runDurationSeconds === 2,
+        "Explicit short-fixture override must remain the resolved test duration");
       const join = await postJson("/join", {
         runId: start.body.session.runId,
         clientId: "bounded-growth-test",

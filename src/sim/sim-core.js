@@ -105,7 +105,10 @@ export class SimCore {
     }
 
     if (!inMenu && !visualOnly && CONFIG.universe.planetoidSpawnAccel > 0) {
-      const runProgress = Math.min(simState.runElapsedTime / CONFIG.universe.runDuration, 1.0);
+      const runDuration = Number(CONFIG.universe.runDuration);
+      const runProgress = runDuration > 0
+        ? Math.min(simState.runElapsedTime / runDuration, 1.0)
+        : 0;
       const intervalScale = 1.0 - runProgress * CONFIG.universe.planetoidSpawnAccel;
       this.planetoidSystem._spawnIntervalScale = Math.max(0.3, intervalScale);
     }

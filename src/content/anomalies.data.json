@@ -143,7 +143,7 @@
     "schemaVersion": 1,
     "status": "provisional",
     "boundaryMode": "match-progress",
-    "durationSource": "MATCH_MAX_SIM_TIME",
+    "durationSource": "MAP_SCALE_REGISTRY.runDurationSeconds",
     "parameterVectors": {
       "seededSeaAmbientMultiplier": {
         "unit": "x seeded ambient field term",
@@ -187,7 +187,7 @@
       },
       {
         "id": "collapse-epoch-3",
-        "progress": 0.65,
+        "progress": 0.75,
         "parameterVector": {
           "seededSeaAmbientMultiplier": 1.24,
           "liveWavePushMultiplier": 1.15

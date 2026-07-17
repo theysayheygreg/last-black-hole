@@ -84,6 +84,7 @@ import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
+import { getMapDurationSeconds } from './content/map-scales.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -138,6 +139,20 @@ const MAP_SELECT_ENTRIES = [
 ];
 function getPlayableMapEntryById(id) {
   return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
+}
+
+function resolveClientRunDuration(mapId) {
+  const duration = Number(getMapDurationSeconds(mapId));
+  if (Number.isFinite(duration) && duration > 0) return duration;
+  return Number(getMapDurationSeconds(DEFAULT_PLAYABLE_MAP.id));
+}
+
+function setResolvedClientRunDuration(mapId, duration = null) {
+  const resolved = Number(duration);
+  CONFIG.universe.runDuration = Number.isFinite(resolved) && resolved > 0
+    ? resolved
+    : resolveClientRunDuration(mapId);
+  return CONFIG.universe.runDuration;
 }
 
 // ---- State ----
@@ -556,6 +571,7 @@ function currentRunResultsViewModel() {
     phase: gamePhase,
     fallbackCargo,
     fallbackSurvivalTime: simState.runEndTime,
+    fallbackRunDurationSeconds: CONFIG.universe.runDuration,
     fallbackEmEarned: runEmEarned({
       outcome: gamePhase === 'escaped' ? 'extracted' : gamePhase === 'dead' ? 'dead' : 'abandoned',
       survivalTime: simState.runEndTime,
@@ -1443,6 +1459,7 @@ function loadScene(map, { seed = 1 } = {}) {
 
   // 2. Apply new scene's CONFIG overrides
   applySceneOverrides(CONFIG, map.configOverrides);
+  setResolvedClientRunDuration(map?.id);
 
   // 3. Reset ALL timers
   totalTime = 0;
@@ -1803,6 +1820,7 @@ function applyRemoteSnapshot(snapshot) {
       throw new Error(`Remote snapshot map scale mismatch: ${authoritativeMapId} is ${authoritativeEntry.map.worldScale}, got ${authoritativeWorldScale}`);
     }
     remoteMapId = authoritativeEntry.id;
+    setResolvedClientRunDuration(authoritativeMapId, snapshot.session?.runDurationSeconds);
   }
   remoteSnapshot = snapshot;
   if (snapshot.session?.cosmicSignature) {
@@ -4817,6 +4835,10 @@ function gameLoop(now) {
     cameraView: CAMERA_VIEW,
     worldScale: WORLD_SCALE,
     totalTime,
+    runTime: {
+      elapsedSeconds: simState.runElapsedTime,
+      durationSeconds: CONFIG.universe.runDuration,
+    },
     phase: gamePhase,
     runId: remoteSnapshot?.session?.runId || null,
     frameId: remoteSnapshot?.snapshotId || Math.floor(totalTime * 60),

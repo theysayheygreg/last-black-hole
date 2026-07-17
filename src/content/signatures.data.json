@@ -16,9 +16,6 @@
         "wells": {
           "gravity": 0.0012
         },
-        "universe": {
-          "runDuration": 540
-        },
         "events": {
           "growthInterval": 55
         }
@@ -44,9 +41,6 @@
         "events": {
           "growthInterval": 25,
           "growthAmount": 0.04
-        },
-        "universe": {
-          "runDuration": 360
         }
       },
       "layout": {
@@ -91,9 +85,6 @@
         "deep-field"
       ],
       "config": {
-        "universe": {
-          "runDuration": 480
-        },
         "events": {
           "growthInterval": 50
         }
@@ -115,9 +106,6 @@
         "expanse"
       ],
       "config": {
-        "universe": {
-          "runDuration": 300
-        },
         "portals": {
           "evaporationInterval": 45
         }
@@ -142,9 +130,6 @@
       "config": {
         "wells": {
           "gravity": 0.002
-        },
-        "universe": {
-          "runDuration": 600
         }
       },
       "layout": {
