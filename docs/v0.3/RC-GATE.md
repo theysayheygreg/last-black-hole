@@ -1,6 +1,6 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-15. This is branch acceptance
+> Document revision: v0.3. Updated 2026-07-16. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
@@ -26,35 +26,37 @@ renderer, fast, and package gates pass with that fix.
 
 ## Current Evidence
 
-Latest package evidence from the consolidated 2026-07-15 candidate:
+Latest package evidence from the consolidated 2026-07-16 candidate:
 
-- Source `f56175f6e0571e8b7ed51a383695ad64229d2440` includes the accepted
-  title/map boot correction and remains on `codex/v0.3-ballpark-roadmap`.
+- Source `2b93b07781d3f123ff818826884f8fe1a4067e39` includes the accepted
+  v0.3.1 fuel recovery, Deck snapshot/star repair, Deck UI, and Map Select
+  work and remains on `codex/v0.3-ballpark-roadmap`.
 - `release:internal` built web, iPad, macOS arm64, Windows x64, and Linux x64 as
-  `0.3.0.f56175f6`; its fast gate included Three smoke `6/6`.
+  `0.3.1.2b93b077`.
 - `release:status` found the hash-named release, and `test:package` passed
   staged plus extracted authority/client boot under protocol `lbh-local-v2`.
 - Playtest ZIP SHA-256:
-  `5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`.
+  `5ccc4c23955785f71600241548145e6475fbe37a737b856e217bb8043dd75525`.
 - Linux `resources/app.asar` SHA-256:
-  `cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`.
-- The no-retry full lane was stopped after 215 seconds because its isolated
-  checkout lacked Python audio packages, `three`, and Electron packager
-  dependencies. It was not retried and is not claimed green for this hash.
-- The 2026-07-16 deploy reused the verified artifact without rebuilding and
+  `d29e3639823fb15e8b25c6a0bc7e345054c624571443b79c2d703f76946ca0b1`.
+- The earlier no-retry full lane remains parked as infrastructure-red after
+  215 seconds because its isolated checkout lacked Python audio packages,
+  `three`, and Electron packager dependencies. It was not rerun for this hash.
+- The 2026-07-16 deploy reused the exact verified artifact without rebuilding and
   installed it at `/home/deck/Games/last-singularity-v03`. Remote `app.asar`
   SHA-256 matches local at
-  `cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`;
+  `d29e3639823fb15e8b25c6a0bc7e345054c624571443b79c2d703f76946ca0b1`;
   the executable matches at
   `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
-- Gaming Mode shortcut key `19` for Steam userdata `31747533` retains app id
-  `3771676273`; backup
-  `/home/deck/.steam/steam/userdata/31747533/config/shortcuts.vdf.lbh-backup-20260716231447`
-  preceded the write. The v0.2 Demo remains key `18`, app id `2947990413`, at
+- Installed launchers and desktop entries identify `Last Singularity v0.3.1
+  Preview`. The supported Gaming Mode refresh stopped before writing because
+  Steam and its helpers did not exit within the bounded timeout. Shortcut key
+  `19` therefore retains display name `Last Singularity v0.3 Preview` and app
+  id `3771676273`. The v0.2 Demo remains key `18`, app id `2947990413`, at
   `/home/deck/Games/last-singularity-v02`.
 - Executable, launcher, desktop entry, and isolated log namespace exist. No
-  Last Singularity coredumps were recorded after deployment. Logs are not
-  claimed as a fresh candidate boot until Greg launches it.
+  recent Last Singularity coredumps were recorded. Existing logs predate this
+  deployment and are not claimed as fresh candidate boot evidence.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 
@@ -180,7 +182,7 @@ npm run release:status
 npm run test:package
 ```
 
-- [ ] Artifact version is `0.3.1.<final-commit-hash>` for the next candidate.
+- [x] Artifact version is `0.3.1.2b93b077` for this candidate.
 - [x] Artifact checksum and path are reported by `npm run test:package` and
   verified by `npm run release:status`.
 - [x] Embedded control plane and sim boot from staged and extracted package
@@ -203,6 +205,8 @@ LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deck:gaming-mode -- --shutdown
 ```
 
 - [x] Deck is reachable over Tailscale and the exact candidate is installed.
+- [ ] Gaming Mode shortcut display name is refreshed to `Last Singularity
+  v0.3.1 Preview`; Steam must first be closed manually in Desktop Mode.
 - [ ] Build launches from Non-Steam Games in Gaming Mode.
 - [ ] Embedded authority reports healthy on loopback.
 - [ ] Steam Input reaches title, Home, map select, flight, pause, extraction,

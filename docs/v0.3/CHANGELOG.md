@@ -21,19 +21,27 @@
   possible-content meters with canonical aggregate descriptions; and separated
   nearby in-match wreck labels with local presentation mattes.
 - **Version train:** development now targets `0.3.1`; internal candidates use
-  `0.3.1.<commit-hash>`. The deployed `0.3.0.f56175f6` Preview keeps its
-  existing identity until a real `0.3.1` artifact replaces it.
-- **Deck deploy:** reused the checksum-verified `0.3.0.f56175f6` Linux artifact
-  without rebuilding and deployed it to
+  `0.3.1.<commit-hash>`.
+- **v0.3.1 RC package:** `release:internal`, `release:status`, and
+  `test:package` are green at source `2b93b077` and build
+  `0.3.1.2b93b077`. The playtest ZIP SHA-256 is
+  `5ccc4c23955785f71600241548145e6475fbe37a737b856e217bb8043dd75525`;
+  Linux `resources/app.asar` is
+  `d29e3639823fb15e8b25c6a0bc7e345054c624571443b79c2d703f76946ca0b1`.
+- **Deck deploy:** reused that checksum-verified v0.3.1 Linux artifact without
+  rebuilding and deployed it to
   `/home/deck/Games/last-singularity-v03`. Remote executable and `app.asar`
-  hashes match local. Gaming Mode entry `Last Singularity v0.3 Preview` remains
-  app id `3771676273`; Steam userdata `31747533` was backed up before shortcut
-  key `19` was refreshed.
+  hashes match local. Installed launchers now identify `Last Singularity v0.3.1
+  Preview`, but the supported shortcut refresh could not safely stop Steam
+  within its timeout. Gaming Mode key `19` therefore still displays `Last
+  Singularity v0.3 Preview` under app id `3771676273`; no shortcut file was
+  rewritten.
 - **Side-by-side preservation:** the v0.2 Demo remains at
   `/home/deck/Games/last-singularity-v02`, shortcut key `18`, app id
   `2947990413`. The v0.3 log namespace and launchers exist and no Last
-  Singularity coredumps were recorded after deployment. Current candidate boot,
-  controls, readability, suspend/resume, feel, and audio remain Greg gates.
+  Singularity coredumps were recorded after deployment. A fresh Gaming Mode
+  launch and current logs, controls, readability, suspend/resume, feel, and
+  audio remain Greg gates.
 
 ## 2026-07-14
 

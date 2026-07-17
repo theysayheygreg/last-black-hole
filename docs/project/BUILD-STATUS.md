@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.3. Updated 2026-07-14. This file answers “what can I
+> Document revision: v0.3. Updated 2026-07-16. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -31,10 +31,11 @@ idle authority resident through an extended attract-screen wait, and joins a
 live run through normal keyboard input. `npm run release:status` is the
 authority for the exact current HEAD hash.
 
-**Physical Steam Deck status:** candidate deployed; Gaming Mode acceptance is
-pending. Automated 1280x800 evidence and checksum identity exist, but they are
-not substitutes for an in-hand launch, controller, readability, suspend/resume,
-feel, or audio review.
+**Physical Steam Deck status:** the v0.3.1 candidate is deployed and
+checksum-verified. Steam did not exit within the supported shortcut-refresh
+timeout, so the Gaming Mode entry still displays the prior v0.3 Preview name.
+That metadata refresh and physical launch, controller, readability,
+suspend/resume, feel, and audio acceptance remain pending.
 
 **Human status:** Greg has not yet made the final movement-feel or visual-taste
 call.
@@ -152,13 +153,13 @@ iCloud, but it is not repository evidence for the current RC hash.
 
 ### Steam Deck Side-by-side Comparison
 
-Latest local v0.3 package candidate: source `f56175f6`, build
-`0.3.0.f56175f6`. All five targets built and `test:package` passed staged and
+Latest local v0.3 package candidate: source `2b93b077`, build
+`0.3.1.2b93b077`. All five targets built and `test:package` passed staged and
 extracted boot. The playtest ZIP SHA-256 is
-`5d53dd2d5305f09cd284ac9e25fbc4c9ae938b1a2894333842d41a2ef080fb66`.
+`5ccc4c23955785f71600241548145e6475fbe37a737b856e217bb8043dd75525`.
 The exact existing Linux artifact was deployed without rebuilding. Remote
 `app.asar` SHA-256 matches local at
-`cedaeb57c5d72feb373f71d1fb924ba754ca4cb367165faa1b9e9852431daece`;
+`d29e3639823fb15e8b25c6a0bc7e345054c624571443b79c2d703f76946ca0b1`;
 the executable matches at
 `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
 The v0.3 launcher, executable, desktop entry, and isolated log namespace exist;
@@ -170,18 +171,22 @@ Installed and checksum-verified on 2026-07-16:
 | Steam entry | Source | Install directory | App id |
 |---|---|---|---:|
 | Last Singularity v0.2 Demo | `main` at `83953aa`, build `0.2.2.83953aa` | `/home/deck/Games/last-singularity-v02` | `2947990413` |
-| Last Singularity v0.3 Preview | v0.3 at `f56175f6`, build `0.3.0.f56175f6` | `/home/deck/Games/last-singularity-v03` | `3771676273` |
+| Last Singularity v0.3 Preview (shortcut refresh pending) | v0.3 at `2b93b077`, build `0.3.1.2b93b077` | `/home/deck/Games/last-singularity-v03` | `3771676273` |
 
 The current v0.3 package passed `release:internal`, `release:status`, and
 `test:package`; its remote executable and `app.asar` hashes match local. The
 v0.2 directory and shortcut remain key `18`, app id `2947990413`; v0.3 remains
-key `19`, app id `3771676273`. The two launchers use separate log and Electron
-user-data namespaces, so profiles and caches do not contaminate the comparison.
+key `19`, app id `3771676273`. Installed v0.3 launchers and desktop entries say
+`Last Singularity v0.3.1 Preview`, while Steam's shortcut still says `Last
+Singularity v0.3 Preview` because the supported shutdown timed out before any
+shortcut write. The two launchers use separate log and Electron user-data
+namespaces, so profiles and caches do not contaminate the comparison.
 
 This proves installation and shortcut identity, not physical Gaming Mode
-acceptance. Steam was shut down safely while `shortcuts.vdf` was updated;
-return to Gaming Mode so Steam reloads both entries, then compare controller
-navigation, movement feel, readability, suspend/resume, and runtime logs.
+acceptance. Close Steam manually in Desktop Mode, rerun only the supported
+shortcut refresh, then return to Gaming Mode and compare controller navigation,
+fuel recovery, Deep Field snapshot stability, readability, suspend/resume,
+movement feel, audio, and current runtime logs.
 
 ## v0.2 Public/Demo Line
 
