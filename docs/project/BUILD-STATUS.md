@@ -68,10 +68,6 @@ call.
 - 1280x800 HUD hierarchy, controller prompts, reduced motion, and event-driven
   bounded audio;
 - staged desktop/package tests that boot embedded authority runtimes.
-- locked physical-unit inputs now come from one browser/CJS-parity manifest;
-  focused ruler and slingshot proofs derive `0.012` sim-unit hull length,
-  `450 m` capture radius, and `100 m` ruler presentation without a physics or
-  map retune;
 - final-package extraction proof that boots the authority runtimes from the
   generated Linux `app.asar`, not source staging.
 - packaged Electron proof that boots Three, survives 31 seconds on the title
