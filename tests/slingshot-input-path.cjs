@@ -111,23 +111,15 @@ async function captureSlingshotPrompt(page) {
   });
 }
 
-async function waitForSlingshotPresentation(page, minimumRemoteTick, timeout = 1500) {
-  const deadline = Date.now() + timeout;
-  let last = null;
-  while (Date.now() < deadline) {
-    last = await captureSlingshotPrompt(page);
-    if (last.remoteAuthorityActive
-      && Number(last.remoteTick) >= minimumRemoteTick
-      && last.scene?.slingshot?.affordance
-      && last.glyph?.action === 'slingshot'
-      && last.glyph?.inputFamily === 'controller'
-      && last.glyph?.label === 'Y'
-      && last.glyph?.copy === 'engage') {
-      return last;
-    }
-    await sleep(20);
-  }
-  throw new Error(`Timed out waiting for remote slingshot presentation: ${JSON.stringify(last)}`);
+function hasSlingshotEngagePresentation(prompt) {
+  return prompt?.visible
+    && prompt.remoteAuthorityActive
+    && /well in range/i.test(prompt.text)
+    && prompt.scene?.slingshot?.affordance
+    && prompt.glyph?.action === 'slingshot'
+    && prompt.glyph?.inputFamily === 'controller'
+    && prompt.glyph?.label === 'Y'
+    && prompt.glyph?.copy === 'engage';
 }
 
 function wrappedDelta(from, to, worldScale) {
@@ -159,14 +151,11 @@ async function steerToRing(page, clientId, anchor) {
   };
 
   const deadline = Date.now() + 35000;
-  const radius = 0.12;
   const maxCruiseSpeed = 0.31;
-  const allowFlyby = true;
   let start = null;
   let closest = Infinity;
   let last = null;
   let recharging = false;
-  let firstAimTick = null;
 
   try {
     while (Date.now() < deadline) {
@@ -180,7 +169,7 @@ async function steerToRing(page, clientId, anchor) {
       const speed = Math.hypot(next.vx || 0, next.vy || 0);
       const fuelRatio = next.deltaVRatio || 0;
       closest = Math.min(closest, distance);
-      const commitDistance = Math.max(radius * 4, 0.16);
+      const commitDistance = 0.48;
       if (recharging) {
         if (fuelRatio > 0.42) recharging = false;
       } else if (fuelRatio < 0.015 || (fuelRatio < 0.08 && distance >= commitDistance)) {
@@ -197,31 +186,22 @@ async function steerToRing(page, clientId, anchor) {
         recharging,
       };
 
-      if (next.slingshot?.aim && firstAimTick === null) firstAimTick = current.tick;
-
-      if (distance <= radius && allowFlyby) {
+      const prompt = await captureSlingshotPrompt(page);
+      if (hasSlingshotEngagePresentation(prompt)) {
         await setPad(page);
-        if (next.slingshot?.aim) {
-          const prompt = await waitForSlingshotPresentation(page, current.tick);
-          return {
-            start,
-            end: last,
-            closest,
-            target: { ...target },
-            firstAimTick,
-            aim: next.slingshot.aim,
-            prompt,
-          };
-        }
-        await sleep(110);
-        continue;
+        return {
+          start,
+          end: last,
+          closest,
+          target: { ...target },
+          aim: next.slingshot?.aim || null,
+          prompt,
+        };
       }
 
       const nx = distance > 1e-6 ? tx / distance : 1;
       const ny = distance > 1e-6 ? ty / distance : 0;
-      const desiredSpeed = allowFlyby
-        ? maxCruiseSpeed
-        : Math.max(0.06, Math.min(maxCruiseSpeed, distance * 1.35));
+      const desiredSpeed = maxCruiseSpeed;
       const correctionX = nx * desiredSpeed - (next.vx || 0);
       const correctionY = ny * desiredSpeed - (next.vy || 0);
       const correctionMagnitude = Math.hypot(correctionX, correctionY);
@@ -359,7 +339,7 @@ async function run() {
         promptBefore: promptBefore.text,
         promptDuring,
         anchor: { id: routeAnchor.id, type: routeAnchor.type || 'well' },
-        approach: { target: approach.target, aimDistance: aim.distance },
+        approach: { target: approach.target, aimDistance: aim?.distance ?? null },
         timingsMs: {
           engageToLock: lockSeenAt - engageStartedAt,
           lockToArc: arcSeenAt - lockSeenAt,
