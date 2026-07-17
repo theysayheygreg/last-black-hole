@@ -88,6 +88,31 @@ async function waitForPlayer(clientId, predicate, label, timeout = 8000) {
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(last)}`);
 }
 
+async function waitForSlingshotRelease(clientId, since = 0, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  let lastEvents = [];
+  let lastPlayer = null;
+  while (Date.now() < deadline) {
+    lastEvents = (await events(since)).filter((event) =>
+      event.payload?.clientId === clientId && event.type.startsWith('player.slingshot'));
+    const engagedIndex = lastEvents.findIndex((event) => event.type === 'player.slingshotEngaged');
+    const releasedIndex = lastEvents.findIndex((event) => event.type === 'player.slingshotReleased');
+    if (engagedIndex >= 0 && releasedIndex > engagedIndex) {
+      const current = await snapshot();
+      lastPlayer = current.players?.find((player) => player.clientId === clientId) || null;
+      if (lastPlayer?.slingshot?.telegraph?.releaseGhost) {
+        return {
+          player: lastPlayer,
+          snapshot: current,
+          event: lastEvents[releasedIndex],
+        };
+      }
+    }
+    await sleep(80);
+  }
+  throw new Error(`Timed out waiting for durable slingshot release: events=${JSON.stringify(lastEvents)} player=${JSON.stringify(lastPlayer)}`);
+}
+
 async function captureSlingshotPrompt(page) {
   return page.evaluate(() => {
     const element = document.getElementById('hud-interaction');
@@ -357,7 +382,9 @@ async function run() {
       await setPad(page, { x: 1, y: 0 });
       await waitFor(page, (count) => (window.__TEST_API.getNetworkState()?.networkMetrics?.slingshotEdgeAcks || []).length === count + 1,
         { timeout: 5000 }, releaseAckCount);
-      const released = await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'release-ghost' && player.slingshot?.engaged === false, 'authoritative release ghost');
+      const released = await waitForSlingshotRelease(clientId, baselineSeq);
+      assert(released.player.slingshot?.engaged === false, 'Authoritative release event must leave slingshot disengaged');
+      assert(released.player.slingshot?.telegraph?.releaseGhost, 'Authoritative snapshot must retain the release ghost payload');
       await waitFor(page, () => Boolean(window.__TEST_API.getThreeSceneState()?.slingshot?.telegraph?.releaseGhost), { timeout: 1500 });
       const releaseScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
       assert(releaseScene.slingshot?.telegraph?.releaseGhost, 'Release ghost did not reach the visible scene state');
