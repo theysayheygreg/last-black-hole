@@ -7,6 +7,7 @@ const crypto = require("crypto");
 const { performance } = require("perf_hooks");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
+const { getMapDurationSeconds } = require("./content/map-scales.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
 const { sanitizeRetiredItems } = require("./content/items.cjs");
 const SEEDED_GEN = require("./seeded-generation.cjs");
@@ -137,8 +138,9 @@ const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = Object.freeze({
   captureRadius: 0.08,
   schedule: Object.freeze({
-    graceSeconds: 45,
-    cadenceSeconds: 120,
+    // Whole-run fronts are normalized against the selected map duration.
+    graceProgress: 0.075,
+    cadenceProgress: 0.20,
     offsetGuardSeconds: 10,
     optionalWindows: Object.freeze([
       { count: [2, 3], types: ["standard"], durationSeconds: 90 },
@@ -166,8 +168,11 @@ const AUTHORITY_INPUT_CONFIG = Object.freeze({
   heldInputTimeoutMs: readNumber(process.env.LBH_SIM_HELD_INPUT_TIMEOUT_MS, 750, 1),
 });
 const PLAYER_CARGO_SLOTS = 8;
-const RUN_DURATION = 600;
-const MATCH_MAX_SIM_TIME = readNumber(process.env.LBH_SIM_MAX_SIM_TIME, RUN_DURATION, 1);
+// This is an explicit fixture/test override. Product durations come only from
+// the selected map's canonical content registry.
+const MATCH_MAX_SIM_TIME_OVERRIDE = process.env.LBH_SIM_MAX_SIM_TIME === undefined
+  ? null
+  : readNumber(process.env.LBH_SIM_MAX_SIM_TIME, null, 1);
 const TERMINAL_SESSION_GRACE_MS = readNumber(process.env.LBH_SIM_TERMINAL_GRACE_MS, 30000, 0);
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
@@ -209,6 +214,16 @@ function readNumber(value, fallback, min = -Infinity) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, parsed);
+}
+
+function resolveRunDurationSeconds(mapId) {
+  const canonical = Number(getMapDurationSeconds(mapId));
+  if (!Number.isFinite(canonical) || canonical <= 0) {
+    throw new Error(`Map ${mapId} has no canonical run duration`);
+  }
+  return MATCH_MAX_SIM_TIME_OVERRIDE == null
+    ? canonical
+    : MATCH_MAX_SIM_TIME_OVERRIDE;
 }
 
 // Wrappers around seeded-generation.js that route through runtime streams.
@@ -360,10 +375,9 @@ const SIGNAL_CONFIG = {
 };
 
 const INHIBITOR_CONFIG = {
-  // Provisional Conductor clock. Both values use the S12 tuning step of
-  // 0.5 minutes (30 seconds): grace 90s, then each phase 90s apart.
-  graceMinutes: 1.5,
-  phaseIntervalMinutes: 1.5,
+  // The prior Expanse schedule is 90/180/270 seconds on a 600-second run.
+  // These normalized fronts preserve that anchor on every map tier.
+  phaseProgresses: Object.freeze([0, 0.15, 0.30, 0.45]),
   phaseWaveBudgets: [0, 1, 2, 3],
   // Form 1: Glitch
   glitchRadius: 0.1,           // world-units
@@ -402,16 +416,13 @@ const INHIBITOR_CONFIG = {
   vesselConsumeGravityBonus: 0.03,
 };
 
-function inhibitorPhaseTime(phase) {
-  if (phase <= 0) return 0;
-  const graceSeconds = INHIBITOR_CONFIG.graceMinutes * 60;
-  const intervalSeconds = INHIBITOR_CONFIG.phaseIntervalMinutes * 60;
-  return graceSeconds + (phase - 1) * intervalSeconds;
+function inhibitorPhaseProgress(phase) {
+  return INHIBITOR_CONFIG.phaseProgresses[Math.max(0, Math.min(3, phase))] || 0;
 }
 
-function inhibitorPhaseAtTime(time) {
+function inhibitorPhaseAtProgress(progress) {
   for (let phase = 3; phase >= 1; phase -= 1) {
-    if (time >= inhibitorPhaseTime(phase)) return phase;
+    if (progress >= inhibitorPhaseProgress(phase)) return phase;
   }
   return 0;
 }
@@ -429,12 +440,20 @@ function scalePortalCountRange(countRange, multiplier) {
   return [min, max];
 }
 
-function portalWindowMetadata(declaration, index, phase) {
+function portalWindowMetadata(
+  declaration,
+  index,
+  phase,
+  openProgress,
+  requestedOpenProgress = openProgress,
+) {
   const lateRule = latePortalRuleForPhase(phase);
   return {
     system: "portals",
     kind: "optional",
     windowIndex: index,
+    openProgress,
+    requestedOpenProgress,
     phaseAtOpen: phase,
     countRange: declaration.count.slice(),
     effectiveCountRange: scalePortalCountRange(declaration.count, lateRule.countMultiplier),
@@ -449,13 +468,19 @@ function portalWindowMetadata(declaration, index, phase) {
   };
 }
 
-function createInhibitorConductor(seed) {
+function createInhibitorConductor(seed, runDurationSeconds) {
+  const duration = Number(runDurationSeconds);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new RangeError("runDurationSeconds must be greater than zero");
+  }
   const conductor = createConductor({
     seed,
     conductorId: "match-conductor",
     offsetGuardSeconds: PORTAL_CONFIG.schedule.offsetGuardSeconds,
-    matchDurationSeconds: MATCH_MAX_SIM_TIME,
+    matchDurationSeconds: duration,
   });
+  const resolvedGuardSeconds = conductor.getSchedule().offsetGuardSeconds;
+  let previousRegisteredPhaseTime = 0;
   conductor.registerEventFront({
     id: "inhibitor:phase-0",
     time: 0,
@@ -470,11 +495,13 @@ function createInhibitorConductor(seed) {
   });
 
   for (let phase = 1; phase <= 3; phase += 1) {
-    const scheduledTime = inhibitorPhaseTime(phase);
+    const progress = inhibitorPhaseProgress(phase);
+    const scheduledTime = duration * progress;
+    if (scheduledTime - previousRegisteredPhaseTime < resolvedGuardSeconds) continue;
     conductor.scheduleSeverityWaves({
       waveIdPrefix: `inhibitor:phase-${phase}`,
       startTime: scheduledTime,
-      cadence: INHIBITOR_CONFIG.phaseIntervalMinutes * 60,
+      cadence: duration * 0.15,
       count: 1,
       budget: INHIBITOR_CONFIG.phaseWaveBudgets[phase],
       tier: phase,
@@ -482,31 +509,84 @@ function createInhibitorConductor(seed) {
         system: "inhibitor",
         phase,
         form: phase,
+        progress,
         scheduledTime,
       },
     });
+    previousRegisteredPhaseTime = scheduledTime;
   }
 
-  const optionalWindows = PORTAL_CONFIG.schedule.optionalWindows.map((declaration, index) => {
-    const openTime = PORTAL_CONFIG.schedule.graceSeconds + PORTAL_CONFIG.schedule.cadenceSeconds * index;
-    const phase = inhibitorPhaseAtTime(openTime);
-    const metadata = portalWindowMetadata(declaration, index, phase);
-    return {
+  const guardSeconds = PORTAL_CONFIG.schedule.offsetGuardSeconds;
+  const inhibitorFrontTimes = INHIBITOR_CONFIG.phaseProgresses.map(
+    (progress) => duration * progress,
+  );
+  let previousOptionalCloseTime = null;
+  const optionalWindows = PORTAL_CONFIG.schedule.optionalWindows.flatMap((declaration, index) => {
+    const requestedOpenProgress =
+      PORTAL_CONFIG.schedule.graceProgress + PORTAL_CONFIG.schedule.cadenceProgress * index;
+    const requestedOpenTime = duration * requestedOpenProgress;
+    if (requestedOpenTime + declaration.durationSeconds > duration) {
+      return [];
+    }
+
+    // Portal targets stay normalized, but the pre-existing absolute guard
+    // may move a short-tier opening forward when it meets an epoch front.
+    let openTime = Math.max(
+      requestedOpenTime,
+      previousOptionalCloseTime === null ? 0 : previousOptionalCloseTime + guardSeconds,
+    );
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const phase = inhibitorPhaseAtProgress(openTime / duration);
+      const durationSeconds = portalWindowMetadata(
+        declaration,
+        index,
+        phase,
+        openTime / duration,
+        requestedOpenProgress,
+      ).durationSeconds;
+      let nextOpenTime = openTime;
+      for (const frontTime of inhibitorFrontTimes) {
+        if (Math.abs(nextOpenTime - frontTime) < guardSeconds) {
+          nextOpenTime = Math.max(nextOpenTime, frontTime + guardSeconds);
+        }
+        if (Math.abs(nextOpenTime + durationSeconds - frontTime) < guardSeconds) {
+          nextOpenTime = Math.max(nextOpenTime, frontTime + guardSeconds);
+        }
+      }
+      if (nextOpenTime === openTime) {
+        break;
+      }
+      openTime = nextOpenTime;
+    }
+
+    const openProgress = openTime / duration;
+    const phase = inhibitorPhaseAtProgress(openProgress);
+    const metadata = portalWindowMetadata(
+      declaration,
+      index,
+      phase,
+      openProgress,
+      requestedOpenProgress,
+    );
+    previousOptionalCloseTime = openTime + metadata.durationSeconds;
+    return [{
+      openTime,
       durationSeconds: metadata.durationSeconds,
       metadata,
-    };
+    }];
   });
-  conductor.scheduleWindows({
-    idPrefix: "portal:optional",
-    startTime: PORTAL_CONFIG.schedule.graceSeconds,
-    cadence: PORTAL_CONFIG.schedule.cadenceSeconds,
-    count: optionalWindows.length,
-    durations: optionalWindows.map((window) => window.durationSeconds),
-    metadata: optionalWindows.map((window) => window.metadata),
-  });
+  if (optionalWindows.length > 0) {
+    conductor.scheduleWindows({
+      idPrefix: "portal:optional",
+      openTimes: optionalWindows.map((window) => window.openTime),
+      count: optionalWindows.length,
+      durations: optionalWindows.map((window) => window.durationSeconds),
+      metadata: optionalWindows.map((window) => window.metadata),
+    });
+  }
   conductor.scheduleWindows({
     idPrefix: "portal:final-exfil",
-    startTime: MATCH_MAX_SIM_TIME,
+    startTime: duration,
     cadence: 1,
     count: 1,
     durations: PORTAL_CONFIG.schedule.finalExfilDuration,
@@ -514,7 +594,8 @@ function createInhibitorConductor(seed) {
       system: "portals",
       kind: "final-exfil",
       windowIndex: optionalWindows.length,
-      phaseAtOpen: inhibitorPhaseAtTime(MATCH_MAX_SIM_TIME),
+      openProgress: 1,
+      phaseAtOpen: inhibitorPhaseAtProgress(1),
       countRange: [1, 1],
       effectiveCountRange: [1, 1],
       types: ["standard"],
@@ -1178,6 +1259,7 @@ const runtime = {
     status: "idle",
     mapId: null,
     mapName: null,
+    runDurationSeconds: null,
     hostClientId: null,
     hostName: null,
     overloadState: "NORMAL",
@@ -1525,12 +1607,14 @@ function startSession(config = {}) {
   const rngStreams = createRNGStreams(seed);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
+  const runDurationSeconds = resolveRunDurationSeconds(mapState.id);
   runtime.session = {
     id: crypto.randomUUID(),
     runId: crypto.randomUUID(),
     status: "running",
     mapId: mapState.id,
     mapName: mapState.name,
+    runDurationSeconds,
     anomalyCatalog: mapState.anomalyCatalog,
     hostClientId: config.requesterId ? String(config.requesterId) : null,
     hostProfileId: config.requesterProfileId
@@ -1656,7 +1740,7 @@ function startSession(config = {}) {
     field: 0,
   };
   // The Conductor is one match-scoped authority built from the run seed.
-  runtime.conductor = createInhibitorConductor(runtime.session.seed);
+  runtime.conductor = createInhibitorConductor(runtime.session.seed, runtime.session.runDurationSeconds);
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
   runtime.portalSchedule = runtime.inhibitorSchedule;
   runtime.portalClock = {
@@ -1727,7 +1811,7 @@ function startSession(config = {}) {
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
-  runtime.collapseEpochSchedule = createCollapseEpochSchedule({ matchDurationSeconds: MATCH_MAX_SIM_TIME });
+  runtime.collapseEpochSchedule = createCollapseEpochSchedule({ matchDurationSeconds: runtime.session.runDurationSeconds });
   runtime.collapseEpochState = createCollapseEpochState(runtime.collapseEpochSchedule);
   runtime.conductor.scheduleCollapseEpochs(runtime.collapseEpochSchedule);
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
@@ -2263,7 +2347,7 @@ function maybeEnforceMatchLifetime() {
   const killedCount = killActiveHumanPlayers("run-timeout");
   return endSession("run-timeout", {
     killedCount,
-    maxSimTime: MATCH_MAX_SIM_TIME,
+    maxSimTime: runtime.session.runDurationSeconds,
     finalExfilCloseTime: runtime.portalSchedule?.windows?.find((window) => window.metadata?.finalExfil)?.closeTime,
   });
 }
@@ -2357,6 +2441,7 @@ function buildRunResult(player, outcome) {
     deathEntityId,
     deathEntityName,
     survivalTime,
+    runDurationSeconds: runtime.session.runDurationSeconds,
     cargoExtracted,
     cargoLost,
     salvageBrought,
@@ -2803,7 +2888,7 @@ function tickWreckWaves(dt) {
     runtime._wreckWaveIndex >= WRECK_WAVES.length &&
     MAX_WRECK_REPEAT_WAVES > 0 &&
     runtime._wreckRepeatWaveCount < MAX_WRECK_REPEAT_WAVES &&
-    runtime.simTime < MATCH_MAX_SIM_TIME &&
+    runtime.simTime < runtime.session.runDurationSeconds &&
     runtime.mapState.wrecks.length < MAX_LIVE_WRECKS
   ) {
     runtime._wreckWaveRepeatTimer += dt;
@@ -5509,7 +5594,7 @@ function aiShouldExtract(ai) {
   // Hard triggers
   if (inhForm >= 3) return true;
   if (portalsAlive <= 1) return true;
-  if (runtime.simTime > RUN_DURATION - 30) return true;
+  if (runtime.simTime > runtime.session.runDurationSeconds - 30) return true;
 
   // Soft triggers
   if (cargoValue >= w.minCargoValue) return true;
@@ -6763,7 +6848,7 @@ const server = http.createServer(async (req, res) => {
         eventJournal: runtime.eventJournal ? runtime.eventJournal.describe() : null,
         snapshotRing: runtime.snapshotRing ? runtime.snapshotRing.describe() : null,
         match: {
-          maxSimTime: MATCH_MAX_SIM_TIME,
+          maxSimTime: runtime.session.runDurationSeconds,
           terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
           wreckRepeatWaveCount: runtime._wreckRepeatWaveCount || 0,
           maxWreckRepeatWaves: MAX_WRECK_REPEAT_WAVES,

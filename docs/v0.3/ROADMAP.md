@@ -1,6 +1,6 @@
 # v0.3 Roadmap: Ballpark Authority
 
-> Document revision: v0.3. Updated 2026-07-14 from live branch and harness
+> Document revision: v0.3. Updated 2026-07-17 from live branch and harness
 > evidence. Earlier mirror-scaffold plans are retained as history in the review
 > documents they came from, not as current implementation claims.
 
@@ -18,6 +18,13 @@ Focused merged-surface checks are green. Broad browser, visual, package, soak,
 platform, and physical Deck evidence remain asynchronous RC work rather than a
 feature-development blocker. Promotion into `main` remains closed until Greg's
 explicit version call; movement feel and visual taste remain Greg's final calls.
+
+The v0.3.1 map-relative schedule migration is source-complete: map-scale
+content owns the 480/600/720-second durations, the match Conductor resolves
+whole-run fronts from normalized progress, and client/server/build/result
+surfaces consume the selected duration. The focused contract preserves the
+600-second Expanse anchor, with epoch 3 intentionally at 75%. This locked
+baseline is ready for playtest; later multiplier balance remains tunable.
 
 ### Production Polish Candidate
 

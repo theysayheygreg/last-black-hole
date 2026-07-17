@@ -1,6 +1,6 @@
 # v0.3 Decisions
 
-> Document revision: v0.3. Updated 2026-07-15. This file records accepted
+> Document revision: v0.3. Updated 2026-07-17. This file records accepted
 > implementation decisions for the current source line. Remaining Greg-owned
 > decisions stay in `OPEN-DECISIONS.md`.
 
@@ -60,6 +60,31 @@ state. Expanse's executable coarse-cell ceiling is `2304` for `2209` cells.
 S24 catalog population is explicitly deferred. W2-A4 only proves the current
 authored population is playable under the density/travel contract; it does not
 begin a new encounter catalog or add a Map Select surface.
+
+## v0.3.1 Map-Relative Run Schedule
+
+Decision: the selected map scale owns the canonical match duration. The shared
+`MAP_SCALE_REGISTRY` declares `shallows = 480s`, `expanse = 600s`, and
+`deep-field = 720s`; ESM, CommonJS, server, build, snapshot, client clock,
+results, and ruler/presentation consumers resolve that same field. Product code
+does not retain a global `600s` policy. `LBH_SIM_MAX_SIM_TIME` remains only as an
+explicit short-fixture/test override.
+
+Whole-run fronts use normalized match progress: collapse epochs at `0`, `0.25`,
+`0.50`, and `0.75`; Inhibitor fronts at `0`, `0.15`, `0.30`, and `0.45`;
+optional portal targets from `0.075` with `0.20` cadence; and final exfil at
+`1.00`. The collapse vectors remain ambient `1/1.08/1.16/1.24` and wave
+`1/1.05/1.10/1.15`. Expanse preserves its prior 600-second schedule, except
+epoch 3 intentionally moves from 65% to 75%.
+
+Local real-time intervals remain absolute: portal open durations, tells,
+cooldowns, action windows, effect lifetimes, offset guards, and
+reconnect/reservation timers. The final exfil has a fixed 60-second close, so
+the hard end is `runDuration + 60s`. On shorter map tiers, the existing
+10-second front guard may resolve an optional portal target forward; it does
+not change the nominal normalized target or the portal's absolute duration.
+This locked baseline is the schedule proof boundary; later multiplier balance
+remains playtest-tunable.
 
 ## Locked Physical Units Centralization
 

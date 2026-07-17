@@ -132,6 +132,7 @@ function resolveWindowDuration(durations, index) {
 function createTimedWindowSchedule({
   idPrefix,
   startTime,
+  openTimes,
   cadence,
   count,
   durations,
@@ -139,9 +140,13 @@ function createTimedWindowSchedule({
 } = {}) {
   const prefix = String(idPrefix || "").trim();
   if (!prefix) throw new TypeError("window idPrefix must not be empty");
-  const start = nonNegativeNumber(startTime, "window startTime");
-  const interval = positiveNumber(cadence, "window cadence");
   const total = integerAtLeast(count, "window count", 1);
+  const hasExplicitOpenTimes = Array.isArray(openTimes);
+  if (hasExplicitOpenTimes && openTimes.length !== total) {
+    throw new RangeError(`window openTimes must contain exactly ${total} values`);
+  }
+  const start = hasExplicitOpenTimes ? 0 : nonNegativeNumber(startTime, "window startTime");
+  const interval = hasExplicitOpenTimes ? 0 : positiveNumber(cadence, "window cadence");
   if (Array.isArray(durations) && durations.length !== total) {
     throw new RangeError(`window durations must contain exactly ${total} values`);
   }
@@ -151,7 +156,9 @@ function createTimedWindowSchedule({
 
   return Object.freeze(Array.from({ length: total }, (_, index) => {
     const windowId = `${prefix}:${index + 1}`;
-    const openTime = start + interval * index;
+    const openTime = hasExplicitOpenTimes
+      ? nonNegativeNumber(openTimes[index], `window ${index + 1} openTime`)
+      : start + interval * index;
     const duration = resolveWindowDuration(durations, index);
     const closeTime = openTime + duration;
     return stableClone({
@@ -382,9 +389,17 @@ class Conductor {
     this.seed = this.rngStreams.seed;
     this.id = String(conductorId || "").trim();
     if (!this.id) throw new TypeError("conductorId must not be empty");
+    this.matchDurationSeconds = matchDurationSeconds === undefined
+      ? null
+      : positiveNumber(matchDurationSeconds, "matchDurationSeconds");
     this.worldScale = worldScale === undefined ? undefined : positiveNumber(worldScale, "worldScale");
     this.events = new EventFrontRegistry({
-      offsetGuardSeconds: resolveOffsetGuardSeconds({ offsetGuardSeconds, matchDurationSeconds }),
+      offsetGuardSeconds: resolveOffsetGuardSeconds({
+        offsetGuardSeconds,
+        matchDurationSeconds: this.matchDurationSeconds === null
+          ? undefined
+          : this.matchDurationSeconds,
+      }),
     });
     this._severityWaves = [];
     this._windows = [];
@@ -482,6 +497,7 @@ class Conductor {
   orderedScheduleData() {
     return stableClone({
       conductorId: this.id,
+      matchDurationSeconds: this.matchDurationSeconds,
       offsetGuardSeconds: this.events.offsetGuardSeconds,
       eventFronts: this.events.ordered(),
       severityWaves: this._severityWaves.slice().sort(compareTimedRecords),

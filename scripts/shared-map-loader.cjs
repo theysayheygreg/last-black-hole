@@ -57,6 +57,7 @@ function normalizeMap(mapId, authoredMap) {
     id: definition.mapId,
     mapClass: definition.mapClass,
     profileId: definition.profileId,
+    runDurationSeconds: definition.runDurationSeconds,
     sourceFile: definition.sourceFile,
     dimensions: { ...definition.dimensions },
     name: map.name,

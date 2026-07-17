@@ -467,6 +467,13 @@ export function createPresentationFrame(input = {}, defaults = {}) {
       dt: Math.max(0, finite(input.timing?.dt ?? input.dt, 1 / 60)),
       totalTime: Math.max(0, finite(input.timing?.totalTime ?? input.totalTime)),
     }),
+    runClock: Object.freeze({
+      elapsedSeconds: Math.max(0, finite(input.runTime?.elapsedSeconds)),
+      durationSeconds: Math.max(0, finite(input.runTime?.durationSeconds)),
+      progress: input.runTime?.durationSeconds > 0
+        ? Math.max(0, Math.min(1, finite(input.runTime.elapsedSeconds) / input.runTime.durationSeconds))
+        : 0,
+    }),
     camera: Object.freeze({
       x: finite(camera.x ?? camera.camX ?? input.camX),
       y: finite(camera.y ?? camera.camY ?? input.camY),

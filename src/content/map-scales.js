@@ -10,6 +10,11 @@ export function getMapScaleDefinition(mapId) {
   return MAP_SCALE_REGISTRY[String(mapId)] || null;
 }
 
+export function getMapDurationSeconds(mapId) {
+  const definition = getMapScaleDefinition(mapId);
+  return definition ? definition.runDurationSeconds : null;
+}
+
 export function getMapScaleByWorldScale(worldScale) {
   const scale = Number(worldScale);
   return PLAYABLE_MAP_IDS

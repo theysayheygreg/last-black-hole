@@ -9,6 +9,11 @@ function getMapScaleDefinition(mapId) {
   return MAP_SCALE_REGISTRY[String(mapId)] || null;
 }
 
+function getMapDurationSeconds(mapId) {
+  const definition = getMapScaleDefinition(mapId);
+  return definition ? definition.runDurationSeconds : null;
+}
+
 function getMapScaleByWorldScale(worldScale) {
   const scale = Number(worldScale);
   return PLAYABLE_MAP_IDS
@@ -35,6 +40,7 @@ module.exports = {
   AUTHORED_MAP_CONTRACT,
   PLAYABLE_MAP_IDS,
   getMapScaleDefinition,
+  getMapDurationSeconds,
   getMapScaleByWorldScale,
   assertMapDefinitionParity,
 };

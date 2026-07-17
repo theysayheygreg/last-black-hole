@@ -36,6 +36,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MapRelativeSchedule",
+    file: "map-relative-schedule.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "RouteBriefing",
     file: "route-briefing.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],
