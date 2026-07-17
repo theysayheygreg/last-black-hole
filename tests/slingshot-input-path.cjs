@@ -352,23 +352,22 @@ async function run() {
       assert(arcScene.slingshot?.telegraph?.ownedArc, 'Owned arc did not reach the visible scene state');
 
       await setPad(page, { x: 1, y: 0 });
-      await sleep(160);
-      const promptDuring = await page.evaluate(() => {
+      await waitFor(page, () => {
         const element = document.getElementById('hud-interaction');
         const glyph = element?.querySelector('[data-action-id="slingshot"]');
         const copy = glyph?.nextElementSibling?.classList.contains('ui-action-copy')
           ? glyph.nextElementSibling.textContent.trim()
           : null;
-        return {
-          text: element?.textContent || '',
-          glyph: glyph ? {
-            action: glyph.dataset.actionId,
-            inputFamily: glyph.dataset.inputFamily,
-            label: glyph.textContent.trim(),
-            copy,
-          } : null,
-        };
-      });
+        return Boolean(
+          element
+          && getComputedStyle(element).display !== 'none'
+          && glyph?.dataset.actionId === 'slingshot'
+          && glyph?.dataset.inputFamily === 'controller'
+          && glyph.textContent.trim() === 'Y'
+          && copy === 'release'
+        );
+      }, { timeout: 1500 });
+      const promptDuring = await captureSlingshotPrompt(page);
       assert(JSON.stringify(promptDuring.glyph) === JSON.stringify({
         action: 'slingshot',
         inputFamily: 'controller',
