@@ -174,10 +174,6 @@ async function run() {
       assert(routeAnchor, 'Shallows route well is missing');
       const approach = await steerToRing(page, clientId, routeAnchor);
       const aim = await waitForPlayer(clientId, (player) => Boolean(player.slingshot?.aim), 'authoritative aim affordance');
-      await setPad(page, { x: 1, y: 0 });
-      await sleep(60);
-      await setPad(page);
-      await sleep(120);
       const promptBefore = await page.evaluate(() => {
         const element = document.getElementById('hud-interaction');
         const glyph = element?.querySelector('[data-action-id="slingshot"]');
