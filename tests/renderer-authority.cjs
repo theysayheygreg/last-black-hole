@@ -185,7 +185,7 @@ async function run() {
     assert(main.includes("remoteAuthorityActive && remoteAuthoritativeField")
       && main.includes("fluid.setAuthoritativeCoarseField(remoteAuthoritativeField)"),
     "Only the remote packed snapshot may register the authority texture");
-    assert(main.includes("ship.update(shipDt, flowField, wellSystem, fluid)"),
+    assert(main.includes("ship.update(dt, flowField, wellSystem, fluid)"),
       "Offline movement must retain its existing FlowField path while seeded migration is deferred");
     assert(simCore.includes("authorityDriven: visualOnly"),
       "Local well/star presentation must be retained while remote force injection is disabled");
