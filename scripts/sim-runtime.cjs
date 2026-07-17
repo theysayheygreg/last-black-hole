@@ -8,6 +8,7 @@ const { performance } = require("perf_hooks");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
+const { sanitizeRetiredItems } = require("./content/items.cjs");
 const SEEDED_GEN = require("./seeded-generation.cjs");
 const {
   buildCoarseFlowField,
@@ -286,8 +287,6 @@ const SERVER_COMBAT = {
   pulseEntityForce: 0.5,
   pulseEntityRadius: 0.3,
   pulseRecoilForce: 0.4,
-  timeSlowScale: 0.3,
-  timeSlowDuration: 3.0,
 };
 const SERVER_WELLS = {
   shipPullStrength: WELL_GRAVITY_PARAMS.player.strength,
@@ -948,9 +947,8 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   };
 }
 
-function cloneLoadoutItems(list = []) {
-  if (!Array.isArray(list)) return [];
-  return list.map((item) => (item ? { ...item } : null));
+function cloneRetiredSafeItems(list = []) {
+  return sanitizeRetiredItems(list);
 }
 
 function portalCaptureRadius(portal) {
@@ -1432,12 +1430,11 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     },
     status: "alive",
     cargo: new Array(brain.cargoSlots).fill(null),
-    equipped: Array.isArray(options.equipped) ? options.equipped.map((item) => item ? { ...item } : null) : [],
-    consumables: Array.isArray(options.consumables) ? options.consumables.map((item) => item ? { ...item } : null) : [],
+    equipped: cloneRetiredSafeItems(options.equipped),
+    consumables: cloneRetiredSafeItems(options.consumables),
     activeEffects: [],
     effectState: {
       shieldCharges: 0,
-      timeSlowRemaining: 0,
       pulseCooldownRemaining: 0,
       hullGraceRemaining: 0,
     },
@@ -2269,8 +2266,8 @@ function maybeEndTerminalSession(reason = "terminal-players") {
 
 function cloneProfileLoadout(profile) {
   return {
-    equipped: cloneLoadoutItems(profile?.loadout?.equipped),
-    consumables: cloneLoadoutItems(profile?.loadout?.consumables),
+    equipped: cloneRetiredSafeItems(profile?.loadout?.equipped),
+    consumables: cloneRetiredSafeItems(profile?.loadout?.consumables),
   };
 }
 
@@ -2286,8 +2283,8 @@ function buildRunResult(player, outcome) {
   const isExtraction = outcome === 'escaped';
   const resultOutcome = isExtraction ? 'extracted' : outcome;
   const loadoutSnapshot = {
-    equipped: cloneLoadoutItems(player.equipped),
-    consumables: cloneLoadoutItems(player.consumables),
+    equipped: cloneRetiredSafeItems(player.equipped),
+    consumables: cloneRetiredSafeItems(player.consumables),
   };
   const salvageBrought = [
     ...loadoutSnapshot.equipped,
@@ -3562,7 +3559,6 @@ function refreshPlayerEffects(player) {
   const passive = player.equipped.filter(Boolean).map((item) => item.effect).filter(Boolean);
   const active = [];
   if (player.effectState.shieldCharges > 0) active.push("shieldBurst");
-  if (player.effectState.timeSlowRemaining > 0) active.push("timeSlowLocal");
   player.activeEffects = [...new Set([...passive, ...active])];
 }
 
@@ -3607,9 +3603,6 @@ function applyConsumable(player, slotIndex) {
   switch (effectId) {
     case "shieldBurst":
       player.effectState.shieldCharges += 1;
-      break;
-    case "timeSlowLocal":
-      player.effectState.timeSlowRemaining = SERVER_COMBAT.timeSlowDuration;
       break;
     case "breachFlare":
       spawnTemporaryPortalNearPlayer(player);
@@ -6520,18 +6513,6 @@ function tickSim() {
     if (player.effectState.pulseCooldownRemaining > 0) {
       player.effectState.pulseCooldownRemaining = Math.max(0, player.effectState.pulseCooldownRemaining - dt);
     }
-    if (player.effectState.timeSlowRemaining > 0) {
-      const wasActive = player.effectState.timeSlowRemaining > 0;
-      player.effectState.timeSlowRemaining = Math.max(0, player.effectState.timeSlowRemaining - dt);
-      if (wasActive && player.effectState.timeSlowRemaining <= 0) {
-        refreshPlayerEffects(player);
-        publishEvent("player.effectExpired", {
-          clientId: player.clientId,
-          effectId: "timeSlowLocal",
-        });
-      }
-    }
-
     let input = expireHeldInput(player);
     if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
       applyConsumable(player, input.consumeSlot);
@@ -6551,10 +6532,7 @@ function tickSim() {
       input = player.lastInput;
     }
 
-    const playerDt =
-      player.effectState.timeSlowRemaining > 0
-        ? dt * SERVER_COMBAT.timeSlowScale
-        : dt;
+    const playerDt = dt;
     setForceLedgerDt(forceLedger, playerDt);
     // Tick control debuff (Swarm contact → sluggish controls)
     if (player.controlDebuff > 0) {
@@ -6962,8 +6940,8 @@ const server = http.createServer(async (req, res) => {
           body.profileSnapshot?.shipType
         );
         const durableLoadout = cloneProfileLoadout(durableProfile);
-        const equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
-        const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
+        const equipped = durableProfile ? durableLoadout.equipped : cloneRetiredSafeItems(body.equipped);
+        const consumables = durableProfile ? durableLoadout.consumables : cloneRetiredSafeItems(body.consumables);
         player = createPlayer(clientId, body.name, explicitHullType, {
           profileShipType: durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType || null,
           profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || null,
@@ -7005,10 +6983,10 @@ const server = http.createServer(async (req, res) => {
           player.hullType = normalizePublicHullType(player.profileShipType, player.hullType);
         }
         if (Array.isArray(body.equipped)) {
-          player.equipped = cloneLoadoutItems(body.equipped);
+          player.equipped = cloneRetiredSafeItems(body.equipped);
         }
         if (Array.isArray(body.consumables)) {
-          player.consumables = cloneLoadoutItems(body.consumables);
+          player.consumables = cloneRetiredSafeItems(body.consumables);
         }
         refreshPlayerBrain(player);
         refreshPlayerEffects(player);

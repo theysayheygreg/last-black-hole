@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { runEmEarned, survivalBonusEm } = require("./content/balance.cjs");
+const { sanitizeRetiredItems } = require("./content/items.cjs");
 
 // Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
 const DEFAULT_RIG_LEVELS = [0, 0, 0];
@@ -59,12 +60,14 @@ function createProfileSkeleton(profileId, name = "Pilot") {
 }
 
 function normalizeLoadout(loadout = {}) {
+  const equipped = sanitizeRetiredItems(loadout?.equipped);
+  const consumables = sanitizeRetiredItems(loadout?.consumables);
   return {
     equipped: Array.from({ length: EQUIPPED_SLOT_COUNT }, (_, index) =>
-      loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null
+      equipped[index] || null
     ),
     consumables: Array.from({ length: CONSUMABLE_SLOT_COUNT }, (_, index) =>
-      loadout?.consumables?.[index] ? { ...loadout.consumables[index] } : null
+      consumables[index] || null
     ),
   };
 }
@@ -85,7 +88,7 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
     created: snapshot.created || base.created,
     lastPlayed: snapshot.lastPlayed || base.lastPlayed,
     exoticMatter: Number.isFinite(Number(snapshot.exoticMatter)) ? Number(snapshot.exoticMatter) : base.exoticMatter,
-    vault: Array.isArray(snapshot.vault) ? snapshot.vault.map((item) => item ? { ...item } : null).filter(Boolean) : base.vault,
+    vault: Array.isArray(snapshot.vault) ? sanitizeRetiredItems(snapshot.vault).filter(Boolean) : base.vault,
     vaultCapacity: Number.isFinite(Number(snapshot.vaultCapacity)) ? Number(snapshot.vaultCapacity) : base.vaultCapacity,
     loadout: normalizeLoadout(snapshot.loadout),
     upgrades,

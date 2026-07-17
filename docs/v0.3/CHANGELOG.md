@@ -8,6 +8,13 @@
   Browser and CommonJS wrappers derive the `0.012` sim-unit hull length and
   keep ruler, force-ledger, dev-panel, fixture, and runtime conversions in
   parity without changing gameplay geometry.
+- **Retired per-player time dilation:** removed Time Dilator and Dead-Air
+  Ampoule from the consumable/drop catalog, deleted `timeSlowLocal` authority
+  state/use/expiry, client presentation, and audio routing, and added direct
+  retirement coverage. Historical IDs and their old effect ID remain only in
+  load-boundary sanitization so existing profiles lose the retired slots
+  cleanly; no replacement effect was added.
+
 - **Lane A payoff crash guard:** compact remote scavenger rows now restore the
   client-owned death presentation anchor when authority provides it, while
   partial rows remain safe to render and update without inventing gameplay
@@ -111,8 +118,9 @@
 - X-D measured current cruise and Breacher Burn travel at live profile dt for the 5x5, 15x15, and 25x25 registry, including raw runs, authority read radii, and a derived decisions-per-minute proxy; no gameplay constants changed.
 - X-A completed the bounded config red-flag audit: movement drag, wreck drift,
   and signal rates now use readable units with exact parity conversions; dead
-  client knobs were removed. The existing per-player `timeSlow` path remains
-  flagged for Greg under the durable "never per-player time" ruling.
+  client knobs were removed. The former per-player `timeSlow` path remained
+  flagged at audit time and was retired in the v0.3.1 follow-up under the
+  durable "never per-player time" ruling.
 - Corrected X-A compatibility coverage: Spacecraft/Surfer preset drag, saved
   profile drag ranks, all hull/item drag scales, and Ship wake terminal velocity
   now share the canonical half-life seam with parent-literal parity fixtures.

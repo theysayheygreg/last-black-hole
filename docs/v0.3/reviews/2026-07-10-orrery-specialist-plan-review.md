@@ -68,8 +68,8 @@ no longer an S0 product finding.
 - `src/config.js:392-408` is the audio config block; `src/dev-panel.js`
   exposes exactly five broad audio knobs.
 - `playAuthoritativeEvent` consumption begins at `src/main.js:2381`; local
-  cue calls exist in the cited ranges (e.g. `timeSlowEnd` near 4404,
-  `scavDeath` at 5369); ~40 direct `playEvent(` call sites confirm the
+  cue calls exist in the cited ranges (e.g. `scavDeath` at 5369); ~40 direct
+  `playEvent(` call sites confirm the
   scattered-call-site finding.
 - `DEATH_LINGER_DURATION = 1.2` at `src/main.js:363` — the 1.2 s near-silence
   design hook is real.
@@ -90,7 +90,7 @@ what `main.js` handles — still holds. Corrected in the plan.
 `overnight/20260710-230616-troubadorb-plan` sits at the base commit `f4b6cfb`
 with a clean tree; no plan file exists anywhere in the repo or in dangling git
 objects. The lane's surface is real and needed: the title says
-`LAST SINGULARITY` (`src/main.js:3319`), 67 named items live in
+`LAST SINGULARITY` (`src/main.js:3319`), 65 named items live in
 `src/content/items.data.json`, hulls/rigs/signatures carry authored names in
 `src/content/*.data.json`, `src/text-corruption.js` owns the Inhibitor's
 language damage, and both other plans lean on color-role words (cyan, amber,

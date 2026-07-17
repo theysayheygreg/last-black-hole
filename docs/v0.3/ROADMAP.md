@@ -150,7 +150,7 @@ explicit presentation contracts.
   scavenger, Inhibitor, extraction, and UI actions with bounded voices.
 - The visual source kit contains auditable entity, item-family, and UI-frame
   atlases. A deterministic build produces transparent top-down runtime sprites,
-  stable icons for all 67 catalog items, and sliced terminal frame parts.
+  stable icons for all 65 catalog items, and sliced terminal frame parts.
 - The generated UI kit now frames Profile, Home, route select, pause, results,
   and inventory surfaces with stronger local backing and restrained shadows.
 - One deterministic motion clock owns terminal expansion, content reveal,

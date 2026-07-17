@@ -4,9 +4,7 @@ import { cueSpec } from './cue-spec.js';
 const LOCAL_EVENT_CUES = Object.freeze({
   'player.pulse': 'pulse',
   'player.effectUsed:shieldBurst': 'shieldActivate',
-  'player.effectUsed:timeSlowLocal': 'timeSlow',
   'player.effectUsed:breachFlare': 'breachFlare',
-  'player.effectExpired:timeSlowLocal': 'timeSlowEnd',
   'player.shieldAbsorbed': 'shieldAbsorb',
   'player.died': 'death',
   'inhibitor.drainCargo': 'inhibitorDrain',
@@ -106,7 +104,6 @@ export class AudioRouter {
     const local = this.clientId ? payload.clientId === this.clientId : true;
     if (!local && event.type.startsWith('player.')) return null;
     if (event.type === 'player.effectUsed') return LOCAL_EVENT_CUES[`${event.type}:${payload.effectId}`] || null;
-    if (event.type === 'player.effectExpired') return LOCAL_EVENT_CUES[`${event.type}:${payload.effectId}`] || null;
     return LOCAL_EVENT_CUES[event.type] || null;
   }
 

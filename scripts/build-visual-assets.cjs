@@ -38,7 +38,7 @@ const ATLASES = {
       'thruster', 'plating', 'signal', 'coupling', 'drag',
       'cargo', 'pulse', 'sensor', 'flow', 'burn',
       'recirculator', 'gravity', 'decay', 'resonance', 'phase',
-      'pickup', 'shield-cell', 'time-dilator', 'breach-flare', 'fuel-cell',
+      'pickup', 'shield-cell', 'breach-flare', 'fuel-cell',
     ],
   },
   ui: {
@@ -122,7 +122,6 @@ function resolveItemFamily(id) {
   const rules = [
     // Match named consumable families before broad artifact words such as shield or anchor.
     [/shield-cell|foam-anchor/, 'shield-cell'],
-    [/time-dilator|dead-air-ampoule/, 'time-dilator'],
     [/breach-flare|crown-breach-match/, 'breach-flare'],
     [/fuel-cell|plasma-cell|antimatter-cell/, 'fuel-cell'],
     [/shield|plating|hull|keel|reinforcement|suture/, 'plating'],

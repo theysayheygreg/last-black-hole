@@ -38,7 +38,7 @@ padding, and never language that promises capability the sim does not grant.
 | Surface | Location | Observed state |
 |---|---|---|
 | Product name | `src/main.js:3319,3399` render `LAST SINGULARITY` | Correct. The repo path `last-black-hole` is implementation history; no player-facing string may say "Last Black Hole." |
-| Item catalog | `src/content/items.data.json` — 67 named items | Names exist and have stable generated icon ids (RC gate). A tone/consistency pass has never been done as a body of work. |
+| Item catalog | `src/content/items.data.json` — 65 named items | Names exist and have stable generated icon ids (RC gate). A tone/consistency pass has never been done as a body of work. |
 | Hulls and rigs | `src/content/hulls.data.json` (rig names like Laminar, Edgerunner, Gleanings, Afterburner, Ironclad, Smash & Grab, Harmonics, Anchor) | Public roster is Drifter and Breacher only. Resonant, Shroud, and Hauler are internal; player-facing text must not reference them. |
 | Signatures | `src/content/signatures.data.json` (`SIGNATURE_DEFINITIONS`, pools, seeded sets) | Cosmic-signature naming feeds route briefings; needs the same voice as the rest. |
 | Outcome language | `src/run-results.js` (`COLLAPSED` for collapse cause; cause/cargo foregrounded) | Matches the timbre plan's collapse language. Keep. |
@@ -109,7 +109,7 @@ no string is rewritten ad hoc.
 Apply the inventory to items, hulls/rigs, signatures, and session-profile
 names/descriptions in `src/content/*.data.json`. Item names must survive at
 Deck icon scale next to the palette lane's icon hierarchy (short, front-loaded
-distinctions). Keep stable ids untouched — the RC gate's 67 stable icon ids
+distinctions). Keep stable ids untouched — the RC gate's 65 stable icon ids
 bind to ids, not display names; verify with `npm run test:ui` and the asset
 tests before commit.
 

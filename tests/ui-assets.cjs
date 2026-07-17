@@ -44,12 +44,10 @@ async function run() {
     'Generated manifest must identify its source atlases without a wall-clock timestamp');
   assert.strictEqual(Object.hasOwn(MANIFEST, 'generatedAt'), false,
     'Generated manifest should be reproducible across identical asset builds');
-  assert.strictEqual(Object.keys(MANIFEST.items).length, 67, 'Expected complete generated item catalog');
+  assert.strictEqual(Object.keys(MANIFEST.items).length, 65, 'Expected complete generated item catalog');
   for (const [catalogId, family] of Object.entries({
     'shield-cell': 'shield-cell',
     'foam-anchor': 'shield-cell',
-    'time-dilator': 'time-dilator',
-    'dead-air-ampoule': 'time-dilator',
     'breach-flare': 'breach-flare',
     'crown-breach-match': 'breach-flare',
     'fuel-cell': 'fuel-cell',

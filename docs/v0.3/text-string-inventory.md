@@ -6,7 +6,7 @@
 
 | Surface / strings | Decision | Wave | Notes |
 |---|---|---|---|
-| `items.data.json` 67 catalog names | Keep | content | Stable ids and icon bindings remain untouched. Existing names are short and front-loaded at Deck icon scale. |
+| `items.data.json` 65 catalog names | Keep | content | Remaining stable ids and icon bindings stay aligned. Existing names are short and front-loaded at Deck icon scale. |
 | `items.data.json` internal-affinity item names | Keep internal | content | Content can retain internal definitions; no UI sweep may expose their hull affinity. |
 | `hulls.data.json` Drifter / Breacher names | Keep | content | Public roster only. |
 | `hulls.data.json` public rig names and focus labels | Retune | content | Use terse route/salvage language; do not change rig ids or mechanics. |

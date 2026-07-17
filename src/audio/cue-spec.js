@@ -18,8 +18,6 @@ export const CUE_SPECS = Object.freeze({
   pulse: spec('pulse', { bus: 'player', priority: 'action', maxVoices: 3, duration: 0.7, cooldown: 0.12, spatial: true }),
   shieldActivate: spec('shieldActivate', { bus: 'player', priority: 'action', maxVoices: 2, duration: 0.5 }),
   shieldAbsorb: spec('shieldAbsorb', { bus: 'critical', priority: 'critical', maxVoices: 2, duration: 0.55 }),
-  timeSlow: spec('timeSlow', { bus: 'player', priority: 'action', duration: 0.65 }),
-  timeSlowEnd: spec('timeSlowEnd', { bus: 'player', priority: 'navigation', duration: 0.35 }),
   breachFlare: spec('breachFlare', { bus: 'critical', priority: 'critical', duration: 0.75 }),
   starConsumed: spec('starConsumed', { bus: 'world', priority: 'warning', maxVoices: 2, duration: 0.8, spatial: true }),
   scavengerBump: spec('scavengerBump', { bus: 'world', priority: 'warning', maxVoices: 2, duration: 0.4, spatial: true }),

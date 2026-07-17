@@ -158,7 +158,7 @@ Requirements:
 - [x] Fuel/hull/signal gauges meet the committed minimum dimensions.
 - [x] Reduced-motion and controller prompt contracts are tested.
 - [x] Event-driven audio has a bounded voice budget.
-- [x] All 67 catalog items have stable generated icon ids, and the UI frame kit
+- [x] All 65 catalog items have stable generated icon ids, and the UI frame kit
   is derived reproducibly from committed source atlases.
 - [x] Profile, Home, route select, pause, results, and inventory surfaces use
   backed terminal frames and deterministic screen motion.

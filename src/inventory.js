@@ -9,6 +9,8 @@
  * Dropping an item creates a mini-wreck at the ship's position.
  */
 
+import { isRetiredItem, sanitizeRetiredItems } from './content/items.js';
+
 export class InventorySystem {
   constructor() {
     /** @type {Array<object|null>} 8 cargo slots */
@@ -181,7 +183,7 @@ export class InventorySystem {
    */
   loadConsumable(slotIndex, item) {
     if (slotIndex < 0 || slotIndex >= this.consumables.length) return null;
-    if (item && (item.subcategory !== 'consumable' || (item.charges || 0) <= 0)) return null;
+    if (item && (isRetiredItem(item) || item.subcategory !== 'consumable' || (item.charges || 0) <= 0)) return null;
     const prev = this.consumables[slotIndex];
     this.consumables[slotIndex] = item;
     return prev;
@@ -194,7 +196,7 @@ export class InventorySystem {
    */
   useConsumable(slotIndex) {
     const item = this.consumables[slotIndex];
-    if (!item || (item.charges || 0) <= 0) return null;
+    if (!item || isRetiredItem(item) || (item.charges || 0) <= 0) return null;
 
     item.charges--;
     this.usedConsumables.push({ ...item, slotIndex });
@@ -262,13 +264,15 @@ export class InventorySystem {
    */
   deserializeLoadout(data) {
     if (data.equipped) {
-      for (let i = 0; i < Math.min(data.equipped.length, this.equipped.length); i++) {
-        this.equipped[i] = data.equipped[i];
+      const equipped = sanitizeRetiredItems(data.equipped);
+      for (let i = 0; i < Math.min(equipped.length, this.equipped.length); i++) {
+        this.equipped[i] = equipped[i];
       }
     }
     if (data.consumables) {
-      for (let i = 0; i < Math.min(data.consumables.length, this.consumables.length); i++) {
-        this.consumables[i] = data.consumables[i];
+      const consumables = sanitizeRetiredItems(data.consumables);
+      for (let i = 0; i < Math.min(consumables.length, this.consumables.length); i++) {
+        this.consumables[i] = consumables[i];
       }
     }
   }

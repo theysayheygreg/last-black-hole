@@ -19,6 +19,7 @@ import {
   TUNING_CONTRACTS,
   normalizeProfileDragUpgradeRank,
 } from './content/tuning.js';
+import { sanitizeRetiredItems } from './content/items.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -101,12 +102,14 @@ function createDefaultProfile(name) {
 }
 
 function normalizeLoadoutShape(loadout = {}) {
+  const equipped = sanitizeRetiredItems(loadout?.equipped);
+  const consumables = sanitizeRetiredItems(loadout?.consumables);
   return {
     equipped: Array.from({ length: EQUIPPED_SLOT_COUNT }, (_, index) =>
-      loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null
+      equipped[index] || null
     ),
     consumables: Array.from({ length: CONSUMABLE_SLOT_COUNT }, (_, index) =>
-      loadout?.consumables?.[index] ? { ...loadout.consumables[index] } : null
+      consumables[index] || null
     ),
   };
 }
@@ -132,6 +135,9 @@ function normalizeProfileShape(profile = {}) {
   next.hullType = normalizeHullType(profile.hullType, profile.shipType);
   next.shipType = next.hullType;
   next.rigLevels = normalizeRigLevels(profile.rigLevels);
+  next.vault = Array.isArray(profile.vault)
+    ? sanitizeRetiredItems(profile.vault).filter(Boolean)
+    : defaults.vault;
   next.loadout = normalizeLoadoutShape(profile.loadout);
   return next;
 }

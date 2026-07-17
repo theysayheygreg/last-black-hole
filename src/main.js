@@ -341,7 +341,6 @@ const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
 let shieldActive = false;   // shieldBurst consumable — survive one well contact
-let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
 let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = {
@@ -1457,7 +1456,6 @@ function loadScene(map, { seed = 1 } = {}) {
   inventoryOpen = false;
   shieldActive = false;
   localAbilityState = null;
-  timeSlowRemaining = 0;
   _starFlashTimer = 0;
   hullGraceTimer = 0;
   hullGraceUsed = false;
@@ -1839,7 +1837,6 @@ function applyRemoteSnapshot(snapshot) {
 
   applyRemoteInventoryShape(localPlayer);
   shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
-  timeSlowRemaining = Math.max(0, localPlayer.effectState?.timeSlowRemaining ?? 0);
   combatSystem.playerCooldown = Math.max(0, localPlayer.effectState?.pulseCooldownRemaining ?? 0);
   if (Number.isFinite(localPlayer.deltaVMax) && Number.isFinite(localPlayer.deltaV)) {
     ship.deltaVMax = localPlayer.deltaVMax;
@@ -2310,14 +2307,8 @@ function applyRemoteEvents(events) {
         if (!isLocal) break;
         if (payload.effectId === 'shieldBurst') {
           showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
-        } else if (payload.effectId === 'timeSlowLocal') {
-          showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
         } else if (payload.effectId === 'breachFlare') {
           showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
-        }
-        break;
-      case 'player.effectExpired':
-        if (isLocal && payload.effectId === 'timeSlowLocal') {
         }
         break;
       case 'player.shieldAbsorbed':
@@ -3915,11 +3906,6 @@ function applyConsumableEffect(effectId, item = null) {
       showWarning(`fuel +${refillAmount}`, 'rgba(120, 220, 140, 0.95)', 1800);
       break;
     }
-    case 'timeSlowLocal':
-      timeSlowRemaining = 3.0;
-      showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
-      audioEngine.playEvent('timeSlow');
-      break;
     case 'breachFlare': {
       // Spawn a temporary portal near the ship
       const angle = Math.random() * Math.PI * 2;
@@ -4471,15 +4457,7 @@ function gameLoop(now) {
 
       // 6. Ship update
       if (gamePhase === 'playing') {
-      // Time slow consumable: ship experiences 30% of normal time
-      let shipDt = dt;
-      if (timeSlowRemaining > 0) {
-        const wasSlowed = timeSlowRemaining > 0;
-        timeSlowRemaining -= dt;
-        if (wasSlowed && timeSlowRemaining <= 0) audioEngine.playEvent('timeSlowEnd');
-        shipDt = dt * 0.3;
-      }
-      ship.update(shipDt, flowField, wellSystem, fluid);
+      ship.update(dt, flowField, wellSystem, fluid);
 
       // Local-only slingshot resolution. In remote-authority mode the same
       // input is sent to the sim server, and snapshots drive presentation.
@@ -5384,19 +5362,6 @@ function gameLoop(now) {
       ctx.save();
       ctx.fillStyle = `rgba(${fr}, ${fg}, ${fb}, ${flashAlpha})`;
       ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-      ctx.restore();
-    }
-
-    // Time slow indicator — purple vignette
-    if (timeSlowRemaining > 0) {
-      const fade = Math.min(timeSlowRemaining, 0.5) * 2;  // fade out in last 0.5s
-      ctx.save();
-      const w = overlayCanvas.width, h = overlayCanvas.height;
-      const grad = ctx.createRadialGradient(w/2, h/2, Math.min(w,h) * 0.3, w/2, h/2, Math.min(w,h) * 0.7);
-      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(1, `rgba(120, 80, 200, ${0.15 * fade})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
       ctx.restore();
     }
 

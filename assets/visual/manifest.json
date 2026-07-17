@@ -42,7 +42,6 @@
       "assets/visual/item-families/phase.png",
       "assets/visual/item-families/pickup.png",
       "assets/visual/item-families/shield-cell.png",
-      "assets/visual/item-families/time-dilator.png",
       "assets/visual/item-families/breach-flare.png",
       "assets/visual/item-families/fuel-cell.png"
     ],
@@ -416,12 +415,6 @@
       "tier": 1,
       "consumable": true
     },
-    "time-dilator": {
-      "file": "assets/visual/items/time-dilator.png",
-      "family": "time-dilator",
-      "tier": 2,
-      "consumable": true
-    },
     "breach-flare": {
       "file": "assets/visual/items/breach-flare.png",
       "family": "breach-flare",
@@ -431,12 +424,6 @@
     "foam-anchor": {
       "file": "assets/visual/items/foam-anchor.png",
       "family": "shield-cell",
-      "tier": 2,
-      "consumable": true
-    },
-    "dead-air-ampoule": {
-      "file": "assets/visual/items/dead-air-ampoule.png",
-      "family": "time-dilator",
       "tier": 2,
       "consumable": true
     },
