@@ -15,6 +15,12 @@ const CAPTURE_PATH = path.join(OUTPUT_DIR, 'movement-slingshot-overlay.png');
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
+function activeForceNames(player) {
+  return Object.entries(player?.forceLedger?.vectors || {})
+    .filter(([, vector]) => Math.hypot(Number(vector.x) || 0, Number(vector.y) || 0) > 0.01)
+    .map(([name]) => name);
+}
+
 async function startStaticServer() {
   const child = spawn(process.execPath, [
     path.join(ROOT, 'scripts', 'static-server.cjs'),
@@ -122,14 +128,12 @@ async function placePlayer(clientId, body) {
       (value) => value?.enabled && value.handlerCount === 11 && value.forceTick != null,
       'live ruler handler and force facts',
     );
-    await sleep(250);
-    const player = (await snapshot()).players.find((entry) => entry.clientId === network.clientId);
-    const activeForces = Object.entries(player.forceLedger.vectors)
-      .filter(([, vector]) => vector.magnitude > 0.01)
-      .map(([name]) => name);
-    if (!player.slingshot.engaged || activeForces.length === 0) {
-      throw new Error('Capture lacks live slingshot or movement force evidence');
-    }
+    const player = await waitFor(
+      async () => (await snapshot()).players.find((entry) => entry.clientId === network.clientId),
+      (value) => value?.slingshot?.engaged === true && activeForceNames(value).length > 0,
+      'live slingshot and movement force evidence',
+    );
+    const activeForces = activeForceNames(player);
     await page.screenshot({ path: CAPTURE_PATH });
     await page.keyboard.up('KeyW');
 

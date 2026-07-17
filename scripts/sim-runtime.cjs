@@ -452,6 +452,7 @@ function createInhibitorConductor(seed) {
     seed,
     conductorId: "match-conductor",
     offsetGuardSeconds: PORTAL_CONFIG.schedule.offsetGuardSeconds,
+    matchDurationSeconds: MATCH_MAX_SIM_TIME,
   });
   conductor.registerEventFront({
     id: "inhibitor:phase-0",

@@ -49,6 +49,7 @@ async function run() {
       idleShutdownMs: 5000,
       env: {
         LBH_SIM_MAX_SIM_TIME: "2",
+        LBH_SIM_FINAL_EXFIL_DURATION: "2",
         LBH_SIM_TERMINAL_GRACE_MS: "60000",
       },
     });

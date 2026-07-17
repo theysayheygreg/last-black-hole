@@ -6,6 +6,11 @@
   client-owned death presentation anchor when authority provides it, while
   partial rows remain safe to render and update without inventing gameplay
   state. Focused coverage lives in `tests/renderer-authority.cjs`.
+- **Lane B Wave-1 gate repair:** Conductor event-front spacing now resolves its
+  ten-second production guard against short match fixtures, preserving stable
+  ordering and overlap rejection; the live ruler proof derives force activity
+  from authoritative `{x, y}` snapshot vectors; and the eight Wave-1 contract
+  suites are registered under their narrow authority, static, or browser lanes.
 
 ## 2026-07-16
 
