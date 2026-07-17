@@ -62,6 +62,7 @@ export class Ship {
     // burn (e.g. Drifter), >1 = expensive (e.g. Breacher).
     this.deltaVBurnEff = 1.0;
     this.timeSinceThrust = 999;
+    this.deltaVRecovering = false;
 
     // --- Hull-supplied movement modifiers ---
     // Were defined in hulls.data.json but the legacy ship.update read
@@ -107,6 +108,7 @@ export class Ship {
     this.deltaVRegenBoost = deltaVRegenBoost;
     this.deltaVBurnEff = deltaVBurnEff;
     this.deltaV = refill ? deltaVMax : prevRatio * deltaVMax;
+    this.deltaVRecovering = false;
     this.thrustScale = thrustScale;
     this.dragScale = dragScale;
     this.currentCoupling = currentCoupling;

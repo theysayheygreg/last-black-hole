@@ -3646,7 +3646,7 @@ function collectThreeSceneState() {
       vy: ship.vy,
       facing: ship.facing,
       hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
-      deltaVRatio: ship.getDeltaVRatio?.() ?? 1,
+      deltaVRatio: authorityPlayer?.deltaVRatio ?? ship.getDeltaVRatio?.() ?? 1,
       forceLedger: authorityPlayer?.forceLedger || null,
       ruler: authorityPlayer?.ruler || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
@@ -5410,7 +5410,7 @@ function gameLoop(now) {
       abilityState: localAbilityState,
       inhibitorState,
       ship,
-      fuelRatio: ship.getDeltaVRatio(),
+      fuelRatio: authoritativePlayer?.deltaVRatio ?? ship.getDeltaVRatio(),
       hullState: authoritativePlayer ? {
         status: authoritativePlayer.status,
         shieldCharges: authoritativePlayer.effectState?.shieldCharges || 0,

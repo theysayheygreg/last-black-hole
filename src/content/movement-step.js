@@ -22,14 +22,23 @@ function wrapWorldPosition(value, worldScale) {
 
 function consumePlayerDeltaV(player, intensity, dt, costScale = 1) {
   const requested = Math.max(0, Math.min(1, Number(intensity) || 0));
-  if (requested <= 0 || (Number(player.deltaV) || 0) <= 0) return 0;
+  if (requested <= 0) return 0;
+  const available = Math.max(0, Number(player.deltaV) || 0);
   const burnRate = (Number(player.deltaVBurnRate) || MOVEMENT.player.deltaVBurnRate)
     * (Number(player.deltaVBurnEff) || 1)
     * costScale;
   const burnCost = burnRate * requested * dt;
-  const allowedRatio = burnCost > 0 ? Math.min(1, player.deltaV / burnCost) : 1;
-  player.deltaV = Math.max(0, player.deltaV - burnCost * allowedRatio);
-  return requested * allowedRatio;
+  // Do not spend the last fractional sample. Once a tank is dry (or cannot
+  // afford this input sample), hold the request while regen refills enough for
+  // one usable pulse. This closes the zero/near-zero oscillation caused by
+  // immediately consuming each tiny regen tick while thrust remains held.
+  if (available < burnCost) {
+    player.deltaVRecovering = true;
+    return 0;
+  }
+  player.deltaV = Math.max(0, available - burnCost);
+  player.deltaVRecovering = player.deltaV <= 0;
+  return requested;
 }
 
 function applyPlayerDeltaVRegen(player, dt, burned, inputConfig = MOVEMENT_INPUT) {
