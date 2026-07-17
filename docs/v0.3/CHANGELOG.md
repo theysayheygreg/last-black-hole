@@ -8,7 +8,11 @@
   Three presentation read fuel ratio from the authoritative player snapshot.
   Focused local/authority depletion, recovery, and parity proof is in
   `tests/fuel-recovery.cjs`.
-
+- **Lane C Deck snapshot repair:** remote launch now treats the authority's
+  empty boot session as idle, starts the selected canonical map tier, and
+  verifies that returned identity. Repeated joined Deep Field snapshots are
+  checked against the `large` 500000-byte ceiling, while compact remote star
+  rows restore the renderer fields required when optional data is absent.
 - **Version train:** development now targets `0.3.1`; internal candidates use
   `0.3.1.<commit-hash>`. The deployed `0.3.0.f56175f6` Preview keeps its
   existing identity until a real `0.3.1` artifact replaces it.

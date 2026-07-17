@@ -64,6 +64,33 @@ const STAR_TYPES = {
   },
 };
 
+/**
+ * Restore client-owned presentation fields around a compact server star row.
+ * Repeated snapshots must not turn a Star into an incomplete wire object.
+ */
+export function normalizeStarPresentation(remote = {}, fallback = null) {
+  const source = remote && typeof remote === 'object' ? remote : {};
+  const previous = fallback && typeof fallback === 'object' ? fallback : {};
+  const requestedType = source.type || previous.type || 'yellowDwarf';
+  const type = STAR_TYPES[requestedType] ? requestedType : 'yellowDwarf';
+  const finite = (value, fallbackValue) => Number.isFinite(Number(value)) ? Number(value) : fallbackValue;
+  return {
+    ...previous,
+    ...source,
+    id: source.id ?? previous.id ?? null,
+    type,
+    typeDef: STAR_TYPES[type],
+    mass: finite(source.mass, finite(previous.mass, 1)),
+    orbitalDir: finite(source.orbitalDir, finite(previous.orbitalDir, 1)),
+    driftVX: finite(source.driftVX, finite(previous.driftVX, 0)),
+    driftVY: finite(source.driftVY, finite(previous.driftVY, 0)),
+    alive: source.alive === undefined ? previous.alive !== false : source.alive !== false,
+    asteroids: Array.isArray(source.asteroids)
+      ? source.asteroids
+      : Array.isArray(previous.asteroids) ? previous.asteroids : [],
+  };
+}
+
 // ---- Name generation ----
 
 const STAR_CATALOGS = ['HD', 'HIP', 'GJ', 'LHS'];
@@ -87,6 +114,7 @@ function generateStarName(type) {
 
 class Star {
   constructor(wx, wy, opts = {}) {
+    this.id = opts.id ?? null;
     this.wx = wx;
     this.wy = wy;
     this.mass = opts.mass ?? 1.0;

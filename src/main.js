@@ -13,7 +13,7 @@ import { CONFIG } from './config.js';
 import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
-import { StarSystem } from './stars.js';
+import { StarSystem, normalizeStarPresentation } from './stars.js';
 // loot.js removed — loot anchors replaced with stars + asteroid clusters (see FLAVOR-PASS.md)
 import { WaveRingSystem } from './wave-rings.js';
 import { WreckSystem } from './wrecks.js';
@@ -1763,6 +1763,19 @@ function applyRemoteSnapshot(snapshot) {
     audioEngine.setContext('gameplay');
     showHUD();
   }
+  const authoritativeMapId = snapshot.session?.mapId;
+  if (authoritativeMapId) {
+    const authoritativeEntry = PLAYABLE_MAPS.find((entry) => entry.id === authoritativeMapId);
+    if (!authoritativeEntry) {
+      throw new Error(`Remote snapshot has unknown map id: ${authoritativeMapId}`);
+    }
+    const authoritativeWorldScale = Number(snapshot.session?.worldScale);
+    if (Number.isFinite(authoritativeWorldScale)
+      && authoritativeWorldScale !== authoritativeEntry.map.worldScale) {
+      throw new Error(`Remote snapshot map scale mismatch: ${authoritativeMapId} is ${authoritativeEntry.map.worldScale}, got ${authoritativeWorldScale}`);
+    }
+    remoteMapId = authoritativeEntry.id;
+  }
   remoteSnapshot = snapshot;
   if (snapshot.session?.cosmicSignature) {
     currentSignature = { ...snapshot.session.cosmicSignature };
@@ -1771,6 +1784,12 @@ function applyRemoteSnapshot(snapshot) {
     ok: true,
     session: snapshot.session ?? null,
     playerCount: Array.isArray(snapshot.players) ? snapshot.players.length : 0,
+    idleState: {
+      ...(remoteSessionHealth?.idleState || {}),
+      humanPlayerCount: Array.isArray(snapshot.players)
+        ? snapshot.players.filter((player) => !player.isAI).length
+        : 0,
+    },
     tick: snapshot.tick ?? null,
     simTime: snapshot.simTime ?? null,
   };
@@ -1917,7 +1936,8 @@ function updateRemoteShipPresentation(dt) {
 function currentRemoteControlState() {
   const selectedEntry = currentMapSelectEntry()?.available ? currentMapSelectEntry() : null;
   const session = remoteSessionHealth?.session ?? null;
-  const hasLiveSession = session?.status === 'running';
+  const hasLiveSession = session?.status === 'running'
+    && Number(remoteSessionHealth?.idleState?.humanPlayerCount || 0) > 0;
   const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
   const isHost = Boolean(hasLiveSession && simClient?.clientId && session?.hostClientId === simClient.clientId);
   return {
@@ -1953,6 +1973,7 @@ async function refreshRemoteSessionHealth(force = false) {
       ok: true,
       session: health?.session ?? null,
       playerCount: health?.playerCount ?? 0,
+      idleState: health?.idleState ?? null,
       tick: health?.tick ?? null,
       simTime: health?.simTime ?? null,
     };
@@ -1964,6 +1985,7 @@ async function refreshRemoteSessionHealth(force = false) {
       error: err.message,
       session: null,
       playerCount: 0,
+      idleState: null,
       tick: null,
       simTime: null,
     };
@@ -2427,11 +2449,7 @@ function syncRemoteWorldState(world) {
     const previousStars = new Map(starSystem.stars.map((star) => [star.id, star]));
     starSystem.stars = world.stars.map((remote, index) => {
       const prev = previousStars.get(remote.id) || starSystem.stars[index] || {};
-      return {
-        ...prev,
-        ...remote,
-        alive: remote.alive !== false,
-      };
+      return normalizeStarPresentation(remote, prev);
     });
   }
 
@@ -2507,7 +2525,10 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   }
 
   const health = await refreshRemoteSessionHealth(true);
-  const runningSession = health?.session?.status === 'running' ? health.session : null;
+  const hasHumanPilot = Number(health?.idleState?.humanPlayerCount || 0) > 0;
+  const runningSession = health?.session?.status === 'running' && hasHumanPilot
+    ? health.session
+    : null;
   const isHost = Boolean(runningSession?.hostClientId && runningSession.hostClientId === simClient.clientId);
   if (forceReset && runningSession && !isHost) {
     throw new Error('Only the host can reset the live cycle');
@@ -2557,7 +2578,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   }
 
   if (!runningSession || forceReset) {
-    await simClient.startSession({
+    const startedSession = await simClient.startSession({
       mapId: mapEntry.id,
       worldScale: mapEntry.map.worldScale,
       maxPlayers: 4,
@@ -2568,6 +2589,9 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
       requesterProfileId: profileManager.active?.id || null,
       requesterProfile: profileSnapshot,
     });
+    if (startedSession?.mapId !== mapEntry.id) {
+      throw new Error(`Remote session map mismatch: requested ${mapEntry.id}, got ${startedSession?.mapId || 'unknown'}`);
+    }
     if (forceReset && runningSession) {
       showWarning(`host reset to ${mapEntry.name.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
     }

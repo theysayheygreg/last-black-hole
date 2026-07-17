@@ -16,6 +16,33 @@ async function run() {
     resampleAuthoritativeField,
     sampleAuthoritativeCurrent,
   } = await import("../src/authoritative-field.mjs");
+  const { normalizeStarPresentation } = await import("../src/stars.js");
+
+  await runner.run("remote star rows retain a valid presentation contract", async () => {
+    const first = normalizeStarPresentation({
+      id: "star-1",
+      type: "redGiant",
+      mass: 1.4,
+      alive: true,
+    });
+    const repeated = normalizeStarPresentation({
+      id: "star-1",
+      type: "redGiant",
+      mass: 1.4,
+      alive: true,
+    }, first);
+    const optionalDataAbsent = normalizeStarPresentation({
+      id: "star-2",
+      mass: 0.8,
+    });
+    assert(first.typeDef?.sizeMult === 1.8, "Known star types must restore sizeMult");
+    assert(repeated.typeDef?.sizeMult === 1.8, "Repeated compact rows must remain render-compatible");
+    assert(optionalDataAbsent.typeDef?.sizeMult === 1, "Missing type data must use a valid default type");
+    assert(Array.isArray(optionalDataAbsent.asteroids), "Missing optional asteroid data must stay safe to render");
+    const main = fs.readFileSync(require.resolve("../src/main.js"), "utf8");
+    assert(main.includes("normalizeStarPresentation(remote, prev)"),
+      "Remote world sync must normalize compact star rows before presentation");
+  });
 
   await runner.run("authority texture registration keeps the shared Y contract", async () => {
     const field = {

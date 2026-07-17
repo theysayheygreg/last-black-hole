@@ -95,6 +95,7 @@ export function loadMap(map, systems, { seed = 1 } = {}) {
   // 5. Spawn stars
   for (const s of map.stars) {
     starSystem.addStar(s.x, s.y, {
+      id: s.id || `star-${starSystem.stars.length + 1}`,
       mass: s.mass ?? 1.0,
       orbitalDir: s.orbitalDir ?? 1,
       type: s.type,  // yellowDwarf if omitted
