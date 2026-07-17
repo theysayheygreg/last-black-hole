@@ -64,6 +64,8 @@ const INTERNAL = Object.freeze({
   lockTelegraphDurationSeconds: 0.25,
   releaseGhostDurationSeconds: 1.0,
   rangeBreakGraceFactor: 1.1,
+  // Internal prompt/snapshot-to-command transport allowance, not a knob.
+  promptTransportTicks: 4,
 });
 
 const QUARTER_TURN_RADIANS = Math.PI / 2;
@@ -129,7 +131,7 @@ function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSH
 function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, fixedStepSeconds = 0) {
   const duration = Math.max(0, finite(coyoteTimeMs));
   if (duration <= 0) return 0;
-  return duration + Math.max(0, finite(fixedStepSeconds)) * 1000 * 2;
+  return duration + Math.max(0, finite(fixedStepSeconds)) * 1000 * INTERNAL.promptTransportTicks;
 }
 
 function resolveChainCount({

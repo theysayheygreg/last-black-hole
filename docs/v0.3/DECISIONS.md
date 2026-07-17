@@ -135,10 +135,10 @@ accepted movement, sea, Conductor, timeSlow, and unit contracts.
 
 Fixed-step transport interpretation: the canonical gameplay value remains
 `50 ms`, but prompt-originated edge eligibility uses the internal runtime
-allowance `50 ms + 2 * current authority dt`. Aim retention, affordance lookup,
+allowance `50 ms + 4 * current authority dt`. Aim retention, affordance lookup,
 and effective/transport remaining-time telemetry use that duration; telemetry
 keeps canonical coyote and transport allowance distinct. For Shallows
-(`dt = 1/15 s`, about `66.7 ms`), an edge within `183.3 ms` is accepted and an
-edge beyond that effective window is rejected. The two-tick allowance is
+(`dt = 1/15 s`, about `66.7 ms`), an edge within `316.7 ms` is accepted and an
+edge beyond that effective window is rejected. The four-tick allowance is
 transport behavior, not a new gameplay knob, and changes no capture radius or
 broader movement behavior.

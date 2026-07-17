@@ -52,12 +52,13 @@ it has no facing-versus-velocity branch.
 The deterministic state path is `aim -> lock -> arc -> release-ghost`.
 Capture updates `lastAimSeenTime`; coyote retains its canonical 50 ms value, but
 prompt-originated edge eligibility uses the fixed-step transport allowance
-`50 ms + 2 * current authority dt` for aim retention and affordance lookup.
+`50 ms + 4 * current authority dt` for aim retention and affordance lookup.
 Telemetry labels canonical coyote separately from effective/transport remaining.
 This keeps a presented aim alive across the snapshot and command hops on
-Shallows (`dt = 1/15 s`, about 66.7 ms): edges within 183.3 ms are accepted,
+Shallows (`dt = 1/15 s`, about 66.7 ms): edges within 316.7 ms are accepted,
 while later edges reject without changing capture radius or movement. The
-shared pure helper and server edge fixture cover both boundaries. Chain count
+named four-tick internal protocol/presentation allowance is not a gameplay
+knob. The shared pure helper and server edge fixture cover both boundaries. Chain count
 is resolved from the prior authoritative release anchor and the five-knob chain
 window. The ratified v0.3.1 internal presentation durations are a 0.25 s lock
 telegraph and a 1.0 s release ghost; they are not tunables.

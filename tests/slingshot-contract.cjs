@@ -55,8 +55,10 @@ function run() {
   const shallowsDt = 1 / 15;
   const effectiveCoyoteMs = effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, shallowsDt);
   assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "canonical coyote value must remain 50 ms");
-  assert(Math.abs(effectiveCoyoteMs - (50 + (2 * 1000 / 15))) < 1e-9,
-    `Expected coyote plus two transport ticks, got ${effectiveCoyoteMs} ms`);
+  assert.strictEqual(INTERNAL.promptTransportTicks, 4, "Prompt transport allowance must remain an internal four-tick constant");
+  assert.strictEqual(INTERNAL.rangeBreakGraceFactor, 1.1, "Range-break grace must remain 1.1x");
+  assert(Math.abs(effectiveCoyoteMs - (50 + (INTERNAL.promptTransportTicks * 1000 / 15))) < 1e-9,
+    `Expected coyote plus four transport ticks, got ${effectiveCoyoteMs} ms`);
   assert(coyoteWindowOpen(10 + (effectiveCoyoteMs - 0.001) / 1000, 10, effectiveCoyoteMs),
     "edge within coyote plus two authority ticks must remain eligible");
   assert(!coyoteWindowOpen(10 + (effectiveCoyoteMs + 0.001) / 1000, 10, effectiveCoyoteMs),

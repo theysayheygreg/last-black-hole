@@ -9,7 +9,7 @@
   an otherwise valid press. Focused proof covers normal F/Y action input,
   authority engagement, and deliberate release without debug injection. The
   runtime coyote seam keeps the canonical `50 ms` value while allowing the
-  internal prompt-to-command transport allowance of two current authority
+  internal prompt-to-command transport allowance of four current authority
   ticks, preserving the presented aim across the Shallows `66.7 ms` snapshot
   and command hops without changing range or movement.
 
