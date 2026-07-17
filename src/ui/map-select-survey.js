@@ -323,18 +323,41 @@ export function surveySchemaKeys() {
   return [...SURVEY_KEYS];
 }
 
+function surveyNoise(seed) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawSurveyContour(ctx, cx, cy, rx, ry, seed, color, alpha = 1, dashed = false) {
+  const points = 12;
+  ctx.save();
+  ctx.strokeStyle = color.replace(/,\s*[^,)]+\)$/, `, ${alpha})`);
+  ctx.lineWidth = 1;
+  if (dashed) ctx.setLineDash([4, 5]);
+  ctx.beginPath();
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const wobble = 0.82 + surveyNoise(seed + i * 3.7) * 0.28;
+    const x = cx + Math.cos(angle) * rx * wobble;
+    const y = cy + Math.sin(angle) * ry * wobble;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime = 0, reducedMotion = false } = {}) {
   if (!preview) return;
-  const plot = { x: rect.x + 22, y: rect.y + 54, w: rect.w - 44, h: rect.h - 92 };
+  const plot = { x: rect.x + 24, y: rect.y + 58, w: rect.w - 48, h: rect.h - 100 };
   const grid = Math.max(1, Number(preview.scale.grid) || 1);
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.fillStyle = 'rgba(0, 4, 18, 0.58)';
   ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
-  ctx.strokeStyle = 'rgba(0, 226, 255, 0.10)';
+  ctx.strokeStyle = 'rgba(0, 226, 255, 0.08)';
   ctx.lineWidth = 1;
   for (let i = 1; i < grid; i++) {
-    if (grid > 15 && i % 2 !== 0) continue;
     const gx = plot.x + (i / grid) * plot.w;
     const gy = plot.y + (i / grid) * plot.h;
     ctx.beginPath();
@@ -343,26 +366,37 @@ export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime =
     ctx.stroke();
   }
   const coarseGrid = Math.max(1, Number(preview.scale.grid) || 1);
-  for (const region of preview.coarseRegions) {
-    const x = plot.x + (region.gridX / coarseGrid) * plot.w;
-    const y = plot.y + (region.gridY / coarseGrid) * plot.h;
-    const w = (region.width / coarseGrid) * plot.w;
-    const h = (region.height / coarseGrid) * plot.h;
-    const color = region.kind === 'open void' ? 'rgba(0, 0, 20, 0.88)' : region.kind === 'dense mass' ? 'rgba(255, 185, 56, 0.58)' : region.kind === 'interference' ? 'rgba(255, 62, 181, 0.48)' : 'rgba(0, 226, 255, 0.60)';
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = region.kind === 'open void' ? 'rgba(154, 180, 206, 0.20)' : 'rgba(0, 226, 255, 0.46)';
-    ctx.setLineDash([3, 4]);
-    ctx.strokeRect(x + 2, y + 2, Math.max(4, w - 4), Math.max(4, h - 4));
-    ctx.setLineDash([]);
-    const contourCount = 2 + Math.round(region.density * 3);
-    for (let ring = 0; ring < contourCount; ring++) {
-      const inset = 8 + ring * 7;
-      if (w <= inset * 2 || h <= inset * 2) continue;
-      ctx.strokeStyle = region.kind === 'interference' ? 'rgba(255, 62, 181, 0.44)' : 'rgba(0, 226, 255, 0.36)';
+  for (const [index, region] of preview.coarseRegions.entries()) {
+    const x = plot.x + ((region.gridX + region.width / 2) / coarseGrid) * plot.w;
+    const y = plot.y + ((region.gridY + region.height / 2) / coarseGrid) * plot.h;
+    const rx = Math.max(16, (region.width / coarseGrid) * plot.w * 0.44);
+    const ry = Math.max(14, (region.height / coarseGrid) * plot.h * 0.44);
+    const isVoid = region.kind === 'open void';
+    const isInterference = region.kind === 'interference';
+    const color = isVoid ? 'rgba(154, 180, 206, 0.26)' : isInterference ? 'rgba(255, 62, 181, 0.60)' : region.kind === 'dense mass' ? 'rgba(255, 185, 56, 0.62)' : 'rgba(0, 226, 255, 0.58)';
+    const contourCount = isVoid ? 1 : 2 + Math.round(region.density * 3);
+    if (!isVoid) {
+      ctx.fillStyle = color.replace(/,\s*[^,)]+\)$/, ', 0.08)');
       ctx.beginPath();
-      ctx.rect(x + inset, y + inset, w - inset * 2, h - inset * 2);
-      ctx.stroke();
+      ctx.moveTo(x - rx, y);
+      for (let step = 1; step <= 12; step++) {
+        const angle = (step / 12) * Math.PI * 2;
+        const wobble = 0.82 + surveyNoise(index * 13 + step) * 0.28;
+        ctx.lineTo(x + Math.cos(angle) * rx * wobble, y + Math.sin(angle) * ry * wobble);
+      }
+      ctx.fill();
+    }
+    for (let ring = 0; ring < contourCount; ring++) {
+      const scale = 1 - ring * 0.17;
+      drawSurveyContour(ctx, x, y, rx * scale, ry * scale, index * 17 + ring, color, isVoid ? 0.26 : 0.66 - ring * 0.1, isVoid || isInterference);
+    }
+    if (isInterference) {
+      for (let mark = 0; mark < 4; mark++) {
+        const offsetX = (surveyNoise(index * 7 + mark) - 0.5) * rx * 1.4;
+        const offsetY = (surveyNoise(index * 11 + mark) - 0.5) * ry * 1.4;
+        ctx.fillStyle = 'rgba(255, 62, 181, 0.54)';
+        ctx.fillRect(x + offsetX, y + offsetY, 18 + mark * 7, 2);
+      }
     }
   }
   const uncertaintyBars = Math.round(preview.uncertainty.value * 10);
@@ -373,7 +407,7 @@ export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime =
     ctx.fillRect(bandX, bandY, 18 + (i % 3) * 8, 2);
   }
   if (!reducedMotion) {
-    const scanY = plot.y + ((motionTime * 34) % 1) * plot.h;
+    const scanY = plot.y + ((motionTime * 0.34) % 1) * plot.h;
     ctx.fillStyle = 'rgba(0, 226, 255, 0.12)';
     ctx.fillRect(plot.x, scanY, plot.w, 2);
   }

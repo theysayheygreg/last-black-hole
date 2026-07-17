@@ -244,6 +244,9 @@ The lane should:
 - emit reduced "couch proxy" images, probably 50 percent and 25 percent scale;
 - sample a few named regions for contrast: selected action, danger warning,
   fuel/hull/signal bars, map selected sector, result outcome, continue action;
+- the bounded v0.3.1 Deck review capture also includes title exit, Ship/loadout,
+  all three canonical survey scales, a locked survey, and an in-match wreck
+  label frame at 1280x800;
 - fail only on objective breakage: missing surface, unreadable sampled element,
   no visible focus, or canvas/image capture failure.
 
@@ -431,6 +434,8 @@ Shipped survey-terminal slice:
 - The right rail uses possible-contents families/ranges, broad risk,
   incomplete confidence, and the shared `BEGIN DROP` graphical glyph contract
   for valid selections.
+- Possible-content ranges are text reads from canonical aggregate populations;
+  the right rail does not use decorative segmented chunk bars.
 - Locked rows show redacted/withheld center and right-rail data and expose no
   launch action. Reduced motion holds the corruption as a static frame.
 

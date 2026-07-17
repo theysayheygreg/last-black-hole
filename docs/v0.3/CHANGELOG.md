@@ -2,6 +2,14 @@
 
 ## 2026-07-16
 
+- **v0.3.1 Deck UI Lane A:** added the controller-visible title `B EXIT` path
+  through the packaged Electron quit bridge; centralized Deck-safe spacing,
+  icon/detail-aware rows, and backed action rails across title, Home, lists,
+  inventory, and Map Select; replaced Map Select box clusters with deterministic
+  coarse contour surveys for `5x5`, `15x15`, and `25x25`; replaced misleading
+  possible-content meters with canonical aggregate descriptions; and separated
+  nearby in-match wreck labels with local presentation mattes.
+
 - **Version train:** development now targets `0.3.1`; internal candidates use
   `0.3.1.<commit-hash>`. The deployed `0.3.0.f56175f6` Preview keeps its
   existing identity until a real `0.3.1` artifact replaces it.

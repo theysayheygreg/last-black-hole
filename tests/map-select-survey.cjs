@@ -41,6 +41,8 @@ async function run() {
   assert.strictEqual(deep.scale.label, '25x25', 'Deep Field survey scale must be 25x25');
   assert(shallows.scale.cells < expanse.scale.cells && expanse.scale.cells < deep.scale.cells, 'survey scale classes must be ordered');
   assert(shallows.coarseRegions.length < deep.coarseRegions.length, 'scale classes should visibly distinguish topology density');
+  assert(shallows.aggregateRanges.gravityWells.max > 0 && deep.aggregateRanges.derelictFields.max >= shallows.aggregateRanges.derelictFields.max,
+    'survey contents must be derived from canonical map populations');
 
   const valid = survey.buildValidSurveySelection({ id: 'expanse', map: maps[1].MAP }, briefing, 42);
   const locked = survey.buildLockedSurveySelection({ id: 'sector-04', label: 'SECTOR 04', status: 'UNRESOLVED' });
@@ -72,7 +74,7 @@ async function run() {
   assert(layout.rectContains(surface.right, glyph), 'controller glyph escaped right panel');
   assert(!layout.rectsOverlap(surface.left, surface.center, 0) && !layout.rectsOverlap(surface.center, surface.right, 0), 'three panels overlap');
 
-  console.log('MapSelectSurvey: 16 focused schema/seed/state/scale/layout assertions passed.');
+  console.log('MapSelectSurvey: 18 focused schema/seed/state/scale/layout assertions passed.');
 }
 
 run().catch((error) => {

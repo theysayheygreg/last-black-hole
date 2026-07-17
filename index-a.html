@@ -87,19 +87,19 @@
       --lbh-track-bg: rgba(24, 38, 52, 0.7);
       --lbh-warning-shadow: rgba(0, 0, 0, 0.8);
       --lbh-panel-radius: 2px;
-      --lbh-edge-margin: 16px;
+      --lbh-edge-margin: 24px;
       --lbh-couch-micro: 13px;
       --lbh-couch-small: 14px;
       --lbh-couch-body: 15px;
       --lbh-couch-button: 18px;
       --lbh-gauge-height: 16px;
       --lbh-hud-gap: 8px;
-      --lbh-deck-panel-pad-y: 10px;
-      --lbh-deck-panel-pad-x: 14px;
-      --lbh-deck-panel-gap: 14px;
-      --lbh-deck-row-min: 48px;
-      --lbh-deck-icon-min: 40px;
-      --lbh-deck-value-min: 46px;
+      --lbh-deck-panel-pad-y: 18px;
+      --lbh-deck-panel-pad-x: 22px;
+      --lbh-deck-panel-gap: 10px;
+      --lbh-deck-row-min: 58px;
+      --lbh-deck-icon-min: 44px;
+      --lbh-deck-value-min: 52px;
     }
     * {
       margin: 0;
@@ -212,7 +212,7 @@
       width: 254px;
       display: grid;
       gap: var(--lbh-deck-panel-gap);
-      padding: 14px 18px;
+      padding: var(--lbh-deck-panel-pad-y) var(--lbh-deck-panel-pad-x);
       color: var(--lbh-text-primary);
       border-color: rgba(234, 247, 255, 0.2);
     }
@@ -619,15 +619,15 @@
     /* Inventory panel (Tab toggle) — terminal card */
     #hud-inventory-panel {
       position: absolute;
-      left: 16px;
+      left: var(--lbh-edge-margin);
       top: 50%;
       transform: translateY(-50%);
       background: rgba(0, 2, 10, 0.94);
       border: 1px solid rgba(0, 226, 255, 0.26);
       border-radius: 2px;
       padding: 14px 18px;
-      width: min(420px, calc(100vw - 32px));
-      min-width: min(360px, calc(100vw - 32px));
+      width: min(420px, calc(100vw - 48px));
+      min-width: min(360px, calc(100vw - 48px));
       max-width: 420px;
       font-size: var(--lbh-couch-small);
       color: var(--lbh-text-primary);
@@ -654,8 +654,8 @@
       justify-content: space-between;
       align-items: center;
       gap: 10px;
-      padding: 6px 8px;
-      margin: 1px 0;
+      padding: 8px 10px;
+      margin: 3px 0;
       border-radius: 1px;
       transition: background 0.1s;
       min-height: var(--lbh-deck-row-min);
@@ -666,6 +666,10 @@
     #hud-inventory-panel .inv-item .inv-name {
       flex: 1;
       font-size: var(--lbh-couch-small);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     #hud-inventory-panel .inv-icon {
       position: relative;
@@ -703,6 +707,10 @@
       margin-left: 8px;
       opacity: 0.45;
       letter-spacing: 0;
+      max-width: 34%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     #hud-inventory-panel .inv-item .inv-drop {
       margin-left: 8px;

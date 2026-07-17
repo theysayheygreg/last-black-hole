@@ -158,11 +158,15 @@ async function run() {
 
   const deckDeploy = fs.readFileSync(DECK_DEPLOY_SCRIPT, "utf8");
   const electronMain = fs.readFileSync(path.join(ROOT, "desktop", "electron-main.cjs"), "utf8");
+  const mainPreload = fs.readFileSync(path.join(ROOT, "desktop", "main-preload.cjs"), "utf8");
   assert(electronMain.includes("protocol.registerSchemesAsPrivileged"), "Packaged renderer must use a privileged app protocol");
   assert(electronMain.includes("://renderer/index.html") && electronMain.includes("loadURL(rendererUrl)"), "Packaged renderer must load through the app protocol");
   assert(electronMain.includes("'application/json; charset=utf-8'"), "App protocol must serve JSON modules with the correct MIME type");
   assert(electronMain.includes("'text/javascript; charset=utf-8'"), "App protocol must serve module scripts with the correct MIME type");
   assert(electronMain.includes("LBH_SIM_KEEP_ALIVE: 'true'"), "Packaged authority must survive an extended title-screen wait");
+  assert(electronMain.includes("preload: path.join(__dirname, 'main-preload.cjs')"), "Packaged renderer must receive the main-window preload bridge");
+  assert(electronMain.includes("ipcMain.handle('lbh:quit-app'"), "Electron main must own the controller quit action");
+  assert(mainPreload.includes("ipcRenderer.invoke('lbh:quit-app')"), "Renderer quit action must use the centralized Electron IPC bridge");
   assert(fs.readFileSync(path.join(ROOT, "scripts", "build.cjs"), "utf8").includes("fs.cpSync(threeBuild"), "Desktop build must copy the complete Three build runtime");
 
   assert(deckDeploy.includes("--disable-gpu-sandbox"), "Deck launcher must keep the Chromium GPU sandbox workaround");

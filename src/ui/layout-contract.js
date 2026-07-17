@@ -53,17 +53,19 @@ export function itemCompoundLayout({
   y = 0,
   textWidth = 0,
   textHeight = 18,
+  detailHeight = 0,
 } = {}) {
   const iconSize = Math.max(UI_DECK_GEOMETRY.iconCell.minWidth, UI_DECK_GEOMETRY.iconCell.minHeight);
   const row = sizeCompound({
     textWidth,
     artWidth: iconSize,
     textHeight,
+    detailHeight,
     artHeight: iconSize,
     minHeight: UI_DECK_GEOMETRY.listRow.minHeight,
-    paddingY: Math.max(0, (UI_DECK_GEOMETRY.listRow.minHeight - iconSize) / 2),
+    paddingY: UI_DECK_GEOMETRY.listRow.paddingY,
   });
-  const rowRect = rect(x, y, row.contentWidth, row.h);
+  const rowRect = rect(x, y, row.w, row.h);
   const icon = rect(rowRect.x, rowRect.y + (rowRect.h - iconSize) / 2, iconSize, iconSize);
   return {
     row: rowRect,
@@ -91,10 +93,12 @@ export function deckPanelLayout(width, height, kind = 'home', viewportWidth = wi
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
   const compact = viewportWidth < 984;
-  const marginX = compact ? Math.max(UI_DECK_GEOMETRY.panel.paddingX, w * 0.025) : Math.max(34, Math.min(64, w * 0.045));
-  const top = Math.max(kind === 'home' ? 28 : 30, h * (kind === 'home' ? 0.05 : 0.052));
-  const bottom = h - Math.max(kind === 'home' ? 28 : 32, h * (kind === 'home' ? 0.045 : 0.048));
-  const gap = compact ? UI_DECK_GEOMETRY.separation + 2 : 18;
+  const marginX = compact
+    ? Math.max(UI_DECK_GEOMETRY.panel.paddingX, w * 0.025)
+    : Math.max(UI_DECK_GEOMETRY.viewport.edgeX, Math.min(72, w * 0.05));
+  const top = Math.max(kind === 'home' ? UI_DECK_GEOMETRY.viewport.edgeY : 46, h * (kind === 'home' ? 0.055 : 0.06));
+  const bottom = h - Math.max(kind === 'home' ? UI_DECK_GEOMETRY.viewport.edgeY : 46, h * (kind === 'home' ? 0.05 : 0.055));
+  const gap = compact ? UI_DECK_GEOMETRY.separation + 4 : UI_DECK_GEOMETRY.viewport.gap;
   const leftW = kind === 'home'
     ? (compact ? Math.max(196, w * 0.18) : Math.min(220, Math.max(190, w * 0.17)))
     : (compact ? Math.max(232, w * 0.22) : Math.min(300, Math.max(248, w * 0.23)));
@@ -113,7 +117,7 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
   const panels = deckPanelLayout(width, height, 'map', viewportWidth);
   const pad = UI_DECK_GEOMETRY.panel.paddingX;
   const count = Math.max(1, Math.floor(Number(entryCount) || 1));
-  const rowH = Math.max(58, Math.min(68, (panels.left.h - 160) / count));
+  const rowH = Math.max(UI_DECK_GEOMETRY.listRow.minHeight, Math.min(72, (panels.left.h - 170) / count));
   const rows = Array.from({ length: count }, (_, index) => rect(
     panels.left.x + pad,
     panels.left.y + 52 + index * (rowH + UI_DECK_GEOMETRY.separation),
@@ -158,10 +162,10 @@ export function titleSurfaceLayout(width, height, layout = 'left') {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
   const sideAligned = layout !== 'center';
-  const gutterX = Math.max(72, Math.min(116, Math.round(w * 0.075)));
-  const gutterY = Math.max(56, Math.min(92, Math.round(h * 0.085)));
+  const gutterX = Math.max(UI_DECK_GEOMETRY.viewport.edgeX, Math.min(120, Math.round(w * 0.075)));
+  const gutterY = Math.max(UI_DECK_GEOMETRY.viewport.edgeY + 12, Math.min(96, Math.round(h * 0.085)));
   const panelW = sideAligned ? Math.min(560, Math.max(500, Math.round(w * 0.43))) : Math.min(900, Math.round(w * 0.74));
-  const panelH = sideAligned ? 310 : 282;
+  const panelH = sideAligned ? 332 : 300;
   const panelX = layout === 'right' ? w - gutterX - panelW : layout === 'center' ? (w - panelW) / 2 : gutterX;
   const panelY = sideAligned ? gutterY + 70 : h / 2 - 154;
   const textInset = sideAligned ? 40 : 0;
@@ -179,6 +183,7 @@ export function titleSurfaceLayout(width, height, layout = 'left') {
     titleFontSize: sideAligned ? 50 : 58,
     statusW,
     commandRect: rect(commandX, titleY + 130, commandW, UI_DECK_GEOMETRY.button.minHeight),
+    footerRect: rect(commandX, titleY + 130 + UI_DECK_GEOMETRY.button.minHeight + UI_DECK_GEOMETRY.button.gap, commandW, UI_DECK_GEOMETRY.actionGlyph.minHeight),
     versionRect: rect(versionX, h - gutterY - 24, versionW, 24),
   };
 }

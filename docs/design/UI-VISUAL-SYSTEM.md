@@ -148,6 +148,9 @@ tooltip or more explanatory copy to compensate for a weak first read.
   the player presses anything.
 - Menu choices can live left or lower-left, but the first action must be
   obvious from a couch distance.
+- The title command rail pairs the active select glyph with a controller-safe
+  `B EXIT` affordance. On packaged Electron builds, the title back action
+  requests the main-process quit bridge so SteamOS receives a normal app quit.
 - System-status microtext is allowed as mood, not navigation.
 
 ### Home / Main Menu
@@ -176,11 +179,11 @@ three-panel hierarchy is stable:
   drawing a route, path sequence, spawn marker, numbered anchor, or exact object
   layout.
 - **Right rail:** selected map identity, scale class, broad risk band, a short
-  description, `POSSIBLE CONTACTS`, and `SURVEY CONFIDENCE`. Possible contacts
-  are families or ranges such as gravity wells, derelict fields, stellar
-  contacts, scavenger pressure, anomaly likelihood, or possible megastructures;
-  they are not promises about a particular run. Confidence is deliberately
-  incomplete and must communicate uncertainty rather than exact layout truth.
+  description, `POSSIBLE CONTENTS`, and `SURVEY CONFIDENCE`. Contents use
+  aggregate ranges derived from canonical map populations with plain-language
+  descriptions. They are not promises about a particular run; decorative
+  chunk meters are not valid evidence. Confidence is deliberately incomplete
+  and must communicate uncertainty rather than exact layout truth.
 
 The active presentation labels are `5x5` for Shallows, `15x15` for Expanse, and
 `25x25` for Deep Field. These are the player-facing scale labels; the separate
@@ -230,14 +233,15 @@ At Deck size item signals resolve: **family silhouette → tier rail → selecte
 Apply the accepted active-device geometry contract to Map Select without adding a
 second button or prompt system:
 
-- headings are at least `32 px` high with their padding and gap;
-- playable and locked list rows are at least `48 px` high;
-- a valid launch command slab is at least `220 x 52 px` with a separate `28 px`
+- headings are at least `40 px` high with their padding and gap;
+- playable and locked list rows are at least `58 px` high, increasing for icon
+  or two-line detail content;
+- a valid launch command slab is at least `240 x 56 px` with a separate `32 px`
   glyph area;
-- survey icon/art cells are at least `40 px`; detailed art cells, when used,
-  are at least `112 x 96 px`;
-- value/status blocks are at least `116 x 46 px`;
-- panel padding is at least `18 x 14 px` with `14 px` internal gaps.
+- survey icon/art cells are at least `44 px`; detailed art cells, when used,
+  are at least `128 x 104 px`;
+- value/status blocks are at least `132 x 52 px`;
+- panel padding is at least `22 x 18 px` with `16 px` internal gaps.
 
 The active command glyph is graphical and device-family matched. Deck/controller
 surfaces show only the resolved controller glyph, never a raw keyboard fallback;

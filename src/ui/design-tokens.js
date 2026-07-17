@@ -51,13 +51,13 @@ export const UI_SHADOWS = {
 };
 
 export const UI_SPACING = {
-  edge: 16,
-  panelPaddingX: 12,
-  panelPaddingY: 8,
+  edge: 24,
+  panelPaddingX: 22,
+  panelPaddingY: 16,
   panelRadius: 2,
-  terminalRowGap: 6,
-  terminalRowPaddingY: 3,
-  terminalRowPaddingX: 6,
+  terminalRowGap: 10,
+  terminalRowPaddingY: 8,
+  terminalRowPaddingX: 12,
   terminalPillPaddingY: 1,
   terminalPillPaddingX: 5,
 };
@@ -88,52 +88,59 @@ export const UI_DECK = {
 // Minimum geometry is a product contract at 1280x720/800 Deck scale. Text can
 // fit inside these shapes; it cannot define their footprint by itself.
 export const UI_DECK_GEOMETRY = {
+  viewport: {
+    minWidth: 1280,
+    minHeight: 800,
+    edgeX: 64,
+    edgeY: 42,
+    gap: 20,
+  },
   panel: {
-    paddingX: 18,
-    paddingY: 14,
-    gap: 14,
+    paddingX: 22,
+    paddingY: 18,
+    gap: 16,
   },
   heading: {
-    minHeight: 32,
-    paddingX: 14,
-    paddingY: 8,
-    gap: 8,
-  },
-  button: {
-    minWidth: 220,
-    minHeight: 52,
-    paddingX: 18,
+    minHeight: 40,
+    paddingX: 16,
     paddingY: 10,
     gap: 10,
   },
+  button: {
+    minWidth: 240,
+    minHeight: 56,
+    paddingX: 24,
+    paddingY: 12,
+    gap: 12,
+  },
   listRow: {
-    minHeight: 48,
-    paddingX: 12,
-    paddingY: 8,
-    gap: 10,
+    minHeight: 58,
+    paddingX: 16,
+    paddingY: 9,
+    gap: 12,
   },
   iconCell: {
-    minWidth: 40,
-    minHeight: 40,
+    minWidth: 44,
+    minHeight: 44,
   },
   artCell: {
-    minWidth: 112,
-    minHeight: 96,
+    minWidth: 128,
+    minHeight: 104,
   },
   valueBlock: {
-    minWidth: 116,
-    minHeight: 46,
-    paddingX: 12,
-    paddingY: 8,
-    gap: 8,
+    minWidth: 132,
+    minHeight: 52,
+    paddingX: 14,
+    paddingY: 10,
+    gap: 10,
   },
   actionGlyph: {
-    minWidth: 28,
-    minHeight: 28,
-    paddingX: 6,
-    gap: 8,
+    minWidth: 32,
+    minHeight: 32,
+    paddingX: 8,
+    gap: 10,
   },
-  separation: 8,
+  separation: 10,
 };
 
 export const UI_TIERS = {
