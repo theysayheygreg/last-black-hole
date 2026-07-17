@@ -10,13 +10,13 @@ const {
 async function run() {
   const runner = new TestRunner("Versioning");
 
-  await runner.run("v0.3 uses public patch plus commit hash", async () => {
-    assert(currentPublicVersion() === "0.3.0", `Expected v0.3 public train, got ${currentPublicVersion()}`);
+  await runner.run("v0.3.1 uses public patch plus commit hash", async () => {
+    assert(currentPublicVersion() === "0.3.1", `Expected v0.3.1 public train, got ${currentPublicVersion()}`);
     assert(currentVersionTrain() === "0.3", `Expected active train 0.3, got ${currentVersionTrain()}`);
-    const build = currentBuildVersion("0.3.0", "abcdef0");
-    assert(build === "0.3.0.abcdef0", `Expected four-part build version, got ${build}`);
+    const build = currentBuildVersion("0.3.1", "abcdef0");
+    assert(build === "0.3.1.abcdef0", `Expected four-part build version, got ${build}`);
     const parsed = parseBuildVersion(build);
-    assert(parsed.minor === 3 && parsed.public === 0 && parsed.hash === "abcdef0",
+    assert(parsed.minor === 3 && parsed.public === 1 && parsed.hash === "abcdef0",
       `Unexpected parsed build ${JSON.stringify(parsed)}`);
   });
 
