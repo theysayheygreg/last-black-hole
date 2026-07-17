@@ -227,12 +227,12 @@ async function run() {
       const effectiveCoyoteMs = effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, dt);
       assert(SLINGSHOT_VALUES.coyoteTime === 50, "Canonical coyote time must remain 50 ms");
 
-      const setPlayer = (point, resetSlingshot = false) => postJson("/debug/player-state", {
+      const setPlayer = (point, resetSlingshot = false, velocity = probe.velocity) => postJson("/debug/player-state", {
         clientId: "slingshot-coyote-test",
         wx: point.wx,
         wy: point.wy,
-        vx: probe.velocity.x,
-        vy: probe.velocity.y,
+        vx: velocity.x,
+        vy: velocity.y,
         deltaV: 40,
         status: "alive",
         resetSlingshot,
@@ -247,6 +247,15 @@ async function run() {
         "Aim telemetry must expose the effective transport remainder");
       assert(aimedPlayer.slingshot.telegraph.aimCue.canonicalCoyoteRemainingMs >= SLINGSHOT_VALUES.coyoteTime - 1e-6,
         "Aim telemetry must retain the canonical coyote remainder separately");
+      assert(aimedPlayer.slingshot.aim.tangentialSpeed >= 0.05
+        && aimedPlayer.slingshot.aim.engageEligible === true,
+      `Aim telemetry must publish the eligible tangential gate: ${JSON.stringify(aimedPlayer.slingshot.aim)}`);
+
+      const restoredAim = await setPlayer(probe.inside, true);
+      assert(restoredAim.status === 200 && restoredAim.body.ok === true, "Expected eligible coyote probe reset");
+      await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-coyote-test" && player.slingshot?.phase === "aim"
+          && player.slingshot?.aim?.engageEligible === true));
       const nextTickWatermark = maxEventSeq((await getJson("/events")).body);
       const movedOutside = await setPlayer(probe.outside);
       assert(movedOutside.status === 200 && movedOutside.body.ok === true, "Expected transport coyote probe placement");

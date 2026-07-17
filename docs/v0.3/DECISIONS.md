@@ -142,3 +142,9 @@ keeps canonical coyote and transport allowance distinct. For Shallows
 edge beyond that effective window is rejected. The four-tick allowance is
 transport behavior, not a new gameplay knob, and changes no capture radius or
 broader movement behavior.
+
+The authority also publishes the current aim's `tangentialSpeed` and boolean
+`engageEligible` result against the internal `0.05` minimum. HUD guidance shows
+`align with current` without an actionable glyph until that result is true;
+eligible aim retains the device-correct Y/F engage prompt. This is derived
+telemetry and presentation gating, not a sixth gameplay value.

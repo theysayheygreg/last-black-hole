@@ -6,10 +6,12 @@ const {
   boundedReleaseDelta,
   captureRadiusWorld,
   coyoteWindowOpen,
+  engageEligible,
   effectiveCoyoteTimeMs,
   releaseSpeedCap,
   resolveChainCount,
   rotateToward,
+  tangentialSpeed,
 } = require("../scripts/sim/slingshot-contract.cjs");
 const { simUnitsToMeters } = require("../scripts/content/units.cjs");
 
@@ -57,6 +59,11 @@ function run() {
   assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "canonical coyote value must remain 50 ms");
   assert.strictEqual(INTERNAL.promptTransportTicks, 4, "Prompt transport allowance must remain an internal four-tick constant");
   assert.strictEqual(INTERNAL.rangeBreakGraceFactor, 1.1, "Range-break grace must remain 1.1x");
+  assert.strictEqual(INTERNAL.minimumTangentialSpeed, 0.05, "Tangential gate must remain the internal 0.05 threshold");
+  assert(Math.abs(tangentialSpeed({ x: 0, y: 0.08 }, { x: 1, y: 0 }) - 0.08) < 1e-9,
+    "Tangential speed must measure the velocity component around the anchor");
+  assert(!engageEligible(0.049), "Aim below the tangential threshold must not be engage-eligible");
+  assert(engageEligible(0.05), "Aim at the tangential threshold must be engage-eligible");
   assert(Math.abs(effectiveCoyoteMs - (50 + (INTERNAL.promptTransportTicks * 1000 / 15))) < 1e-9,
     `Expected coyote plus four transport ticks, got ${effectiveCoyoteMs} ms`);
   assert(coyoteWindowOpen(10 + (effectiveCoyoteMs - 0.001) / 1000, 10, effectiveCoyoteMs),

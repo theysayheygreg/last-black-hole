@@ -68,6 +68,13 @@ The authoritative telegraph carries `aimCue`, `lock`, `ownedArc`, and
 W1-E ruler and force-ledger handlers for the readable overlay instead of
 recreating conversion or debug math.
 
+Aim telemetry also carries the authoritative `tangentialSpeed` and
+`engageEligible` result against the internal `0.05` minimum. Until the player
+aligns with the current, HUD guidance is non-actionable; once eligible, the
+existing device-correct Y/F engage prompt is shown. The normal-input fixture
+uses the live aim anchor coordinates to build that tangential velocity before
+pressing F.
+
 ## Focused Receipt
 
 The route fixture uses only the five knobs above:

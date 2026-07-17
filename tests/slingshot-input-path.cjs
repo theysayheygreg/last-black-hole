@@ -156,6 +156,8 @@ async function steerToRing(page, clientId, anchor) {
   let closest = Infinity;
   let last = null;
   let recharging = false;
+  let aimSteeringUntil = 0;
+  let aimAnchorKey = null;
 
   try {
     while (Date.now() < deadline) {
@@ -187,16 +189,44 @@ async function steerToRing(page, clientId, anchor) {
       };
 
       const prompt = await captureSlingshotPrompt(page);
-      if (hasSlingshotEngagePresentation(prompt)) {
-        await setPad(page);
-        return {
-          start,
-          end: last,
-          closest,
-          target: { ...target },
-          aim: next.slingshot?.aim || null,
-          prompt,
-        };
+      const aim = next.slingshot?.aim || null;
+      if (aim) {
+        const currentAimKey = `${aim.anchorType || 'anchor'}:${aim.anchorId || 'unknown'}`;
+        if (currentAimKey !== aimAnchorKey) {
+          aimAnchorKey = currentAimKey;
+          aimSteeringUntil = Date.now() + 140;
+        }
+        const aimDx = wrappedDelta(next.wx, aim.anchorWX, worldScale);
+        const aimDy = wrappedDelta(next.wy, aim.anchorWY, worldScale);
+        const aimDistance = Math.hypot(aimDx, aimDy) || 1;
+        let tangentX = -aimDy / aimDistance;
+        let tangentY = aimDx / aimDistance;
+        if ((next.vx || 0) * tangentX + (next.vy || 0) * tangentY < 0) {
+          tangentX = -tangentX;
+          tangentY = -tangentY;
+        }
+        const emergencyBrake = speed > Math.max(0.52, maxCruiseSpeed * 1.6);
+        if (Date.now() >= aimSteeringUntil
+          && aim.engageEligible === true
+          && hasSlingshotEngagePresentation(prompt)) {
+          await setPad(page);
+          return {
+            start,
+            end: last,
+            closest,
+            target: { ...target },
+            aim,
+            prompt,
+          };
+        }
+        await setPad(page, {
+          x: tangentX,
+          y: tangentY,
+          thrust: !emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
+          brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
+        });
+        await sleep(70);
+        continue;
       }
 
       const nx = distance > 1e-6 ? tx / distance : 1;
@@ -269,6 +299,8 @@ async function run() {
       const approach = await steerToRing(page, clientId, routeAnchor);
       const aim = approach.aim;
       const promptBefore = approach.prompt;
+      assert(aim?.engageEligible === true && aim.tangentialSpeed >= 0.05,
+        `Authority aim was not engage-eligible: ${JSON.stringify(aim)}`);
       assert(promptBefore.visible && /well in range/i.test(promptBefore.text), `Missing in-world slingshot prompt: ${JSON.stringify(promptBefore)}`);
       assert(JSON.stringify(promptBefore.glyph) === JSON.stringify({
         action: 'slingshot',

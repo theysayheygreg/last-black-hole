@@ -115,12 +115,14 @@ const {
   boundedReleaseDelta,
   captureRadiusWorld,
   coyoteWindowOpen,
+  engageEligible: slingshotEngageEligible,
   effectiveCoyoteTimeMs,
   quarterTurnsFromArc,
   releaseSpeedCap,
   resolveChainCount,
   rotateToward,
   signedAngle,
+  tangentialSpeed,
 } = require("./sim/slingshot-contract.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
@@ -2000,6 +2002,8 @@ function buildSnapshotBody() {
           anchorWY: player.slingshot.aimAnchorWY,
           anchorRange: player.slingshot.aimAnchorRange,
           distance: player.slingshot.aimDistance,
+          tangentialSpeed: player.slingshot.aimTangentialSpeed || 0,
+          engageEligible: player.slingshot.engageEligible === true,
           coyoteActive: Boolean(player.slingshot.coyoteActive),
           coyoteRemainingMs: coyote.transportRemainingMs,
           canonicalCoyoteRemainingMs: coyote.canonicalRemainingMs,
@@ -4837,10 +4841,22 @@ function findSlingshotAnchorByState(state) {
 function slingshotTangentialSpeed(player, anchor) {
   const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
   const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
-  const dist = Math.hypot(dx, dy) || 1e-4;
-  const tx = -(dy / dist);
-  const ty = dx / dist;
-  return Math.abs(player.vx * tx + player.vy * ty);
+  return tangentialSpeed({ x: player.vx, y: player.vy }, { x: dx, y: dy });
+}
+
+function slingshotAimEligibility(player, state, anchor = findSlingshotAnchorByState(state)) {
+  const tangential = anchor ? slingshotTangentialSpeed(player, anchor) : 0;
+  return {
+    tangentialSpeed: tangential,
+    engageEligible: Boolean(anchor && slingshotEngageEligible(tangential)),
+  };
+}
+
+function setSlingshotAimEligibility(player, state, anchor) {
+  const eligibility = slingshotAimEligibility(player, state, anchor);
+  state.aimTangentialSpeed = eligibility.tangentialSpeed;
+  state.engageEligible = eligibility.engageEligible;
+  return eligibility;
 }
 
 function slingshotOrbitDirection(player, anchor) {
@@ -4883,6 +4899,7 @@ function updateSlingshotAim(player, currentTime, dt = 0) {
     state.lastAimSeenTime = currentTime;
     state.coyoteUntil = currentTime + coyoteTimeMs / 1000;
     state.coyoteActive = false;
+    setSlingshotAimEligibility(player, state, current.anchor);
     return current;
   }
 
@@ -4894,10 +4911,12 @@ function updateSlingshotAim(player, currentTime, dt = 0) {
   if (canCoyote) {
     state.phase = "aim";
     state.coyoteActive = true;
-    return findSlingshotAnchorByState({
+    const anchor = findSlingshotAnchorByState({
       anchorId: state.aimAnchorId,
       anchorType: state.aimAnchorType,
     });
+    setSlingshotAimEligibility(player, state, anchor);
+    return anchor;
   }
 
   state.phase = "idle";
@@ -4908,6 +4927,8 @@ function updateSlingshotAim(player, currentTime, dt = 0) {
   state.aimAnchorWY = null;
   state.aimAnchorRange = 0;
   state.aimDistance = 0;
+  state.aimTangentialSpeed = 0;
+  state.engageEligible = false;
   state.coyoteActive = false;
   state.coyoteUntil = 0;
   return null;
@@ -4953,6 +4974,9 @@ function buildSlingshotTelegraph(player) {
   const state = ensurePlayerSlingshot(player);
   const coyote = slingshotCoyoteTelemetry(state);
   const aimAnchor = slingshotAnchorTelemetry(state, "aim");
+  const aimEligibility = aimAnchor
+    ? setSlingshotAimEligibility(player, state, findSlingshotAnchorByState(state))
+    : { tangentialSpeed: 0, engageEligible: false };
   const activeAnchor = slingshotAnchorTelemetry(state, "");
   const releaseGhost = state.releaseGhost ? {
     ...state.releaseGhost,
@@ -4963,6 +4987,8 @@ function buildSlingshotTelegraph(player) {
     aimCue: aimAnchor ? {
       anchor: aimAnchor,
       distance: state.aimDistance || 0,
+      tangentialSpeed: aimEligibility.tangentialSpeed,
+      engageEligible: aimEligibility.engageEligible,
       coyoteActive: Boolean(state.coyoteActive),
       coyoteRemainingMs: coyote.transportRemainingMs,
       canonicalCoyoteRemainingMs: coyote.canonicalRemainingMs,
@@ -5056,7 +5082,7 @@ function engagePlayerSlingshot(player, currentTime, dt = 0) {
   const anchor = affordance?.anchor;
   if (!anchor) return false;
   const tanSpeed = slingshotTangentialSpeed(player, anchor);
-  if (tanSpeed < SLINGSHOT_INTERNAL.minimumTangentialSpeed) return false;
+  if (!slingshotEngageEligible(tanSpeed)) return false;
 
   const mods = slingshotHullMods(player);
   const anchorKey = slingshotAnchorKey(anchor);

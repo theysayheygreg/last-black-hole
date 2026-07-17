@@ -89,6 +89,21 @@ function normalized(value, fallback = { x: 1, y: 0 }) {
   return { x: source.x / magnitude, y: source.y / magnitude };
 }
 
+function tangentialSpeed(velocity, radial) {
+  const dx = finite(radial?.x);
+  const dy = finite(radial?.y);
+  const distance = Math.hypot(dx, dy);
+  if (distance <= 1e-9) return 0;
+  return Math.abs(
+    finite(velocity?.x) * (-dy / distance)
+      + finite(velocity?.y) * (dx / distance),
+  );
+}
+
+function engageEligible(speed, minimum = INTERNAL.minimumTangentialSpeed) {
+  return finite(speed) >= Math.max(0, finite(minimum));
+}
+
 function signedAngle(from, to) {
   const a = normalized(from);
   const b = normalized(to);
@@ -195,9 +210,11 @@ module.exports = {
   captureRadiusWorld,
   coyoteWindowOpen,
   effectiveCoyoteTimeMs,
+  engageEligible,
   quarterTurnsFromArc,
   releaseSpeedCap,
   resolveChainCount,
   rotateToward,
   signedAngle,
+  tangentialSpeed,
 };

@@ -202,6 +202,8 @@ function telegraph(source = null) {
     aimCue: source.aimCue ? Object.freeze({
       anchor: normalizeAnchor(source.aimCue.anchor),
       distance: Math.max(0, finite(source.aimCue.distance)),
+      tangentialSpeed: Math.max(0, finite(source.aimCue.tangentialSpeed)),
+      engageEligible: source.aimCue.engageEligible === true,
       coyoteActive: source.aimCue.coyoteActive === true,
       coyoteRemainingMs: Math.max(0, finite(source.aimCue.coyoteRemainingMs)),
       canonicalCoyoteRemainingMs: Math.max(0, finite(source.aimCue.canonicalCoyoteRemainingMs)),
