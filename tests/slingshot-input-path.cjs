@@ -111,67 +111,79 @@ async function steerToRing(page, clientId, anchor) {
   const dy = wrappedDelta(anchor.wy, player.wy, worldScale);
   const radialLength = Math.hypot(dx, dy) || 1;
   const target = {
+    id: `${anchor.id || 'route-anchor'}-inner-current`,
     wx: ((anchor.wx + (dx / radialLength) * 0.22) % worldScale + worldScale) % worldScale,
     wy: ((anchor.wy + (dy / radialLength) * 0.22) % worldScale + worldScale) % worldScale,
   };
 
   const deadline = Date.now() + 35000;
-  const captureStopBand = 0.39;
-  const arrivalSpeed = 0.12;
+  const radius = 0.12;
+  const maxCruiseSpeed = 0.31;
+  const allowFlyby = true;
+  let start = null;
+  let closest = Infinity;
+  let last = null;
+  let recharging = false;
+
   try {
     while (Date.now() < deadline) {
       const current = await snapshot();
       const next = current.players.find((entry) => entry.clientId === clientId);
       assert(next?.status === 'alive', `pilot left the run while approaching the route anchor: ${next?.status}`);
+      if (!start) start = { wx: next.wx, wy: next.wy };
       const tx = wrappedDelta(next.wx, target.wx, worldScale);
       const ty = wrappedDelta(next.wy, target.wy, worldScale);
       const distance = Math.hypot(tx, ty);
-      const anchorDistance = wrappedDistance(next, anchor, worldScale);
       const speed = Math.hypot(next.vx || 0, next.vy || 0);
+      const fuelRatio = next.deltaVRatio || 0;
+      closest = Math.min(closest, distance);
+      const commitDistance = Math.max(radius * 4, 0.16);
+      if (recharging) {
+        if (fuelRatio > 0.42) recharging = false;
+      } else if (fuelRatio < 0.015 || (fuelRatio < 0.08 && distance >= commitDistance)) {
+        recharging = true;
+      }
+      last = {
+        wx: next.wx,
+        wy: next.wy,
+        vx: next.vx,
+        vy: next.vy,
+        dist: distance,
+        speed,
+        fuelRatio,
+        recharging,
+      };
 
-      // Once inside capture range, remove thrust and damp only the measured
-      // velocity so the next authority snapshot can acquire aim in place.
-      if (anchorDistance <= captureStopBand) {
-        if (speed <= arrivalSpeed) {
-          await setPad(page);
-          return { target, player: next, distance, speed };
-        }
-        await setPad(page, {
-          x: (next.vx || 0) / speed,
-          y: (next.vy || 0) / speed,
-          brake: 1,
-        });
-        await sleep(100);
+      if (distance <= radius && allowFlyby) {
+        return { start, end: last, closest, target: { ...target } };
+      }
+
+      const nx = distance > 1e-6 ? tx / distance : 1;
+      const ny = distance > 1e-6 ? ty / distance : 0;
+      const desiredSpeed = allowFlyby
+        ? maxCruiseSpeed
+        : Math.max(0.06, Math.min(maxCruiseSpeed, distance * 1.35));
+      const correctionX = nx * desiredSpeed - (next.vx || 0);
+      const correctionY = ny * desiredSpeed - (next.vy || 0);
+      const correctionMagnitude = Math.hypot(correctionX, correctionY);
+      const emergencyBrake = speed > Math.max(0.52, maxCruiseSpeed * 1.6);
+      if (recharging) {
+        await setPad(page);
+        await sleep(150);
         continue;
       }
-
-      const direction = distance > 1e-6 ? { x: tx / distance, y: ty / distance } : { x: 1, y: 0 };
-      const desiredSpeed = Math.max(0.06, Math.min(0.30, distance * 0.9));
-      const correctionX = direction.x * desiredSpeed - (next.vx || 0);
-      const correctionY = direction.y * desiredSpeed - (next.vy || 0);
-      const correctionMagnitude = Math.hypot(correctionX, correctionY);
-      const emergencyBrake = speed > Math.max(0.42, desiredSpeed * 1.6);
-      if (emergencyBrake && speed > 0.01) {
-        await setPad(page, {
-          x: (next.vx || 0) / speed,
-          y: (next.vy || 0) / speed,
-          brake: 1,
-        });
-      } else if (correctionMagnitude > 0.035) {
-        await setPad(page, {
-          x: correctionX / correctionMagnitude,
-          y: correctionY / correctionMagnitude,
-          thrust: Math.min(0.65, Math.max(0.12, correctionMagnitude * 2.2)),
-        });
-      } else {
-        await setPad(page);
-      }
+      await setPad(page, {
+        x: emergencyBrake && speed > 0.01 ? (next.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
+        y: emergencyBrake && speed > 0.01 ? (next.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
+        thrust: !emergencyBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
+        brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
+      });
       await sleep(110);
     }
   } finally {
     await setPad(page).catch(() => null);
   }
-  throw new Error(`Could not reach ${anchor.id || 'route anchor'} capture band`);
+  throw new Error(`Could not reach ${target.id}; closest=${closest.toFixed(4)} last=${JSON.stringify(last)}`);
 }
 
 async function run() {
