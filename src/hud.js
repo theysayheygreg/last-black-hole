@@ -410,11 +410,43 @@ export function getHullPresentationState(hullState = {}, ship = null) {
 
 export function getInteractionPresentationState(interaction, promptOptions = {}) {
   if (!interaction || interaction.visible === false) return null;
-  const action = interaction.action || 'confirm';
   const label = String(interaction.label || 'confirm interaction');
   const detail = String(interaction.detail || 'hold position');
+  if (interaction.actionable === false) {
+    return { action: null, label, detail, caption: null };
+  }
+  const action = interaction.action || 'confirm';
   const verb = String(interaction.verb || 'confirm');
   return { action, label, detail, caption: affordanceCaption(action, verb, promptOptions) };
+}
+
+export function getSlingshotInteractionState(slingshot) {
+  if (!slingshot) return null;
+  if (slingshot.engaged) {
+    return {
+      action: 'slingshot',
+      label: 'slingshot locked',
+      detail: 'release the orbit',
+      verb: 'release',
+    };
+  }
+  const anchor = slingshot.aim || slingshot.affordance;
+  if (!anchor) return null;
+  const anchorType = anchor.type || anchor.anchorType || 'anchor';
+  const engageEligible = slingshot.aim?.engageEligible ?? slingshot.engageEligible;
+  if (slingshot.aim && engageEligible === false) {
+    return {
+      actionable: false,
+      label: `${anchorType} in range`,
+      detail: 'align with current',
+    };
+  }
+  return {
+    action: 'slingshot',
+    label: `${anchorType} in range`,
+    detail: 'ride the current',
+    verb: 'engage',
+  };
 }
 
 /**
@@ -621,7 +653,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
       _interactionEl.style.display = '';
       _interactionActionEl.textContent = interaction.label;
       _interactionDetailEl.textContent = interaction.detail;
-      _interactionCaptionEl.textContent = interaction.caption;
+      _interactionCaptionEl.innerHTML = interaction.caption || '';
     }
   }
 

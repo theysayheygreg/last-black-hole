@@ -107,3 +107,44 @@ recovery, terminal, and resume copy settled and readable.
 This decision changes no protocol or server authority behavior. Visual feel and
 headed proof remain deferred; this source acceptance does not require visual
 proof.
+
+## W1-D Slingshot Input-Path RC Ratification
+
+Decision: accept the v0.3.1 slingshot input path as the packaged local-authority
+contract. Physical F and Deck/controller Y are rising-edge actions owned by
+InputManager and main, queued as `slingshotEdges`, acknowledged by SimClient,
+and consumed only by the authority affordance/engage seam. The client presents
+the authoritative aim ring and device-correct engage/release prompt; a press
+without an eligible anchor reports that no anchor is in range and does not
+invent a local outcome.
+
+The five gameplay values remain centralized in
+`scripts/sim/slingshot-contract.cjs` and ratified as:
+
+| Value | Baseline |
+| --- | ---: |
+| capture radius | `450 m` |
+| magnetism | `30 deg` |
+| coyote time | `50 ms` |
+| payoff curve | `1.4x` per quarter-turn |
+| chain window | `0.5 s` |
+
+Lock telegraph (`0.25 s`) and release ghost (`1.0 s`) are internal
+presentation durations. This ratification preserves server authority and the
+accepted movement, sea, Conductor, timeSlow, and unit contracts.
+
+Fixed-step transport interpretation: the canonical gameplay value remains
+`50 ms`, but prompt-originated edge eligibility uses the internal runtime
+allowance `50 ms + 4 * current authority dt`. Aim retention, affordance lookup,
+and effective/transport remaining-time telemetry use that duration; telemetry
+keeps canonical coyote and transport allowance distinct. For Shallows
+(`dt = 1/15 s`, about `66.7 ms`), an edge within `316.7 ms` is accepted and an
+edge beyond that effective window is rejected. The four-tick allowance is
+transport behavior, not a new gameplay knob, and changes no capture radius or
+broader movement behavior.
+
+The authority also publishes the current aim's `tangentialSpeed` and boolean
+`engageEligible` result against the internal `0.05` minimum. HUD guidance shows
+`align with current` without an actionable glyph until that result is true;
+eligible aim retains the device-correct Y/F engage prompt. This is derived
+telemetry and presentation gating, not a sixth gameplay value.

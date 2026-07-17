@@ -50,6 +50,7 @@ const path = require('path');
   assert(!prompts.actionCaptionMarkup('confirm', 'confirm', { deck: true }).includes('ui-action-copy'), 'duplicate action/subprompt verb emitted');
   assert(prompts.actionCaptionMarkup('confirm', 'launch', { deck: true }).includes('ui-action-copy'), 'distinct supporting verb was lost');
   assert(!prompts.actionCaptionMarkup('confirm', 'confirm', { deck: true }).includes('data-input-family="keyboard"'), 'Deck caption selected keyboard family');
+  assert(prompts.affordanceCaption('slingshot', 'engage', { mode: 'controller' }).includes('ui-action-glyph'), 'Slingshot caption must generate a glyph element');
   assert.strictEqual(prompts.resolveSteamInputOrigin(deck), null, 'Browser descriptor must not claim native SDK integration');
   assert.strictEqual(prompts.resolveSteamInputOrigin(deck, ({ actionId }) => `origin:${actionId}`), 'origin:confirm', 'Origin adapter boundary must remain callable');
 
@@ -63,6 +64,8 @@ const path = require('path');
   assert(!homeSource.includes('tab to LAUNCH when ready'), 'Home launch prompt must not emit raw Tab copy');
   assert(main.includes("action: actionDescriptor('inventory', currentPromptOptions())"), 'Cargo-full HUD must carry a shared inventory action');
   assert(hudSource.includes('actionCaptionMarkup(options.action.actionId'), 'HUD warning actions must render shared glyph markup');
+  assert(hudSource.includes('_interactionCaptionEl.innerHTML = interaction.caption;'), 'Contextual interaction must render caption markup as DOM');
+  assert(!hudSource.includes('_interactionCaptionEl.textContent = interaction.caption;'), 'Contextual interaction must not expose literal caption markup');
   assert(hudSource.includes("affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)"), 'HUD salvage prompt must use one active-device caption');
   assert(!hudSource.includes('hold space for salvage'), 'HUD salvage prompt must not emit raw Space copy');
   const authority = main.slice(main.indexOf("const authorityY ="), main.indexOf('drawCommandButtonMotion(ctx, {', main.indexOf("const authorityY =")));

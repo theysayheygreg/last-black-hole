@@ -61,9 +61,11 @@ const INTERNAL = Object.freeze({
   tangentialForce: 1.5,
   chainQuarterTurnBonus: 0.5,
   maxChainCount: 6,
-  lockTelegraphDurationSeconds: 0.15,
-  releaseGhostDurationSeconds: 0.65,
+  lockTelegraphDurationSeconds: 0.25,
+  releaseGhostDurationSeconds: 1.0,
   rangeBreakGraceFactor: 1.1,
+  // Internal prompt/snapshot-to-command transport allowance, not a knob.
+  promptTransportTicks: 4,
 });
 
 const QUARTER_TURN_RADIANS = Math.PI / 2;
@@ -85,6 +87,21 @@ function normalized(value, fallback = { x: 1, y: 0 }) {
   const source = vector(value, fallback);
   const magnitude = Math.hypot(source.x, source.y) || 1;
   return { x: source.x / magnitude, y: source.y / magnitude };
+}
+
+function tangentialSpeed(velocity, radial) {
+  const dx = finite(radial?.x);
+  const dy = finite(radial?.y);
+  const distance = Math.hypot(dx, dy);
+  if (distance <= 1e-9) return 0;
+  return Math.abs(
+    finite(velocity?.x) * (-dy / distance)
+      + finite(velocity?.y) * (dx / distance),
+  );
+}
+
+function engageEligible(speed, minimum = INTERNAL.minimumTangentialSpeed) {
+  return finite(speed) >= Math.max(0, finite(minimum));
 }
 
 function signedAngle(from, to) {
@@ -122,6 +139,14 @@ function captureRadiusWorld(anchorType, captureRadiusMeters = SLINGSHOT_VALUES.c
 function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime) {
   const duration = Math.max(0, finite(coyoteTimeMs)) / 1000;
   return duration > 0 && finite(nowSeconds) - finite(lastAimSeenSeconds, -Infinity) <= duration;
+}
+
+// Prompt presentation and command delivery each cross an authority tick. The
+// allowance is internal transport behavior, not a sixth gameplay knob.
+function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, fixedStepSeconds = 0) {
+  const duration = Math.max(0, finite(coyoteTimeMs));
+  if (duration <= 0) return 0;
+  return duration + Math.max(0, finite(fixedStepSeconds)) * 1000 * INTERNAL.promptTransportTicks;
 }
 
 function resolveChainCount({
@@ -184,9 +209,12 @@ module.exports = {
   boundedReleaseDelta,
   captureRadiusWorld,
   coyoteWindowOpen,
+  effectiveCoyoteTimeMs,
+  engageEligible,
   quarterTurnsFromArc,
   releaseSpeedCap,
   resolveChainCount,
   rotateToward,
   signedAngle,
+  tangentialSpeed,
 };
