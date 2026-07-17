@@ -285,10 +285,12 @@ async function run() {
         { timeout: 5000 }, engageAckCount);
       const lock = await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'lock' && player.slingshot?.engaged === true, 'authoritative lock');
       const lockSeenAt = Date.now();
+      await waitFor(page, () => Boolean(window.__TEST_API.getThreeSceneState()?.slingshot?.telegraph?.lock), { timeout: 1500 });
       const lockScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
       assert(lockScene.slingshot?.telegraph?.lock, 'Lock telegraph did not reach the visible scene state');
       await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'arc' && player.slingshot?.engaged === true, 'authoritative arc');
       const arcSeenAt = Date.now();
+      await waitFor(page, () => Boolean(window.__TEST_API.getThreeSceneState()?.slingshot?.telegraph?.ownedArc), { timeout: 1500 });
       const arcScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
       assert(arcScene.slingshot?.telegraph?.ownedArc, 'Owned arc did not reach the visible scene state');
 
@@ -324,6 +326,7 @@ async function run() {
       await waitFor(page, (count) => (window.__TEST_API.getNetworkState()?.networkMetrics?.slingshotEdgeAcks || []).length === count + 1,
         { timeout: 5000 }, releaseAckCount);
       const released = await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'release-ghost' && player.slingshot?.engaged === false, 'authoritative release ghost');
+      await waitFor(page, () => Boolean(window.__TEST_API.getThreeSceneState()?.slingshot?.telegraph?.releaseGhost), { timeout: 1500 });
       const releaseScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
       assert(releaseScene.slingshot?.telegraph?.releaseGhost, 'Release ghost did not reach the visible scene state');
 
