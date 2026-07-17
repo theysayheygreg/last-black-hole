@@ -292,8 +292,6 @@ export class AudioEngine {
       case 'scavengerExtract':  this._playScavengerExtract(now, vol * 0.4, pan); break;
       case 'shieldActivate':    this._playShieldActivate(now, vol); break;
       case 'shieldAbsorb':      this._playShieldAbsorb(now, vol); break;
-      case 'timeSlow':          this._playTimeSlow(now, vol); break;
-      case 'timeSlowEnd':       this._playTimeSlowEnd(now, vol); break;
       case 'breachFlare':       this._playBreachFlare(now, vol); break;
       case 'wellProximity':     this._playWellRumble(now, vol); break;
       case 'hullWarning':       this._playHullWarning(now, vol); break;
@@ -879,30 +877,6 @@ export class AudioEngine {
     nv.gain.gain.setValueAtTime(vol * 0.4, now);
     nv.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
     noise.start(now); noise.stop(now + 0.1);
-  }
-
-  _playTimeSlow(now, vol) {
-    // Descending wobbly tone — time stretching
-    const osc = this._createSquare(0.3);
-    osc.frequency.setValueAtTime(600, now);
-    osc.frequency.exponentialRampToValueAtTime(150, now + 0.6);
-    const voice = this._createVoice(0);
-    osc.connect(voice.gain);
-    voice.gain.gain.setValueAtTime(vol * 0.3, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-    osc.start(now); osc.stop(now + 0.75);
-  }
-
-  _playTimeSlowEnd(now, vol) {
-    // Quick ascending snap
-    const osc = this._createSquare(0.3);
-    osc.frequency.setValueAtTime(200, now);
-    osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
-    const voice = this._createVoice(0);
-    osc.connect(voice.gain);
-    voice.gain.gain.setValueAtTime(vol * 0.25, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-    osc.start(now); osc.stop(now + 0.25);
   }
 
   _playBreachFlare(now, vol) {

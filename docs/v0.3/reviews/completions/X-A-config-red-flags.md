@@ -11,8 +11,8 @@ acceleration, and signal rates now have player-readable units and exact
 conversion seams. Dead or reserved client config keys were deleted. Default
 gameplay is unchanged at equivalent values; no feel tuning was performed.
 
-The per-player time path remains a flagged Greg decision, unchanged by this
-audit. The durable ruling is still "never per-player time".
+The former per-player time path was retired in the v0.3.1 follow-up under the
+durable ruling "never per-player time". No replacement effect was added.
 
 ## Audit Table
 
@@ -28,7 +28,7 @@ audit. The durable ruling is still "never per-player time".
 | `ascii.colorTemperature`, `input.gamepadTurnRate` | Unused client config | Deleted | None; no runtime consumer | No contract | Runtime source scan |
 | `vfx.shipMotion`, `portalSparks`, `pickupGlints`, `inhibitorFaults`, `nearCameraAtmosphere`, `debugBounds`, `freezeSeed` | Future/reserved or unused client flags | Deleted | None; no runtime consumer | No contract | Runtime source and dev-panel scan |
 | `pressureFromTime` | Handoff example `0.0005/s` | No current runtime/config name; no new behavior invented | None in current source | No contract | Source scan; already absent after the prior pressure ruling |
-| `SERVER_COMBAT.timeSlowScale` and `timeSlowDuration` | `0.3` player-only time multiplier for `3.0 s` | **Flag only; unchanged** | Authority player tick plus local sandbox presentation | Existing output is `playerDt = dt * 0.3` while `timeSlowRemaining > 0`, with a 3 s server duration. No new range/step is declared pending Greg's ruling | `scripts/sim-runtime.cjs:289-290,6520-6554`; `src/main.js:4346-4354` |
+| Former `timeSlowLocal` consumable path | `0.3` player-only time multiplier for `3.0 s` | **Retired**; catalog entries, runtime state/expiry, client presentation, and audio cues removed. Old loadout IDs/effect are sanitized to empty slots at load boundaries. | Shared catalog, profile/loadout loading, authority, client, audio | No surviving gameplay contract; no replacement effect | `tests/time-slow-retirement.cjs` plus focused catalog/runtime/audio checks |
 
 Existing local wreck `driftFalloff`, `driftMaxRange`, and
 `driftTerminalSpeed` remain named, human-unit controls with their existing dev
@@ -94,8 +94,5 @@ all surviving compatibility paths:
 
 ## Greg Decision
 
-The only open decision is the existing per-player time mechanic. It must be
-retired or reassigned under the durable ruling "never per-player time" before
-this path can be considered a valid gameplay contract. This audit deliberately
-makes no feel choice: the exact old values, consumers, and player-delta output
-are recorded above.
+Greg's 2026-07-17 ruling is executed: retire `timeSlowLocal`. Future
+consumables must be multiplayer-aware and cannot alter per-player sim time.

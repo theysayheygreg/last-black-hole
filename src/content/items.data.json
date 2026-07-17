@@ -25,7 +25,13 @@
   "CONSUMABLE_EFFECT_IDS": [
     "breachFlare",
     "fuelRefill",
-    "shieldBurst",
+    "shieldBurst"
+  ],
+  "RETIRED_CONSUMABLE_IDS": [
+    "time-dilator",
+    "dead-air-ampoule"
+  ],
+  "RETIRED_CONSUMABLE_EFFECT_IDS": [
     "timeSlowLocal"
   ],
   "ITEM_CATALOG": {
@@ -826,16 +832,6 @@
       "effect": "shieldBurst"
     },
     {
-      "id": "time-dilator",
-      "name": "Time Dilator",
-      "tier": 2,
-      "value": [
-        60,
-        90
-      ],
-      "effect": "timeSlowLocal"
-    },
-    {
       "id": "breach-flare",
       "name": "Breach Flare",
       "tier": 2,
@@ -854,16 +850,6 @@
         105
       ],
       "effect": "shieldBurst"
-    },
-    {
-      "id": "dead-air-ampoule",
-      "name": "Dead-Air Ampoule",
-      "tier": 2,
-      "value": [
-        85,
-        125
-      ],
-      "effect": "timeSlowLocal"
     },
     {
       "id": "crown-breach-match",
