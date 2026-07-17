@@ -60,15 +60,16 @@ async function installVirtualPad(page) {
   });
 }
 
-async function setPad(page, { x = 0, y = 0, thrust = 0, slingshot = false } = {}) {
-  await page.evaluate(({ x, y, thrust, slingshot }) => {
+async function setPad(page, { x = 0, y = 0, thrust = 0, brake = 0, slingshot = false } = {}) {
+  await page.evaluate(({ x, y, thrust, brake, slingshot }) => {
     const pad = window.__TEST_GAMEPAD;
     pad.axes[0] = Math.max(-1, Math.min(1, x));
     pad.axes[1] = Math.max(-1, Math.min(1, y));
     pad.buttons[7] = { pressed: thrust > 0.05, touched: thrust > 0, value: thrust };
+    pad.buttons[6] = { pressed: brake > 0.05, touched: brake > 0, value: brake };
     pad.buttons[3] = { pressed: Boolean(slingshot), touched: Boolean(slingshot), value: slingshot ? 1 : 0 };
     pad.timestamp = Date.now();
-  }, { x, y, thrust, slingshot });
+  }, { x, y, thrust, brake, slingshot });
 }
 
 async function edgeAcks(page) {
@@ -87,16 +88,27 @@ async function waitForPlayer(clientId, predicate, label, timeout = 8000) {
   throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(last)}`);
 }
 
+function wrappedDelta(from, to, worldScale) {
+  let delta = to - from;
+  if (delta > worldScale / 2) delta -= worldScale;
+  if (delta < -worldScale / 2) delta += worldScale;
+  return delta;
+}
+
+function wrappedDistance(left, right, worldScale) {
+  return Math.hypot(
+    wrappedDelta(left.wx, right.wx, worldScale),
+    wrappedDelta(left.wy, right.wy, worldScale),
+  );
+}
+
 async function steerToRing(page, clientId, anchor) {
   const initial = await snapshot();
   const worldScale = initial.session.worldScale;
   const player = initial.players.find((entry) => entry.clientId === clientId);
-  let dx = player.wx - anchor.wx;
-  let dy = player.wy - anchor.wy;
-  if (dx > worldScale / 2) dx -= worldScale;
-  if (dx < -worldScale / 2) dx += worldScale;
-  if (dy > worldScale / 2) dy -= worldScale;
-  if (dy < -worldScale / 2) dy += worldScale;
+  assert(player, 'authoritative player disappeared before slingshot approach');
+  const dx = wrappedDelta(anchor.wx, player.wx, worldScale);
+  const dy = wrappedDelta(anchor.wy, player.wy, worldScale);
   const radialLength = Math.hypot(dx, dy) || 1;
   const target = {
     wx: ((anchor.wx + (dx / radialLength) * 0.22) % worldScale + worldScale) % worldScale,
@@ -104,34 +116,62 @@ async function steerToRing(page, clientId, anchor) {
   };
 
   const deadline = Date.now() + 35000;
-  while (Date.now() < deadline) {
-    const current = await snapshot();
-    const next = current.players.find((entry) => entry.clientId === clientId);
-    assert(next?.status === 'alive', `pilot left the run while approaching the route anchor: ${next?.status}`);
-    let tx = target.wx - next.wx;
-    let ty = target.wy - next.wy;
-    if (tx > worldScale / 2) tx -= worldScale;
-    if (tx < -worldScale / 2) tx += worldScale;
-    if (ty > worldScale / 2) ty -= worldScale;
-    if (ty < -worldScale / 2) ty += worldScale;
-    const distance = Math.hypot(tx, ty);
-    if (distance <= 0.12) break;
-    await setPad(page, { x: tx / distance, y: ty / distance, thrust: 1 });
-    await sleep(120);
+  const captureStopBand = 0.39;
+  const arrivalSpeed = 0.12;
+  try {
+    while (Date.now() < deadline) {
+      const current = await snapshot();
+      const next = current.players.find((entry) => entry.clientId === clientId);
+      assert(next?.status === 'alive', `pilot left the run while approaching the route anchor: ${next?.status}`);
+      const tx = wrappedDelta(next.wx, target.wx, worldScale);
+      const ty = wrappedDelta(next.wy, target.wy, worldScale);
+      const distance = Math.hypot(tx, ty);
+      const anchorDistance = wrappedDistance(next, anchor, worldScale);
+      const speed = Math.hypot(next.vx || 0, next.vy || 0);
+
+      // Once inside capture range, remove thrust and damp only the measured
+      // velocity so the next authority snapshot can acquire aim in place.
+      if (anchorDistance <= captureStopBand) {
+        if (speed <= arrivalSpeed) {
+          await setPad(page);
+          return { target, player: next, distance, speed };
+        }
+        await setPad(page, {
+          x: (next.vx || 0) / speed,
+          y: (next.vy || 0) / speed,
+          brake: 1,
+        });
+        await sleep(100);
+        continue;
+      }
+
+      const direction = distance > 1e-6 ? { x: tx / distance, y: ty / distance } : { x: 1, y: 0 };
+      const desiredSpeed = Math.max(0.06, Math.min(0.30, distance * 0.9));
+      const correctionX = direction.x * desiredSpeed - (next.vx || 0);
+      const correctionY = direction.y * desiredSpeed - (next.vy || 0);
+      const correctionMagnitude = Math.hypot(correctionX, correctionY);
+      const emergencyBrake = speed > Math.max(0.42, desiredSpeed * 1.6);
+      if (emergencyBrake && speed > 0.01) {
+        await setPad(page, {
+          x: (next.vx || 0) / speed,
+          y: (next.vy || 0) / speed,
+          brake: 1,
+        });
+      } else if (correctionMagnitude > 0.035) {
+        await setPad(page, {
+          x: correctionX / correctionMagnitude,
+          y: correctionY / correctionMagnitude,
+          thrust: Math.min(0.65, Math.max(0.12, correctionMagnitude * 2.2)),
+        });
+      } else {
+        await setPad(page);
+      }
+      await sleep(110);
+    }
+  } finally {
+    await setPad(page).catch(() => null);
   }
-  const atRing = await snapshot();
-  const next = atRing.players.find((entry) => entry.clientId === clientId);
-  let tx = anchor.wx - next.wx;
-  let ty = anchor.wy - next.wy;
-  if (tx > worldScale / 2) tx -= worldScale;
-  if (tx < -worldScale / 2) tx += worldScale;
-  if (ty > worldScale / 2) ty -= worldScale;
-  if (ty < -worldScale / 2) ty += worldScale;
-  const distance = Math.hypot(tx, ty) || 1;
-  await setPad(page, { x: -ty / distance, y: tx / distance, thrust: 1 });
-  await sleep(180);
-  await setPad(page);
-  return { target, player: next };
+  throw new Error(`Could not reach ${anchor.id || 'route anchor'} capture band`);
 }
 
 async function run() {
@@ -170,7 +210,10 @@ async function run() {
         { timeout: 5000 }, initialAckCount);
       await waitFor(page, () => document.querySelector('#hud-warnings')?.textContent.includes('no anchor in range'), { timeout: 3000 });
 
-      const routeAnchor = initial.snapshot.world.wells[1];
+      const routeAnchor = initial.snapshot.world.wells
+        .filter((well) => well?.alive !== false && !well?.consumedByInhibitor)
+        .sort((left, right) => wrappedDistance(initial.player, left, initial.snapshot.session.worldScale)
+          - wrappedDistance(initial.player, right, initial.snapshot.session.worldScale))[0];
       assert(routeAnchor, 'Shallows route well is missing');
       const approach = await steerToRing(page, clientId, routeAnchor);
       const aim = await waitForPlayer(clientId, (player) => Boolean(player.slingshot?.aim), 'authoritative aim affordance');
