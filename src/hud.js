@@ -642,7 +642,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
       _interactionEl.style.display = '';
       _interactionActionEl.textContent = interaction.label;
       _interactionDetailEl.textContent = interaction.detail;
-      _interactionCaptionEl.textContent = interaction.caption;
+      _interactionCaptionEl.innerHTML = interaction.caption;
     }
   }
 
