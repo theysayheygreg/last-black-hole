@@ -98,6 +98,8 @@ async function captureSlingshotPrompt(page) {
     return {
       text: element?.textContent || '',
       visible: getComputedStyle(element).display !== 'none',
+      remoteAuthorityActive: Boolean(window.__TEST_API.getNetworkState()?.remoteAuthorityActive),
+      remoteTick: window.__TEST_API.getNetworkState()?.remoteTick ?? null,
       glyph: glyph ? {
         action: glyph.dataset.actionId,
         inputFamily: glyph.dataset.inputFamily,
@@ -107,6 +109,25 @@ async function captureSlingshotPrompt(page) {
       scene: window.__TEST_API.getThreeSceneState(),
     };
   });
+}
+
+async function waitForSlingshotPresentation(page, minimumRemoteTick, timeout = 1500) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await captureSlingshotPrompt(page);
+    if (last.remoteAuthorityActive
+      && Number(last.remoteTick) >= minimumRemoteTick
+      && last.scene?.slingshot?.affordance
+      && last.glyph?.action === 'slingshot'
+      && last.glyph?.inputFamily === 'controller'
+      && last.glyph?.label === 'Y'
+      && last.glyph?.copy === 'engage') {
+      return last;
+    }
+    await sleep(20);
+  }
+  throw new Error(`Timed out waiting for remote slingshot presentation: ${JSON.stringify(last)}`);
 }
 
 function wrappedDelta(from, to, worldScale) {
@@ -145,6 +166,7 @@ async function steerToRing(page, clientId, anchor) {
   let closest = Infinity;
   let last = null;
   let recharging = false;
+  let firstAimTick = null;
 
   try {
     while (Date.now() < deadline) {
@@ -175,14 +197,22 @@ async function steerToRing(page, clientId, anchor) {
         recharging,
       };
 
-      if (next.slingshot?.aim) {
-        await setPad(page);
-        const prompt = await captureSlingshotPrompt(page);
-        return { start, end: last, closest, target: { ...target }, aim: next.slingshot.aim, prompt };
-      }
+      if (next.slingshot?.aim && firstAimTick === null) firstAimTick = current.tick;
 
       if (distance <= radius && allowFlyby) {
         await setPad(page);
+        if (next.slingshot?.aim) {
+          const prompt = await waitForSlingshotPresentation(page, current.tick);
+          return {
+            start,
+            end: last,
+            closest,
+            target: { ...target },
+            firstAimTick,
+            aim: next.slingshot.aim,
+            prompt,
+          };
+        }
         await sleep(110);
         continue;
       }
