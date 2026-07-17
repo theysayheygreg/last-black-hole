@@ -417,6 +417,27 @@ export function getInteractionPresentationState(interaction, promptOptions = {})
   return { action, label, detail, caption: affordanceCaption(action, verb, promptOptions) };
 }
 
+export function getSlingshotInteractionState(slingshot) {
+  if (!slingshot) return null;
+  if (slingshot.engaged) {
+    return {
+      action: 'slingshot',
+      label: 'slingshot locked',
+      detail: 'release the orbit',
+      verb: 'release',
+    };
+  }
+  const anchor = slingshot.aim || slingshot.affordance;
+  if (!anchor) return null;
+  const anchorType = anchor.type || anchor.anchorType || 'anchor';
+  return {
+    action: 'slingshot',
+    label: `${anchorType} in range`,
+    detail: 'ride the current',
+    verb: 'engage',
+  };
+}
+
 /**
  * Update HUD panels. Call once per frame during 'playing' phase.
  *

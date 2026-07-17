@@ -37,6 +37,14 @@ async function run() {
   assert(interaction.caption.includes('data-input-family="deck"'), 'Interaction must select Deck glyph family');
   assert(interaction.caption.includes('ui-action-copy'), 'Non-duplicate interaction verb should remain visible');
 
+  const slingshot = hud.getSlingshotInteractionState({ aim: { type: 'well' }, engaged: false });
+  const slingshotPrompt = hud.getInteractionPresentationState(slingshot, { deck: true });
+  const keyboardSlingshotPrompt = hud.getInteractionPresentationState(slingshot, { lastInputSource: 'keyboard' });
+  assert.strictEqual(slingshot.label, 'well in range');
+  assert(slingshotPrompt.caption.includes('Y'), 'Deck slingshot affordance must show Y');
+  assert(keyboardSlingshotPrompt.caption.includes('F'), 'Keyboard slingshot affordance must show F');
+  assert.strictEqual(hud.getSlingshotInteractionState(null), null, 'No anchor must not expose a false affordance');
+
   const route = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },
     { activeCount: 1, portals: [{ alive: true, wx: 0.8, wy: 0.5 }] },

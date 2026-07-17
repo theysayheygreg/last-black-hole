@@ -38,7 +38,8 @@ import { initTestAPI } from './test-api.js';
 import { drawRulerOverlay } from './ruler-overlay.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
-         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
+         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
+         getSlingshotInteractionState } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem, normalizeScavengerPresentation } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -4384,6 +4385,10 @@ function gameLoop(now) {
           remotePendingExtractConfirm = true;
         }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
+          const authoritySlingshot = remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)?.slingshot;
+          if (!authoritySlingshot?.engaged && !authoritySlingshot?.aim) {
+            showWarning('no anchor in range // move toward a ring', 'rgba(120, 190, 255, 0.92)', 1600);
+          }
           remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
           if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
         }
@@ -5449,6 +5454,14 @@ function gameLoop(now) {
       ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
       : null;
     const portalInteraction = authoritativePlayer?.portalInteraction;
+    const slingshotInteraction = getSlingshotInteractionState(
+      authoritativePlayer?.slingshot || (remoteAuthorityActive ? null : {
+        engaged: ship.slingshotEngaged,
+        affordance: !ship.slingshotEngaged
+          ? slingshotSystem?.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))?.anchor
+          : null,
+      }),
+    );
     updateHUD(simState.runElapsedTime, portalSystem, cargoItems, simState.growthTimer, {
       scavengerSystem,
       combatSystem,
@@ -5472,7 +5485,7 @@ function gameLoop(now) {
         label: 'confirm extraction',
         detail: 'remain inside cyan aperture',
         verb: 'extract',
-      } : null,
+      } : slingshotInteraction,
       deckMode: isDeckMode(),
       lastInputSource: inputManager.lastInputSource,
       camX, camY,

@@ -2,6 +2,13 @@
 
 ## 2026-07-17
 
+- **W1-D slingshot input-path RC:** preserved the five-knob authority contract,
+  ratified the internal `0.25 s` lock telegraph and `1.0 s` release ghost,
+  added an authoritative aim/engage/release prompt that follows keyboard or
+  Deck/controller input family, and report a visible no-anchor range gate on
+  an otherwise valid press. Focused proof covers normal F/Y action input,
+  authority engagement, and deliberate release without debug injection.
+
 - **Locked physical units:** `src/content/units.data.json` is now the sole
   shared authority for `1000 m` per sim/world unit, `12 m` Drifter length, and
   the `100 m` ruler default, with Greg/date/source ratification metadata.

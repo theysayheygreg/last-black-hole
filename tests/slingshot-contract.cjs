@@ -66,7 +66,9 @@ function run() {
     previousCount: 1,
   }), 1);
   assert(INTERNAL.releaseGhostDurationSeconds > 0);
-  console.log("SlingshotContract: 8/8 passed");
+  assert.strictEqual(INTERNAL.lockTelegraphDurationSeconds, 0.25);
+  assert.strictEqual(INTERNAL.releaseGhostDurationSeconds, 1.0);
+  console.log("SlingshotContract: 10/10 passed");
 }
 
 try {

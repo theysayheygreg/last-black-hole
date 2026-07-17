@@ -52,8 +52,9 @@ it has no facing-versus-velocity branch.
 The deterministic state path is `aim -> lock -> arc -> release-ghost`.
 Capture updates `lastAimSeenTime`; coyote is a real 50 ms boundary checked by
 the shared pure helper. Chain count is resolved from the prior authoritative
-release anchor and the five-knob chain window. The 0.15 s lock telegraph and
-0.65 s release ghost are internal presentation durations, not tunables.
+release anchor and the five-knob chain window. The ratified v0.3.1 internal
+presentation durations are a 0.25 s lock telegraph and a 1.0 s release ghost;
+they are not tunables.
 
 The authoritative telegraph carries `aimCue`, `lock`, `ownedArc`, and
 `releaseGhost` payloads as their phases become active. The renderer uses the
@@ -72,7 +73,7 @@ time margin:  28.13% (required: 25%)
 
 Pure and authoritative proof:
 
-- `node tests/slingshot-contract.cjs`: `SlingshotContract 8/8 passed`
+- `node tests/slingshot-contract.cjs`: `SlingshotContract: 10/10 passed`
 - `node tests/slingshot-v2.cjs`: `2 passed, 0 failed` including the 25% route,
   aim/lock/arc/release-ghost, stick-relative exit direction, bounded cap, and
   deterministic chain count
@@ -113,9 +114,12 @@ Implementation and focused evidence are in:
 - `src/ruler-contract.js`
 - `src/ruler-overlay.js`
 - `src/presentation/presentation-frame.js`
+- `src/hud.js`
 - `src/main.js`
 - `src/render-three/entities/player-visual-family.js`
 - `tests/slingshot-contract.cjs`
+- `tests/slingshot-input-path.cjs`
+- `tests/hud-deck.cjs`
 - `tests/slingshot-v2.cjs`
 - `tests/slingshot-v2-live.cjs`
 
@@ -125,11 +129,13 @@ was performed.
 
 ## Deviations And Open Decisions
 
-There are no behavior deviations from S4/G4. The only implementation choices
-that need later feel review are the ratified starting values, the internal
-lock/ghost display durations, and whether a later balance pass chooses the
-supported `chainWindow=0` disabled state. Those choices do not add a gameplay
-knob or reopen movement thrust/gravity tuning.
+The v0.3.1 RC ratification keeps the five gameplay values above and closes the
+packaged input-path presentation gap: F/Y rising edges travel through
+InputManager, main, SimClient, and authority, while the authoritative aim ring
+gets a device-correct prompt. A press without an eligible anchor reports the
+range gate instead of appearing inert. The internal lock/ghost durations are
+0.25 s and 1.0 s. These choices do not add a gameplay knob or reopen movement
+thrust/gravity tuning.
 
 W1-B fabric work and W1-C seeded-sea work remain separate and untouched. This
 branch does not change their status or claim their implementation.

@@ -107,3 +107,28 @@ recovery, terminal, and resume copy settled and readable.
 This decision changes no protocol or server authority behavior. Visual feel and
 headed proof remain deferred; this source acceptance does not require visual
 proof.
+
+## W1-D Slingshot Input-Path RC Ratification
+
+Decision: accept the v0.3.1 slingshot input path as the packaged local-authority
+contract. Physical F and Deck/controller Y are rising-edge actions owned by
+InputManager and main, queued as `slingshotEdges`, acknowledged by SimClient,
+and consumed only by the authority affordance/engage seam. The client presents
+the authoritative aim ring and device-correct engage/release prompt; a press
+without an eligible anchor reports that no anchor is in range and does not
+invent a local outcome.
+
+The five gameplay values remain centralized in
+`scripts/sim/slingshot-contract.cjs` and ratified as:
+
+| Value | Baseline |
+| --- | ---: |
+| capture radius | `450 m` |
+| magnetism | `30 deg` |
+| coyote time | `50 ms` |
+| payoff curve | `1.4x` per quarter-turn |
+| chain window | `0.5 s` |
+
+Lock telegraph (`0.25 s`) and release ghost (`1.0 s`) are internal
+presentation durations. This ratification preserves server authority and the
+accepted movement, sea, Conductor, timeSlow, and unit contracts.

@@ -61,8 +61,8 @@ const INTERNAL = Object.freeze({
   tangentialForce: 1.5,
   chainQuarterTurnBonus: 0.5,
   maxChainCount: 6,
-  lockTelegraphDurationSeconds: 0.15,
-  releaseGhostDurationSeconds: 0.65,
+  lockTelegraphDurationSeconds: 0.25,
+  releaseGhostDurationSeconds: 1.0,
   rangeBreakGraceFactor: 1.1,
 });
 
