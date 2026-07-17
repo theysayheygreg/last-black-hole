@@ -94,6 +94,38 @@ async function run() {
       "Expected the bonus consumable to remain loadable");
   });
 
+  await runner.run("Non-durable joins sanitize retired loadout effects", async () => {
+    await startSimServer(SIM_PORT, { keepAlive: true });
+    try {
+      const start = await postJson("/session/start", {
+        mapId: "shallows",
+        requesterId: "retired-join-test",
+        requesterName: "Retired Join Test",
+        seed: 7304,
+      });
+      assert(start.status === 200 && start.body.ok === true, `Expected session start, got ${start.status}`);
+
+      const retired = { catalogId: "time-dilator", useEffect: "timeSlowLocal", charges: 1 };
+      const join = await postJson("/join", {
+        runId: start.body.session.runId,
+        clientId: "retired-join-test",
+        name: "Retired Join Test",
+        joinTicket: start.body.joinTicket,
+        equipped: [retired],
+        consumables: [retired],
+      });
+      assert(join.status === 200 && join.body.ok === true, `Expected player join, got ${join.status}`);
+      assert(join.body.player.equipped?.length === 1 && join.body.player.equipped[0] === null,
+        "Retired equipped item survived a non-durable join");
+      assert(join.body.player.consumables?.length === 1 && join.body.player.consumables[0] === null,
+        "Retired consumable survived a non-durable join");
+      assert(!JSON.stringify(join.body.player).includes("timeSlowLocal"),
+        "Retired effect survived a non-durable join");
+    } finally {
+      await stopSimServer(SIM_PORT).catch(() => null);
+    }
+  });
+
   await runner.run("Authoritative wreck loot keeps its shape after pickup into cargo", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {

@@ -947,11 +947,6 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   };
 }
 
-function cloneLoadoutItems(list = []) {
-  if (!Array.isArray(list)) return [];
-  return list.map((item) => (item ? { ...item } : null));
-}
-
 function cloneRetiredSafeItems(list = []) {
   return sanitizeRetiredItems(list);
 }
@@ -6945,8 +6940,8 @@ const server = http.createServer(async (req, res) => {
           body.profileSnapshot?.shipType
         );
         const durableLoadout = cloneProfileLoadout(durableProfile);
-        const equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
-        const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
+        const equipped = durableProfile ? durableLoadout.equipped : cloneRetiredSafeItems(body.equipped);
+        const consumables = durableProfile ? durableLoadout.consumables : cloneRetiredSafeItems(body.consumables);
         player = createPlayer(clientId, body.name, explicitHullType, {
           profileShipType: durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType || null,
           profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || null,
