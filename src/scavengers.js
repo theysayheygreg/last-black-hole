@@ -45,6 +45,72 @@ const VULTURE_COLOR = '#D4A060';
 const DRIFTER_TRAIL = 'rgba(138, 174, 196, 0.6)';
 const VULTURE_TRAIL = 'rgba(212, 160, 96, 0.6)';
 
+function finitePresentationValue(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function optionalPresentationValue(value, fallback) {
+  const number = Number(value);
+  if (Number.isFinite(number)) return number;
+  const fallbackNumber = Number(fallback);
+  return Number.isFinite(fallbackNumber) ? fallbackNumber : undefined;
+}
+
+function normalizeDeathWell(remote, previous) {
+  const sourceWell = remote.deathWell && typeof remote.deathWell === 'object'
+    ? remote.deathWell
+    : {};
+  const previousWell = previous.deathWell && typeof previous.deathWell === 'object'
+    ? previous.deathWell
+    : {};
+  const wx = optionalPresentationValue(remote.deathWellWX, sourceWell.wx ?? previousWell.wx);
+  const wy = optionalPresentationValue(remote.deathWellWY, sourceWell.wy ?? previousWell.wy);
+  if (wx === undefined || wy === undefined) return null;
+  return {
+    ...previousWell,
+    ...sourceWell,
+    id: remote.deathWellId ?? sourceWell.id ?? previousWell.id ?? null,
+    wx,
+    wy,
+  };
+}
+
+/**
+ * Restore client-owned presentation fields around a compact server scavenger row.
+ * Death spiral anchors remain optional; the local system must not invent them.
+ */
+export function normalizeScavengerPresentation(remote = {}, fallback = null) {
+  const source = remote && typeof remote === 'object' ? remote : {};
+  const previous = fallback && typeof fallback === 'object' ? fallback : {};
+  const requestedArchetype = source.archetype || previous.archetype;
+  const archetype = requestedArchetype === 'vulture' ? 'vulture' : 'drifter';
+  const state = typeof source.state === 'string' && source.state
+    ? source.state
+    : typeof previous.state === 'string' && previous.state ? previous.state : 'drift';
+  return {
+    ...previous,
+    ...source,
+    id: source.id ?? previous.id ?? null,
+    wx: finitePresentationValue(source.wx, finitePresentationValue(previous.wx, 0)),
+    wy: finitePresentationValue(source.wy, finitePresentationValue(previous.wy, 0)),
+    vx: finitePresentationValue(source.vx, finitePresentationValue(previous.vx, 0)),
+    vy: finitePresentationValue(source.vy, finitePresentationValue(previous.vy, 0)),
+    facing: finitePresentationValue(source.facing, finitePresentationValue(previous.facing, 0)),
+    thrustIntensity: finitePresentationValue(source.thrustIntensity, finitePresentationValue(previous.thrustIntensity, 0)),
+    archetype,
+    state,
+    name: source.name ?? previous.name ?? 'scavenger',
+    lootCount: Math.max(0, finitePresentationValue(source.lootCount, finitePresentationValue(previous.lootCount, 0))),
+    deathTimer: Math.max(0, finitePresentationValue(source.deathTimer, finitePresentationValue(previous.deathTimer, 0))),
+    deathAngle: finitePresentationValue(source.deathAngle, finitePresentationValue(previous.deathAngle, 0)),
+    deathStartWX: optionalPresentationValue(source.deathStartWX, previous.deathStartWX),
+    deathStartWY: optionalPresentationValue(source.deathStartWY, previous.deathStartWY),
+    deathWell: normalizeDeathWell(source, previous),
+    alive: source.alive === undefined ? previous.alive !== false : source.alive !== false,
+  };
+}
+
 // ---- Helper: thrust toward a world-space target ----
 
 /**
@@ -566,6 +632,18 @@ export class ScavengerSystem {
 
     const t = scav.deathTimer / duration; // 0→1 over the spiral
     const well = scav.deathWell;
+
+    // Compact remote rows may omit local-only death anchors. Keep the row
+    // authoritative and wait for a complete presentation row instead of
+    // inventing a well or moving the scavenger from fabricated coordinates.
+    if (!well
+      || !Number.isFinite(Number(well.wx))
+      || !Number.isFinite(Number(well.wy))
+      || !Number.isFinite(Number(scav.deathStartWX))
+      || !Number.isFinite(Number(scav.deathStartWY))
+      || !Number.isFinite(Number(scav.deathAngle))) {
+      return;
+    }
 
     // Death spiral: scavenger orbits inward toward the well's center.
     // Radius shrinks linearly (1-t), angle accelerates (4 + t*12 rad/s)

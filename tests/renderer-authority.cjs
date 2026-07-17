@@ -17,6 +17,7 @@ async function run() {
     sampleAuthoritativeCurrent,
   } = await import("../src/authoritative-field.mjs");
   const { normalizeStarPresentation } = await import("../src/stars.js");
+  const { ScavengerSystem, normalizeScavengerPresentation } = await import("../src/scavengers.js");
 
   await runner.run("remote star rows retain a valid presentation contract", async () => {
     const first = normalizeStarPresentation({
@@ -42,6 +43,60 @@ async function run() {
     const main = fs.readFileSync(require.resolve("../src/main.js"), "utf8");
     assert(main.includes("normalizeStarPresentation(remote, prev)"),
       "Remote world sync must normalize compact star rows before presentation");
+  });
+
+  await runner.run("remote scavenger rows retain a safe death presentation contract", async () => {
+    const valid = normalizeScavengerPresentation({
+      id: "scavenger-1",
+      wx: 1.2,
+      wy: 0.8,
+      vx: 0.03,
+      vy: -0.02,
+      facing: 0.4,
+      thrustIntensity: 0.15,
+      archetype: "vulture",
+      state: "dying",
+      deathTimer: 0.4,
+      deathWellId: "well-1",
+      deathWellWX: 1,
+      deathWellWY: 1,
+      deathStartWX: 1.2,
+      deathStartWY: 0.8,
+      deathAngle: -0.7,
+      alive: true,
+    });
+    const repeated = normalizeScavengerPresentation({
+      id: "scavenger-1",
+      wx: 1.2,
+      wy: 0.8,
+      archetype: "vulture",
+      state: "dying",
+      alive: true,
+    }, valid);
+    assert(valid.archetype === "vulture" && valid.state === "dying",
+      "Valid scavenger identity and lifecycle state must remain unchanged");
+    assert(valid.deathWell?.id === "well-1" && valid.deathWell.wx === 1 && valid.deathWell.wy === 1,
+      "Compact death-well coordinates must restore the local presentation anchor");
+    assert(repeated.deathWell?.wx === 1 && repeated.deathWell?.wy === 1,
+      "Repeated compact rows must retain a valid death presentation anchor");
+
+    const partial = normalizeScavengerPresentation({
+      id: "scavenger-2",
+      wx: 0.4,
+      wy: 0.6,
+      state: "dying",
+      alive: true,
+    });
+    const system = new ScavengerSystem();
+    let error = null;
+    try {
+      system._updateDeathSpiral(partial, 1 / 60);
+    } catch (caught) {
+      error = caught;
+    }
+    assert(!error, `Partial accepted scavenger row must not fatal: ${error?.message || "unknown error"}`);
+    assert(partial.alive && partial.state === "dying",
+      "Partial row must retain authoritative lifecycle state while optional presentation data is absent");
   });
 
   await runner.run("authority texture registration keeps the shared Y contract", async () => {
