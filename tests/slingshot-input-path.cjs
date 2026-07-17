@@ -394,7 +394,7 @@ async function run() {
       assert(JSON.stringify(routeEventTypes) === JSON.stringify(['player.slingshotEngaged', 'player.slingshotReleased']),
         `Expected slingshot engage/release order, got ${JSON.stringify(routeEventTypes)}`);
       assert((await edgeAcks(page)).length === initialAckCount + 3, 'Expected no-anchor, engage, and release edge acknowledgements');
-      assert.strictEqual(errors.length, 0, `browser errors: ${errors.join('; ')}`);
+      assert(errors.length === 0, `browser errors: ${errors.join('; ')}`);
       console.log(JSON.stringify({
         edgeAcks: await edgeAcks(page),
         events: routeEvents.map((event) => ({ type: event.type, tick: event.tick, simTime: event.simTime })),
