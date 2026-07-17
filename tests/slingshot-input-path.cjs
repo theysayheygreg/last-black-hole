@@ -175,13 +175,31 @@ async function run() {
       const approach = await steerToRing(page, clientId, routeAnchor);
       const aim = await waitForPlayer(clientId, (player) => Boolean(player.slingshot?.aim), 'authoritative aim affordance');
       await tapKey(page, 'KeyW', 40);
-      const promptBefore = await page.evaluate(() => ({
-        text: document.getElementById('hud-interaction')?.textContent || '',
-        visible: getComputedStyle(document.getElementById('hud-interaction')).display !== 'none',
-        scene: window.__TEST_API.getThreeSceneState(),
-      }));
+      const promptBefore = await page.evaluate(() => {
+        const element = document.getElementById('hud-interaction');
+        const glyph = element?.querySelector('[data-action-id="slingshot"]');
+        const copy = glyph?.nextElementSibling?.classList.contains('ui-action-copy')
+          ? glyph.nextElementSibling.textContent.trim()
+          : null;
+        return {
+          text: element?.textContent || '',
+          visible: getComputedStyle(element).display !== 'none',
+          glyph: glyph ? {
+            action: glyph.dataset.actionId,
+            inputFamily: glyph.dataset.inputFamily,
+            label: glyph.textContent.trim(),
+            copy,
+          } : null,
+          scene: window.__TEST_API.getThreeSceneState(),
+        };
+      });
       assert(promptBefore.visible && /well in range/i.test(promptBefore.text), `Missing in-world slingshot prompt: ${JSON.stringify(promptBefore)}`);
-      assert(/Y engage/i.test(promptBefore.text), `Deck prompt did not expose Y: ${promptBefore.text}`);
+      assert.deepStrictEqual(promptBefore.glyph, {
+        action: 'slingshot',
+        inputFamily: 'deck',
+        label: 'Y',
+        copy: 'engage',
+      }, `Deck prompt did not expose semantic Y engage state: ${JSON.stringify(promptBefore.glyph)}`);
       assert(promptBefore.scene.slingshot?.affordance, 'Three scene did not expose the authoritative aim affordance');
 
       const engageStartedAt = Date.now();
@@ -200,8 +218,28 @@ async function run() {
 
       await setPad(page, { x: 1, y: 0 });
       await sleep(160);
-      const promptDuring = await page.evaluate(() => document.getElementById('hud-interaction')?.textContent || '');
-      assert(/Y release/i.test(promptDuring), `Controller prompt did not expose Y release: ${promptDuring}`);
+      const promptDuring = await page.evaluate(() => {
+        const element = document.getElementById('hud-interaction');
+        const glyph = element?.querySelector('[data-action-id="slingshot"]');
+        const copy = glyph?.nextElementSibling?.classList.contains('ui-action-copy')
+          ? glyph.nextElementSibling.textContent.trim()
+          : null;
+        return {
+          text: element?.textContent || '',
+          glyph: glyph ? {
+            action: glyph.dataset.actionId,
+            inputFamily: glyph.dataset.inputFamily,
+            label: glyph.textContent.trim(),
+            copy,
+          } : null,
+        };
+      });
+      assert.deepStrictEqual(promptDuring.glyph, {
+        action: 'slingshot',
+        inputFamily: 'deck',
+        label: 'Y',
+        copy: 'release',
+      }, `Controller prompt did not expose semantic Y release state: ${JSON.stringify(promptDuring.glyph)}`);
       const releaseAckCount = (await edgeAcks(page)).length;
       const releaseStartedAt = Date.now();
       await setPad(page, { x: 1, y: 0, slingshot: true });
