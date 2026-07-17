@@ -5,43 +5,36 @@
  * module is the deliberate information boundary for the survey terminal: it
  * emits only coarse, aggregate, and uncertain facts suitable for a preview.
  */
+import { getMapScaleDefinition } from '../content/map-scales.js';
 
-// Interim presentation input for the survey terminal. W2-A4 is the owner of
-// the canonical authority scale registry; this seam keeps the preview schema
-// compatible without claiming that the authority maps have moved to 5/15/25.
-export const SURVEY_SCALE_PRESENTATION_INPUT = Object.freeze({
-  shallows: Object.freeze({
-    mapClass: 'shallows',
-    label: 'THE SHALLOWS',
-    authorityCells: 3,
-    scale: Object.freeze({ cells: 5, label: '5x5', band: 'LOCAL' }),
-    topology: Object.freeze({ grid: 5, miniGlyphCells: 3, regionCount: 4, voidBias: 0.16, densityBias: 0.72 }),
-    riskBand: 'LOW',
-  }),
-  expanse: Object.freeze({
-    mapClass: 'expanse',
-    label: 'THE EXPANSE',
-    authorityCells: 5,
-    scale: Object.freeze({ cells: 15, label: '15x15', band: 'REGIONAL' }),
-    topology: Object.freeze({ grid: 7, miniGlyphCells: 4, regionCount: 7, voidBias: 0.30, densityBias: 0.56 }),
-    riskBand: 'MEDIUM',
-  }),
-  'deep-field': Object.freeze({
-    mapClass: 'deep-field',
-    label: 'DEEP FIELD',
-    authorityCells: 10,
-    scale: Object.freeze({ cells: 25, label: '25x25', band: 'DEEP' }),
-    topology: Object.freeze({ grid: 9, miniGlyphCells: 5, regionCount: 10, voidBias: 0.48, densityBias: 0.38 }),
-    riskBand: 'HIGH',
-  }),
-});
-
-export function resolveSurveyScalePresentation(mapOrId, canonicalRegistry = null) {
+export function resolveSurveyPresentation(mapOrId) {
   const id = typeof mapOrId === 'string' ? mapOrId : mapOrId?.id;
-  const canonical = canonicalRegistry?.[id];
-  if (canonical?.surveyScale) return { ...canonical.surveyScale, source: 'canonical' };
-  const input = SURVEY_SCALE_PRESENTATION_INPUT[id];
-  return input ? { ...input.scale, authorityCells: input.authorityCells, source: 'interim-presentation-input' } : null;
+  const definition = getMapScaleDefinition(id);
+  const survey = definition?.survey;
+  if (!definition || !survey) return null;
+  const width = definition.dimensions.width;
+  const height = definition.dimensions.height;
+  return {
+    source: 'canonical',
+    mapClass: definition.mapClass,
+    label: survey.label,
+    authorityCells: width,
+    scale: {
+      cells: width,
+      label: `${width}x${height}`,
+      band: survey.scaleBand,
+      grid: survey.topology.grid,
+    },
+    topology: { ...survey.topology },
+    riskBand: survey.riskBand,
+    description: survey.description,
+    contents: survey.contents.map((content) => ({ ...content })),
+  };
+}
+
+export function resolveSurveyScalePresentation(mapOrId) {
+  const presentation = resolveSurveyPresentation(mapOrId);
+  return presentation ? { ...presentation.scale, authorityCells: presentation.authorityCells, source: presentation.source } : null;
 }
 
 export const LOCKED_SECTOR_REGISTRY = Object.freeze([
@@ -54,6 +47,7 @@ const SURVEY_KEYS = Object.freeze([
   'schemaVersion',
   'mapClass',
   'scale',
+  'description',
   'aggregateRanges',
   'signature',
   'coarseRegions',
@@ -127,17 +121,18 @@ function coarseRegions(registry, rng) {
   return regions;
 }
 
-function contactFamilies(registry, rng) {
-  const deep = registry.scale.cells >= 25;
-  const regional = registry.scale.cells >= 15;
-  const families = [
-    { id: 'gravity', label: 'GRAVITY WELLS', role: 'flow', range: range(regional ? 4 : 2, deep ? 18 : regional ? 10 : 6, rng, 2) },
-    { id: 'derelict', label: 'DERELICT FIELDS', role: 'salvage', range: range(regional ? 5 : 3, deep ? 24 : regional ? 14 : 8, rng, 3) },
-    { id: 'stellar', label: 'STELLAR CONTACTS', role: 'amber', range: range(regional ? 2 : 1, deep ? 16 : regional ? 9 : 5, rng, 2) },
-    { id: 'scavenger', label: 'SCAVENGER PRESSURE', role: 'danger', range: range(regional ? 1 : 0, deep ? 8 : regional ? 5 : 3, rng, 1) },
-    { id: 'anomaly', label: 'ANOMALY TRACE', role: 'anomaly', range: range(0, deep ? 6 : regional ? 4 : 2, rng, 1) },
-  ];
-  return families.map((family) => ({ ...family, likelihood: family.range.max > 0 ? (family.range.min > 0 ? 'LIKELY' : 'POSSIBLE') : 'UNCERTAIN' }));
+function contentFamilies(registry, aggregates) {
+  return registry.contents.map((content) => {
+    const contentRange = aggregates[content.rangeKey] || { min: 0, max: 0 };
+    return {
+      id: content.id,
+      label: content.label,
+      description: content.description,
+      role: content.role,
+      range: contentRange,
+      likelihood: contentRange.max > 0 ? (contentRange.min > 0 ? 'LIKELY' : 'POSSIBLE') : 'UNCERTAIN',
+    };
+  });
 }
 
 function safeSignature(signature) {
@@ -202,6 +197,7 @@ export function sanitizeSurveyPreview(candidate) {
       band: String(scale.band || 'UNKNOWN'),
       grid: Math.max(1, Math.floor(Number(scale.grid) || 1)),
     },
+    description: String(candidate?.description || 'Survey contacts remain unresolved.'),
     aggregateRanges: {},
     signature: safeSignature(candidate?.signature),
     coarseRegions: sanitizeRegions(candidate?.coarseRegions),
@@ -219,6 +215,7 @@ export function sanitizeSurveyPreview(candidate) {
       ? candidate.possibleContactFamilies.map((family) => ({
         id: String(family?.id || 'unknown'),
         label: String(family?.label || 'UNKNOWN CONTACT'),
+        description: String(family?.description || 'possible read'),
         role: String(family?.role || 'muted'),
         likelihood: String(family?.likelihood || 'UNCERTAIN'),
         range: {
@@ -260,17 +257,19 @@ export function buildSurveyPreview(map, briefing, seed) {
   const rng = createSurveyRng(seed, registry.mapClass);
   const densityValue = clamp(registry.topology.densityBias + (rng() - 0.5) * 0.22, 0.08, 0.94);
   const uncertaintyValue = clamp(0.26 + rng() * 0.48 + registry.topology.voidBias * 0.18, 0.2, 0.9);
+  const aggregates = surveyAggregates(map, registry, rng);
   const candidate = {
     mapClass: safeMapClass(registry),
     scale: registry.scale,
-    aggregateRanges: surveyAggregates(map, registry, rng),
+    description: registry.description,
+    aggregateRanges: aggregates,
     signature: safeSignature(briefing?.signature),
     coarseRegions: coarseRegions(registry, rng),
     density: { band: densityValue > 0.65 ? 'DENSE' : densityValue > 0.4 ? 'MIXED' : 'SPARSE', value: Number(densityValue.toFixed(2)) },
     uncertainty: { band: uncertaintyValue > 0.62 ? 'HIGH' : uncertaintyValue > 0.42 ? 'PARTIAL' : 'LOW', value: Number(uncertaintyValue.toFixed(2)) },
     confidence: Math.round(clamp(100 - uncertaintyValue * 56 - registry.topology.voidBias * 14 + rng() * 8, 18, 86)),
     riskBand: registry.riskBand,
-    possibleContactFamilies: contactFamilies(registry, rng),
+    possibleContactFamilies: contentFamilies(registry, aggregates),
   };
   const safe = sanitizeSurveyPreview(candidate);
   assertSurveyPreviewSafe(safe);
@@ -310,31 +309,48 @@ export function surveySelectionState(entry, briefing, seed) {
 }
 
 export function surveyScaleForMap(mapOrId) {
-  const id = typeof mapOrId === 'string' ? mapOrId : mapOrId?.id;
-  const input = SURVEY_SCALE_PRESENTATION_INPUT[id];
-  if (!input) return null;
-  return {
-    ...input,
-    scale: { ...input.scale, ...resolveSurveyScalePresentation(id), grid: input.topology.grid },
-  };
+  return resolveSurveyPresentation(mapOrId);
 }
 
 export function surveySchemaKeys() {
   return [...SURVEY_KEYS];
 }
 
+function surveyNoise(seed) {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function drawSurveyContour(ctx, cx, cy, rx, ry, seed, color, alpha = 1, dashed = false) {
+  const points = 12;
+  ctx.save();
+  ctx.strokeStyle = color.replace(/,\s*[^,)]+\)$/, `, ${alpha})`);
+  ctx.lineWidth = 1;
+  if (dashed) ctx.setLineDash([4, 5]);
+  ctx.beginPath();
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const wobble = 0.82 + surveyNoise(seed + i * 3.7) * 0.28;
+    const x = cx + Math.cos(angle) * rx * wobble;
+    const y = cy + Math.sin(angle) * ry * wobble;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime = 0, reducedMotion = false } = {}) {
   if (!preview) return;
-  const plot = { x: rect.x + 22, y: rect.y + 54, w: rect.w - 44, h: rect.h - 92 };
+  const plot = { x: rect.x + 24, y: rect.y + 58, w: rect.w - 48, h: rect.h - 100 };
   const grid = Math.max(1, Number(preview.scale.grid) || 1);
   ctx.save();
   ctx.globalAlpha *= alpha;
   ctx.fillStyle = 'rgba(0, 4, 18, 0.58)';
   ctx.fillRect(plot.x, plot.y, plot.w, plot.h);
-  ctx.strokeStyle = 'rgba(0, 226, 255, 0.10)';
+  ctx.strokeStyle = 'rgba(0, 226, 255, 0.08)';
   ctx.lineWidth = 1;
   for (let i = 1; i < grid; i++) {
-    if (grid > 15 && i % 2 !== 0) continue;
     const gx = plot.x + (i / grid) * plot.w;
     const gy = plot.y + (i / grid) * plot.h;
     ctx.beginPath();
@@ -343,26 +359,37 @@ export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime =
     ctx.stroke();
   }
   const coarseGrid = Math.max(1, Number(preview.scale.grid) || 1);
-  for (const region of preview.coarseRegions) {
-    const x = plot.x + (region.gridX / coarseGrid) * plot.w;
-    const y = plot.y + (region.gridY / coarseGrid) * plot.h;
-    const w = (region.width / coarseGrid) * plot.w;
-    const h = (region.height / coarseGrid) * plot.h;
-    const color = region.kind === 'open void' ? 'rgba(0, 0, 20, 0.88)' : region.kind === 'dense mass' ? 'rgba(255, 185, 56, 0.58)' : region.kind === 'interference' ? 'rgba(255, 62, 181, 0.48)' : 'rgba(0, 226, 255, 0.60)';
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = region.kind === 'open void' ? 'rgba(154, 180, 206, 0.20)' : 'rgba(0, 226, 255, 0.46)';
-    ctx.setLineDash([3, 4]);
-    ctx.strokeRect(x + 2, y + 2, Math.max(4, w - 4), Math.max(4, h - 4));
-    ctx.setLineDash([]);
-    const contourCount = 2 + Math.round(region.density * 3);
-    for (let ring = 0; ring < contourCount; ring++) {
-      const inset = 8 + ring * 7;
-      if (w <= inset * 2 || h <= inset * 2) continue;
-      ctx.strokeStyle = region.kind === 'interference' ? 'rgba(255, 62, 181, 0.44)' : 'rgba(0, 226, 255, 0.36)';
+  for (const [index, region] of preview.coarseRegions.entries()) {
+    const x = plot.x + ((region.gridX + region.width / 2) / coarseGrid) * plot.w;
+    const y = plot.y + ((region.gridY + region.height / 2) / coarseGrid) * plot.h;
+    const rx = Math.max(16, (region.width / coarseGrid) * plot.w * 0.44);
+    const ry = Math.max(14, (region.height / coarseGrid) * plot.h * 0.44);
+    const isVoid = region.kind === 'open void';
+    const isInterference = region.kind === 'interference';
+    const color = isVoid ? 'rgba(154, 180, 206, 0.26)' : isInterference ? 'rgba(255, 62, 181, 0.60)' : region.kind === 'dense mass' ? 'rgba(255, 185, 56, 0.62)' : 'rgba(0, 226, 255, 0.58)';
+    const contourCount = isVoid ? 1 : 2 + Math.round(region.density * 3);
+    if (!isVoid) {
+      ctx.fillStyle = color.replace(/,\s*[^,)]+\)$/, ', 0.08)');
       ctx.beginPath();
-      ctx.rect(x + inset, y + inset, w - inset * 2, h - inset * 2);
-      ctx.stroke();
+      ctx.moveTo(x - rx, y);
+      for (let step = 1; step <= 12; step++) {
+        const angle = (step / 12) * Math.PI * 2;
+        const wobble = 0.82 + surveyNoise(index * 13 + step) * 0.28;
+        ctx.lineTo(x + Math.cos(angle) * rx * wobble, y + Math.sin(angle) * ry * wobble);
+      }
+      ctx.fill();
+    }
+    for (let ring = 0; ring < contourCount; ring++) {
+      const scale = 1 - ring * 0.17;
+      drawSurveyContour(ctx, x, y, rx * scale, ry * scale, index * 17 + ring, color, isVoid ? 0.26 : 0.66 - ring * 0.1, isVoid || isInterference);
+    }
+    if (isInterference) {
+      for (let mark = 0; mark < 4; mark++) {
+        const offsetX = (surveyNoise(index * 7 + mark) - 0.5) * rx * 1.4;
+        const offsetY = (surveyNoise(index * 11 + mark) - 0.5) * ry * 1.4;
+        ctx.fillStyle = 'rgba(255, 62, 181, 0.54)';
+        ctx.fillRect(x + offsetX, y + offsetY, 18 + mark * 7, 2);
+      }
     }
   }
   const uncertaintyBars = Math.round(preview.uncertainty.value * 10);
@@ -373,7 +400,7 @@ export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime =
     ctx.fillRect(bandX, bandY, 18 + (i % 3) * 8, 2);
   }
   if (!reducedMotion) {
-    const scanY = plot.y + ((motionTime * 34) % 1) * plot.h;
+    const scanY = plot.y + ((motionTime * 0.34) % 1) * plot.h;
     ctx.fillStyle = 'rgba(0, 226, 255, 0.12)';
     ctx.fillRect(plot.x, scanY, plot.w, 2);
   }

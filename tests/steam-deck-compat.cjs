@@ -36,6 +36,7 @@ async function run() {
   const prompts = await import(pathToFileURL(path.join(ROOT, "src", "ui", "input-prompts.js")).href);
   assert.strictEqual(prompts.promptLabel("confirm", { deck: true }), "A");
   assert.strictEqual(prompts.promptLabel("back", { deck: true }), "B");
+  assert.strictEqual(prompts.promptLabel("quit", { deck: true }), "B");
   assert.strictEqual(prompts.promptLabel("pulse", { deck: true }), "X");
   assert.strictEqual(prompts.promptLabel("inventory", { deck: true }), "View");
   assert.strictEqual(prompts.promptLabel("tabs", { deck: true }), "L1/R1");
@@ -65,13 +66,19 @@ async function run() {
   includes(main, "actionDescriptor('tabs', homePromptOptions)", "Home launch prompt must use the active-device descriptor");
   includes(hud, "affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)", "HUD salvage prompt must use one shared active-device caption");
   includes(main, "currentPromptOptions()", "Canvas overlays must route through prompt options");
+  includes(main, "actionDescriptor('quit', currentPromptOptions())", "Title exit must use the shared action/glyph descriptor");
+  includes(main, "requestPackagedQuit()", "Title back action must request a packaged app quit");
   includes(hud, "affordanceCaption('inventory'", "HUD cargo prompt must use centralized input labels");
   includes(results, "actionDescriptor('confirm'", "Results overlay must use centralized action descriptors");
   includes(primitives, "r.y + r.h + UI_DECK_GEOMETRY.button.gap", "Command button glyphs must draw below the button label");
   excludes(primitives, "hotkey ? `${String(hotkey).toUpperCase()}  ${String(label).toUpperCase()}`", "Command labels must not fuse input affordances into the action label");
 
   const electronMain = read("desktop/electron-main.cjs");
+  const mainPreload = read("desktop/main-preload.cjs");
   includes(electronMain, "params.set('deck', '1')", "Packaged Deck renderer must receive an explicit deck mode flag");
+  includes(electronMain, "preload: path.join(__dirname, 'main-preload.cjs')", "Packaged renderer must receive the quit bridge");
+  includes(electronMain, "ipcMain.handle('lbh:quit-app'", "Electron must own the packaged quit action");
+  includes(mainPreload, "ipcRenderer.invoke('lbh:quit-app')", "Controller quit must use the main-process bridge");
 
   const build = read("scripts/build.cjs");
   includes(build, "APP_ICON_PNG", "Build must know about the app icon");

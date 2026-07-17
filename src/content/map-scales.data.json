@@ -6,7 +6,20 @@
       "dimensions": { "width": 5, "height": 5 },
       "profileId": "small",
       "sourceFile": "shallows-5x5.js",
-      "legacyDimensions": { "width": 3, "height": 3 }
+      "legacyDimensions": { "width": 3, "height": 3 },
+      "survey": {
+        "label": "THE SHALLOWS",
+        "scaleBand": "LOCAL",
+        "riskBand": "LOW",
+        "description": "A coarse fabric read. Contacts remain unresolved.",
+        "topology": { "grid": 5, "miniGlyphCells": 3, "regionCount": 4, "voidBias": 0.16, "densityBias": 0.72 },
+        "contents": [
+          { "id": "gravity", "rangeKey": "gravityWells", "label": "GRAVITY WELLS", "description": "broad massing // possible read", "role": "flow" },
+          { "id": "derelict", "rangeKey": "derelictFields", "label": "DERELICT FIELDS", "description": "salvage traces // possible read", "role": "salvage" },
+          { "id": "stellar", "rangeKey": "stellarContacts", "label": "STELLAR CONTACTS", "description": "bright bodies // possible read", "role": "amber" },
+          { "id": "exit", "rangeKey": "possibleExits", "label": "POSSIBLE EXITS", "description": "aperture traces // not guaranteed", "role": "flow" }
+        ]
+      }
     },
     "expanse": {
       "mapId": "expanse",
@@ -14,7 +27,20 @@
       "dimensions": { "width": 15, "height": 15 },
       "profileId": "medium",
       "sourceFile": "expanse-15x15.js",
-      "legacyDimensions": { "width": 5, "height": 5 }
+      "legacyDimensions": { "width": 5, "height": 5 },
+      "survey": {
+        "label": "THE EXPANSE",
+        "scaleBand": "REGIONAL",
+        "riskBand": "MEDIUM",
+        "description": "A coarse fabric read. Contacts remain unresolved.",
+        "topology": { "grid": 7, "miniGlyphCells": 4, "regionCount": 7, "voidBias": 0.30, "densityBias": 0.56 },
+        "contents": [
+          { "id": "gravity", "rangeKey": "gravityWells", "label": "GRAVITY WELLS", "description": "broad massing // possible read", "role": "flow" },
+          { "id": "derelict", "rangeKey": "derelictFields", "label": "DERELICT FIELDS", "description": "salvage traces // possible read", "role": "salvage" },
+          { "id": "stellar", "rangeKey": "stellarContacts", "label": "STELLAR CONTACTS", "description": "bright bodies // possible read", "role": "amber" },
+          { "id": "exit", "rangeKey": "possibleExits", "label": "POSSIBLE EXITS", "description": "aperture traces // not guaranteed", "role": "flow" }
+        ]
+      }
     },
     "deep-field": {
       "mapId": "deep-field",
@@ -22,7 +48,20 @@
       "dimensions": { "width": 25, "height": 25 },
       "profileId": "large",
       "sourceFile": "deep-field-25x25.js",
-      "legacyDimensions": { "width": 10, "height": 10 }
+      "legacyDimensions": { "width": 10, "height": 10 },
+      "survey": {
+        "label": "DEEP FIELD",
+        "scaleBand": "DEEP",
+        "riskBand": "HIGH",
+        "description": "A coarse fabric read. Contacts remain unresolved.",
+        "topology": { "grid": 9, "miniGlyphCells": 5, "regionCount": 10, "voidBias": 0.48, "densityBias": 0.38 },
+        "contents": [
+          { "id": "gravity", "rangeKey": "gravityWells", "label": "GRAVITY WELLS", "description": "broad massing // possible read", "role": "flow" },
+          { "id": "derelict", "rangeKey": "derelictFields", "label": "DERELICT FIELDS", "description": "salvage traces // possible read", "role": "salvage" },
+          { "id": "stellar", "rangeKey": "stellarContacts", "label": "STELLAR CONTACTS", "description": "bright bodies // possible read", "role": "amber" },
+          { "id": "exit", "rangeKey": "possibleExits", "label": "POSSIBLE EXITS", "description": "aperture traces // not guaranteed", "role": "flow" }
+        ]
+      }
     }
   },
   "AUTHORED_MAP_CONTRACT": {

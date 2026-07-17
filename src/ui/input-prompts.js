@@ -130,7 +130,7 @@ export function affordanceCaption(action, verb, options = {}) {
 
 export function menuHint(options = {}) {
   return [
-    ['tabs', 'tabs'], ['select', 'select'], ['confirm', 'confirm'], ['back', 'back'],
+    ['tabs', 'switch tabs'], ['select', 'move'], ['confirm', 'select'], ['quit', 'exit'],
   ].map(([action, verb]) => actionCaptionMarkup(action, verb, options)).join('    ');
 }
 

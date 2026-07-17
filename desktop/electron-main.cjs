@@ -520,6 +520,7 @@ function createMainWindow() {
     autoHideMenuBar: true,
     title: 'Last Singularity',
     webPreferences: {
+      preload: path.join(__dirname, 'main-preload.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -617,6 +618,10 @@ function buildMenu() {
 }
 
 ipcMain.handle('lbh:stack-status', async () => getEmbeddedStackSnapshot());
+ipcMain.handle('lbh:quit-app', async () => {
+  app.quit();
+  return { ok: true };
+});
 ipcMain.handle('lbh:focus-main-window', async () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();

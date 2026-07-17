@@ -432,6 +432,15 @@ function currentPromptOptions() {
   };
 }
 
+function requestPackagedQuit() {
+  const quit = globalThis?.lbhApp?.quit;
+  if (typeof quit !== 'function') return false;
+  void Promise.resolve(quit()).catch((error) => {
+    console.warn('[LBH] packaged quit request failed:', error?.message || error);
+  });
+  return true;
+}
+
 function profileRunRecords(profile) {
   const records = Array.isArray(profile?.runRecords) ? profile.runRecords
     : Array.isArray(profile?.runs) ? profile.runs
@@ -3463,7 +3472,9 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
 
   if (readyAlpha > 0) {
     drawCommandButtonMotion(ctx, layout.commandRect, 'select pilot', {
-      action: actionDescriptor('confirm', currentPromptOptions()),
+      // The title command owns the action label; the shared prompt rail below
+      // it keeps controller select and title exit together on Deck.
+      action: null,
       role: 'flow',
       active: true,
       alpha: readyAlpha * promptPulse,
@@ -3472,6 +3483,10 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
       reducedMotion: motion.reducedMotion,
       commandPulse: motion.commandPulse,
     });
+    drawActionFooter(ctx, layout.footerRect.x, layout.footerRect.y, [
+      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'select pilot' },
+      { descriptor: actionDescriptor('quit', currentPromptOptions()), verb: 'exit' },
+    ], { alpha: 0.86, gap: 14, maxWidth: layout.footerRect.w, backing: true, backingRole: 'flow' });
   }
 
   ctx.shadowBlur = 0;
@@ -4010,6 +4025,7 @@ function gameLoop(now) {
       gamePhase = 'profileSelect';
       profileCursor = profileManager.activeSlot >= 0 ? profileManager.activeSlot : 0;
     }
+    if (!transitionActive && backNow && !_prevBack) requestPackagedQuit();
     applySceneCamera(dt);
 
   } else if (gamePhase === 'profileSelect') {
@@ -5230,7 +5246,8 @@ function gameLoop(now) {
         ctx.fillText(p.name, sx, sy + 16);
       }
 
-      // Wrecks — cluster labels dedupe nearby fragments so telemetry reads as one contact.
+      // Wrecks — cluster labels dedupe nearby fragments and choose a free
+      // presentation slot so adjacent salvage names never stack into noise.
       const renderedWreckLabels = [];
       for (const wreck of wreckSystem.wrecks) {
         if (!wreck.alive) continue;
@@ -5244,16 +5261,37 @@ function gameLoop(now) {
           rendered.key === labelKey && Math.hypot(rendered.sx - sx, rendered.sy - sy) < 170
         ));
         if (duplicateNearbyLabel) continue;
-        renderedWreckLabels.push({ key: labelKey, sx, sy });
-
         let color;
         if (wreck.type === 'vault') color = `rgba(255, 215, 60, ${a * 0.7})`;
         else if (wreck.type === 'debris') color = `rgba(180, 140, 80, ${a * 0.6})`;
         else color = `rgba(160, 180, 200, ${a * 0.6})`;
         ctx.font = canvasFont(10);
-        ctx.fillStyle = color;
         const itemText = wreck.looted ? '' : ` (${wreck.loot.length})`;
-        ctx.fillText(label + itemText, sx, sy + 18);
+        const labelText = label + itemText;
+        const labelWidth = Math.min(220, ctx.measureText(labelText).width + 14);
+        const candidates = [18, -18, 42, -42, 66, -66];
+        let chosen = null;
+        for (const offset of candidates) {
+          const centerX = Math.max(labelWidth / 2 + 8, Math.min(overlayCanvas.width - labelWidth / 2 - 8, sx));
+          const centerY = sy + offset;
+          const box = { x: centerX - labelWidth / 2, y: centerY - 13, w: labelWidth, h: 18 };
+          const overlaps = renderedWreckLabels.some((rendered) => (
+            box.x < rendered.x + rendered.w + 6 && box.x + box.w + 6 > rendered.x
+            && box.y < rendered.y + rendered.h + 4 && box.y + box.h + 4 > rendered.y
+          ));
+          if (!overlaps) {
+            chosen = { ...box, centerX, centerY };
+            break;
+          }
+        }
+        if (!chosen) continue;
+        renderedWreckLabels.push({ key: labelKey, sx, sy, ...chosen });
+        ctx.fillStyle = 'rgba(0, 0, 8, 0.62)';
+        ctx.fillRect(chosen.x, chosen.y, chosen.w, chosen.h);
+        ctx.strokeStyle = color.replace(/,\s*[^,)]+\)$/, ', 0.28)');
+        ctx.strokeRect(chosen.x, chosen.y, chosen.w, chosen.h);
+        ctx.fillStyle = color;
+        ctx.fillText(labelText, chosen.centerX, chosen.centerY);
       }
 
       // Scavengers — faction + callsign, archetype-colored
@@ -5736,11 +5774,11 @@ function gameLoop(now) {
 
     // Controls hint: glyphs remain separate from the selected action label.
     drawActionFooter(ctx, profileLayout.panel.x + UI_DECK_GEOMETRY.panel.paddingX, profileLayout.promptY - 12, [
-      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'select' },
-      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'confirm' },
+      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'move' },
+      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'load / create' },
       { descriptor: actionDescriptor('delete', currentPromptOptions()), verb: 'delete' },
-      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back' },
-    ], { alpha: 0.76, maxWidth: profileLayout.panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2 });
+      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back out' },
+    ], { alpha: 0.76, maxWidth: profileLayout.panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, backing: true, backingRole: 'flow' });
 
     ctx.restore();
   }
@@ -5800,7 +5838,7 @@ function gameLoop(now) {
     const tabY = leftPanel.y + 104;
     for (let i = 0; i < HOME_TABS.length; i++) {
       const role = homeTabRole(i);
-      const row = { x: leftPanel.x + UI_DECK_GEOMETRY.panel.paddingX, y: tabY + i * 60, w: leftPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, h: 52 };
+      const row = { x: leftPanel.x + UI_DECK_GEOMETRY.panel.paddingX, y: tabY + i * (UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation), w: leftPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, h: UI_DECK_GEOMETRY.listRow.minHeight };
       const active = homeTab === i;
       drawSelectedRow(ctx, row, {
         role,
@@ -5888,7 +5926,10 @@ function gameLoop(now) {
 
       drawSectionLabel(ctx, 'loadout', centerX, sy, { role: 'salvage', alpha: 0.86 });
       sy += 24;
-      const loadoutRowH = UI_DECK_GEOMETRY.listRow.minHeight;
+      const loadoutRowH = Math.max(
+        UI_DECK_GEOMETRY.listRow.minHeight,
+        UI_DECK_GEOMETRY.iconCell.minHeight + UI_DECK_GEOMETRY.listRow.paddingY * 2,
+      );
       const loadoutRowGap = UI_DECK_GEOMETRY.separation;
       ctx.font = canvasFont(12);
       for (let i = 0; i < 2; i++) {
@@ -5939,12 +5980,13 @@ function gameLoop(now) {
       ctx.fillText(`VAULT ${p.vault.length}/${p.vaultCapacity}`, centerX, centerY);
       ctx.font = canvasFont(12);
       let vy = centerY + 34;
-      const maxVisible = Math.min(p.vault.length, Math.max(4, Math.floor((centerPanel.h - 220) / (UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation))));
+      const vaultRowH = Math.max(UI_DECK_GEOMETRY.listRow.minHeight, UI_DECK_GEOMETRY.valueBlock.minHeight + 6);
+      const maxVisible = Math.min(p.vault.length, Math.max(4, Math.floor((centerPanel.h - 220) / (vaultRowH + UI_DECK_GEOMETRY.separation))));
       const scrollStart = Math.max(0, homeVaultCursor - 6);
       for (let i = scrollStart; i < Math.min(p.vault.length, scrollStart + maxVisible); i++) {
         const item = p.vault[i];
         const selected = (i === homeVaultCursor);
-        const row = { x: centerX - 6, y: vy - 6, w: centerTextW, h: UI_DECK_GEOMETRY.listRow.minHeight };
+        const row = { x: centerX - 6, y: vy - 6, w: centerTextW, h: vaultRowH };
         drawSelectedRow(ctx, row, {
           role: 'salvage',
           active: true,
@@ -5975,7 +6017,7 @@ function gameLoop(now) {
             h: UI_DECK_GEOMETRY.actionGlyph.minHeight,
           }, actionDescriptor('confirm', currentPromptOptions()), { verb: action, alpha: 0.86, color: roleColor('salvage') });
         }
-        vy += UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation;
+        vy += vaultRowH + UI_DECK_GEOMETRY.separation;
       }
       if (p.vault.length === 0) {
         ctx.fillStyle = roleColor('muted', 0.48);
@@ -6143,7 +6185,8 @@ function gameLoop(now) {
       ctx.fillText('no active profile', centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2);
     }
 
-    const sidebarX = rightPanel.x + 20;
+    const sidebarX = rightPanel.x + UI_DECK_GEOMETRY.panel.paddingX;
+    const sidebarW = rightPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
     let sideY = rightPanel.y + 58;
     const homePromptOptions = currentPromptOptions();
     const launchActive = homeTab === 4;
@@ -6164,23 +6207,24 @@ function gameLoop(now) {
         commandPulse: motion.commandPulse,
       });
     } else {
-      drawSectionLabel(ctx, 'next operation', rightPanel.x + 24, sideY + 8, { role: 'salvage', alpha: 0.82 });
-      drawActionFooter(ctx, rightPanel.x + 24, sideY + 18, [
+      drawSectionLabel(ctx, 'next operation', sidebarX, sideY + 8, { role: 'salvage', alpha: 0.82 });
+      drawActionFooter(ctx, sidebarX, sideY + 18, [
         { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'launch when ready' },
-      ], { alpha: 0.78, maxWidth: rightPanel.w - 48 });
+      ], { alpha: 0.78, maxWidth: sidebarW, backingRole: 'salvage' });
     }
     sideY += 82;
-    drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM`, sidebarX, sideY, { labelWidth: 136, valueRole: 'salvage' });
+    const valueWidth = Math.max(64, sidebarW - 136);
+    drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM`, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'salvage' });
     sideY += 24;
-    drawKeyValueRow(ctx, 'vault value', `${profileVaultValue(p)} EM`, sidebarX, sideY, { labelWidth: 136, valueRole: 'salvage' });
+    drawKeyValueRow(ctx, 'vault value', `${profileVaultValue(p)} EM`, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'salvage' });
     sideY += 24;
-    drawKeyValueRow(ctx, 'best survival', bestLabel, sidebarX, sideY, { labelWidth: 136, valueRole: 'flow' });
+    drawKeyValueRow(ctx, 'best survival', bestLabel, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'flow' });
     sideY += 24;
-    drawKeyValueRow(ctx, 'extractions', String(p?.totalExtractions || 0), sidebarX, sideY, { labelWidth: 136, valueRole: 'ecology' });
+    drawKeyValueRow(ctx, 'extractions', String(p?.totalExtractions || 0), sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'ecology' });
     sideY += 36;
     drawSectionLabel(ctx, 'readiness', sidebarX, sideY, { role: 'flow', alpha: 0.84 });
     sideY += 24;
-    drawSegmentedGauge(ctx, { x: sidebarX, y: sideY, w: rightPanel.w - 42, h: 13 }, {
+    drawSegmentedGauge(ctx, { x: sidebarX, y: sideY, w: sidebarW, h: 13 }, {
       value: equippedCount + consumableCount,
       max: 4,
       segments: 4,
@@ -6189,7 +6233,7 @@ function gameLoop(now) {
       alpha: 0.9,
     });
     sideY += 42;
-    drawSegmentedGauge(ctx, { x: sidebarX, y: sideY, w: rightPanel.w - 42, h: 13 }, {
+    drawSegmentedGauge(ctx, { x: sidebarX, y: sideY, w: sidebarW, h: 13 }, {
       value: vaultCapacity ? vaultCount : 0,
       max: Math.max(1, vaultCapacity),
       segments: 8,
@@ -6201,14 +6245,14 @@ function gameLoop(now) {
     if (launchActive) {
       ctx.font = canvasFont(11);
       ctx.fillStyle = roleColor('muted', 0.74);
-      ctx.fillText(fitUiText(ctx, 'map briefing opens on confirm', rightPanel.w - 42), sidebarX, sideY);
+      ctx.fillText(fitUiText(ctx, 'map briefing opens on confirm', sidebarW), sidebarX, sideY);
     }
     drawActionFooter(ctx, sidebarX, rightPanel.y + rightPanel.h - 72, [
-      { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'tabs' },
-      { descriptor: actionDescriptor('select', homePromptOptions), verb: 'select' },
-      { descriptor: actionDescriptor('confirm', homePromptOptions), verb: 'confirm' },
-      { descriptor: actionDescriptor('back', homePromptOptions), verb: 'back' },
-    ], { alpha: 0.62, gap: 10, maxWidth: rightPanel.w - 36 });
+      { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'switch tabs' },
+      { descriptor: actionDescriptor('select', homePromptOptions), verb: 'move' },
+      { descriptor: actionDescriptor('confirm', homePromptOptions), verb: 'use' },
+      { descriptor: actionDescriptor('back', homePromptOptions), verb: 'back out' },
+    ], { alpha: 0.72, gap: 10, maxWidth: sidebarW, backing: true, backingRole: 'flow' });
 
     ctx.restore();
   }
@@ -6274,7 +6318,7 @@ function gameLoop(now) {
         borderAlpha: selected ? (entry.available === false ? 0.72 : 0.66 + focusPulse * 0.12) : 0.12,
         railWidth: selected ? 5 : 2,
       });
-      const iconX = row.x + UI_DECK_GEOMETRY.listRow.paddingX + 19;
+      const iconX = row.x + UI_DECK_GEOMETRY.listRow.paddingX + UI_DECK_GEOMETRY.iconCell.minWidth / 2;
       const iconY = row.y + row.h / 2;
       ctx.strokeStyle = roleColor(entry.available === false ? 'muted' : role, selected ? 0.78 : 0.38);
       ctx.fillStyle = roleColor(entry.available === false ? 'muted' : role, selected ? 0.36 : 0.18);
@@ -6294,23 +6338,23 @@ function gameLoop(now) {
         ctx.stroke();
         ctx.strokeRect(iconX - 6, iconY - 4, 12, 10);
       }
-      const textX = row.x + UI_DECK_GEOMETRY.listRow.paddingX + 54;
+      const textX = row.x + UI_DECK_GEOMETRY.listRow.paddingX + UI_DECK_GEOMETRY.iconCell.minWidth + UI_DECK_GEOMETRY.listRow.gap;
       ctx.font = canvasFont(selected ? 16 : 14, { role: selected ? 'display' : 'body', weight: selected ? '700' : '600' });
       ctx.fillStyle = selected ? roleColor(entry.available === false ? 'danger' : 'text', 0.96) : roleColor('muted', 0.72);
       const rowLabel = entry.available === false ? entry.label : registry.label;
-      ctx.fillText(fitUiText(ctx, rowLabel, row.w - 78), textX, row.y + row.h * 0.44);
+      ctx.fillText(fitUiText(ctx, rowLabel, row.w - (textX - row.x) - UI_DECK_GEOMETRY.listRow.paddingX), textX, row.y + row.h * 0.44);
       ctx.font = canvasFont(11, { weight: '700' });
       ctx.fillStyle = roleColor(entry.available === false ? (selected ? 'danger' : 'muted') : role, selected ? 0.82 : 0.46);
       const rowStatus = entry.available === false ? entry.status : `${registry.scale.label} // AVAILABLE`;
-      ctx.fillText(fitUiText(ctx, rowStatus, row.w - 78), textX, row.y + row.h * 0.72);
+      ctx.fillText(fitUiText(ctx, rowStatus, row.w - (textX - row.x) - UI_DECK_GEOMETRY.listRow.paddingX), textX, row.y + row.h * 0.72);
       ctx.restore();
     }
 
     drawActionFooter(ctx, listPanel.x + pad, listPanel.y + listPanel.h - 54, [
-      { descriptor: actionDescriptor('select', promptOptions), verb: 'select' },
-      { descriptor: actionDescriptor('reroll', promptOptions), verb: 'reroll' },
-      { descriptor: actionDescriptor('back', promptOptions), verb: 'back' },
-    ], { alpha: 0.72, gap: 10, maxWidth: listPanel.w - pad * 2 });
+      { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
+      { descriptor: actionDescriptor('reroll', promptOptions), verb: 'new seed' },
+      { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
+    ], { alpha: 0.82, gap: 10, maxWidth: listPanel.w - pad * 2, backing: true, backingRole: surveyRole });
 
     const centerX = previewPanel.x + pad;
     ctx.font = canvasFont(21, { role: 'display', weight: '800' });
@@ -6333,11 +6377,18 @@ function gameLoop(now) {
       ctx.fillText('DATA WITHHELD', briefX, briefPanel.y + 58);
       ctx.font = canvasFont(11, { weight: '700' });
       for (let i = 0; i < 6; i++) {
-        const y = briefPanel.y + 98 + i * 40;
+        const y = briefPanel.y + 98 + i * 42;
         ctx.fillStyle = roleColor('text', 0.78);
         ctx.fillText('???', briefX, y);
+        ctx.strokeStyle = roleColor('danger', 0.56);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(briefX + 44, y - 12, Math.max(48, briefW - 44), 16);
+        ctx.fillStyle = roleColor('danger', 0.42);
+        for (let mark = 0; mark < 5; mark++) {
+          ctx.fillRect(briefX + 52 + mark * Math.max(14, (briefW - 66) / 5), y - 8, 6, 2);
+        }
         ctx.fillStyle = roleColor('danger', 0.62);
-        ctx.fillRect(briefX + 42, y - 10, briefW - 42, 12);
+        ctx.fillText('WITHHELD', briefX + 54, y + 2);
       }
       drawSectionLabel(ctx, 'survey confidence', briefX, briefPanel.y + briefPanel.h - 210, { role: 'danger', alpha: 0.88 });
       ctx.font = canvasFont(28, { role: 'display', weight: '800' });
@@ -6359,17 +6410,21 @@ function gameLoop(now) {
       drawKeyValueRow(ctx, 'signature', preview.signature.name, briefX, briefPanel.y + 128, { labelWidth: 88, valueRole: 'anomaly' });
       ctx.font = canvasFont(10);
       ctx.fillStyle = roleColor('muted', 0.74);
-      ctx.fillText(fitUiText(ctx, 'A coarse fabric read. Exact contacts remain unresolved.', briefW), briefX, briefPanel.y + 151);
-      drawSectionLabel(ctx, 'possible contacts', briefX, briefPanel.y + 180, { role: 'flow', alpha: 0.86 });
-      const contactY = briefPanel.y + 204;
+      ctx.fillText(fitUiText(ctx, preview.description, briefW), briefX, briefPanel.y + 151);
+      drawSectionLabel(ctx, 'possible contents', briefX, briefPanel.y + 180, { role: 'flow', alpha: 0.86 });
+      const contactY = briefPanel.y + 210;
       for (const [index, family] of preview.possibleContactFamilies.entries()) {
-        const y = contactY + index * 35;
+        const y = contactY + index * 39;
         ctx.font = canvasFont(10, { weight: '700' });
-        ctx.fillStyle = roleColor(family.role, 0.84);
-        ctx.fillText(fitUiText(ctx, family.label, briefW - 76), briefX, y);
-        ctx.fillStyle = roleColor('muted', 0.72);
-        ctx.fillText(`${family.range.min}-${family.range.max}`, briefX + briefW - 62, y);
-        drawSegmentedGauge(ctx, { x: briefX, y: y + 7, w: briefW, h: 7 }, { value: family.range.max, max: family.range.max || 1, segments: 8, role: family.role, alpha: 0.72 });
+        ctx.fillStyle = roleColor(family.role, 0.86);
+        ctx.fillText(fitUiText(ctx, family.label, Math.max(100, briefW - 64)), briefX, y);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = roleColor('text', 0.82);
+        ctx.fillText(`${family.range.min}-${family.range.max}`, briefX + briefW, y);
+        ctx.textAlign = 'left';
+        ctx.font = canvasFont(10);
+        ctx.fillStyle = roleColor('muted', 0.68);
+        ctx.fillText(fitUiText(ctx, family.description, briefW), briefX, y + 16);
       }
       const authorityY = commandY - 116;
       const authorityActions = remoteControl?.canHostReset ? [{

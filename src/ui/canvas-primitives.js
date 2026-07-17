@@ -295,10 +295,13 @@ export function drawActionFooter(ctx, x, y, actions, {
   gap = UI_DECK_GEOMETRY.panel.gap,
   maxWidth = Infinity,
   lineHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight + UI_DECK_GEOMETRY.panel.gap,
+  backing = true,
+  backingRole = 'flow',
 } = {}) {
   let cursor = Number(x) || 0;
   const startX = cursor;
   let top = Number(y) || 0;
+  const placed = [];
   for (const entry of Array.isArray(actions) ? actions : []) {
     const descriptor = entry?.descriptor || entry;
     const verb = entry?.verb || '';
@@ -307,8 +310,23 @@ export function drawActionFooter(ctx, x, y, actions, {
       cursor = startX;
       top += lineHeight;
     }
-    const result = drawActionPrompt(ctx, { x: cursor, y: top, w: Math.max(estimatedWidth, UI_DECK_GEOMETRY.actionGlyph.minWidth), h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, descriptor, { verb, alpha, color });
+    placed.push({ descriptor, verb, x: cursor, y: top, w: Math.max(estimatedWidth, UI_DECK_GEOMETRY.actionGlyph.minWidth) });
     cursor += estimatedWidth;
+  }
+  if (backing && placed.length > 0) {
+    const right = Math.min(startX + maxWidth, Math.max(...placed.map((entry) => entry.x + entry.w)));
+    const bottom = Math.max(...placed.map((entry) => entry.y + UI_DECK_GEOMETRY.actionGlyph.minHeight));
+    drawUiPanel(ctx, {
+      x: startX - UI_DECK_GEOMETRY.actionGlyph.paddingX,
+      y: Number(y) - 6,
+      w: Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, right - startX + UI_DECK_GEOMETRY.actionGlyph.paddingX * 2),
+      h: Math.max(UI_DECK_GEOMETRY.actionGlyph.minHeight, bottom - Number(y) + 12),
+    }, { role: backingRole, fillAlpha: 0.16 * alpha, borderAlpha: 0.22 * alpha, cornerLength: 10 });
+  }
+  for (const entry of placed) {
+    drawActionPrompt(ctx, { x: entry.x, y: entry.y, w: entry.w, h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, entry.descriptor, {
+      verb: entry.verb, alpha, color,
+    });
   }
 }
 
@@ -479,6 +497,7 @@ export function drawSectionLabel(ctx, text, x, y, {
 
 export function drawKeyValueRow(ctx, label, value, x, y, {
   labelWidth = 122,
+  valueWidth = Infinity,
   alpha = 1,
   valueRole = 'text',
 } = {}) {
@@ -492,6 +511,6 @@ export function drawKeyValueRow(ctx, label, value, x, y, {
   ctx.fillStyle = roleColor('muted', 0.75 * a);
   ctx.fillText(String(label), x, y);
   ctx.fillStyle = roleColor(valueRole, 0.9 * a);
-  ctx.fillText(String(value), x + labelWidth, y);
+  ctx.fillText(fitUiText(ctx, String(value), valueWidth), x + labelWidth, y);
   ctx.restore();
 }

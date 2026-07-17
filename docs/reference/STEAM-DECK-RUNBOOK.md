@@ -97,6 +97,9 @@ First launch flow on Deck:
    consumables.
 7. Loot wrecks, preserve delta-v, follow cyan route apertures, remain inside
    one, then press `A` to extract before it expires or the universe collapses.
+8. From the title screen, press `B` to exit cleanly back to SteamOS. The
+   title rail shows the same controller glyph; no keyboard is required for
+   the quit path.
 
 ### Public Installer Overrides
 

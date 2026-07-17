@@ -675,6 +675,7 @@ function stageElectronShell(mode) {
 
   const desktopFiles = [
     'electron-main.cjs',
+    'main-preload.cjs',
     'status-preload.cjs',
     'status.html',
   ];

@@ -126,7 +126,7 @@ First bridge status:
 | Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | plain-left is the shipped v0.2 default; opposite-left remains a taste challenger for Greg's review |
 | Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | first motion pass shipped; danger/delete composition still needs stronger treatment |
 | Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first static composition slice shipped; next work is content density, profile/destructive-state polish, and Deck-specific prompt review |
-| Map Select / Survey Terminal | `src/main.js` | v0.3 approved valid/locked survey references | selected sector, topology reconstruction, broad risk, possible contents, confidence, launch or locked state | source vertical and accepted Deck proof are complete; W2-A4 authority-parity dependency remains, with physical Deck and Greg taste gates still open |
+| Map Select / Survey Terminal | `src/main.js` | v0.3 approved valid/locked survey references | selected sector, topology reconstruction, broad risk, possible contents, confidence, launch or locked state | source vertical and accepted Deck proof are complete; physical Deck and Greg taste gates remain open |
 | In-Match HUD | `index-a.html`, `src/hud.js` | `in-match-hud.png` | fuel, hull, signal, cargo, exits, warning, active ability | edge reads need stronger icon/bar hierarchy and better backing |
 | Pause | `src/main.js` | shared command overlay | paused state, resume, settings, abandon | first motion pass shipped; needs command-panel composition cleanup |
 | Results / Run Report | `src/run-results.js` | `post-match-results.png` | outcome, cause/reward, cargo accounting, earnings, continue | primitives and motion shipped; still needs final theatrical layout review |
@@ -180,7 +180,7 @@ line, or a path sequence.
 
 The left rail lists Shallows `5x5`, Expanse `15x15`, and Deep Field `25x25`, then
 generic locked sectors. The right rail explains what the selected survey may
-contain using broad families or ranges under `POSSIBLE CONTACTS`, plus a broad
+contain using broad families or ranges under `POSSIBLE CONTENTS`, plus a broad
 risk band and deliberately incomplete `SURVEY CONFIDENCE`. Possible contents
 are not guaranteed objects, and signal pressure is not a Map Select promise.
 
@@ -189,9 +189,9 @@ readable, corrupt the center into withheld/redacted data, redact the right rail,
 and expose no launch action or fake input prompt. Reduced motion uses a static
 corrupted frame rather than flashing.
 
-The W2-A4 branch `codex/v0.3-map-scale-5-15-25` remains the production
-authority-parity dependency for those scale labels. This branch's survey source
-does not claim branch-local runtime authority parity.
+The canonical map registry owns dimensions plus each map's survey risk,
+topology tuning, and visible descriptions. Map Select derives `5x5`, `15x15`,
+and `25x25` from those dimensions and consumes that survey descriptor directly.
 
 ### In-Match HUD
 
@@ -244,6 +244,9 @@ The lane should:
 - emit reduced "couch proxy" images, probably 50 percent and 25 percent scale;
 - sample a few named regions for contrast: selected action, danger warning,
   fuel/hull/signal bars, map selected sector, result outcome, continue action;
+- the bounded v0.3.1 Deck review capture also includes title exit, Ship/loadout,
+  all three canonical survey scales, a locked survey, and an in-match wreck
+  label frame at 1280x800;
 - fail only on objective breakage: missing surface, unreadable sampled element,
   no visible focus, or canvas/image capture failure.
 
@@ -398,9 +401,9 @@ Shipped slice:
 ## Pass 5 - Map Select / Survey Terminal
 
 Status: v0.3 survey-terminal source and accepted visual proof complete on
-2026-07-15; style-guide consistency is recorded here. Production authority
-scale parity still depends on W2-A4, and physical Deck plus Greg taste review
-remain open.
+2026-07-15; style-guide consistency is recorded here. Canonical map/survey
+metadata parity is source-complete; physical Deck plus Greg taste review remain
+open.
 
 Tasks:
 
@@ -431,6 +434,9 @@ Shipped survey-terminal slice:
 - The right rail uses possible-contents families/ranges, broad risk,
   incomplete confidence, and the shared `BEGIN DROP` graphical glyph contract
   for valid selections.
+- Possible-content ranges are text reads from canonical aggregate populations;
+  labels and descriptions come from the same canonical map survey descriptor,
+  and the right rail does not use decorative segmented chunk bars.
 - Locked rows show redacted/withheld center and right-rail data and expose no
   launch action. Reduced motion holds the corruption as a static frame.
 
