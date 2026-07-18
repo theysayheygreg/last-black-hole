@@ -135,8 +135,8 @@ function createWellEntities(exhibit, tuning) {
 
 function createScavengerEntities(exhibit, tuning) {
   return [
-    { id: "bench:scavenger:standard:a", name: "Yard Scavenger A", wx: exhibit.placement.x - 430, wy: exhibit.placement.y - 45 },
-    { id: "bench:scavenger:standard:b", name: "Yard Scavenger B", wx: exhibit.placement.x - 220, wy: exhibit.placement.y + 45 },
+    { id: "bench:scavenger:standard:a", name: "Yard Scavenger A", wx: exhibit.placement.x - 40, wy: exhibit.placement.y - 45 },
+    { id: "bench:scavenger:standard:b", name: "Yard Scavenger B", wx: exhibit.placement.x + 180, wy: exhibit.placement.y + 45 },
   ].map((placement) => ({
     ...placement,
     family: "scavengers",
