@@ -53,3 +53,10 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 
 Historical indexes: [`v0.1 archive`](../v0.1/README.md) and
 [`v0.2 archive`](../v0.2/history/README.md).
+
+## Developer Tooling
+
+- [`BENCH-TUNING-MODE.md`](BENCH-TUNING-MODE.md) — the Bench: Gallery map,
+  contract-generated inspector, direct-manipulation handles (ring drag =
+  type tune, body drag = instance staging), seeded restart, tuning
+  patches. Mockups in [`bench-mockups/`](bench-mockups/).
