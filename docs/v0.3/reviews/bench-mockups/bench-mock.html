@@ -76,7 +76,7 @@
     <span class="spacer"></span><span class="muted" style="font-size:9px">live: applies on release · restart: applies on ↻</span></div>
 </div>
 
-<div class="panel" id="hint">click any entity to inspect its archetype</div>
+<div class="panel" id="hint">drag ring = tune the type · drag body = stage this instance · panel = fine tune</div>
 
 <div class="panel" id="patch">
   <div class="ihead"><div class="iname">TUNING PATCH</div>
@@ -115,8 +115,17 @@ function drawWorld(state){
   // slingshot alley
   HOLES.forEach((h,i)=>{ g.fillStyle='#05060c'; g.beginPath(); g.arc(h.x,h.y,10,0,6.29); g.fill();
     g.strokeStyle='rgba(184,76,255,0.7)'; g.beginPath(); g.arc(h.x,h.y,13,0,6.29); g.stroke();
-    if(state===2){ ring(h.x,h.y,58,'rgba(0,226,255,0.9)',[4,4], i===2?'capture 450 m · step 25 m':null);
-      g.strokeStyle='rgba(0,226,255,0.35)'; g.strokeRect(h.x-70,h.y-70,140,140); } });
+    if(state===2){
+      const dragging = i===0, r = dragging?66:66; // all instances live-updated by the drag
+      if(dragging){ ring(h.x,h.y,58,'rgba(0,226,255,0.25)',[2,4],null); } // pre-drag ghost
+      ring(h.x,h.y,r,'rgba(0,226,255,0.95)',[4,4], i===2?'capture 475 m · step 25':null);
+      [[r,0],[0,r],[-r,0],[0,-r]].forEach(([dx,dy])=>{ g.fillStyle= dragging&&dx===r?'#fff':'rgba(0,226,255,0.95)';
+        g.fillRect(h.x+dx-3,h.y+dy-3,6,6); });
+      if(dragging){ g.fillStyle='#fff'; g.font='11px Menlo, monospace';
+        g.fillText('475 m  (+1 step)', h.x-46, h.y+r+20);
+        g.fillText('↔', h.x+r+6, h.y+4); }
+      else { g.fillStyle='rgba(0,226,255,0.8)'; g.font='9px Menlo, monospace';
+        g.fillText('+1', h.x+r+6, h.y-6); } } });
   if(state===2){ // magnetism cone + ghost on first hole
     const h=HOLES[0]; g.strokeStyle='rgba(56,245,138,0.6)';
     g.beginPath(); g.moveTo(h.x-110,h.y+66); g.lineTo(h.x-30,h.y+18); g.stroke();
@@ -131,8 +140,19 @@ function drawWorld(state){
   SCAVS.forEach(s=>{ g.fillStyle='rgba(234,247,255,0.9)'; g.font='12px Menlo, monospace'; g.fillText('◄►',s[0]-6,s[1]);
     if(state===3){ ring(s[0],s[1],46,'rgba(255,51,54,0.55)',[3,4],null);
       g.strokeStyle='rgba(0,226,255,0.8)'; g.strokeRect(s[0]-16,s[1]-14,30,22); } });
-  if(state===3){ ring(SCAVS[0][0],SCAVS[0][1],46,'rgba(255,51,54,0.9)',[3,4],'aggro 450 m · hidden in play');
-    g.fillStyle='rgba(255,51,54,0.9)'; g.font='12px Menlo, monospace'; g.fillText('!', SCAVS[0][0]+20, SCAVS[0][1]-18); }
+  if(state===3){ ring(SCAVS[0][0],SCAVS[0][1],46,'rgba(255,51,54,0.9)',[3,4],'aggro 450 m · drag ring to tune type');
+    [[46,0],[0,46],[-46,0],[0,-46]].forEach(([dx,dy])=>{ g.fillStyle='rgba(255,51,54,0.9)';
+      g.fillRect(SCAVS[0][0]+dx-3,SCAVS[0][1]+dy-3,6,6); });
+    // instance staging: ghost origin + leader line + move cursor
+    const gx=885,gy=585;
+    g.globalAlpha=0.35; g.fillStyle='rgba(234,247,255,0.9)'; g.font='12px Menlo, monospace';
+    g.fillText('◄►',SCAVS[1][0]-6,SCAVS[1][1]); g.globalAlpha=1;
+    g.strokeStyle='rgba(154,180,206,0.5)'; g.setLineDash([3,4]); g.beginPath();
+    g.moveTo(SCAVS[1][0],SCAVS[1][1]); g.lineTo(gx,gy); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#fff'; g.font='12px Menlo, monospace'; g.fillText('◄►',gx-6,gy);
+    g.fillText('✥', gx+16, gy-12);
+    g.fillStyle='rgba(154,180,206,0.85)'; g.font='10px Menlo, monospace';
+    g.fillText('staging · this instance only', gx-40, gy+22); }
   // portal row
   PORTALS.forEach(p=>{ const col = p.s==='closed'?'rgba(0,226,255,0.25)':'rgba(0,226,255,0.9)';
     ring(p.x,p.y,16,col,null,null); if(p.s==='open') ring(p.x,p.y,24,'rgba(0,226,255,0.5)');
@@ -161,7 +181,7 @@ const CONTRACTS={
       ['gravityStrengthMult','1.15×','range 0.8–1.6 · step 0.05','restart',0.44],
       ['killRadius','0.05 wu','range 0.02–0.1 · step 0.01','restart',0.33],
       ['__group','LINKED CONTRACT · SLINGSHOT','system-wide — not per-archetype','',0],
-      ['captureRadius','450 m','range 200–800 · step 25','live',0.42],
+      ['captureRadius','475 m ← dragging','range 200–800 · step 25','live',0.46],
       ['magnetism','30°','range 0–60 · step 5','live',0.5],
       ['coyoteTime','50 ms','range 0–250 · step 50','live',0.2],
       ['payoffCurve','1.4× / qtr-turn','range 1.0–2.0 · step 0.1','live',0.4],
@@ -194,9 +214,9 @@ window.showMock=function(n){
   document.getElementById('hint').style.display='block';
   document.getElementById('patchPill').textContent='patch · 0 edits';
   drawWorld(n);
-  if(n===2){ showInspector('hole'); document.getElementById('hint').style.display='none';
+  if(n===2){ showInspector('hole');
     document.getElementById('patchPill').textContent='patch · 1 edit'; }
-  if(n===3){ showInspector('scav'); document.getElementById('hint').style.display='none';
+  if(n===3){ showInspector('scav');
     document.getElementById('patchPill').textContent='patch · 2 edits'; }
   if(n===4){ document.getElementById('hint').style.display='none';
     document.getElementById('patchPill').textContent='patch · 2 edits';
