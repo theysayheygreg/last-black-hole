@@ -75,7 +75,35 @@ async function waitForBench(port) {
     assert.strictEqual(response.body.enabled, true);
     assert.strictEqual(response.body.gallery.id, "bench-gallery-v1");
     assert.strictEqual(response.body.gallery.bays.filter((bay) => bay.simulation === "active").length, 1);
-    assert.deepStrictEqual(response.body.adapters, []);
+    const wellAdapter = response.body.adapters.find((adapter) => adapter.id === "well.standard");
+    assert.strictEqual(wellAdapter.properties[0].currentValue, 220);
+    const initialWells = response.body.world.entities.filter((entity) => entity.archetype === "well.standard");
+    assert.strictEqual(initialWells.length, 2);
+    assert.ok(initialWells.every((well) => well.influenceRadius === 220 && well.rulerFacts[0].distance === 220));
+
+    const edit = await requestJson(port, "POST", "/bench/edit", {
+      adapterId: "well.standard",
+      propertyId: "influenceRadius",
+      value: 300,
+    });
+    assert.strictEqual(edit.status, 200);
+    assert.ok(edit.body.state.world.entities.filter((entity) => entity.archetype === "well.standard")
+      .every((well) => well.influenceRadius === 300 && well.linkedSlingshot.captureDistance === 210));
+    assert.strictEqual(edit.body.state.adapters[0].properties[0].currentValue, 300);
+
+    const replayEdited = await requestJson(port, "POST", "/bench/replay", {});
+    assert.ok(replayEdited.body.authorityTruth.world.entities
+      .filter((entity) => entity.archetype === "well.standard")
+      .every((well) => well.influenceRadius === 300));
+
+    const resetWell = await requestJson(port, "POST", "/bench/reset", {
+      adapterId: "well.standard",
+      propertyId: "influenceRadius",
+    });
+    assert.strictEqual(resetWell.status, 200);
+    const resetState = await getJson(port, "/bench");
+    assert.ok(resetState.body.world.entities.filter((entity) => entity.archetype === "well.standard")
+      .every((well) => well.influenceRadius === 220));
     const health = await getJson(port, "/health");
     assert.strictEqual(health.body.mapId, "bench-gallery-v1");
     assert.strictEqual(health.body.idleState.idle, false);

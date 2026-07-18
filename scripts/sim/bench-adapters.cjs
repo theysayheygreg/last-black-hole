@@ -55,6 +55,7 @@ function createBenchAdapterRegistry() {
       properties,
       apply: typeof adapter.apply === "function" ? adapter.apply : null,
       reset: typeof adapter.reset === "function" ? adapter.reset : null,
+      getCurrent: typeof adapter.getCurrent === "function" ? adapter.getCurrent : null,
     });
     adapters.set(id, normalized);
     return normalized;
@@ -77,7 +78,10 @@ function createBenchAdapterRegistry() {
     return Array.from(adapters.values()).map((adapter) => ({
       id: adapter.id,
       label: adapter.label,
-      properties: Array.from(adapter.properties.values()),
+      properties: Array.from(adapter.properties.values()).map((property) => ({
+        ...property,
+        currentValue: adapter.getCurrent ? adapter.getCurrent(property) : null,
+      })),
     }));
   }
 

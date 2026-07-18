@@ -6916,6 +6916,19 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/bench/edit") {
+      await handleBenchRoute(req, res, (body) => ({
+        ok: true,
+        entry: benchAuthority.applyEntry({
+          adapterId: body.adapterId,
+          propertyId: body.propertyId,
+          value: body.value,
+        }),
+        state: benchAuthority.state(),
+      }));
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/bench/replay") {
       await handleBenchRoute(req, res, () => ({ ok: true, authorityTruth: benchAuthority.replaySameSetup() }));
       return;

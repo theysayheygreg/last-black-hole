@@ -56,11 +56,10 @@ assert.strictEqual(initial.gallery.id, BENCH_GALLERY_ID);
 assert.strictEqual(initial.gallery.seed, BENCH_GALLERY_SEED);
 assert.strictEqual(initial.gallery.bays.length, BAY_DEFINITIONS.length);
 assert.strictEqual(initial.gallery.bays.filter((bay) => bay.simulation === "active").length, 1);
-assert.ok(initial.gallery.bays.every((bay) => bay.exhibits.every((exhibit) =>
-  exhibit.contractStatus === "NO TUNABLE CONTRACT YET"
-)));
+assert.strictEqual(initial.gallery.bays.flatMap((bay) => bay.exhibits)
+  .filter((exhibit) => exhibit.contractStatus === "TUNABLE").length, 1);
 assert.strictEqual(initial.world.id, BENCH_GALLERY_ID);
-assert.strictEqual(initial.world.entities.length, BAY_DEFINITIONS.reduce((sum, bay) => sum + bay.families.length, 0));
+assert.strictEqual(initial.world.entities.length, BAY_DEFINITIONS.reduce((sum, bay) => sum + bay.families.length, 0) + 1);
 const probe = initial.world.entities.find((entity) => entity.family === "probe-ship");
 assert.strictEqual(probe.invulnerable, true);
 assert.strictEqual(probe.infiniteFuel, true);

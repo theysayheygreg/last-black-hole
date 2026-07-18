@@ -8,6 +8,8 @@ const {
   createBenchGalleryWorld,
   setBenchWorldActiveBay,
   tickBenchGalleryWorld,
+  WELL_ARCHETYPE_ID,
+  WELL_DEFAULTS,
 } = require("./bench-gallery.cjs");
 const { normalizeBenchTruth } = require("./bench-normalize.cjs");
 
@@ -62,12 +64,56 @@ function validatePatch(patch, registry) {
   });
 }
 
-function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) {
+function createBenchAuthority(options = {}) {
+  const registry = options.registry || createBenchAdapterRegistry();
+  const ownsRegistry = !options.registry;
   let gallery = createBenchGallery();
-  let world = createBenchGalleryWorld();
+  const wellTuning = { ...WELL_DEFAULTS };
+  let world = createBenchGalleryWorld({ wellTuning });
   const live = new Map();
   const restart = new Map();
   let undo = null;
+
+  function propagateWellTuning() {
+    for (const entity of world.entities) {
+      if (entity.archetypeId !== WELL_ARCHETYPE_ID) continue;
+      entity.influenceRadius = wellTuning.influenceRadius;
+      entity.geometry.radius = wellTuning.influenceRadius;
+      entity.rulerFacts[0].distance = wellTuning.influenceRadius;
+      entity.linkedSlingshot.captureDistance = Number((wellTuning.influenceRadius * 0.7).toFixed(3));
+      entity.linkedSlingshot.ruler.toRadius = entity.linkedSlingshot.captureDistance;
+    }
+  }
+
+  if (ownsRegistry) {
+    registry.register({
+      id: WELL_ARCHETYPE_ID,
+      label: "Standard Well",
+      properties: [{
+        id: "influenceRadius",
+        label: "Influence Radius",
+        effect: "Changes the pull and linked slingshot ruler radius for every Standard Well.",
+        group: "Gravity and Slingshot",
+        unit: "world units",
+        min: 100,
+        max: 400,
+        step: 10,
+        scope: "type",
+        applies: "live",
+        drawKind: "radius",
+        reset: "Restore the canonical Standard Well radius.",
+      }],
+      getCurrent(property) { return wellTuning[property.id]; },
+      apply({ property, value }) {
+        wellTuning[property.id] = value;
+        propagateWellTuning();
+      },
+      reset({ property }) {
+        wellTuning[property.id] = WELL_DEFAULTS[property.id];
+        propagateWellTuning();
+      },
+    });
+  }
 
   function captureUndo() {
     undo = { live: cloneEntries(live), restart: cloneEntries(restart) };
@@ -175,7 +221,7 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
     registry,
     replaySameSetup() {
       gallery = createBenchGallery({ activeBayId: gallery.activeBayId });
-      world = createBenchGalleryWorld({ activeBayId: gallery.activeBayId });
+      world = createBenchGalleryWorld({ activeBayId: gallery.activeBayId, wellTuning });
       return normalizeBenchTruth({ gallery, patch: exportPatch(), world: snapshotWorld() });
     },
     resetAll() { return resetWhere(() => true); },
