@@ -72,8 +72,8 @@
     <div class="ipills" id="iPills"></div>
   </div>
   <div id="knobs"></div>
-  <div class="ifoot"><span class="btn">↺ reset archetype</span><span class="btn">↺ reset knob</span>
-    <span class="spacer"></span><span class="btn primary">apply</span></div>
+  <div class="ifoot"><span class="btn">↺ reset archetype</span>
+    <span class="spacer"></span><span class="muted" style="font-size:9px">live: applies on release · restart: applies on ↻</span></div>
 </div>
 
 <div class="panel" id="hint">click any entity to inspect its archetype</div>
@@ -158,13 +158,14 @@ const CONTRACTS={
   hole:{name:'MICRO BLACK HOLE',type:'anomaly · vector over base-well · anomalies.data.json',
     pills:['3 instances','shipping','ruler: ON'],
     knobs:[
+      ['gravityStrengthMult','1.15×','range 0.8–1.6 · step 0.05','restart',0.44],
+      ['killRadius','0.05 wu','range 0.02–0.1 · step 0.01','restart',0.33],
+      ['__group','LINKED CONTRACT · SLINGSHOT','system-wide — not per-archetype','',0],
       ['captureRadius','450 m','range 200–800 · step 25','live',0.42],
       ['magnetism','30°','range 0–60 · step 5','live',0.5],
       ['coyoteTime','50 ms','range 0–250 · step 50','live',0.2],
       ['payoffCurve','1.4× / qtr-turn','range 1.0–2.0 · step 0.1','live',0.4],
-      ['chainWindow','0.5 s','range 0–3 · step 0.5 · 0 = off','live',0.17],
-      ['gravityStrengthMult','1.15×','range 0.8–1.6 · step 0.05','restart',0.44],
-      ['killRadius','0.05 wu','range 0.02–0.1 · step 0.01','restart',0.33]]},
+      ['chainWindow','0.5 s','range 0–3 · step 0.5 · 0 = off','live',0.17]]},
   scav:{name:'SCAVENGER · DRIFTER CLASS',type:'hostile · absolute speed class · scavengers contract',
     pills:['4 instances','edits propagate to all','ruler: ON'],
     knobs:[
@@ -179,8 +180,11 @@ function showInspector(key){ const c=CONTRACTS[key]; const el=document.getElemen
   document.getElementById('iName').textContent=c.name;
   document.getElementById('iType').textContent=c.type;
   document.getElementById('iPills').innerHTML=c.pills.map(p=>`<span class="pill">${p}</span>`).join('');
-  document.getElementById('knobs').innerHTML=c.knobs.map(k=>`
-    <div class="knob"><div class="krow"><span class="kname">${k[0]}</span><span class="kval">${k[1]}</span></div>
+  document.getElementById('knobs').innerHTML=c.knobs.map(k=> k[0]==='__group' ? `
+    <div class="knob" style="padding:7px 14px;background:rgba(0,14,30,0.5)">
+    <div class="krow"><span class="kname" style="color:rgba(0,226,255,0.75);font-size:10px">${k[1]}</span></div>
+    <div class="kmeta"><span>${k[2]}</span></div></div>` : `
+    <div class="knob"><div class="krow"><span class="kname">${k[0]}</span><span><span class="kval">${k[1]}</span> <span class="muted" style="font-size:9px">↺</span></span></div>
     <div class="kmeta"><span>${k[2]}</span><span class="badge ${k[3]}">${k[3]}</span></div>
     <div class="slider"><div class="ticks"></div><div class="track"></div>
     <div class="fill" style="width:${k[4]*100}%"></div><div class="thumb" style="left:${k[4]*100}%"></div></div></div>`).join(''); }
