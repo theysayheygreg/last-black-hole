@@ -100,6 +100,13 @@ export class SimClient {
     });
   }
 
+  async editBench({ adapterId, propertyId, value }) {
+    return this._json('/bench/edit', {
+      method: 'POST',
+      body: JSON.stringify({ adapterId, propertyId, value }),
+    });
+  }
+
   async replayBenchSameSetup(worldTruth = {}) {
     return this._json('/bench/replay', {
       method: 'POST',
