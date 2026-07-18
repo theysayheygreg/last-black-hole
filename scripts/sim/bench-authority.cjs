@@ -4,12 +4,15 @@ const { createBenchAdapterRegistry } = require("./bench-adapters.cjs");
 const { benchValidation } = require("./bench-errors.cjs");
 const {
   activateBenchBay,
+  applyBenchScenarioAction,
   createBenchGallery,
   createBenchGalleryWorld,
   setBenchWorldActiveBay,
   tickBenchGalleryWorld,
   WELL_ARCHETYPE_ID,
   WELL_DEFAULTS,
+  SCAVENGER_ARCHETYPE_ID,
+  SCAVENGER_DEFAULTS,
 } = require("./bench-gallery.cjs");
 const { normalizeBenchTruth } = require("./bench-normalize.cjs");
 
@@ -69,7 +72,8 @@ function createBenchAuthority(options = {}) {
   const ownsRegistry = !options.registry;
   let gallery = createBenchGallery();
   const wellTuning = { ...WELL_DEFAULTS };
-  let world = createBenchGalleryWorld({ wellTuning });
+  const scavengerTuning = { ...SCAVENGER_DEFAULTS };
+  let world = createBenchGalleryWorld({ wellTuning, scavengerTuning });
   const live = new Map();
   const restart = new Map();
   let undo = null;
@@ -82,6 +86,17 @@ function createBenchAuthority(options = {}) {
       entity.rulerFacts[0].distance = wellTuning.influenceRadius;
       entity.linkedSlingshot.captureDistance = Number((wellTuning.influenceRadius * 0.7).toFixed(3));
       entity.linkedSlingshot.ruler.toRadius = entity.linkedSlingshot.captureDistance;
+    }
+  }
+
+  function propagateScavengerTuning() {
+    for (const entity of world.entities) {
+      if (entity.archetypeId !== SCAVENGER_ARCHETYPE_ID) continue;
+      entity.detectionRadius = scavengerTuning.detectionRadius;
+      entity.geometry.radius = scavengerTuning.detectionRadius;
+      entity.rulerFacts[0].radius = scavengerTuning.detectionRadius;
+      entity.rulerFacts[0].value = scavengerTuning.detectionRadius;
+      entity.rulerFacts[0].distance = scavengerTuning.detectionRadius;
     }
   }
 
@@ -111,6 +126,33 @@ function createBenchAuthority(options = {}) {
       reset({ property }) {
         wellTuning[property.id] = WELL_DEFAULTS[property.id];
         propagateWellTuning();
+      },
+    });
+    registry.register({
+      id: SCAVENGER_ARCHETYPE_ID,
+      label: "Yard Scavenger",
+      properties: [{
+        id: "detectionRadius",
+        label: "Detection Radius",
+        effect: "Changes how far every Yard Scavenger can acquire a target in this scenario.",
+        group: "Detection and Chase",
+        unit: "world units",
+        min: 80,
+        max: 400,
+        step: 20,
+        scope: "type",
+        applies: "live",
+        drawKind: "radius",
+        reset: "Restore the shipped Yard Scavenger detection radius.",
+      }],
+      getCurrent(property) { return scavengerTuning[property.id]; },
+      apply({ property, value }) {
+        scavengerTuning[property.id] = value;
+        propagateScavengerTuning();
+      },
+      reset({ property }) {
+        scavengerTuning[property.id] = SCAVENGER_DEFAULTS[property.id];
+        propagateScavengerTuning();
       },
     });
   }
@@ -221,8 +263,12 @@ function createBenchAuthority(options = {}) {
     registry,
     replaySameSetup() {
       gallery = createBenchGallery({ activeBayId: gallery.activeBayId });
-      world = createBenchGalleryWorld({ activeBayId: gallery.activeBayId, wellTuning });
+      world = createBenchGalleryWorld({ activeBayId: gallery.activeBayId, wellTuning, scavengerTuning });
       return normalizeBenchTruth({ gallery, patch: exportPatch(), world: snapshotWorld() });
+    },
+    runScenarioAction({ entityId = null, adapterId = null, actionId } = {}) {
+      const action = applyBenchScenarioAction(world, { entityId, adapterId, actionId });
+      return { action, state: state() };
     },
     resetAll() { return resetWhere(() => true); },
     resetProperty(adapterId, propertyId) {

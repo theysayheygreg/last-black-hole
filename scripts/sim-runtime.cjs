@@ -6929,6 +6929,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/bench/action") {
+      await handleBenchRoute(req, res, (body) => ({
+        ok: true,
+        ...benchAuthority.runScenarioAction({
+          entityId: body.entityId,
+          adapterId: body.adapterId,
+          actionId: body.actionId,
+        }),
+      }));
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/bench/replay") {
       await handleBenchRoute(req, res, () => ({ ok: true, authorityTruth: benchAuthority.replaySameSetup() }));
       return;
