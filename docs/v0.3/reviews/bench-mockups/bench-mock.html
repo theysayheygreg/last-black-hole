@@ -1,0 +1,206 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root{
+    --void:#000021; --panelBg:rgba(0,2,10,0.86); --panelBorder:rgba(0,226,255,0.32);
+    --text:rgba(234,247,255,0.94); --muted:rgba(154,180,206,0.72);
+    --cyan:rgba(0,226,255,0.9); --cyanDim:rgba(0,226,255,0.58);
+    --salvage:rgba(255,185,56,0.92); --danger:rgba(255,51,54,0.95);
+    --sel:rgba(0,226,255,0.95); --selBg:rgba(0,226,255,0.14);
+    --rowBg:rgba(0,14,30,0.36); --rowBorder:rgba(0,226,255,0.18);
+    --pillBg:rgba(0,226,255,0.14); --pillBorder:rgba(0,226,255,0.34);
+    --ecology:rgba(56,245,138,0.9); --anomaly:rgba(184,76,255,0.94);
+  }
+  html,body{margin:0;background:var(--void);width:1280px;height:720px;overflow:hidden;
+    font-family:"SF Mono",Menlo,monospace;color:var(--text)}
+  #world{position:absolute;inset:0}
+  .panel{position:absolute;background:var(--panelBg);border:1px solid var(--panelBorder);
+    border-radius:2px;box-shadow:4px 6px 12px rgba(0,0,8,0.72);font-size:11px}
+  .bar{left:8px;top:8px;right:8px;height:34px;display:flex;align-items:center;gap:14px;padding:0 14px}
+  .brand{color:var(--cyan);letter-spacing:2px;font-size:12px}
+  .pill{background:var(--pillBg);border:1px solid var(--pillBorder);border-radius:2px;
+    padding:2px 8px;color:var(--text);letter-spacing:1px}
+  .pill.warn{border-color:var(--salvage);color:var(--salvage)}
+  .btn{border:1px solid var(--pillBorder);background:var(--rowBg);padding:3px 10px;
+    border-radius:2px;letter-spacing:1px;color:var(--text)}
+  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
+  .muted{color:var(--muted)}
+  .spacer{flex:1}
+  #inspector{right:8px;top:50px;width:332px;bottom:8px;padding:0;display:none;overflow:hidden}
+  .ihead{padding:12px 14px;border-bottom:1px solid var(--rowBorder)}
+  .iname{font-size:13px;letter-spacing:2px}
+  .itype{color:var(--muted);margin-top:3px}
+  .ipills{margin-top:8px;display:flex;gap:6px}
+  .knob{padding:10px 14px;border-bottom:1px solid var(--rowBorder)}
+  .krow{display:flex;justify-content:space-between;align-items:baseline}
+  .kname{letter-spacing:1px}
+  .kval{color:var(--cyan)}
+  .kmeta{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:2px}
+  .badge{font-size:9px;padding:1px 5px;border:1px solid var(--rowBorder);border-radius:2px;color:var(--muted)}
+  .badge.live{color:var(--ecology);border-color:rgba(56,245,138,0.4)}
+  .badge.restart{color:var(--salvage);border-color:rgba(255,185,56,0.4)}
+  .slider{margin-top:6px;height:14px;position:relative}
+  .track{position:absolute;top:6px;left:0;right:0;height:2px;background:var(--rowBorder)}
+  .ticks{position:absolute;top:4px;left:0;right:0;height:6px;
+    background:repeating-linear-gradient(90deg,var(--rowBorder) 0 1px,transparent 1px 10%)}
+  .fill{position:absolute;top:6px;left:0;height:2px;background:var(--cyanDim)}
+  .thumb{position:absolute;top:1px;width:8px;height:12px;background:var(--cyan);border-radius:1px}
+  .ifoot{position:absolute;bottom:0;left:0;right:0;padding:10px 14px;border-top:1px solid var(--rowBorder);
+    display:flex;gap:8px;background:var(--panelBg)}
+  #hint{left:50%;transform:translateX(-50%);bottom:14px;padding:6px 16px;letter-spacing:1px;color:var(--muted)}
+  #patch{display:none;left:50%;top:50%;transform:translate(-50%,-50%);width:520px;padding:0}
+  #patch .ifoot{position:static;margin-top:0}
+  .prow{display:flex;justify-content:space-between;padding:8px 16px;border-bottom:1px solid var(--rowBorder)}
+  .zone-label{position:absolute;color:var(--muted);font-size:10px;letter-spacing:2px;text-shadow:2px 3px 5px rgba(0,0,8,0.9)}
+</style>
+<canvas id="world" width="1280" height="720"></canvas>
+
+<div class="panel bar">
+  <span class="brand">◦ THE BENCH</span><span class="muted">tuning mode · dev=1</span>
+  <span class="pill">seed 0x5EA-F0AM</span>
+  <span class="btn primary" id="restartBtn">↻ RESTART (same seed)</span>
+  <span class="btn">⏸ pause</span><span class="btn">⇥ step</span><span class="btn">◐ slow-mo (sim)</span>
+  <span class="spacer"></span>
+  <span class="pill warn" id="patchPill">patch · 0 edits</span>
+  <span class="btn">zone ▾</span>
+</div>
+
+<div class="panel" id="inspector">
+  <div class="ihead">
+    <div class="iname" id="iName">MICRO BLACK HOLE</div>
+    <div class="itype" id="iType">anomaly · vector over base-well · anomalies.data.json</div>
+    <div class="ipills" id="iPills"></div>
+  </div>
+  <div id="knobs"></div>
+  <div class="ifoot"><span class="btn">↺ reset archetype</span><span class="btn">↺ reset knob</span>
+    <span class="spacer"></span><span class="btn primary">apply</span></div>
+</div>
+
+<div class="panel" id="hint">click any entity to inspect its archetype</div>
+
+<div class="panel" id="patch">
+  <div class="ihead"><div class="iname">TUNING PATCH</div>
+    <div class="itype">session overlay vs shipped data · step-snapped</div></div>
+  <div id="prows"></div>
+  <div class="ifoot"><span class="btn">load…</span><span class="spacer"></span>
+    <span class="btn primary">save → tune-2026-07-17.json</span></div>
+</div>
+
+<script>
+const g = document.getElementById('world').getContext('2d');
+const W=1280,H=720;
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const DIRS=['—','\\','|','/'];
+function sea(seed, dim){
+  const r=mul(seed); g.font='12px Menlo, monospace';
+  for(let i=0;i<1500;i++){ const x=r()*W,y=r()*H,b=r();
+    g.globalAlpha=(0.04+0.10*b)*dim; g.fillStyle='#c7d3e0';
+    g.fillText(DIRS[(x/97|0)%4], x, y); }
+  g.globalAlpha=1;
+}
+// gallery entities
+const HOLES=[{x:250,y:250},{x:390,y:250},{x:530,y:250}];
+const WRECKS=[[190,485],[240,520],[300,492],[275,555],[345,530],[215,575]];
+const SCAVS=[[705,505],[760,540],[820,500],[755,470]];
+const PORTALS=[{x:660,y:150,s:'idle'},{x:760,y:150,s:'activating'},{x:860,y:150,s:'open'},{x:960,y:150,s:'closed'}];
+const FAUNA=[[1050,480],[1085,510],[1060,545]];
+function ring(x,y,r,col,dash,label){ g.strokeStyle=col; g.lineWidth=1.2;
+  if(dash)g.setLineDash(dash); g.beginPath(); g.arc(x,y,r,0,6.29); g.stroke(); g.setLineDash([]);
+  if(label){ g.fillStyle='rgba(154,180,206,0.85)'; g.font='10px Menlo, monospace';
+    g.textAlign='center'; g.fillText(label,x,y-r-6); g.textAlign='left'; } }
+function drawWorld(state){
+  g.fillStyle='#000021'; g.fillRect(0,0,W,H); sea(0xBEAC, 1);
+  g.font='13px Menlo, monospace';
+  // slingshot alley
+  HOLES.forEach((h,i)=>{ g.fillStyle='#05060c'; g.beginPath(); g.arc(h.x,h.y,10,0,6.29); g.fill();
+    g.strokeStyle='rgba(184,76,255,0.7)'; g.beginPath(); g.arc(h.x,h.y,13,0,6.29); g.stroke();
+    if(state===2){ ring(h.x,h.y,58,'rgba(0,226,255,0.9)',[4,4], i===2?'capture 450 m · step 25 m':null);
+      g.strokeStyle='rgba(0,226,255,0.35)'; g.strokeRect(h.x-70,h.y-70,140,140); } });
+  if(state===2){ // magnetism cone + ghost on first hole
+    const h=HOLES[0]; g.strokeStyle='rgba(56,245,138,0.6)';
+    g.beginPath(); g.moveTo(h.x-110,h.y+66); g.lineTo(h.x-30,h.y+18); g.stroke();
+    g.beginPath(); g.moveTo(h.x-110,h.y+30); g.lineTo(h.x-30,h.y+10); g.stroke();
+    g.fillStyle='rgba(154,180,206,0.85)'; g.font='10px Menlo, monospace';
+    g.fillText('magnetism 30° · step 5°', h.x-150, h.y+84);
+    g.fillStyle='rgba(223,244,248,0.5)'; g.font='14px Menlo, monospace'; g.fillText('◄►', h.x+72, h.y-40);
+    g.fillStyle='rgba(154,180,206,0.7)'; g.font='10px Menlo, monospace'; g.fillText('release ghost 0.65 s', h.x+90, h.y-38); }
+  // wreck field
+  WRECKS.forEach(w=>{ g.fillStyle='rgba(255,185,56,0.92)'; g.font='13px Menlo, monospace'; g.fillText('◆',w[0],w[1]); });
+  // scav pen
+  SCAVS.forEach(s=>{ g.fillStyle='rgba(234,247,255,0.9)'; g.font='12px Menlo, monospace'; g.fillText('◄►',s[0]-6,s[1]);
+    if(state===3){ ring(s[0],s[1],46,'rgba(255,51,54,0.55)',[3,4],null);
+      g.strokeStyle='rgba(0,226,255,0.8)'; g.strokeRect(s[0]-16,s[1]-14,30,22); } });
+  if(state===3){ ring(SCAVS[0][0],SCAVS[0][1],46,'rgba(255,51,54,0.9)',[3,4],'aggro 450 m · hidden in play');
+    g.fillStyle='rgba(255,51,54,0.9)'; g.font='12px Menlo, monospace'; g.fillText('!', SCAVS[0][0]+20, SCAVS[0][1]-18); }
+  // portal row
+  PORTALS.forEach(p=>{ const col = p.s==='closed'?'rgba(0,226,255,0.25)':'rgba(0,226,255,0.9)';
+    ring(p.x,p.y,16,col,null,null); if(p.s==='open') ring(p.x,p.y,24,'rgba(0,226,255,0.5)');
+    if(p.s==='activating'){ ring(p.x,p.y,20,'rgba(255,185,56,0.8)',[2,3]); }
+    g.fillStyle='rgba(154,180,206,0.72)'; g.font='9px Menlo, monospace'; g.textAlign='center';
+    g.fillText(p.s,p.x,p.y+34); g.textAlign='left'; });
+  // fauna
+  FAUNA.forEach(f=>{ g.fillStyle='rgba(56,245,138,0.85)'; g.fillText('∴',f[0],f[1]); });
+  // probe ship
+  g.fillStyle='rgba(223,244,248,1)'; g.font='15px Menlo, monospace'; g.fillText('◄►', 630,370);
+  g.fillStyle='rgba(154,180,206,0.72)'; g.font='10px Menlo, monospace'; g.fillText('probe · invulnerable · ∞ fuel', 585,388);
+  // epoch strip
+  for(let i=0;i<4;i++){ g.fillStyle=`rgba(0,226,255,${0.15+i*0.08})`;
+    g.fillRect(1080+i*38,620,32,12); }
+  g.fillStyle='rgba(154,180,206,0.72)'; g.font='10px Menlo, monospace'; g.fillText('epoch strip 0—3', 1080, 650);
+  // zone labels
+  const zl=(t,x,y)=>{ g.fillStyle='rgba(154,180,206,0.55)'; g.font='10px Menlo, monospace';
+    g.fillText(t,x,y); };
+  zl('SLINGSHOT ALLEY',210,190); zl('WRECK FIELD · dwell',185,450); zl('SCAV PEN',700,445);
+  zl('PORTAL ROW',655,100); zl('FAUNA POCKET',1030,450); zl('MOVEMENT RANGE',560,330);
+}
+const CONTRACTS={
+  hole:{name:'MICRO BLACK HOLE',type:'anomaly · vector over base-well · anomalies.data.json',
+    pills:['3 instances','shipping','ruler: ON'],
+    knobs:[
+      ['captureRadius','450 m','range 200–800 · step 25','live',0.42],
+      ['magnetism','30°','range 0–60 · step 5','live',0.5],
+      ['coyoteTime','50 ms','range 0–250 · step 50','live',0.2],
+      ['payoffCurve','1.4× / qtr-turn','range 1.0–2.0 · step 0.1','live',0.4],
+      ['chainWindow','0.5 s','range 0–3 · step 0.5 · 0 = off','live',0.17],
+      ['gravityStrengthMult','1.15×','range 0.8–1.6 · step 0.05','restart',0.44],
+      ['killRadius','0.05 wu','range 0.02–0.1 · step 0.01','restart',0.33]]},
+  scav:{name:'SCAVENGER · DRIFTER CLASS',type:'hostile · absolute speed class · scavengers contract',
+    pills:['4 instances','edits propagate to all','ruler: ON'],
+    knobs:[
+      ['cruiseSpeed','120 m/s','range 60–300 · step 10','live',0.27],
+      ['burstSpeed','280 m/s','range 100–500 · step 10','live',0.45],
+      ['aggroRadius','450 m','hidden in play · step 50','live',0.4],
+      ['telegraphTime','0.75 s','range 0.25–2 · step 0.25','live',0.29],
+      ['packSize','2','range 1–5 · step 1','restart',0.25],
+      ['bumpForce','0.3 Δv','range 0–0.6 · step 0.05','live',0.5]]}};
+function showInspector(key){ const c=CONTRACTS[key]; const el=document.getElementById('inspector');
+  el.style.display='block';
+  document.getElementById('iName').textContent=c.name;
+  document.getElementById('iType').textContent=c.type;
+  document.getElementById('iPills').innerHTML=c.pills.map(p=>`<span class="pill">${p}</span>`).join('');
+  document.getElementById('knobs').innerHTML=c.knobs.map(k=>`
+    <div class="knob"><div class="krow"><span class="kname">${k[0]}</span><span class="kval">${k[1]}</span></div>
+    <div class="kmeta"><span>${k[2]}</span><span class="badge ${k[3]}">${k[3]}</span></div>
+    <div class="slider"><div class="ticks"></div><div class="track"></div>
+    <div class="fill" style="width:${k[4]*100}%"></div><div class="thumb" style="left:${k[4]*100}%"></div></div></div>`).join(''); }
+window.showMock=function(n){
+  document.getElementById('inspector').style.display='none';
+  document.getElementById('patch').style.display='none';
+  document.getElementById('hint').style.display='block';
+  document.getElementById('patchPill').textContent='patch · 0 edits';
+  drawWorld(n);
+  if(n===2){ showInspector('hole'); document.getElementById('hint').style.display='none';
+    document.getElementById('patchPill').textContent='patch · 1 edit'; }
+  if(n===3){ showInspector('scav'); document.getElementById('hint').style.display='none';
+    document.getElementById('patchPill').textContent='patch · 2 edits'; }
+  if(n===4){ document.getElementById('hint').style.display='none';
+    document.getElementById('patchPill').textContent='patch · 2 edits';
+    const p=document.getElementById('patch'); p.style.display='block';
+    document.getElementById('prows').innerHTML=`
+      <div class="prow"><span>slingshot.captureRadius</span><span class="muted">450 → <span style="color:var(--cyan)">475 m</span> · +1 step · live</span></div>
+      <div class="prow"><span>scavenger.aggroRadius</span><span class="muted">450 → <span style="color:var(--cyan)">400 m</span> · −1 step · live</span></div>
+      <div class="prow muted"><span>restart required by</span><span>none — all edits live</span></div>`; }
+};
+showMock(1);
+</script>
