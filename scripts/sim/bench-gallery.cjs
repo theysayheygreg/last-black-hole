@@ -21,6 +21,15 @@ const WRECK_ACTIONS = Object.freeze([
   Object.freeze({ id: "loot", label: "Expose Loot", effect: "Opens the wreck and makes its nearby salvage available." }),
   Object.freeze({ id: "destroy", label: "Destroy Wreck", effect: "Breaks the wreck apart and scatters its debris while leaving salvage exposed." }),
 ]);
+const PORTAL_ARCHETYPE_ID = "portal.extraction";
+const PORTAL_DEFAULTS = Object.freeze({ captureRadius: 140 });
+const PORTAL_ACTIONS = Object.freeze([
+  Object.freeze({ id: "announce", label: "Announce Portal", effect: "Marks the extraction portal as the active objective." }),
+  Object.freeze({ id: "open", label: "Open Portal", effect: "Opens the portal and shows its live extraction capture area." }),
+  Object.freeze({ id: "blocked", label: "Block Extraction", effect: "Closes extraction behind an objective blocker." }),
+  Object.freeze({ id: "extract", label: "Run Extraction", effect: "Completes the extraction beat for this portal scenario." }),
+  Object.freeze({ id: "reset", label: "Reset Scenario", effect: "Restores the deterministic dormant portal setup." }),
+]);
 
 const BAY_DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -74,8 +83,10 @@ function createBenchGallery({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
         ? WELL_ARCHETYPE_ID
         : family === "scavengers"
           ? SCAVENGER_ARCHETYPE_ID
-          : family === "wrecks" ? WRECK_ARCHETYPE_ID : null,
-      contractStatus: family === "wells" || family === "scavengers" || family === "wrecks"
+          : family === "wrecks"
+            ? WRECK_ARCHETYPE_ID
+            : family === "portals" ? PORTAL_ARCHETYPE_ID : null,
+      contractStatus: family === "wells" || family === "scavengers" || family === "wrecks" || family === "portals"
         ? "TUNABLE"
         : "NO TUNABLE CONTRACT YET",
     })),
@@ -283,6 +294,54 @@ function createLootEntities(exhibit) {
   }));
 }
 
+function createPortalEntities(exhibit, tuning) {
+  return [
+    { id: "bench:portal:extraction:a", name: "Extraction Portal A", wx: exhibit.placement.x - 90, wy: exhibit.placement.y - 30 },
+    { id: "bench:portal:extraction:b", name: "Extraction Portal B", wx: exhibit.placement.x + 110, wy: exhibit.placement.y + 35 },
+  ].map((placement) => ({
+    ...placement,
+    family: "portals",
+    bayId: exhibit.bayId,
+    representation: "runtime-archetype",
+    contractStatus: "TUNABLE",
+    selectable: true,
+    archetypeId: PORTAL_ARCHETYPE_ID,
+    archetype: PORTAL_ARCHETYPE_ID,
+    adapterId: PORTAL_ARCHETYPE_ID,
+    selectionKey: `archetype:${PORTAL_ARCHETYPE_ID}`,
+    inspector: { adapterId: PORTAL_ARCHETYPE_ID, label: "Extraction Portal" },
+    captureRadius: tuning.captureRadius,
+    radius: 34,
+    geometry: {
+      drawKind: "radius",
+      center: { wx: placement.wx, wy: placement.wy },
+      radius: tuning.captureRadius,
+    },
+    rulerFacts: [{
+      id: "captureRadius",
+      label: "Capture Radius",
+      radius: tuning.captureRadius,
+      value: tuning.captureRadius,
+      distance: tuning.captureRadius,
+      unit: "world units",
+    }],
+    scenarioState: "dormant",
+    scenarioStateLabel: "Dormant — awaiting announcement",
+    objectiveState: "inactive",
+    objectiveLabel: "Extraction objective inactive",
+    announced: false,
+    open: false,
+    blocked: false,
+    extracted: false,
+    scenarioActions: PORTAL_ACTIONS.map((action) => ({ ...action })),
+    vx: 0,
+    vy: 0,
+    simulationKind: "portal-scenario",
+    scenarioTicks: 0,
+    scenarioPhase: placement.id.endsWith(":a") ? 0.18 : 0.68,
+  }));
+}
+
 function createBenchEntity(exhibit, bayIndex, familyIndex) {
   const probe = exhibit.family === "probe-ship";
   return {
@@ -316,6 +375,7 @@ function createBenchGalleryWorld({
   wellTuning = WELL_DEFAULTS,
   scavengerTuning = SCAVENGER_DEFAULTS,
   wreckTuning = WRECK_DEFAULTS,
+  portalTuning = PORTAL_DEFAULTS,
 } = {}) {
   const gallery = createBenchGallery({ activeBayId });
   const entities = gallery.bays.flatMap((bay, bayIndex) => bay.exhibits.flatMap((exhibit, familyIndex) =>
@@ -329,6 +389,8 @@ function createBenchGalleryWorld({
         ? createDebrisEntities(exhibit)
       : exhibit.family === "loot"
         ? createLootEntities(exhibit)
+      : exhibit.family === "portals"
+        ? createPortalEntities(exhibit, { ...PORTAL_DEFAULTS, ...portalTuning })
       : [createBenchEntity(exhibit, bayIndex, familyIndex)]
   ));
   setBenchWorldActiveBay({ entities }, activeBayId);
@@ -354,7 +416,9 @@ function applyBenchScenarioAction(world, { entityId = null, adapterId = null, ac
   const archetypeId = requestedTargets[0]?.archetypeId;
   const supportedActions = archetypeId === SCAVENGER_ARCHETYPE_ID
     ? SCAVENGER_ACTIONS
-    : archetypeId === WRECK_ARCHETYPE_ID ? WRECK_ACTIONS : [];
+    : archetypeId === WRECK_ARCHETYPE_ID
+      ? WRECK_ACTIONS
+      : archetypeId === PORTAL_ARCHETYPE_ID ? PORTAL_ACTIONS : [];
   if (!supportedActions.some((action) => action.id === normalizedAction)) {
     throw benchValidation(`Unsupported Bench scenario action: ${actionId}`);
   }
@@ -394,6 +458,39 @@ function applyBenchScenarioAction(world, { entityId = null, adapterId = null, ac
       targetIds: targets.map((entity) => entity.id),
       scenarioStates: targets.map((entity) => ({ entityId: entity.id, state: entity.scenarioState })),
       affectedIds: [...debris, ...loot].map((entity) => entity.id),
+    };
+  }
+
+  if (archetypeId === PORTAL_ARCHETYPE_ID) {
+    for (const entity of targets) {
+      const state = normalizedAction === "reset" ? "dormant" : normalizedAction;
+      entity.scenarioState = state;
+      entity.scenarioStateLabel = state === "dormant"
+        ? "Dormant — awaiting announcement"
+        : state === "announce"
+          ? "Announced — extraction objective active"
+          : state === "open"
+            ? "Open — ship may enter capture radius"
+            : state === "blocked"
+              ? "Blocked — objective requirement unmet"
+              : "Extracted — scenario complete";
+      entity.objectiveState = state === "dormant"
+        ? "inactive"
+        : state === "extract" ? "complete" : state === "blocked" ? "blocked" : "active";
+      entity.objectiveLabel = state === "dormant"
+        ? "Extraction objective inactive"
+        : state === "extract"
+          ? "Extraction objective complete"
+          : state === "blocked" ? "Extraction objective blocked" : "Extraction objective active";
+      entity.announced = state !== "dormant";
+      entity.open = state === "open" || state === "extract";
+      entity.blocked = state === "blocked";
+      entity.extracted = state === "extract";
+    }
+    return {
+      actionId: normalizedAction,
+      targetIds: targets.map((entity) => entity.id),
+      scenarioStates: targets.map((entity) => ({ entityId: entity.id, state: entity.scenarioState })),
     };
   }
 
@@ -480,6 +577,9 @@ module.exports = {
   WRECK_ACTIONS,
   WRECK_ARCHETYPE_ID,
   WRECK_DEFAULTS,
+  PORTAL_ACTIONS,
+  PORTAL_ARCHETYPE_ID,
+  PORTAL_DEFAULTS,
   activateBenchBay,
   applyBenchScenarioAction,
   createBenchGallery,

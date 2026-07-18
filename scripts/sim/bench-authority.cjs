@@ -15,6 +15,8 @@ const {
   SCAVENGER_DEFAULTS,
   WRECK_ARCHETYPE_ID,
   WRECK_DEFAULTS,
+  PORTAL_ARCHETYPE_ID,
+  PORTAL_DEFAULTS,
 } = require("./bench-gallery.cjs");
 const { normalizeBenchTruth } = require("./bench-normalize.cjs");
 
@@ -76,7 +78,8 @@ function createBenchAuthority(options = {}) {
   const wellTuning = { ...WELL_DEFAULTS };
   const scavengerTuning = { ...SCAVENGER_DEFAULTS };
   const wreckTuning = { ...WRECK_DEFAULTS };
-  let world = createBenchGalleryWorld({ wellTuning, scavengerTuning, wreckTuning });
+  const portalTuning = { ...PORTAL_DEFAULTS };
+  let world = createBenchGalleryWorld({ wellTuning, scavengerTuning, wreckTuning, portalTuning });
   const live = new Map();
   const restart = new Map();
   let undo = null;
@@ -111,6 +114,17 @@ function createBenchAuthority(options = {}) {
       entity.rulerFacts[0].radius = wreckTuning.salvageRadius;
       entity.rulerFacts[0].value = wreckTuning.salvageRadius;
       entity.rulerFacts[0].distance = wreckTuning.salvageRadius;
+    }
+  }
+
+  function propagatePortalTuning() {
+    for (const entity of world.entities) {
+      if (entity.archetypeId !== PORTAL_ARCHETYPE_ID) continue;
+      entity.captureRadius = portalTuning.captureRadius;
+      entity.geometry.radius = portalTuning.captureRadius;
+      entity.rulerFacts[0].radius = portalTuning.captureRadius;
+      entity.rulerFacts[0].value = portalTuning.captureRadius;
+      entity.rulerFacts[0].distance = portalTuning.captureRadius;
     }
   }
 
@@ -194,6 +208,33 @@ function createBenchAuthority(options = {}) {
       reset({ property }) {
         wreckTuning[property.id] = WRECK_DEFAULTS[property.id];
         propagateWreckTuning();
+      },
+    });
+    registry.register({
+      id: PORTAL_ARCHETYPE_ID,
+      label: "Extraction Portal",
+      properties: [{
+        id: "captureRadius",
+        label: "Capture Radius",
+        effect: "Changes the extraction capture area for every Extraction Portal.",
+        group: "Portal and Objective",
+        unit: "world units",
+        min: 60,
+        max: 300,
+        step: 10,
+        scope: "type",
+        applies: "live",
+        drawKind: "radius",
+        reset: "Restore the shipped Extraction Portal capture radius.",
+      }],
+      getCurrent(property) { return portalTuning[property.id]; },
+      apply({ property, value }) {
+        portalTuning[property.id] = value;
+        propagatePortalTuning();
+      },
+      reset({ property }) {
+        portalTuning[property.id] = PORTAL_DEFAULTS[property.id];
+        propagatePortalTuning();
       },
     });
   }
@@ -309,6 +350,7 @@ function createBenchAuthority(options = {}) {
         wellTuning,
         scavengerTuning,
         wreckTuning,
+        portalTuning,
       });
       return normalizeBenchTruth({ gallery, patch: exportPatch(), world: snapshotWorld() });
     },
