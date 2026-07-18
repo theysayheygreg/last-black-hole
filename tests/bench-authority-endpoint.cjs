@@ -21,8 +21,19 @@ function freePort() {
 }
 
 function getJson(port, route) {
+  return requestJson(port, "GET", route);
+}
+
+function requestJson(port, method, route, payload) {
   return new Promise((resolve, reject) => {
-    const req = http.get({ host: "127.0.0.1", port, path: route }, (res) => {
+    const body = payload === undefined ? "" : JSON.stringify(payload);
+    const req = http.request({
+      host: "127.0.0.1",
+      port,
+      path: route,
+      method,
+      headers: body ? { "content-type": "application/json", "content-length": Buffer.byteLength(body) } : {},
+    }, (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => { body += chunk; });
@@ -32,6 +43,8 @@ function getJson(port, route) {
       });
     });
     req.on("error", reject);
+    if (body) req.write(body);
+    req.end();
   });
 }
 
@@ -63,6 +76,40 @@ async function waitForBench(port) {
     assert.strictEqual(response.body.gallery.id, "bench-gallery-v1");
     assert.strictEqual(response.body.gallery.bays.filter((bay) => bay.simulation === "active").length, 1);
     assert.deepStrictEqual(response.body.adapters, []);
+    const health = await getJson(port, "/health");
+    assert.strictEqual(health.body.mapId, "bench-gallery-v1");
+    assert.strictEqual(health.body.idleState.idle, false);
+    assert.strictEqual(health.body.idleState.shutdownInMs, null);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const snapshot = await getJson(port, "/snapshot");
+    assert.strictEqual(snapshot.status, 200);
+    assert.strictEqual(snapshot.body.bench.galleryId, "bench-gallery-v1");
+    assert.ok(snapshot.body.bench.world.entities.length > 0);
+    const probe = snapshot.body.bench.world.entities.find((entity) => entity.family === "probe-ship");
+    assert.strictEqual(probe.invulnerable, true);
+    assert.strictEqual(probe.infiniteFuel, true);
+    assert.ok(snapshot.body.bench.world.entities.filter((entity) => entity.active)
+      .every((entity) => entity.scenarioTicks > 0));
+    assert.ok(snapshot.body.bench.world.entities.filter((entity) => !entity.active)
+      .every((entity) => entity.scenarioTicks === 0));
+
+    const maps = await getJson(port, "/maps");
+    assert.ok(!maps.body.maps.some((map) => map.id === "bench-gallery-v1"));
+
+    const replayA = await requestJson(port, "POST", "/bench/replay", {});
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const replayB = await requestJson(port, "POST", "/bench/replay", { worldTruth: { forged: true } });
+    assert.deepStrictEqual(replayA.body.authorityTruth, replayB.body.authorityTruth);
+
+    const badBay = await requestJson(port, "POST", "/bench/bay", { activeBayId: "not-a-bay" });
+    assert.strictEqual(badBay.status, 400);
+    assert.strictEqual(badBay.body.code, "bench-validation");
+    const badPatch = await requestJson(port, "POST", "/bench/patch", { patch: { schema: "wrong", edits: [] } });
+    assert.strictEqual(badPatch.status, 400);
+    assert.strictEqual(badPatch.body.code, "bench-validation");
+    const badReset = await requestJson(port, "POST", "/bench/reset", { adapterId: "not-an-adapter" });
+    assert.strictEqual(badReset.status, 400);
+    assert.strictEqual(badReset.body.code, "bench-validation");
     console.log("Bench authority endpoint: PASS");
   } finally {
     child.kill("SIGTERM");

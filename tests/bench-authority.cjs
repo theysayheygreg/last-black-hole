@@ -59,6 +59,15 @@ assert.strictEqual(initial.gallery.bays.filter((bay) => bay.simulation === "acti
 assert.ok(initial.gallery.bays.every((bay) => bay.exhibits.every((exhibit) =>
   exhibit.contractStatus === "NO TUNABLE CONTRACT YET"
 )));
+assert.strictEqual(initial.world.id, BENCH_GALLERY_ID);
+assert.strictEqual(initial.world.entities.length, BAY_DEFINITIONS.reduce((sum, bay) => sum + bay.families.length, 0));
+const probe = initial.world.entities.find((entity) => entity.family === "probe-ship");
+assert.strictEqual(probe.invulnerable, true);
+assert.strictEqual(probe.infiniteFuel, true);
+assert.strictEqual(probe.fuel, "infinite");
+authority.tick(0.1);
+assert.ok(authority.state().world.entities.filter((entity) => entity.active).every((entity) => entity.scenarioTicks === 1));
+assert.ok(authority.state().world.entities.filter((entity) => !entity.active).every((entity) => entity.scenarioTicks === 0));
 
 authority.applyEntry({ adapterId: "test-well", propertyId: "radius", value: 2.5 });
 authority.applyEntry({ adapterId: "test-well", propertyId: "restartMass", value: 14 });
@@ -91,12 +100,76 @@ assert.throws(
   /align to step/
 );
 
-const truthA = authority.replaySameSetup({ id: "volatile-a", timestamp: 12, x: 1 / 3 });
-const truthB = authority.replaySameSetup({ id: "volatile-b", timestamp: 99, x: 1 / 3 });
+const truthA = authority.replaySameSetup();
+authority.tick(9);
+const truthB = authority.replaySameSetup();
 assert.deepStrictEqual(truthA, truthB);
+assert.strictEqual(authority.state().world.scenarioTime, 0);
 
 authority.activateBay("objectives");
 const activeBays = authority.state().gallery.bays.filter((bay) => bay.simulation === "active");
 assert.deepStrictEqual(activeBays.map((bay) => bay.id), ["objectives"]);
+
+function createThrowingAuthority() {
+  const switches = { apply: false, reset: false };
+  const throwingRegistry = createBenchAdapterRegistry();
+  throwingRegistry.register({
+    id: "throwing",
+    label: "Throwing Test Adapter",
+    properties: [{
+      id: "value",
+      label: "Value",
+      effect: "Exercises transaction failure handling.",
+      group: "Tests",
+      unit: "units",
+      min: 0,
+      max: 10,
+      step: 1,
+      scope: "type",
+      applies: "live",
+      drawKind: "number",
+      reset: "Restore the test value.",
+    }],
+    apply() { if (switches.apply) throw new Error("apply exploded"); },
+    reset() { if (switches.reset) throw new Error("reset exploded"); },
+  });
+  return { authority: createBenchAuthority({ registry: throwingRegistry }), switches };
+}
+
+{
+  const throwing = createThrowingAuthority();
+  const before = throwing.authority.state();
+  throwing.switches.apply = true;
+  assert.throws(
+    () => throwing.authority.applyEntry({ adapterId: "throwing", propertyId: "value", value: 2 }),
+    /apply exploded/
+  );
+  assert.deepStrictEqual(throwing.authority.state(), before);
+}
+
+{
+  const throwing = createThrowingAuthority();
+  throwing.authority.applyEntry({ adapterId: "throwing", propertyId: "value", value: 2 });
+  const before = throwing.authority.state();
+  throwing.switches.reset = true;
+  assert.throws(() => throwing.authority.resetAll(), /reset exploded/);
+  assert.deepStrictEqual(throwing.authority.state(), before);
+  assert.throws(() => throwing.authority.importPatch({ schema: before.patch.schema, edits: [] }), /reset exploded/);
+  assert.deepStrictEqual(throwing.authority.state(), before);
+  assert.throws(() => throwing.authority.undoLastChange(), /reset exploded/);
+  assert.deepStrictEqual(throwing.authority.state(), before);
+}
+
+{
+  const throwing = createThrowingAuthority();
+  throwing.authority.applyEntry({ adapterId: "throwing", propertyId: "value", value: 2 });
+  const before = throwing.authority.state();
+  throwing.switches.apply = true;
+  assert.throws(() => throwing.authority.importPatch({
+    schema: before.patch.schema,
+    edits: [{ ...before.patch.edits[0], value: 3 }],
+  }), /apply exploded/);
+  assert.deepStrictEqual(throwing.authority.state(), before);
+}
 
 console.log("Bench authority pure contracts: PASS");

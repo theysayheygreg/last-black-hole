@@ -1,7 +1,14 @@
 "use strict";
 
 const { createBenchAdapterRegistry } = require("./bench-adapters.cjs");
-const { activateBenchBay, createBenchGallery } = require("./bench-gallery.cjs");
+const { benchValidation } = require("./bench-errors.cjs");
+const {
+  activateBenchBay,
+  createBenchGallery,
+  createBenchGalleryWorld,
+  setBenchWorldActiveBay,
+  tickBenchGalleryWorld,
+} = require("./bench-gallery.cjs");
 const { normalizeBenchTruth } = require("./bench-normalize.cjs");
 
 const PATCH_SCHEMA = "lbh-bench-patch/v1";
@@ -16,21 +23,21 @@ function cloneEntries(map) {
 
 function validateValue(value, property) {
   const numeric = Number(value);
-  if (!Number.isFinite(numeric)) throw new Error(`${property.id} requires a finite number`);
+  if (!Number.isFinite(numeric)) throw benchValidation(`${property.id} requires a finite number`);
   if (numeric < property.min || numeric > property.max) {
-    throw new Error(`${property.id} must be between ${property.min} and ${property.max}`);
+    throw benchValidation(`${property.id} must be between ${property.min} and ${property.max}`);
   }
   const steps = Math.round((numeric - property.min) / property.step);
   const snapped = property.min + steps * property.step;
   if (Math.abs(snapped - numeric) > 1e-9) {
-    throw new Error(`${property.id} must align to step ${property.step}`);
+    throw benchValidation(`${property.id} must align to step ${property.step}`);
   }
   return numeric;
 }
 
 function validatePatch(patch, registry) {
   if (!patch || patch.schema !== PATCH_SCHEMA || !Array.isArray(patch.edits)) {
-    throw new Error(`Bench patch must use schema ${PATCH_SCHEMA} with an edits array`);
+    throw benchValidation(`Bench patch must use schema ${PATCH_SCHEMA} with an edits array`);
   }
   const seen = new Set();
   return patch.edits.map((raw) => {
@@ -39,7 +46,7 @@ function validatePatch(patch, registry) {
     const { property } = registry.requireProperty(adapterId, propertyId);
     const expectedStatus = property.applies === "restart" ? "banked-restart" : "live-applied";
     if (raw.applies !== property.applies || raw.status !== expectedStatus) {
-      throw new Error(`Bench patch timing mismatch for ${adapterId}.${propertyId}`);
+      throw benchValidation(`Bench patch timing mismatch for ${adapterId}.${propertyId}`);
     }
     const entry = Object.freeze({
       adapterId,
@@ -49,7 +56,7 @@ function validatePatch(patch, registry) {
       status: expectedStatus,
     });
     const key = keyFor(entry);
-    if (seen.has(key)) throw new Error(`Duplicate Bench patch entry: ${key}`);
+    if (seen.has(key)) throw benchValidation(`Duplicate Bench patch entry: ${key}`);
     seen.add(key);
     return entry;
   });
@@ -57,6 +64,7 @@ function validatePatch(patch, registry) {
 
 function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) {
   let gallery = createBenchGallery();
+  let world = createBenchGalleryWorld();
   const live = new Map();
   const restart = new Map();
   let undo = null;
@@ -82,14 +90,14 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
     }, registry);
     const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
     if (property.applies !== "restart" && !adapter.apply) {
-      throw new Error(`Bench adapter ${adapter.id} has no authority applicator`);
+      throw benchValidation(`Bench adapter ${adapter.id} has no authority applicator`);
+    }
+    if (property.applies !== "restart") {
+      adapter.apply({ property, value: entry.value });
     }
     if (capture) captureUndo();
     const target = property.applies === "restart" ? restart : live;
     target.set(keyFor(entry), entry);
-    if (property.applies !== "restart") {
-      adapter.apply({ property, value: entry.value });
-    }
     return entry;
   }
 
@@ -98,18 +106,21 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
     for (const entry of edits) {
       const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
       if (property.applies !== "restart" && !adapter.apply) {
-        throw new Error(`Bench adapter ${adapter.id} has no authority applicator`);
+        throw benchValidation(`Bench adapter ${adapter.id} has no authority applicator`);
       }
     }
-    captureUndo();
     for (const entry of live.values()) {
       const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
-      if (!adapter.reset) throw new Error(`Bench adapter ${adapter.id} has no authority reset applicator`);
+      if (!adapter.reset) throw benchValidation(`Bench adapter ${adapter.id} has no authority reset applicator`);
       adapter.reset({ property });
     }
-    live.clear();
-    restart.clear();
-    for (const entry of edits) applyEntry(entry, { capture: false });
+    for (const entry of edits) {
+      const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
+      if (property.applies !== "restart") adapter.apply({ property, value: entry.value });
+    }
+    captureUndo();
+    restoreEntries(live, edits.filter((entry) => entry.applies !== "restart"));
+    restoreEntries(restart, edits.filter((entry) => entry.applies === "restart"));
     return exportPatch();
   }
 
@@ -119,10 +130,10 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
       ...registry.requireProperty(entry.adapterId, entry.propertyId),
     }));
     for (const { adapter } of liveResets) {
-      if (!adapter.reset) throw new Error(`Bench adapter ${adapter.id} has no authority reset applicator`);
+      if (!adapter.reset) throw benchValidation(`Bench adapter ${adapter.id} has no authority reset applicator`);
     }
-    captureUndo();
     for (const { adapter, property } of liveResets) adapter.reset({ property });
+    captureUndo();
     for (const [key, entry] of live) if (predicate(entry)) live.delete(key);
     for (const [key, entry] of restart) if (predicate(entry)) restart.delete(key);
     return exportPatch();
@@ -141,42 +152,66 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
     return {
       enabled: true,
       gallery,
+      world: snapshotWorld(),
       adapters: registry.describe(),
       patch: exportPatch(),
       canUndo: Boolean(undo),
     };
   }
 
+  function snapshotWorld() {
+    return JSON.parse(JSON.stringify(world));
+  }
+
   return Object.freeze({
     activateBay(activeBayId) {
       gallery = activateBenchBay(gallery, activeBayId);
+      setBenchWorldActiveBay(world, activeBayId);
       return state();
     },
     applyEntry,
     exportPatch,
     importPatch,
     registry,
-    replaySameSetup(worldTruth = {}) {
+    replaySameSetup() {
       gallery = createBenchGallery({ activeBayId: gallery.activeBayId });
-      return normalizeBenchTruth({ gallery, patch: exportPatch(), worldTruth });
+      world = createBenchGalleryWorld({ activeBayId: gallery.activeBayId });
+      return normalizeBenchTruth({ gallery, patch: exportPatch(), world: snapshotWorld() });
     },
     resetAll() { return resetWhere(() => true); },
     resetProperty(adapterId, propertyId) {
+      registry.requireProperty(adapterId, propertyId);
       return resetWhere((entry) => entry.adapterId === adapterId && entry.propertyId === propertyId);
     },
-    resetType(adapterId) { return resetWhere((entry) => entry.adapterId === adapterId); },
+    resetType(adapterId) {
+      registry.requireAdapter(adapterId);
+      return resetWhere((entry) => entry.adapterId === adapterId);
+    },
     state,
+    snapshot() {
+      return {
+        galleryId: gallery.id,
+        seed: gallery.seed,
+        activeBayId: gallery.activeBayId,
+        world: snapshotWorld(),
+        patch: exportPatch(),
+      };
+    },
+    tick(dt) {
+      tickBenchGalleryWorld(world, dt);
+      return snapshotWorld();
+    },
     undoLastChange() {
       if (!undo) return false;
       const previous = undo;
       for (const entry of live.values()) {
         const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
-        if (!adapter.reset) throw new Error(`Bench adapter ${adapter.id} has no authority reset applicator`);
+        if (!adapter.reset) throw benchValidation(`Bench adapter ${adapter.id} has no authority reset applicator`);
         adapter.reset({ property });
       }
       for (const entry of previous.live) {
         const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
-        if (!adapter.apply) throw new Error(`Bench adapter ${adapter.id} has no authority applicator`);
+        if (!adapter.apply) throw benchValidation(`Bench adapter ${adapter.id} has no authority applicator`);
         adapter.apply({ property, value: entry.value });
       }
       restoreEntries(live, previous.live);

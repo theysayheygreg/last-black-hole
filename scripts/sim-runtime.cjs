@@ -88,6 +88,7 @@ const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { BODY_SCHEMA_VERSION } = require("./sim/body-schema.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
 const { createBenchAuthority } = require("./sim/bench-authority.cjs");
+const { isBenchValidationError } = require("./sim/bench-errors.cjs");
 const { resolveBenchGate } = require("./sim/bench-gate.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 const {
@@ -760,6 +761,19 @@ function sendJson(res, statusCode, body) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
   res.end(payload);
+}
+
+async function handleBenchRoute(req, res, handler) {
+  try {
+    const body = await readJson(req);
+    sendJson(res, 200, await handler(body));
+  } catch (error) {
+    if (error instanceof SyntaxError || isBenchValidationError(error)) {
+      sendJson(res, 400, { ok: false, code: "bench-validation", error: error.message });
+      return;
+    }
+    throw error;
+  }
 }
 
 function ensureParent(filepath) {
@@ -2027,6 +2041,7 @@ function buildSnapshotBody() {
     simTime: runtime.simTime,
     serverTime: Date.now(),
     lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
+    bench: benchAuthority ? benchAuthority.snapshot() : null,
     players: Array.from(runtime.players.values()).map((player) => {
       const coyote = player.slingshot ? slingshotCoyoteTelemetry(player.slingshot) : null;
       return ({
@@ -2214,7 +2229,7 @@ function getHumanPlayerCount(options = {}) {
 function getIdleState() {
   const humanPlayerCount = getHumanPlayerCount();
   const activeHumanPlayerCount = getHumanPlayerCount({ activeOnly: true });
-  const idle = activeHumanPlayerCount === 0;
+  const idle = benchAuthority ? false : activeHumanPlayerCount === 0;
   const emptySince = humanPlayerCount === 0 ? runtime.emptySince : null;
   const idleForMs = emptySince ? Math.max(0, Date.now() - emptySince) : 0;
   const terminalShutdownInMs = runtime.terminalShutdownAt
@@ -2235,7 +2250,7 @@ function getIdleState() {
     currentLoopTickHz: runtime.loopTickHz,
     idleShutdownMs: runtime.keepAlive ? 0 : runtime.idleShutdownMs,
     shutdownInMs:
-      humanPlayerCount > 0 || runtime.keepAlive || !runtime.idleShutdownMs
+      benchAuthority || humanPlayerCount > 0 || runtime.keepAlive || !runtime.idleShutdownMs
         ? null
         : Math.max(0, runtime.idleShutdownMs - idleForMs),
   };
@@ -6613,6 +6628,14 @@ function tickInhibitor(dt) {
 
 function tickSim() {
   if (runtime.session.status !== "running") return;
+  if (benchAuthority) {
+    const dt = 1 / 10;
+    runtime.emptySince = null;
+    runtime.tick += 1;
+    runtime.simTime = Number((runtime.simTime + dt).toFixed(9));
+    benchAuthority.tick(dt);
+    return;
+  }
   if (getHumanPlayerCount() === 0) {
     runtime.emptySince = runtime.emptySince || Date.now();
     if (!runtime.keepAlive && runtime.idleShutdownMs > 0 && Date.now() - runtime.emptySince >= runtime.idleShutdownMs) {
@@ -6774,6 +6797,7 @@ function tickSim() {
 
 function getLoopTickHz() {
   if (runtime.session.status !== "running") return 0;
+  if (benchAuthority) return 10;
   if (getHumanPlayerCount({ activeOnly: true }) === 0) return IDLE_SESSION_TICK_HZ;
   return runtime.session.tickHz;
 }
@@ -6846,7 +6870,7 @@ const server = http.createServer(async (req, res) => {
         tick: runtime.tick,
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
-        mapId: runtime.mapState.id,
+        mapId: benchAuthority ? benchAuthority.snapshot().galleryId : runtime.mapState.id,
         ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
         ballparkRelevance: runtime.ballparkRelevance,
         eventJournal: runtime.eventJournal ? runtime.eventJournal.describe() : null,
@@ -6883,35 +6907,37 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/bench/bay") {
-      const body = await readJson(req);
-      sendJson(res, 200, { ok: true, ...benchAuthority.activateBay(body.activeBayId) });
+      await handleBenchRoute(req, res, (body) => ({ ok: true, ...benchAuthority.activateBay(body.activeBayId) }));
       return;
     }
 
     if (req.method === "POST" && req.url === "/bench/patch") {
-      const body = await readJson(req);
-      sendJson(res, 200, { ok: true, patch: benchAuthority.importPatch(body.patch) });
+      await handleBenchRoute(req, res, (body) => ({ ok: true, patch: benchAuthority.importPatch(body.patch) }));
       return;
     }
 
     if (req.method === "POST" && req.url === "/bench/replay") {
-      const body = await readJson(req);
-      sendJson(res, 200, { ok: true, truth: benchAuthority.replaySameSetup(body.worldTruth) });
+      await handleBenchRoute(req, res, () => ({ ok: true, authorityTruth: benchAuthority.replaySameSetup() }));
       return;
     }
 
     if (req.method === "POST" && req.url === "/bench/reset") {
-      const body = await readJson(req);
-      let patch;
-      if (body.propertyId) patch = benchAuthority.resetProperty(body.adapterId, body.propertyId);
-      else if (body.adapterId) patch = benchAuthority.resetType(body.adapterId);
-      else patch = benchAuthority.resetAll();
-      sendJson(res, 200, { ok: true, patch });
+      await handleBenchRoute(req, res, (body) => {
+        let patch;
+        if (body.propertyId) patch = benchAuthority.resetProperty(body.adapterId, body.propertyId);
+        else if (body.adapterId) patch = benchAuthority.resetType(body.adapterId);
+        else patch = benchAuthority.resetAll();
+        return { ok: true, patch };
+      });
       return;
     }
 
     if (req.method === "POST" && req.url === "/bench/undo") {
-      sendJson(res, 200, { ok: true, undone: benchAuthority.undoLastChange(), patch: benchAuthority.exportPatch() });
+      await handleBenchRoute(req, res, () => ({
+        ok: true,
+        undone: benchAuthority.undoLastChange(),
+        patch: benchAuthority.exportPatch(),
+      }));
       return;
     }
 

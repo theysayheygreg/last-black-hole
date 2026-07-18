@@ -1,10 +1,12 @@
 "use strict";
 
+const { benchValidation } = require("./bench-errors.cjs");
+
 const APPLICATION_TIMINGS = new Set(["live", "next-tick", "restart"]);
 const SCOPES = new Set(["type", "family", "system"]);
 
 function assertText(value, field) {
-  if (!String(value || "").trim()) throw new Error(`${field} is required`);
+  if (!String(value || "").trim()) throw benchValidation(`${field} is required`);
   return String(value).trim();
 }
 
@@ -23,15 +25,15 @@ function validateProperty(property) {
     max: Number(property?.max),
     step: Number(property?.step),
   };
-  if (!SCOPES.has(normalized.scope)) throw new Error(`Unsupported scope: ${normalized.scope}`);
+  if (!SCOPES.has(normalized.scope)) throw benchValidation(`Unsupported scope: ${normalized.scope}`);
   if (!APPLICATION_TIMINGS.has(normalized.applies)) {
-    throw new Error(`Unsupported application timing: ${normalized.applies}`);
+    throw benchValidation(`Unsupported application timing: ${normalized.applies}`);
   }
   if (![normalized.min, normalized.max, normalized.step].every(Number.isFinite)) {
-    throw new Error(`Property ${normalized.id} requires finite min, max, and step`);
+    throw benchValidation(`Property ${normalized.id} requires finite min, max, and step`);
   }
   if (normalized.min > normalized.max || normalized.step <= 0) {
-    throw new Error(`Property ${normalized.id} has an invalid range`);
+    throw benchValidation(`Property ${normalized.id} has an invalid range`);
   }
   return Object.freeze(normalized);
 }
@@ -41,12 +43,12 @@ function createBenchAdapterRegistry() {
 
   function register(adapter) {
     const id = assertText(adapter?.id, "adapter.id");
-    if (adapters.has(id)) throw new Error(`Bench adapter already registered: ${id}`);
+    if (adapters.has(id)) throw benchValidation(`Bench adapter already registered: ${id}`);
     const properties = new Map((adapter.properties || []).map((entry) => {
       const property = validateProperty(entry);
       return [property.id, property];
     }));
-    if (properties.size === 0) throw new Error(`Bench adapter ${id} has no curated properties`);
+    if (properties.size === 0) throw benchValidation(`Bench adapter ${id} has no curated properties`);
     const normalized = Object.freeze({
       id,
       label: assertText(adapter.label, "adapter.label"),
@@ -59,11 +61,16 @@ function createBenchAdapterRegistry() {
   }
 
   function requireProperty(adapterId, propertyId) {
-    const adapter = adapters.get(String(adapterId || ""));
-    if (!adapter) throw new Error(`NO TUNABLE CONTRACT YET: ${adapterId}`);
+    const adapter = requireAdapter(adapterId);
     const property = adapter.properties.get(String(propertyId || ""));
-    if (!property) throw new Error(`Unsupported Bench property: ${adapterId}.${propertyId}`);
+    if (!property) throw benchValidation(`Unsupported Bench property: ${adapterId}.${propertyId}`);
     return { adapter, property };
+  }
+
+  function requireAdapter(adapterId) {
+    const adapter = adapters.get(String(adapterId || ""));
+    if (!adapter) throw benchValidation(`NO TUNABLE CONTRACT YET: ${adapterId}`);
+    return adapter;
   }
 
   function describe() {
@@ -74,7 +81,7 @@ function createBenchAdapterRegistry() {
     }));
   }
 
-  return Object.freeze({ describe, register, requireProperty });
+  return Object.freeze({ describe, register, requireAdapter, requireProperty });
 }
 
 module.exports = {

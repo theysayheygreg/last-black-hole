@@ -1,5 +1,7 @@
 "use strict";
 
+const { benchValidation } = require("./bench-errors.cjs");
+
 const BENCH_GALLERY_ID = "bench-gallery-v1";
 const BENCH_GALLERY_SEED = 303031;
 
@@ -40,7 +42,7 @@ function stablePlacement(bayIndex, familyIndex) {
 
 function createBenchGallery({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
   if (!BAY_DEFINITIONS.some((bay) => bay.id === activeBayId)) {
-    throw new Error(`Unknown Bench bay: ${activeBayId}`);
+    throw benchValidation(`Unknown Bench bay: ${activeBayId}`);
   }
   const bays = BAY_DEFINITIONS.map((bay, bayIndex) => ({
     ...bay,
@@ -65,6 +67,74 @@ function createBenchGallery({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
   };
 }
 
+function createBenchEntity(exhibit, bayIndex, familyIndex) {
+  const probe = exhibit.family === "probe-ship";
+  return {
+    id: exhibit.identity,
+    family: exhibit.family,
+    bayId: exhibit.bayId,
+    representation: probe ? "authority-probe" : "read-only-placeholder",
+    contractStatus: exhibit.contractStatus,
+    wx: exhibit.placement.x,
+    wy: exhibit.placement.y,
+    vx: 0,
+    vy: 0,
+    radius: probe ? 24 : 18,
+    active: exhibit.bayId === BAY_DEFINITIONS[0].id,
+    simulation: exhibit.bayId === BAY_DEFINITIONS[0].id ? "active" : "paused",
+    simulationKind: "scenario-pulse",
+    scenarioTicks: 0,
+    scenarioPhase: Number(((bayIndex + 1) * 0.17 + (familyIndex + 1) * 0.07).toFixed(6)),
+    ...(probe ? {
+      name: "Bench Probe",
+      status: "alive",
+      invulnerable: true,
+      fuel: "infinite",
+      infiniteFuel: true,
+    } : {}),
+  };
+}
+
+function createBenchGalleryWorld({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
+  const gallery = createBenchGallery({ activeBayId });
+  const entities = gallery.bays.flatMap((bay, bayIndex) =>
+    bay.exhibits.map((exhibit, familyIndex) => createBenchEntity(exhibit, bayIndex, familyIndex))
+  );
+  setBenchWorldActiveBay({ entities }, activeBayId);
+  return {
+    id: gallery.id,
+    seed: gallery.seed,
+    fixedLayout: true,
+    activeBayId,
+    scenarioTime: 0,
+    entities,
+  };
+}
+
+function setBenchWorldActiveBay(world, activeBayId) {
+  if (!BAY_DEFINITIONS.some((bay) => bay.id === activeBayId)) {
+    throw benchValidation(`Unknown Bench bay: ${activeBayId}`);
+  }
+  world.activeBayId = activeBayId;
+  for (const entity of world.entities) {
+    entity.active = entity.bayId === activeBayId;
+    entity.simulation = entity.active ? "active" : "paused";
+  }
+  return world;
+}
+
+function tickBenchGalleryWorld(world, dt) {
+  const step = Number(dt);
+  if (!Number.isFinite(step) || step < 0) throw benchValidation("Bench Gallery tick requires a non-negative dt");
+  world.scenarioTime = Number((world.scenarioTime + step).toFixed(9));
+  for (const entity of world.entities) {
+    if (!entity.active || entity.simulationKind === "none") continue;
+    entity.scenarioTicks += 1;
+    entity.scenarioPhase = Number(((entity.scenarioPhase + step * 0.25) % 1).toFixed(9));
+  }
+  return world;
+}
+
 function activateBenchBay(gallery, activeBayId) {
   return createBenchGallery({ activeBayId, seed: gallery?.seed });
 }
@@ -75,4 +145,7 @@ module.exports = {
   BENCH_GALLERY_SEED,
   activateBenchBay,
   createBenchGallery,
+  createBenchGalleryWorld,
+  setBenchWorldActiveBay,
+  tickBenchGalleryWorld,
 };
