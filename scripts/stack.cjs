@@ -21,7 +21,13 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
-      const key = arg.slice(2);
+      const assignment = arg.slice(2);
+      const equalsAt = assignment.indexOf('=');
+      if (equalsAt >= 0) {
+        args[assignment.slice(0, equalsAt)] = assignment.slice(equalsAt + 1);
+        continue;
+      }
+      const key = assignment;
       const next = argv[i + 1];
       if (next && !next.startsWith("--")) {
         args[key] = next;
@@ -48,6 +54,13 @@ const MODES = {
     description: "Dev server + local control plane + local sim + browser client bound to local authority.",
     services: ["control", "sim", "dev"],
     query: { simServer: LOCAL_SIM_URL },
+  },
+  "bench": {
+    name: "bench",
+    description: "Dev-only Bench Gallery and local authority with the explicit Bench gate.",
+    services: ["control", "sim", "dev"],
+    serviceArgs: { sim: ["--bench", "true", "--keep-alive", "true"] },
+    query: { simServer: LOCAL_SIM_URL, bench: "1" },
   },
   "remote-client": {
     name: "remote-client",
@@ -99,12 +112,12 @@ async function start({ mode = "local-host", openBrowser = true, remoteSimUrl = "
   console.log(`Starting LBH in ${selected.name} mode...\n`);
 
   for (const service of selected.services) {
-    const output = startService(service);
+    const output = startService(service, selected.serviceArgs?.[service] || []);
     if (output) console.log(output);
   }
 
   let url = DEV_URL;
-  if (selected.name === "local-host") {
+  if (selected.name === "local-host" || selected.name === "bench") {
     url = buildUrl(DEV_URL, selected.query);
   } else if (selected.name === "remote-client") {
     if (!remoteSimUrl) {
@@ -149,6 +162,7 @@ async function main() {
 module.exports = {
   MODES,
   DEV_URL,
+  parseArgs,
   start,
   stop,
   printStackStatus,

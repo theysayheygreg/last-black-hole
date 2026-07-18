@@ -1,6 +1,6 @@
 "use strict";
 
-const TIMINGS = new Set(["LIVE", "NEXT TICK", "RESTART"]);
+const APPLICATION_TIMINGS = new Set(["live", "next-tick", "restart"]);
 const SCOPES = new Set(["type", "family", "system"]);
 
 function assertText(value, field) {
@@ -16,15 +16,17 @@ function validateProperty(property) {
     group: assertText(property?.group, "property.group"),
     unit: assertText(property?.unit, "property.unit"),
     scope: assertText(property?.scope, "property.scope"),
-    timing: assertText(property?.timing, "property.timing"),
+    applies: assertText(property?.applies, "property.applies"),
     drawKind: assertText(property?.drawKind, "property.drawKind"),
-    resetBehavior: assertText(property?.resetBehavior, "property.resetBehavior"),
+    reset: assertText(property?.reset, "property.reset"),
     min: Number(property?.min),
     max: Number(property?.max),
     step: Number(property?.step),
   };
   if (!SCOPES.has(normalized.scope)) throw new Error(`Unsupported scope: ${normalized.scope}`);
-  if (!TIMINGS.has(normalized.timing)) throw new Error(`Unsupported application timing: ${normalized.timing}`);
+  if (!APPLICATION_TIMINGS.has(normalized.applies)) {
+    throw new Error(`Unsupported application timing: ${normalized.applies}`);
+  }
   if (![normalized.min, normalized.max, normalized.step].every(Number.isFinite)) {
     throw new Error(`Property ${normalized.id} requires finite min, max, and step`);
   }

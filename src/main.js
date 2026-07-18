@@ -37,6 +37,7 @@ import { ScanlinesPass } from './render/passes/scanlines-pass.js';
 import { initTestAPI } from './test-api.js';
 import { drawRulerOverlay } from './ruler-overlay.js';
 import { initDevPanel } from './dev-panel.js';
+import { initBenchUi } from './bench/ui.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
          getSlingshotInteractionState } from './hud.js';
@@ -352,6 +353,7 @@ let currentCameraMode = 'follow';
 let rendererFixtureActive = false;
 let activeRendererFixture = null;
 const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
+const BENCH_REQUESTED = new URLSearchParams(window.location.search).get('bench') === '1';
 
 // Run state
 const simState = createSimState();
@@ -1287,7 +1289,22 @@ function init() {
     }));
   }
 
-  if (RUNTIME_FLAGS.enableDevPanel) {
+  if (RUNTIME_FLAGS.isDev && BENCH_REQUESTED) {
+    void initBenchUi({
+      simClient,
+      overlayCanvas,
+      getSnapshot: () => remoteSnapshot,
+      screenToWorldPoint: (clientX, clientY) => {
+        const rect = overlayCanvas.getBoundingClientRect();
+        const px = (clientX - rect.left) * overlayCanvas.width / Math.max(1, rect.width);
+        const py = (clientY - rect.top) * overlayCanvas.height / Math.max(1, rect.height);
+        const [x, y] = screenToWorld(px, py, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        return { x, y };
+      },
+    });
+  }
+
+  if (RUNTIME_FLAGS.enableDevPanel && !BENCH_REQUESTED) {
     initDevPanel();
   }
   initHUD();

@@ -21,6 +21,7 @@
     "stack:stop": "node scripts/stack.cjs stop",
     "stack:status": "node scripts/stack.cjs status",
     "stack:restart": "node scripts/stack.cjs restart --mode=local-host",
+    "bench": "node scripts/stack.cjs restart --mode=bench",
     "sim": "node scripts/sim-server.cjs start",
     "sim:bench": "node scripts/sim-server.cjs start --bench true --keep-alive true",
     "sim:stop": "node scripts/sim-server.cjs stop",

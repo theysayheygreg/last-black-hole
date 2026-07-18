@@ -69,10 +69,10 @@ function statusService(name) {
   return '';
 }
 
-function startService(name) {
-  if (name === 'dev') return runNodeSafe('dev-server.cjs', 'start');
-  if (name === 'sim') return runNodeSafe('sim-server.cjs', 'start');
-  if (name === 'control') return runNodeSafe('control-plane-server.cjs', 'start');
+function startService(name, extraArgs = []) {
+  if (name === 'dev') return runNodeSafe('dev-server.cjs', 'start', extraArgs);
+  if (name === 'sim') return runNodeSafe('sim-server.cjs', 'start', extraArgs);
+  if (name === 'control') return runNodeSafe('control-plane-server.cjs', 'start', extraArgs);
   return '';
 }
 

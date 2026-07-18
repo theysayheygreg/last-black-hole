@@ -27,9 +27,9 @@ registry.register({
       max: 5,
       step: 0.5,
       scope: "type",
-      timing: "LIVE",
+      applies: "live",
       drawKind: "radius",
-      resetBehavior: "Restore the canonical archetype value.",
+      reset: "Restore the canonical archetype value.",
     },
     {
       id: "restartMass",
@@ -41,9 +41,9 @@ registry.register({
       max: 20,
       step: 1,
       scope: "type",
-      timing: "RESTART",
+      applies: "restart",
       drawKind: "number",
-      resetBehavior: "Remove the banked restart value.",
+      reset: "Remove the banked restart value.",
     },
   ],
   apply(change) { applied.push([change.property.id, change.value]); },
@@ -74,9 +74,13 @@ assert.deepStrictEqual(applied.at(-1), ["radius", 2.5]);
 const exported = authority.exportPatch();
 authority.resetAll();
 assert.deepStrictEqual(reset, ["radius", "radius"]);
-assert.strictEqual(authority.exportPatch().entries.length, 0);
-authority.importPatch({ version: exported.version, entries: exported.entries });
-assert.deepStrictEqual(authority.exportPatch().entries, exported.entries);
+assert.strictEqual(authority.exportPatch().edits.length, 0);
+authority.importPatch({ schema: exported.schema, edits: exported.edits });
+assert.deepStrictEqual(authority.exportPatch().edits, exported.edits);
+assert.throws(
+  () => authority.importPatch({ schema: exported.schema, edits: [{ ...exported.edits[0], status: "banked-restart" }] }),
+  /timing mismatch/
+);
 
 assert.throws(
   () => authority.applyEntry({ adapterId: "unknown", propertyId: "radius", value: 2 }),

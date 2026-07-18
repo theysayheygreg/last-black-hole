@@ -4,7 +4,7 @@ const { createBenchAdapterRegistry } = require("./bench-adapters.cjs");
 const { activateBenchBay, createBenchGallery } = require("./bench-gallery.cjs");
 const { normalizeBenchTruth } = require("./bench-normalize.cjs");
 
-const PATCH_VERSION = 1;
+const PATCH_SCHEMA = "lbh-bench-patch/v1";
 
 function keyFor(entry) {
   return `${entry.adapterId}.${entry.propertyId}`;
@@ -29,19 +29,24 @@ function validateValue(value, property) {
 }
 
 function validatePatch(patch, registry) {
-  if (!patch || patch.version !== PATCH_VERSION || !Array.isArray(patch.entries)) {
-    throw new Error(`Bench patch must use version ${PATCH_VERSION} with an entries array`);
+  if (!patch || patch.schema !== PATCH_SCHEMA || !Array.isArray(patch.edits)) {
+    throw new Error(`Bench patch must use schema ${PATCH_SCHEMA} with an edits array`);
   }
   const seen = new Set();
-  return patch.entries.map((raw) => {
+  return patch.edits.map((raw) => {
     const adapterId = String(raw?.adapterId || "").trim();
     const propertyId = String(raw?.propertyId || "").trim();
     const { property } = registry.requireProperty(adapterId, propertyId);
+    const expectedStatus = property.applies === "restart" ? "banked-restart" : "live-applied";
+    if (raw.applies !== property.applies || raw.status !== expectedStatus) {
+      throw new Error(`Bench patch timing mismatch for ${adapterId}.${propertyId}`);
+    }
     const entry = Object.freeze({
       adapterId,
       propertyId,
       value: validateValue(raw.value, property),
-      timing: property.timing,
+      applies: property.applies,
+      status: expectedStatus,
     });
     const key = keyFor(entry);
     if (seen.has(key)) throw new Error(`Duplicate Bench patch entry: ${key}`);
@@ -66,25 +71,33 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
   }
 
   function applyEntry(rawEntry, { capture = true } = {}) {
-    const [entry] = validatePatch({ version: PATCH_VERSION, entries: [rawEntry] }, registry);
+    const { property: rawProperty } = registry.requireProperty(rawEntry.adapterId, rawEntry.propertyId);
+    const [entry] = validatePatch({
+      schema: PATCH_SCHEMA,
+      edits: [{
+        ...rawEntry,
+        applies: rawProperty.applies,
+        status: rawProperty.applies === "restart" ? "banked-restart" : "live-applied",
+      }],
+    }, registry);
     const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
-    if (property.timing !== "RESTART" && !adapter.apply) {
+    if (property.applies !== "restart" && !adapter.apply) {
       throw new Error(`Bench adapter ${adapter.id} has no authority applicator`);
     }
     if (capture) captureUndo();
-    const target = property.timing === "RESTART" ? restart : live;
+    const target = property.applies === "restart" ? restart : live;
     target.set(keyFor(entry), entry);
-    if (property.timing !== "RESTART") {
+    if (property.applies !== "restart") {
       adapter.apply({ property, value: entry.value });
     }
     return entry;
   }
 
   function importPatch(patch) {
-    const entries = validatePatch(patch, registry);
-    for (const entry of entries) {
+    const edits = validatePatch(patch, registry);
+    for (const entry of edits) {
       const { adapter, property } = registry.requireProperty(entry.adapterId, entry.propertyId);
-      if (property.timing !== "RESTART" && !adapter.apply) {
+      if (property.applies !== "restart" && !adapter.apply) {
         throw new Error(`Bench adapter ${adapter.id} has no authority applicator`);
       }
     }
@@ -96,7 +109,7 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
     }
     live.clear();
     restart.clear();
-    for (const entry of entries) applyEntry(entry, { capture: false });
+    for (const entry of edits) applyEntry(entry, { capture: false });
     return exportPatch();
   }
 
@@ -117,8 +130,8 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
 
   function exportPatch() {
     return {
-      version: PATCH_VERSION,
-      entries: [...cloneEntries(live), ...cloneEntries(restart)].sort((a, b) => keyFor(a).localeCompare(keyFor(b))),
+      schema: PATCH_SCHEMA,
+      edits: [...cloneEntries(live), ...cloneEntries(restart)].sort((a, b) => keyFor(a).localeCompare(keyFor(b))),
       liveApplied: cloneEntries(live),
       bankedRestart: cloneEntries(restart),
     };
@@ -175,7 +188,7 @@ function createBenchAuthority({ registry = createBenchAdapterRegistry() } = {}) 
 }
 
 module.exports = {
-  PATCH_VERSION,
+  PATCH_SCHEMA,
   createBenchAuthority,
   validatePatch,
   validateValue,

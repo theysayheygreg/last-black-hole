@@ -82,6 +82,42 @@ export class SimClient {
     return this._json('/maps');
   }
 
+  async getBench() {
+    return this._json('/bench');
+  }
+
+  async activateBenchBay(activeBayId) {
+    return this._json('/bench/bay', {
+      method: 'POST',
+      body: JSON.stringify({ activeBayId }),
+    });
+  }
+
+  async importBenchPatch(patch) {
+    return this._json('/bench/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+  }
+
+  async replayBenchSameSetup(worldTruth = {}) {
+    return this._json('/bench/replay', {
+      method: 'POST',
+      body: JSON.stringify({ worldTruth }),
+    });
+  }
+
+  async resetBench({ adapterId = null, propertyId = null } = {}) {
+    return this._json('/bench/reset', {
+      method: 'POST',
+      body: JSON.stringify({ adapterId, propertyId }),
+    });
+  }
+
+  async undoBench() {
+    return this._json('/bench/undo', { method: 'POST', body: '{}' });
+  }
+
   async startSession({ mapId, worldScale, maxPlayers = 4, seed = null, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
     const command = this.commandCredential ? this._nextCommandEnvelope() : {};
     const request = () => this._json('/session/start', {
