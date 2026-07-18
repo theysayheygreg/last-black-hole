@@ -14,6 +14,13 @@ const SCAVENGER_ACTIONS = Object.freeze([
   Object.freeze({ id: "chase", label: "Chase Wreck", effect: "Moves the scavenger toward the acquired yard wreck." }),
   Object.freeze({ id: "reset", label: "Reset Scenario", effect: "Restores the deterministic idle setup for this scavenger." }),
 ]);
+const WRECK_ARCHETYPE_ID = "wreck.standard";
+const WRECK_DEFAULTS = Object.freeze({ salvageRadius: 110 });
+const WRECK_ACTIONS = Object.freeze([
+  Object.freeze({ id: "intact", label: "Restore Intact", effect: "Reseals the wreck and returns its debris and loot to the deterministic setup." }),
+  Object.freeze({ id: "loot", label: "Expose Loot", effect: "Opens the wreck and makes its nearby salvage available." }),
+  Object.freeze({ id: "destroy", label: "Destroy Wreck", effect: "Breaks the wreck apart and scatters its debris while leaving salvage exposed." }),
+]);
 
 const BAY_DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -65,8 +72,10 @@ function createBenchGallery({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
       placement: stablePlacement(bayIndex, familyIndex),
       tunableContract: family === "wells"
         ? WELL_ARCHETYPE_ID
-        : family === "scavengers" ? SCAVENGER_ARCHETYPE_ID : null,
-      contractStatus: family === "wells" || family === "scavengers"
+        : family === "scavengers"
+          ? SCAVENGER_ARCHETYPE_ID
+          : family === "wrecks" ? WRECK_ARCHETYPE_ID : null,
+      contractStatus: family === "wells" || family === "scavengers" || family === "wrecks"
         ? "TUNABLE"
         : "NO TUNABLE CONTRACT YET",
     })),
@@ -169,6 +178,111 @@ function createScavengerEntities(exhibit, tuning) {
   }));
 }
 
+function createWreckEntities(exhibit, tuning) {
+  return [
+    { id: "bench:wreck:standard:a", name: "Standard Wreck A", wx: exhibit.placement.x - 70, wy: exhibit.placement.y - 35 },
+    { id: "bench:wreck:standard:b", name: "Standard Wreck B", wx: exhibit.placement.x + 90, wy: exhibit.placement.y + 45 },
+  ].map((placement) => ({
+    ...placement,
+    family: "wrecks",
+    bayId: exhibit.bayId,
+    representation: "runtime-archetype",
+    contractStatus: "TUNABLE",
+    selectable: true,
+    archetypeId: WRECK_ARCHETYPE_ID,
+    archetype: WRECK_ARCHETYPE_ID,
+    adapterId: WRECK_ARCHETYPE_ID,
+    selectionKey: `archetype:${WRECK_ARCHETYPE_ID}`,
+    inspector: { adapterId: WRECK_ARCHETYPE_ID, label: "Standard Wreck" },
+    salvageRadius: tuning.salvageRadius,
+    radius: 30,
+    geometry: {
+      drawKind: "radius",
+      center: { wx: placement.wx, wy: placement.wy },
+      radius: tuning.salvageRadius,
+    },
+    rulerFacts: [{
+      id: "salvageRadius",
+      label: "Salvage Radius",
+      radius: tuning.salvageRadius,
+      value: tuning.salvageRadius,
+      distance: tuning.salvageRadius,
+      unit: "world units",
+    }],
+    scenarioState: "intact",
+    scenarioStateLabel: "Intact — salvage sealed",
+    scenarioActions: WRECK_ACTIONS.map((action) => ({ ...action })),
+    integrity: 1,
+    lootExposed: false,
+    vx: 0,
+    vy: 0,
+    simulationKind: "wreck-scenario",
+    scenarioTicks: 0,
+    scenarioPhase: placement.id.endsWith(":a") ? 0.3 : 0.7,
+  }));
+}
+
+function createDebrisEntities(exhibit) {
+  return [
+    { id: "bench:debris:plate:a", name: "Hull Plate", dx: -55, dy: -30 },
+    { id: "bench:debris:plate:b", name: "Engine Debris", dx: 35, dy: 20 },
+    { id: "bench:debris:plate:c", name: "Broken Spar", dx: 75, dy: -45 },
+  ].map((part, index) => ({
+    id: part.id,
+    name: part.name,
+    family: "debris",
+    bayId: exhibit.bayId,
+    representation: "authority-scenario-object",
+    contractStatus: "NO TUNABLE CONTRACT YET",
+    selectable: true,
+    archetypeId: "debris.wreckage",
+    archetype: "debris.wreckage",
+    selectionKey: "archetype:debris.wreckage",
+    wx: exhibit.placement.x + part.dx,
+    wy: exhibit.placement.y + part.dy,
+    home: { wx: exhibit.placement.x + part.dx, wy: exhibit.placement.y + part.dy },
+    radius: 13,
+    scenarioState: "compact",
+    scenarioStateLabel: "Compact — beside intact wreck",
+    scattered: false,
+    vx: 0,
+    vy: 0,
+    simulationKind: "wreck-scenario",
+    scenarioTicks: 0,
+    scenarioPhase: Number((0.2 + index * 0.21).toFixed(3)),
+  }));
+}
+
+function createLootEntities(exhibit) {
+  return [
+    { id: "bench:loot:salvage:a", name: "Salvage Canister", dx: -38, dy: -20 },
+    { id: "bench:loot:salvage:b", name: "Fuel Cell", dx: 48, dy: 25 },
+  ].map((item, index) => ({
+    id: item.id,
+    name: item.name,
+    family: "loot",
+    bayId: exhibit.bayId,
+    representation: "authority-scenario-object",
+    contractStatus: "NO TUNABLE CONTRACT YET",
+    selectable: true,
+    archetypeId: "loot.salvage",
+    archetype: "loot.salvage",
+    selectionKey: "archetype:loot.salvage",
+    wx: exhibit.placement.x + item.dx,
+    wy: exhibit.placement.y + item.dy,
+    radius: 12,
+    scenarioState: "stowed",
+    scenarioStateLabel: "Stowed — sealed in wreck",
+    available: false,
+    revealed: false,
+    vx: 0,
+    vy: 0,
+    simulationKind: "wreck-scenario",
+    scenarioTicks: 0,
+    scenarioPhase: Number((0.35 + index * 0.28).toFixed(3)),
+  }));
+}
+
 function createBenchEntity(exhibit, bayIndex, familyIndex) {
   const probe = exhibit.family === "probe-ship";
   return {
@@ -201,6 +315,7 @@ function createBenchGalleryWorld({
   activeBayId = BAY_DEFINITIONS[0].id,
   wellTuning = WELL_DEFAULTS,
   scavengerTuning = SCAVENGER_DEFAULTS,
+  wreckTuning = WRECK_DEFAULTS,
 } = {}) {
   const gallery = createBenchGallery({ activeBayId });
   const entities = gallery.bays.flatMap((bay, bayIndex) => bay.exhibits.flatMap((exhibit, familyIndex) =>
@@ -208,6 +323,12 @@ function createBenchGalleryWorld({
       ? createWellEntities(exhibit, { ...WELL_DEFAULTS, ...wellTuning })
       : exhibit.family === "scavengers"
         ? createScavengerEntities(exhibit, { ...SCAVENGER_DEFAULTS, ...scavengerTuning })
+      : exhibit.family === "wrecks"
+        ? createWreckEntities(exhibit, { ...WRECK_DEFAULTS, ...wreckTuning })
+      : exhibit.family === "debris"
+        ? createDebrisEntities(exhibit)
+      : exhibit.family === "loot"
+        ? createLootEntities(exhibit)
       : [createBenchEntity(exhibit, bayIndex, familyIndex)]
   ));
   setBenchWorldActiveBay({ entities }, activeBayId);
@@ -223,19 +344,60 @@ function createBenchGalleryWorld({
 
 function applyBenchScenarioAction(world, { entityId = null, adapterId = null, actionId } = {}) {
   const normalizedAction = String(actionId || "").trim();
-  if (!SCAVENGER_ACTIONS.some((action) => action.id === normalizedAction)) {
-    throw benchValidation(`Unsupported Bench scenario action: ${actionId}`);
-  }
   const normalizedEntityId = String(entityId || "").trim();
   const normalizedAdapterId = String(adapterId || "").trim();
   if (!normalizedEntityId && !normalizedAdapterId) {
     throw benchValidation("Bench scenario action requires entityId or adapterId");
   }
-  const targets = world.entities.filter((entity) => entity.archetypeId === SCAVENGER_ARCHETYPE_ID
-    && (normalizedEntityId ? entity.id === normalizedEntityId : entity.adapterId === normalizedAdapterId));
+  const requestedTargets = world.entities.filter((entity) =>
+    normalizedEntityId ? entity.id === normalizedEntityId : entity.adapterId === normalizedAdapterId);
+  const archetypeId = requestedTargets[0]?.archetypeId;
+  const supportedActions = archetypeId === SCAVENGER_ARCHETYPE_ID
+    ? SCAVENGER_ACTIONS
+    : archetypeId === WRECK_ARCHETYPE_ID ? WRECK_ACTIONS : [];
+  if (!supportedActions.some((action) => action.id === normalizedAction)) {
+    throw benchValidation(`Unsupported Bench scenario action: ${actionId}`);
+  }
+  const targets = requestedTargets.filter((entity) => entity.archetypeId === archetypeId);
   if (targets.length === 0) throw benchValidation("Bench scenario action target was not found");
 
-  const yardWreck = world.entities.find((entity) => entity.id === "bench:salvage-yard:wrecks");
+  if (archetypeId === WRECK_ARCHETYPE_ID) {
+    const debris = world.entities.filter((entity) => entity.family === "debris");
+    const loot = world.entities.filter((entity) => entity.family === "loot");
+    for (const entity of targets) {
+      entity.scenarioState = normalizedAction === "loot" ? "looted" : normalizedAction;
+      entity.scenarioStateLabel = normalizedAction === "intact"
+        ? "Intact — salvage sealed"
+        : normalizedAction === "loot" ? "Open — salvage exposed" : "Destroyed — debris scattered";
+      entity.integrity = normalizedAction === "destroy" ? 0 : normalizedAction === "loot" ? 0.55 : 1;
+      entity.lootExposed = normalizedAction !== "intact";
+    }
+    for (const entity of loot) {
+      entity.available = normalizedAction !== "intact";
+      entity.revealed = normalizedAction !== "intact";
+      entity.scenarioState = normalizedAction === "intact" ? "stowed" : "available";
+      entity.scenarioStateLabel = normalizedAction === "intact"
+        ? "Stowed — sealed in wreck"
+        : "Available — ready for pickup";
+    }
+    for (const [index, entity] of debris.entries()) {
+      entity.scattered = normalizedAction === "destroy";
+      entity.scenarioState = normalizedAction === "destroy" ? "scattered" : "compact";
+      entity.scenarioStateLabel = normalizedAction === "destroy"
+        ? "Scattered — wreck destroyed"
+        : "Compact — beside intact wreck";
+      entity.wx = entity.home.wx + (normalizedAction === "destroy" ? (index - 1) * 70 : 0);
+      entity.wy = entity.home.wy + (normalizedAction === "destroy" ? (index % 2 === 0 ? -65 : 70) : 0);
+    }
+    return {
+      actionId: normalizedAction,
+      targetIds: targets.map((entity) => entity.id),
+      scenarioStates: targets.map((entity) => ({ entityId: entity.id, state: entity.scenarioState })),
+      affectedIds: [...debris, ...loot].map((entity) => entity.id),
+    };
+  }
+
+  const yardWreck = world.entities.find((entity) => entity.id === "bench:wreck:standard:a");
   for (const entity of targets) {
     if (normalizedAction === "idle" || normalizedAction === "reset") {
       entity.wx = entity.home.wx;
@@ -249,7 +411,7 @@ function applyBenchScenarioAction(world, { entityId = null, adapterId = null, ac
       entity.vy = 0;
       continue;
     }
-    entity.targetId = yardWreck?.id || "bench:salvage-yard:wrecks";
+    entity.targetId = yardWreck?.id || "bench:wreck:standard:a";
     entity.targetPosition = yardWreck ? { wx: yardWreck.wx, wy: yardWreck.wy } : null;
     if (normalizedAction === "detect") {
       entity.scenarioState = "detected";
@@ -315,6 +477,9 @@ module.exports = {
   SCAVENGER_ACTIONS,
   SCAVENGER_ARCHETYPE_ID,
   SCAVENGER_DEFAULTS,
+  WRECK_ACTIONS,
+  WRECK_ARCHETYPE_ID,
+  WRECK_DEFAULTS,
   activateBenchBay,
   applyBenchScenarioAction,
   createBenchGallery,

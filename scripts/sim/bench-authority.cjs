@@ -13,6 +13,8 @@ const {
   WELL_DEFAULTS,
   SCAVENGER_ARCHETYPE_ID,
   SCAVENGER_DEFAULTS,
+  WRECK_ARCHETYPE_ID,
+  WRECK_DEFAULTS,
 } = require("./bench-gallery.cjs");
 const { normalizeBenchTruth } = require("./bench-normalize.cjs");
 
@@ -73,7 +75,8 @@ function createBenchAuthority(options = {}) {
   let gallery = createBenchGallery();
   const wellTuning = { ...WELL_DEFAULTS };
   const scavengerTuning = { ...SCAVENGER_DEFAULTS };
-  let world = createBenchGalleryWorld({ wellTuning, scavengerTuning });
+  const wreckTuning = { ...WRECK_DEFAULTS };
+  let world = createBenchGalleryWorld({ wellTuning, scavengerTuning, wreckTuning });
   const live = new Map();
   const restart = new Map();
   let undo = null;
@@ -97,6 +100,17 @@ function createBenchAuthority(options = {}) {
       entity.rulerFacts[0].radius = scavengerTuning.detectionRadius;
       entity.rulerFacts[0].value = scavengerTuning.detectionRadius;
       entity.rulerFacts[0].distance = scavengerTuning.detectionRadius;
+    }
+  }
+
+  function propagateWreckTuning() {
+    for (const entity of world.entities) {
+      if (entity.archetypeId !== WRECK_ARCHETYPE_ID) continue;
+      entity.salvageRadius = wreckTuning.salvageRadius;
+      entity.geometry.radius = wreckTuning.salvageRadius;
+      entity.rulerFacts[0].radius = wreckTuning.salvageRadius;
+      entity.rulerFacts[0].value = wreckTuning.salvageRadius;
+      entity.rulerFacts[0].distance = wreckTuning.salvageRadius;
     }
   }
 
@@ -153,6 +167,33 @@ function createBenchAuthority(options = {}) {
       reset({ property }) {
         scavengerTuning[property.id] = SCAVENGER_DEFAULTS[property.id];
         propagateScavengerTuning();
+      },
+    });
+    registry.register({
+      id: WRECK_ARCHETYPE_ID,
+      label: "Standard Wreck",
+      properties: [{
+        id: "salvageRadius",
+        label: "Salvage Radius",
+        effect: "Changes how close a ship must be to salvage every Standard Wreck.",
+        group: "Wreck and Loot",
+        unit: "world units",
+        min: 50,
+        max: 250,
+        step: 10,
+        scope: "type",
+        applies: "live",
+        drawKind: "radius",
+        reset: "Restore the shipped Standard Wreck salvage radius.",
+      }],
+      getCurrent(property) { return wreckTuning[property.id]; },
+      apply({ property, value }) {
+        wreckTuning[property.id] = value;
+        propagateWreckTuning();
+      },
+      reset({ property }) {
+        wreckTuning[property.id] = WRECK_DEFAULTS[property.id];
+        propagateWreckTuning();
       },
     });
   }
@@ -263,7 +304,12 @@ function createBenchAuthority(options = {}) {
     registry,
     replaySameSetup() {
       gallery = createBenchGallery({ activeBayId: gallery.activeBayId });
-      world = createBenchGalleryWorld({ activeBayId: gallery.activeBayId, wellTuning, scavengerTuning });
+      world = createBenchGalleryWorld({
+        activeBayId: gallery.activeBayId,
+        wellTuning,
+        scavengerTuning,
+        wreckTuning,
+      });
       return normalizeBenchTruth({ gallery, patch: exportPatch(), world: snapshotWorld() });
     },
     runScenarioAction({ entityId = null, adapterId = null, actionId } = {}) {
