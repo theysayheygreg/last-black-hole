@@ -1,142 +1,131 @@
-# The Bench — Tuning Mode Spec (canonical)
+# The Bench — Tuning Mode Proposal
 
-> Canonical per-system spec per the X-B versioning convention.
-> Extracted 2026-07-17 from the v0.3.1 review line.
+> **Status: proposal under review.** This is the canonical place to develop the
+> Bench proposal, but the complete design is not ratified. The product and
+> architecture boundaries marked **Ratified** below are the current authority.
+> Unmarked details remain implementation hypotheses and must not silently become
+> product commitments.
 
-## Mockups
+The Bench is a deterministic scenario runner with an archetype inspector. It
+is not a miniature Unity/Godot editor, a map authoring tool, or a second gameplay
+authority.
 
-![Gallery](bench-mockups/bench-mock-1.png)
-![Inspector + ring drag](bench-mockups/bench-mock-2.png)
-![Aggro handles + staging](bench-mockups/bench-mock-3.png)
-![Tuning patch](bench-mockups/bench-mock-4.png)
+## Ratified product loop
 
-> Ratified direction 2026-07-17 (Greg + Orrery). Replaces the legacy
-> dev side panel. Not an engine editor: the contracts made clickable.
-> Rulings: **mouse-first** (Deck is player-only; no on-device editing);
-> **type-level propagation is the architecture** (build with it as the
-> intention even though map/Conductor design isn't far enough for it to
-> pay off yet — no per-instance overrides, no scene files).
+A developer launches one dev-only Bench and enters a fixed-seed Gallery campus
+containing every player-visible entity, object, objective, and system family in
+named isolated scenario bays. Only the active bay simulates unless the
+developer explicitly enables another bay.
 
-## Thesis
+The developer clicks an object, sees curated WYSIWYG/contextual properties for
+its archetype or linked system, changes a value through the real local
+authority, and observes every existing and future instance of that type update
+at the declared application time. They can then replay the identical setup
+with the active tuning overlay or reset the change.
 
-Every v2 system ships a tunables contract (unit, range, step, start
-bias — `src/content/*.data.json`, `scripts/sim/slingshot-contract.cjs`,
-`src/ruler-contract.js`). That schema IS an inspector definition. The
-panel generates itself from contracts; nothing hand-built per entity.
-Consequence: contract coverage is the forcing function — a knob not in
-a contract cannot appear in the Bench, which drives remaining stray
-config into the doctrine (X-A follow-through).
+- Mouse-first developer tool. Deck remains the player and review target.
+- Click-to-select is primary. Every instance of the selected type highlights.
+- No per-instance value overrides. Instance lifecycle and state are read-only
+  or changed only by named scenario actions.
+- Direct manipulation is limited to naturally spatial values such as radius,
+  distance, and angle, and follows the authority/inspector truth path. Arbitrary
+  body dragging and saved stage-layout authoring are out of scope for v1.
+- The probe ship is invulnerable and has infinite fuel.
 
-## Components
+The existing mockups in [`bench-mockups/`](bench-mockups/) are visual reference,
+not a ratified interaction contract. Their body-drag and stage-layout concepts
+are superseded by the v1 boundary above.
 
-1. **The Gallery** — one hand-authored static map, fixed seed, every
-   entity/object/objective in labeled zones: movement range, slingshot
-   alley (micro holes at each knob band), wreck field + salvage dwell,
-   scavenger pen, sentry post, portal row (all states), fauna pocket,
-   epoch demonstration strip. Conductor idles by default; can run or
-   loop a phase on demand. A training stage, not a level.
-2. **Click-to-inspect, archetype-first.** Click an entity → resolve to
-   its archetype (catalog/data entry) → inspector shows that contract.
-   Edits write to the archetype in the running authority; **all
-   instances re-derive** (type-level propagation). Selection highlight
-   on every instance of the selected archetype.
-3. **WYSIWYG via the ruler layer.** Selection auto-enables the
-   archetype's draw handlers (rings, radii, windows, vector pairs) at
-   true scale; slider-moves-geometry-same-frame is the existing ruler
-   contract. The Bench is wiring, not new rendering.
-4. **Seeded restart.** Every contract knob carries `applies: live |
-   restart`. Live knobs hot-apply; the Restart button reboots the sim
-   with the SAME seed + the edited data overlay — identical world,
-   changed values. Deterministic A/B is the core loop.
-5. **The tuning patch.** A session produces a JSON overlay vs shipped
-   data (values step-snapped, before/after recorded). Save / load /
-   export; a patch is the handoff artifact for a `Tune:` commit.
-   Greg's taste sessions become diffs, not dictation.
-6. **Bench tools.** Pause, single-tick step, sim-wide slow-mo (sim-wide
-   only — the no-per-player-time ruling holds in dev too),
-   invulnerable/infinite-fuel probe ship, teleport-to-zone hotkeys,
-   spawn-one-of-archetype at cursor, and **instance staging** (body-drag
-   any entity to reposition it for a test scenario — GREG 2026-07-17
-   ruling, superseding the earlier no-dragging line). The boundary that
-   keeps this from becoming another engine's editor is now: **staging is
-   session state, authoring is not a Bench verb.** Staged positions live
-   in the Gallery session; they may be saved/loaded as a named *stage
-   layout* for reproducible scenarios, but a stage layout is a Bench
-   fixture format — it is never map data, never procgen input, and never
-   part of a tuning patch. Shipping layouts stay in data/procgen files,
-   authored outside the Bench.
+## Contract and authority boundary
 
-## Implementation shape
+Inspector rows come from curated contract metadata, never raw object
+introspection. Each tunable declares:
 
-- Server: three dev endpoints on the local authority — contract
-  registry (walk all contracts, emit schema), archetype patch (apply
-  overlay, re-derive instances), restart-with-seed (same seed + overlay).
-- Client: picking pass over snapshot entities (nearest within cursor
-  radius); DOM inspector generated from the registry (grouped knobs,
-  slider + numeric entry per knob, unit/step/range shown, live/restart
-  badge, reset-to-shipped per knob and per archetype); top bar: seed
-  field, Restart, pause/step/slow-mo, patch save/load, zone teleport.
-- Legacy dev side panel retires once Bench coverage ≥ its knob list.
-- All behind `dev=1`/tuning flag; stripped from release builds.
+| Field | Meaning |
+|---|---|
+| `label`, `effect` | Human name and one-sentence gameplay effect |
+| `group`, `unit` | Presentation grouping and physical/game unit |
+| `min`, `max`, `step` | Valid numeric domain and snap step |
+| `scope` | `type`, `family`, or `system` |
+| `applies` | `live`, `next-tick`, or `restart` |
+| `drawKind` | Optional truthful ruler/overlay affordance |
+| `reset` | Shipped baseline and reset behavior |
 
-## Goal prompt (for an executing agent)
+Every gameplay edit goes through an explicit authority-owned adapter/applicator.
+The Bench must not generic-merge arbitrary runtime objects or present client
+`CONFIG` as simulation truth. Unsupported selections say **NO TUNABLE CONTRACT
+YET** while still exposing read-only identity and scenario actions.
 
-**Goal:** a developer can launch the Gallery map, click any entity,
-see a generated properties panel from its tunables contract, edit a
-knob and watch every instance update (live) or restart the identical
-seeded world with the new values (restart knobs), and export the
-session as a step-snapped JSON tuning patch. Mouse-first; dev-only.
-**Read first:** this spec; `src/ruler-contract.js`, `src/units.js`,
-`src/dev-panel.js` (to retire), `src/content/*.data.json` contract
-shapes, seeded-sea/anomaly test suites for the seed-determinism
-pattern.
-**Done when:** the Gallery boots from one command; the inspector is
-generated (zero hand-authored per-entity panels); archetype edits
-propagate to all instances; Restart reproduces the identical world
-modulo edited values (test: two restarts same seed+patch → same state
-hash); a saved patch reloads; the ruler handlers auto-enable on
-selection; everything is absent from release builds. Completion MD to
-`docs/v0.3/reviews/completions/` per the standing contract — include a
-capture of the inspector open over the slingshot alley.
+A tuning patch is a validated in-memory JSON overlay. It clearly separates
+live-applied changes from restart-banked changes, supports export/import, and
+never writes source files. The Bench offers Replay Same Setup, Reset Property,
+Reset Type, Revert All, Undo Last Change, and scenario focus/teleport.
 
-## Interaction model v2 (GREG 2026-07-17: direct manipulation primary)
+“Same setup” means the same Gallery layout, active bay and scenario state,
+seed, and tuning overlay. Replay comparisons normalize authority world truth to
+exclude volatile IDs and timestamps.
 
-**Direct manipulation is the primary verb; the panel is fine-tuning
-only.** Think 3D-editor controls, 2D top-down:
+## Gallery scenario contract
 
-- **Every drawn affordance is a handle.** Capture rings, aggro radii,
-  telegraph arcs, territory rings render with grab handles (cardinal
-  squares). Dragging a ring edge resizes the value — snapped to the
-  contract step during the drag, live label showing `475 m (+1 step)`.
-  A ring drag IS a knob edit: type-level, so every instance's ring
-  updates mid-drag (propagation made visceral — the mock shows +1
-  markers on siblings).
-- **Drag grammar:** *drag ring = tune the type · drag body = stage this
-  instance · panel = fine tune.* Body-drags reposition that one
-  instance in the Gallery (ghost origin + leader line while dragging);
-  positions are Gallery-session staging state, never map data, never in
-  the tuning patch (a stage layout may be saved separately for repro —
-  see Components §6 for the full boundary). Values ship, layouts don't.
-- **Hover/cursor language:** rings highlight + handles appear on hover;
-  ↔ cursor on ring edges, ✥ on bodies. Modifier: hold Shift for
-  unsnapped drag (snaps on release).
-- **Live knobs hot-apply on release** — no apply button anywhere.
-  Restart knobs bank until ↻ RESTART (same seed).
-- **Panel = precision:** exact numeric entry, step-nudge arrows,
-  per-knob reset (row glyph), per-archetype reset (footer), badges.
-- **Inspector is archetype-first**; system-wide contracts surfacing
-  through an entity (slingshot on wells/holes) sit under an explicit
-  "LINKED CONTRACT" divider — editing there edits the system, and the
-  panel says so.
-- Mockups: `bench-mockups/` (embedded above) — gallery; micro-hole
-  inspector with ring-drag in progress + sibling propagation; scavenger
-  aggro handles + instance staging drag; tuning patch. `bench-mock.html`
-  is the layout reference, built on UI_COLORS tokens.
+The Gallery is a dev-only authority bootstrap outside `PLAYABLE_MAP_IDS` and is
+disabled behind an explicit Bench authority gate in release builds. Source
+files may still be packaged; the honest boundary is disabled, not stripped.
 
-## Non-goals (v1)
+Named actions are more important than editor features:
 
-Per-instance *value* overrides (staging moves bodies, never edits their
-knobs — all value edits remain type-level); authoring shippable
-layouts/maps (stage layouts are Bench fixtures only, see Components §6);
-asset editing; undo trees; controller/Deck operation; multiplayer Bench
-sessions.
+- scavengers and other hostiles: patrol, detect, chase, attack, die;
+- wrecks and loot: intact, loot, destroy;
+- portals and objectives: announce, open, blocked, extract;
+- wells and slingshot: growth, wave, engage/release;
+- Conductor: phase and event triggers.
+
+The old dev panel remains available until measured Bench coverage equals its
+useful knob coverage. Raw or unclear controls retire only as truthful Bench
+replacements land.
+
+## Tracked implementation plan
+
+### F0 — Foundation vertical
+
+- [ ] One command/dev entry opens the Bench.
+- [ ] Dev-only authority-owned Gallery bootstrap outside `PLAYABLE_MAP_IDS`.
+- [ ] Common read-only picking/identity projection for all snapshot families.
+- [ ] Generated inspector shell backed by an explicit adapter registry.
+- [ ] Honest unsupported-family state: `NO TUNABLE CONTRACT YET`.
+- [ ] Same-setup replay, property/type/all resets, one-step undo, and validated
+      in-memory patch import/export with live vs restart separation.
+
+### F1 — First complete proof
+
+- [ ] Wells plus linked slingshot contract and one scavenger scenario.
+- [ ] Real selection, readable metadata, live/restart authority application,
+      existing/future type propagation, ruler overlay, and scenario action.
+- [ ] Normalized same-seed replay assertion and patch roundtrip proof.
+
+### F2 — Family coverage
+
+- [ ] Ships and enemies.
+- [ ] Debris, wrecks, and loot.
+- [ ] Stars, anomalies, and planetoids.
+- [ ] Portals and objectives.
+- [ ] Fauna and sentries.
+- [ ] Conductor states.
+
+Land these as coherent family commits rather than one giant change. Maintain a
+coverage ledger against the legacy dev panel before removing useful controls.
+
+### F3 — Later usability
+
+- [ ] Spatial radius/angle/distance handles after the truth path is proven.
+- [ ] Better comparison/A-B tools after the core replay loop is useful.
+- [ ] Careful legacy panel retirement after measured coverage parity.
+
+Stage-layout authoring remains excluded unless Greg explicitly reopens it.
+
+## Focused proof budget
+
+For each feature commit, run the smallest pure/contract tests and one bounded
+interactive proof only when a real world interaction changes. Capture one
+visual at a coherent Gallery/inspector checkpoint, not for every small commit.
+Full suites, package, Deck deploy, soak, broad browser runs, multiplayer, and
+cross-version work are checkpoint lanes rather than per-feature requirements.

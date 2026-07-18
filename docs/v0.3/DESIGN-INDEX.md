@@ -56,7 +56,8 @@ Historical indexes: [`v0.1 archive`](../v0.1/README.md) and
 
 ## Developer Tooling
 
-- [`BENCH-TUNING-MODE.md`](BENCH-TUNING-MODE.md) — the Bench: Gallery map,
-  contract-generated inspector, direct-manipulation handles (ring drag =
-  type tune, body drag = instance staging), seeded restart, tuning
-  patches. Mockups in [`bench-mockups/`](bench-mockups/).
+- [`BENCH-TUNING-MODE.md`](BENCH-TUNING-MODE.md) — proposal under review for
+  the Bench deterministic Gallery scenario runner and authority-backed
+  archetype inspector. Ratified boundaries and tracked implementation phases
+  live there; mockups in [`bench-mockups/`](bench-mockups/) are non-binding
+  visual reference.
