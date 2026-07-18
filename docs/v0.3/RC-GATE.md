@@ -5,9 +5,9 @@
 
 ## Current Verdict
 
-**The v0.3.1 source candidate and exact package are green. Deck deployment is
-blocked on Tailscale SSH authorization; physical-device acceptance and Greg's
-final review remain.**
+**The v0.3.1 source candidate, exact package, Deck deployment, and bounded
+Gamescope runtime smoke are green. Physical Gaming Mode Library launch, Steam
+Input, and Greg's final review remain.**
 
 `codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
 protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
@@ -17,8 +17,8 @@ agent-eval work, plus the v0.3 generated visual kit and UI motion system.
 The previously deployed `0.3.1.2b93b077` artifact remains valid evidence for
 that older hash, but Greg marked it needs-fix. Source `dd9e5149` adds the
 Orrery blocker fixes, locked units, retired time dilation, ratified normal-input
-slingshot path, and map-relative schedule. Its matching package is green; it
-has not reached the Deck because Tailscale SSH requires an additional check.
+slingshot path, and map-relative schedule. Its matching package is installed on
+the Deck and checksum-verified.
 
 Orrery's review exposed a client ownership bug during extraction: after the
 phase changed, local `SimCore` could advance server-owned snapshot entities.
@@ -78,8 +78,22 @@ Current package evidence:
   `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`;
 - playtest ZIP SHA-256:
   `9cfd14b433cb4b0113a6f1a84cb8a643eb1e35752e1fce1bd679c9a70c8bbeba`;
-- Deck preflight reached `100.77.19.24` but could not pass the additional
-  Tailscale SSH check. No deployment or shortcut refresh occurred.
+- Deck preflight initially stopped at Tailscale SSH's additional authorization
+  check. After Greg authorized it, preflight passed and the exact existing
+  artifact was deployed with `--no-build` to
+  `/home/deck/Games/last-singularity-v03`.
+- Remote executable SHA-256 matches local at
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`;
+  remote `resources/app.asar` matches at
+  `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`.
+- Gaming Mode key `19` is `Last Singularity v0.3.1 Preview`, app id
+  `3696252517`. The v0.2 Demo remains key `18`, app id `2947990413`, at its
+  separate install path.
+- A 20-second foreground smoke of the deployed wrapper inside the active
+  Gamescope session reached embedded control/sim startup, authority
+  registration, WebGL2 readiness, and `init.completed` with no boot fatal or
+  coredump. Remote `steam -applaunch 3696252517` returned `AppError_9`, so this
+  does not check the physical Non-Steam Library launch box below.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 
@@ -230,18 +244,19 @@ LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck
 LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
 
-- [ ] Deploy `0.3.1.dd9e5149`; the installed build is the older
-  `0.3.1.2b93b077` artifact and Tailscale SSH authorization is pending.
-- [ ] Gaming Mode shortcut display name is refreshed to `Last Singularity
-  v0.3.1 Preview`; Steam must first be closed manually in Desktop Mode.
+- [x] Deploy exact build `0.3.1.dd9e5149` without rebuilding; remote hashes
+  match the release artifact.
+- [x] Gaming Mode shortcut display name is `Last Singularity v0.3.1 Preview`
+  at key `19`, app id `3696252517`.
 - [ ] Build launches from Non-Steam Games in Gaming Mode.
-- [ ] Embedded authority reports healthy on loopback.
+- [x] Embedded authority reports healthy on loopback during the bounded
+  Gamescope-session wrapper smoke.
 - [ ] Steam Input reaches title, Home, map select, flight, pause, extraction,
   results, and quit.
 - [ ] 1280x800 text and prompts are readable in hand.
 - [ ] Suspend/resume preserves or cleanly abandons the run.
-- [x] No post-deploy coredump; log files exist under the isolated v0.3 state
-  directory. Fresh candidate log content awaits launch.
+- [x] No post-deploy coredump; fresh candidate logs reached Three
+  `init.completed` without the prior snapshot or star-presentation fatal.
 
 If the Deck is unavailable, record this entire section as residual physical
 device risk. Do not mark it passed from desktop screenshots.

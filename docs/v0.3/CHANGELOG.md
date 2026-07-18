@@ -8,11 +8,19 @@
   `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`;
   the playtest ZIP SHA-256 is
   `9cfd14b433cb4b0113a6f1a84cb8a643eb1e35752e1fce1bd679c9a70c8bbeba`.
-- **Deck deployment boundary:** the Deck resolved at `100.77.19.24`, but two
-  supported preflight checks stopped at `Tailscale SSH requires an additional
-  check`. No files, shortcut, logs, or v0.2 state were changed. The verified
-  Linux artifact is retained for an authorization-following `--no-build`
-  deploy.
+- **v0.3.1 Deck deployment:** after Greg completed Tailscale SSH's additional
+  authorization check, the verified `0.3.1.dd9e5149` Linux artifact was
+  deployed without rebuilding to `/home/deck/Games/last-singularity-v03`.
+  Remote executable and `app.asar` hashes match local, and the v0.2 Demo
+  remains unchanged. Gaming Mode key `19` now reads `Last Singularity v0.3.1
+  Preview`; the display-name change deterministically changed its non-Steam app
+  id to `3696252517`.
+- **Deck runtime smoke:** the exact deployed wrapper reached embedded control
+  and sim startup, authority registration, WebGL2 readiness, and
+  `init.completed` on the Three title screen. It produced no snapshot-budget
+  error, `sizeMult` fatal, or coredump. Remote `steam -applaunch` returned
+  `AppError_9`, so a physical Library launch remains a Greg gate; the bounded
+  Gamescope-session wrapper smoke is not claimed as Steam Input acceptance.
 
 - **v0.3.1 map-relative schedule:** canonical map durations are now `480s`,
   `600s`, and `720s` across ESM/CJS, server, build, snapshot, UI clock, and

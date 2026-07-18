@@ -20,7 +20,8 @@ does not erase newer committed work.
 The v0.3 line now includes the Orrery source fixes, packaged local-authority
 Solo path, locked physical units, retired per-player time dilation, ratified
 normal-input slingshot path, and map-relative 480/600/720-second schedule. The
-new source has not yet completed package or physical Deck acceptance.
+new source has completed package, Deck deployment, and a bounded wrapper boot.
+Physical Gaming Mode and feel acceptance remain open.
 
 **Package status:** green for source `dd9e5149`, build `0.3.1.dd9e5149`.
 `release:internal` built all five targets, `release:status` found the matching
@@ -30,12 +31,14 @@ plane, sim, and Three client under `lbh-local-v2`. The playtest ZIP SHA-256 is
 Linux `app.asar` is
 `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`.
 
-**Physical Steam Deck status:** the older `0.3.1.2b93b077` candidate remains
-installed. The new package resolved the Deck at `100.77.19.24`, but both
-supported preflight attempts stopped at `Tailscale SSH requires an additional
-check`; no deploy or shortcut refresh occurred. Authorization, deployment,
-physical launch, controller, readability, suspend/resume, feel, and audio
-acceptance remain pending.
+**Physical Steam Deck status:** build `0.3.1.dd9e5149` is installed and
+checksum-verified at `/home/deck/Games/last-singularity-v03`. Gaming Mode key
+`19` is `Last Singularity v0.3.1 Preview`, app id `3696252517`. A bounded
+Gamescope-session wrapper smoke reached healthy embedded authority and Three
+`init.completed` without the prior snapshot/star fatal or a coredump. Remote
+`steam -applaunch` returned `AppError_9`, so physical Library launch,
+controller, readability, suspend/resume, feel, and audio acceptance remain
+pending.
 
 **Human status:** Greg approved the v0.3.1 slingshot and schedule baselines;
 final movement feel, visual taste, audio, and updated Deck acceptance remain.
@@ -153,40 +156,37 @@ iCloud, but it is not repository evidence for the current RC hash.
 
 ### Steam Deck Side-by-side Comparison
 
-Latest local v0.3 package candidate: source `2b93b077`, build
-`0.3.1.2b93b077`. All five targets built and `test:package` passed staged and
+Latest local v0.3 package candidate: source `dd9e5149`, build
+`0.3.1.dd9e5149`. All five targets built and `test:package` passed staged and
 extracted boot. The playtest ZIP SHA-256 is
-`5ccc4c23955785f71600241548145e6475fbe37a737b856e217bb8043dd75525`.
+`9cfd14b433cb4b0113a6f1a84cb8a643eb1e35752e1fce1bd679c9a70c8bbeba`.
 The exact existing Linux artifact was deployed without rebuilding. Remote
 `app.asar` SHA-256 matches local at
-`d29e3639823fb15e8b25c6a0bc7e345054c624571443b79c2d703f76946ca0b1`;
+`561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`;
 the executable matches at
 `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
-The v0.3 launcher, executable, desktop entry, and isolated log namespace exist;
-no Last Singularity coredumps were recorded after deployment. Existing logs are
-not treated as fresh candidate boot evidence until Greg launches it.
+The v0.3 launcher, executable, desktop entry, and isolated log namespace exist.
+Fresh logs reached embedded authority and Three `init.completed`; no Last
+Singularity coredumps were recorded after deployment.
 
-Installed and checksum-verified on 2026-07-16:
+Installed and checksum-verified on 2026-07-17:
 
 | Steam entry | Source | Install directory | App id |
 |---|---|---|---:|
 | Last Singularity v0.2 Demo | `main` at `83953aa`, build `0.2.2.83953aa` | `/home/deck/Games/last-singularity-v02` | `2947990413` |
-| Last Singularity v0.3 Preview (shortcut refresh pending) | v0.3 at `2b93b077`, build `0.3.1.2b93b077` | `/home/deck/Games/last-singularity-v03` | `3771676273` |
+| Last Singularity v0.3.1 Preview | v0.3 at `dd9e5149`, build `0.3.1.dd9e5149` | `/home/deck/Games/last-singularity-v03` | `3696252517` |
 
 The current v0.3 package passed `release:internal`, `release:status`, and
 `test:package`; its remote executable and `app.asar` hashes match local. The
 v0.2 directory and shortcut remain key `18`, app id `2947990413`; v0.3 remains
-key `19`, app id `3771676273`. Installed v0.3 launchers and desktop entries say
-`Last Singularity v0.3.1 Preview`, while Steam's shortcut still says `Last
-Singularity v0.3 Preview` because the supported shutdown timed out before any
-shortcut write. The two launchers use separate log and Electron user-data
-namespaces, so profiles and caches do not contaminate the comparison.
+key `19`, now app id `3696252517` after the supported display-name refresh.
+The two launchers use separate log and Electron user-data namespaces, so
+profiles and caches do not contaminate the comparison.
 
-This proves installation and shortcut identity, not physical Gaming Mode
-acceptance. Close Steam manually in Desktop Mode, rerun only the supported
-shortcut refresh, then return to Gaming Mode and compare controller navigation,
-fuel recovery, Deep Field snapshot stability, readability, suspend/resume,
-movement feel, audio, and current runtime logs.
+This proves installation, shortcut identity, and direct Gamescope-session boot,
+not physical Gaming Mode acceptance. Launch from Library -> Non-Steam and
+compare controller navigation, fuel recovery, Deep Field snapshot stability,
+readability, suspend/resume, movement feel, audio, and current runtime logs.
 
 ## v0.2 Public/Demo Line
 
