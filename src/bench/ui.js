@@ -132,6 +132,60 @@ function scavengerColor(state) {
   return '#12a594';
 }
 
+function entityFamily(entity) {
+  return String(entity?.family || '').trim().toLowerCase();
+}
+
+function isSalvageFamily(entity) {
+  return ['wreck', 'wrecks', 'debris', 'loot'].includes(entityFamily(entity));
+}
+
+function salvageColor(entity, state) {
+  if (state.includes('destroy') || state.includes('spent')) return '#6f6475';
+  if (state.includes('loot') || state.includes('expose') || state.includes('open')) return '#f4d35e';
+  if (entityFamily(entity) === 'loot') return '#38f58a';
+  if (entityFamily(entity) === 'debris') return '#cd88ff';
+  return '#d97745';
+}
+
+function appendSalvageBody(group, entity, state, radius) {
+  const family = entityFamily(entity);
+  const color = salvageColor(entity, state);
+  const destroyed = state.includes('destroy') || state.includes('spent');
+  if (family === 'loot') {
+    group.appendChild(svgNode('rect', {
+      x: -radius * .72, y: -radius * .58, width: radius * 1.44, height: radius * 1.16,
+      rx: 4, fill: color, stroke: '#e8fff1', 'stroke-width': 3,
+      transform: 'rotate(45)', opacity: destroyed ? .45 : 1,
+    }));
+    group.appendChild(svgNode('circle', {
+      cx: 0, cy: 0, r: radius * .23, fill: '#f3fff7', opacity: destroyed ? .3 : .9,
+    }));
+    return;
+  }
+  if (family === 'debris') {
+    const shards = destroyed
+      ? [[-1.15, -.45], [.2, -1.05], [.95, .4], [-.25, .95]]
+      : [[-.65, -.2], [.18, -.62], [.58, .35]];
+    for (const [x, y] of shards) {
+      group.appendChild(svgNode('polygon', {
+        points: `${x * radius},${y * radius} ${(x + .48) * radius},${(y + .12) * radius} ${(x + .1) * radius},${(y + .52) * radius}`,
+        fill: color, stroke: '#f2dcff', 'stroke-width': 2, opacity: destroyed ? .55 : .9,
+      }));
+    }
+    return;
+  }
+  const spread = destroyed ? 1.28 : 1;
+  group.appendChild(svgNode('polygon', {
+    points: `${-radius * spread},${-radius * .45} ${-radius * .35},${-radius} ${radius * .82 * spread},${-radius * .55} ${radius * spread},${radius * .35} ${radius * .2},${radius} ${-radius * .85 * spread},${radius * .58}`,
+    fill: color, stroke: '#ffd2ad', 'stroke-width': 3, opacity: destroyed ? .5 : 1,
+  }));
+  group.appendChild(svgNode('path', {
+    d: `M ${-radius * .48} ${-radius * .52} L ${-radius * .08} ${-radius * .04} L ${radius * .18} ${-radius * .38} L ${radius * .52} ${radius * .5}`,
+    fill: 'none', stroke: '#3b2432', 'stroke-width': 4, 'stroke-linecap': 'round',
+  }));
+}
+
 function adapterForEntity(state, entity) {
   if (!entity) return null;
   const adapters = Array.isArray(state?.adapters) ? state.adapters : [];
@@ -288,7 +342,10 @@ export async function initBenchUi({ simClient }) {
       const entityState = scenarioState(entity);
       const sameType = selectedGroup && entityGroupKey(entity) === selectedGroup;
       const isSelected = entity.id === selectedId;
-      const group = svgNode('g', { transform: `translate(${position.x} ${position.y})`, role: 'button', tabindex: '0' });
+      const group = svgNode('g', {
+        transform: `translate(${position.x} ${position.y})`, role: 'button', tabindex: '0',
+        'aria-label': `${entity.name || humanize(entity.archetype || entity.family)} · ${scenarioStateLabel(entity)}`,
+      });
       group.style.cursor = 'pointer';
       for (const fact of rulerFacts(entity)) {
         group.appendChild(svgNode('circle', {
@@ -309,21 +366,25 @@ export async function initBenchUi({ simClient }) {
           fill: 'none', stroke: '#ffb938', 'stroke-width': 3,
         }));
       }
-      const radius = Math.max(16, Math.min(42, Number(entity.radius) || 22));
+      const radius = Math.max(16, Math.min(42, Number(entity.radius ?? entity.geometry?.radius) || 22));
       group.appendChild(svgNode('circle', {
         cx: 0, cy: 0, r: radius + (isSelected ? 12 : sameType ? 7 : 0), fill: 'none',
         stroke: isSelected ? '#ffffff' : sameType ? '#f4d35e' : '#1d7084',
         'stroke-width': isSelected ? 5 : 3, opacity: sameType ? 1 : .7,
       }));
-      group.appendChild(svgNode('circle', {
-        cx: 0, cy: 0, r: radius,
-        fill: entity.family === 'wells' || entity.family === 'well'
-          ? '#8b5cf6'
-          : entity.family === 'scavengers' || entity.family === 'scavenger'
-            ? scavengerColor(entityState)
-            : '#087f95',
-        stroke: '#9ff6ff', 'stroke-width': 3,
-      }));
+      if (isSalvageFamily(entity)) {
+        appendSalvageBody(group, entity, entityState, radius);
+      } else {
+        group.appendChild(svgNode('circle', {
+          cx: 0, cy: 0, r: radius,
+          fill: entity.family === 'wells' || entity.family === 'well'
+            ? '#8b5cf6'
+            : entity.family === 'scavengers' || entity.family === 'scavenger'
+              ? scavengerColor(entityState)
+              : '#087f95',
+          stroke: '#9ff6ff', 'stroke-width': 3,
+        }));
+      }
       if (entity.family === 'scavengers' || entity.family === 'scavenger') {
         const nose = radius + Math.max(10, Math.min(28, Math.hypot(Number(entity.vx) || 0, Number(entity.vy) || 0) * 14));
         const angle = Number(entity.heading ?? entity.angle) || Math.atan2(Number(entity.vy) || 0, Number(entity.vx) || 1);
@@ -341,6 +402,14 @@ export async function initBenchUi({ simClient }) {
       if (entity.family === 'scavengers' || entity.family === 'scavenger') {
         const stateLabel = svgNode('text', {
           x: 0, y: radius + 51, fill: scavengerColor(entityState),
+          'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle',
+          'font-family': 'var(--lbh-font-mono)',
+        });
+        stateLabel.textContent = scenarioStateLabel(entity).toUpperCase();
+        group.appendChild(stateLabel);
+      } else if (isSalvageFamily(entity)) {
+        const stateLabel = svgNode('text', {
+          x: 0, y: radius + 51, fill: salvageColor(entity, entityState),
           'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle',
           'font-family': 'var(--lbh-font-mono)',
         });
@@ -400,7 +469,9 @@ export async function initBenchUi({ simClient }) {
       const scenarioTitle = document.createElement('strong');
       scenarioTitle.textContent = `SCENARIO · ${scenarioStateLabel(entity).toUpperCase()}`;
       const scenarioHint = document.createElement('div');
-      scenarioHint.textContent = 'Observe this authority-owned type in a named behavior state.';
+      scenarioHint.textContent = isSalvageFamily(entity)
+        ? 'Drive this salvage object through its named authority states and observe the yard change.'
+        : 'Observe this authority-owned type in a named behavior state.';
       scenarioHint.style.cssText = 'color:#d9bd86;line-height:1.4;margin:4px 0 8px';
       const controls = style(document.createElement('div'), { display: 'flex', flexWrap: 'wrap', gap: '6px' });
       for (const action of actions) {
