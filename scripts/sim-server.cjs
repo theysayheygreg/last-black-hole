@@ -160,6 +160,7 @@ async function start() {
     "--pid-file", PID_FILE,
     "--meta-file", META_FILE,
     "--label", "lbh-sim",
+    ...(cliArgs.bench ? ["--bench", String(cliArgs.bench)] : []),
     ...(cliArgs["keep-alive"] ? ["--keep-alive", String(cliArgs["keep-alive"])] : []),
     ...(cliArgs["idle-shutdown-ms"] ? ["--idle-shutdown-ms", String(cliArgs["idle-shutdown-ms"])] : []),
   ], {

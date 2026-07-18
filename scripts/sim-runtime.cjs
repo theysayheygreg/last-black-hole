@@ -87,6 +87,8 @@ const {
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { BODY_SCHEMA_VERSION } = require("./sim/body-schema.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
+const { createBenchAuthority } = require("./sim/bench-authority.cjs");
+const { resolveBenchGate } = require("./sim/bench-gate.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 const {
   applyPlayerBrakeAndIntegrate,
@@ -1213,6 +1215,8 @@ function findPortalSpawnPosition(portalType, window, portalIndex, { finalExfil =
   );
 }
 const args = parseArgs(process.argv.slice(2));
+const BENCH_GATE = resolveBenchGate({ args });
+const benchAuthority = BENCH_GATE.enabled ? createBenchAuthority() : null;
 const HOST = args.host || "127.0.0.1";
 const PORT = Number(args.port || 8787);
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
@@ -6861,7 +6865,53 @@ const server = http.createServer(async (req, res) => {
         },
         idleState,
         shutdownReason: runtime.shutdownReason,
+        bench: BENCH_GATE.enabled
+          ? { enabled: true, gateSource: BENCH_GATE.source, galleryId: benchAuthority.state().gallery.id }
+          : { enabled: false },
       });
+      return;
+    }
+
+    if (req.url?.startsWith("/bench") && !BENCH_GATE.enabled) {
+      sendJson(res, 404, { ok: false, error: "Bench authority is disabled; launch with the explicit Bench gate" });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/bench") {
+      sendJson(res, 200, { ok: true, gateSource: BENCH_GATE.source, ...benchAuthority.state() });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/bench/bay") {
+      const body = await readJson(req);
+      sendJson(res, 200, { ok: true, ...benchAuthority.activateBay(body.activeBayId) });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/bench/patch") {
+      const body = await readJson(req);
+      sendJson(res, 200, { ok: true, patch: benchAuthority.importPatch(body.patch) });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/bench/replay") {
+      const body = await readJson(req);
+      sendJson(res, 200, { ok: true, truth: benchAuthority.replaySameSetup(body.worldTruth) });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/bench/reset") {
+      const body = await readJson(req);
+      let patch;
+      if (body.propertyId) patch = benchAuthority.resetProperty(body.adapterId, body.propertyId);
+      else if (body.adapterId) patch = benchAuthority.resetType(body.adapterId);
+      else patch = benchAuthority.resetAll();
+      sendJson(res, 200, { ok: true, patch });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/bench/undo") {
+      sendJson(res, 200, { ok: true, undone: benchAuthority.undoLastChange(), patch: benchAuthority.exportPatch() });
       return;
     }
 
