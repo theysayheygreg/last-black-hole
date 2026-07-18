@@ -140,6 +140,62 @@ function isSalvageFamily(entity) {
   return ['wreck', 'wrecks', 'debris', 'loot'].includes(entityFamily(entity));
 }
 
+function isPortalFamily(entity) {
+  return ['portal', 'portals', 'objective', 'objectives'].includes(entityFamily(entity));
+}
+
+function portalColor(state) {
+  if (state.includes('block') || state.includes('deny')) return '#ff5f56';
+  if (state.includes('extract') || state.includes('complete')) return '#38f58a';
+  if (state.includes('open') || state.includes('active')) return '#00e2ff';
+  if (state.includes('announce') || state.includes('signal')) return '#f4d35e';
+  return '#7188a8';
+}
+
+function appendPortalBody(group, state, radius) {
+  const color = portalColor(state);
+  const isOpen = state.includes('open') || state.includes('active') || state.includes('extract');
+  const isBlocked = state.includes('block') || state.includes('deny');
+  const isAnnounced = state.includes('announce') || state.includes('signal');
+  const isExtracting = state.includes('extract') || state.includes('complete');
+  const gateRadius = radius * 1.08;
+
+  if (isAnnounced) {
+    for (const scale of [1.48, 1.86]) {
+      group.appendChild(svgNode('circle', {
+        cx: 0, cy: 0, r: radius * scale, fill: 'none', stroke: color,
+        'stroke-width': 2, 'stroke-dasharray': '8 8', opacity: scale < 1.6 ? .7 : .35,
+      }));
+    }
+  }
+
+  group.appendChild(svgNode('circle', {
+    cx: 0, cy: 0, r: gateRadius, fill: isOpen ? 'rgba(0,226,255,.14)' : 'rgba(5,13,27,.92)',
+    stroke: color, 'stroke-width': 7, 'stroke-dasharray': isOpen ? '18 7' : '5 4',
+  }));
+  group.appendChild(svgNode('circle', {
+    cx: 0, cy: 0, r: radius * .62, fill: isOpen ? 'rgba(56,245,138,.2)' : 'rgba(18,33,54,.9)',
+    stroke: isOpen ? '#d9ffff' : '#465b78', 'stroke-width': 2,
+  }));
+
+  if (isBlocked) {
+    group.appendChild(svgNode('path', {
+      d: `M ${-radius * .7} ${-radius * .7} L ${radius * .7} ${radius * .7} M ${radius * .7} ${-radius * .7} L ${-radius * .7} ${radius * .7}`,
+      fill: 'none', stroke: color, 'stroke-width': 8, 'stroke-linecap': 'round',
+    }));
+  } else if (isExtracting) {
+    group.appendChild(svgNode('path', {
+      d: `M 0 ${radius * .75} L 0 ${-radius * .48} M ${-radius * .28} ${-radius * .14} L 0 ${-radius * .5} L ${radius * .28} ${-radius * .14}`,
+      fill: 'none', stroke: '#dfffea', 'stroke-width': 7,
+      'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    }));
+  } else if (isOpen) {
+    group.appendChild(svgNode('circle', {
+      cx: 0, cy: 0, r: radius * .25, fill: '#d9ffff', opacity: .9,
+    }));
+  }
+}
+
 function salvageColor(entity, state) {
   if (state.includes('destroy') || state.includes('spent')) return '#6f6475';
   if (state.includes('loot') || state.includes('expose') || state.includes('open')) return '#f4d35e';
@@ -374,6 +430,8 @@ export async function initBenchUi({ simClient }) {
       }));
       if (isSalvageFamily(entity)) {
         appendSalvageBody(group, entity, entityState, radius);
+      } else if (isPortalFamily(entity)) {
+        appendPortalBody(group, entityState, radius);
       } else {
         group.appendChild(svgNode('circle', {
           cx: 0, cy: 0, r: radius,
@@ -410,6 +468,14 @@ export async function initBenchUi({ simClient }) {
       } else if (isSalvageFamily(entity)) {
         const stateLabel = svgNode('text', {
           x: 0, y: radius + 51, fill: salvageColor(entity, entityState),
+          'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle',
+          'font-family': 'var(--lbh-font-mono)',
+        });
+        stateLabel.textContent = scenarioStateLabel(entity).toUpperCase();
+        group.appendChild(stateLabel);
+      } else if (isPortalFamily(entity)) {
+        const stateLabel = svgNode('text', {
+          x: 0, y: radius + 51, fill: portalColor(entityState),
           'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle',
           'font-family': 'var(--lbh-font-mono)',
         });
@@ -471,7 +537,9 @@ export async function initBenchUi({ simClient }) {
       const scenarioHint = document.createElement('div');
       scenarioHint.textContent = isSalvageFamily(entity)
         ? 'Drive this salvage object through its named authority states and observe the yard change.'
-        : 'Observe this authority-owned type in a named behavior state.';
+        : isPortalFamily(entity)
+          ? 'Announce, open, block, or extract through this authority-owned objective gate.'
+          : 'Observe this authority-owned type in a named behavior state.';
       scenarioHint.style.cssText = 'color:#d9bd86;line-height:1.4;margin:4px 0 8px';
       const controls = style(document.createElement('div'), { display: 'flex', flexWrap: 'wrap', gap: '6px' });
       for (const action of actions) {
