@@ -1,11 +1,20 @@
 "use strict";
 
 const { benchValidation } = require("./bench-errors.cjs");
+const MOVEMENT = require("../../src/content/movement.data.json");
 
 const BENCH_GALLERY_ID = "bench-gallery-v1";
 const BENCH_GALLERY_SEED = 303031;
 const WELL_ARCHETYPE_ID = "well.standard";
 const WELL_DEFAULTS = Object.freeze({ influenceRadius: 220, startMass: 80 });
+const PLAYER_SHIP_ARCHETYPE_ID = "ship.player.standard";
+const PLAYER_SHIP_DEFAULTS = Object.freeze({ thrustAcceleration: MOVEMENT.player.thrustAccel });
+const PLAYER_SHIP_ACTIONS = Object.freeze([
+  Object.freeze({ id: "idle", label: "Return to Idle", effect: "Returns the ship to its launch marker with engines idle." }),
+  Object.freeze({ id: "thrust", label: "Run Thrust Step", effect: "Runs one bounded forward thrust step using the current type acceleration." }),
+  Object.freeze({ id: "coast", label: "Coast", effect: "Holds the ship at the end of its thrust step with engines off." }),
+  Object.freeze({ id: "reset", label: "Reset Scenario", effect: "Restores the deterministic launch setup for this ship." }),
+]);
 const SCAVENGER_ARCHETYPE_ID = "scavenger.standard";
 const SCAVENGER_DEFAULTS = Object.freeze({ detectionRadius: 180 });
 const SCAVENGER_ACTIONS = Object.freeze([
@@ -79,14 +88,16 @@ function createBenchGallery({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
       family,
       bayId: bay.id,
       placement: stablePlacement(bayIndex, familyIndex),
-      tunableContract: family === "wells"
+      tunableContract: family === "player-ships"
+        ? PLAYER_SHIP_ARCHETYPE_ID
+        : family === "wells"
         ? WELL_ARCHETYPE_ID
         : family === "scavengers"
           ? SCAVENGER_ARCHETYPE_ID
           : family === "wrecks"
             ? WRECK_ARCHETYPE_ID
             : family === "portals" ? PORTAL_ARCHETYPE_ID : null,
-      contractStatus: family === "wells" || family === "scavengers" || family === "wrecks" || family === "portals"
+      contractStatus: family === "player-ships" || family === "wells" || family === "scavengers" || family === "wrecks" || family === "portals"
         ? "TUNABLE"
         : "NO TUNABLE CONTRACT YET",
     })),
@@ -99,6 +110,44 @@ function createBenchGallery({ activeBayId = BAY_DEFINITIONS[0].id } = {}) {
     activeBayId,
     bays,
   };
+}
+
+function createPlayerShipEntities(exhibit, tuning) {
+  return [
+    { id: "bench:ship:player:standard:a", name: "Standard Ship A", wx: exhibit.placement.x - 80, wy: exhibit.placement.y - 35 },
+    { id: "bench:ship:player:standard:b", name: "Standard Ship B", wx: exhibit.placement.x + 70, wy: exhibit.placement.y + 35 },
+  ].map((placement) => ({
+    ...placement,
+    family: "player-ships",
+    bayId: exhibit.bayId,
+    representation: "runtime-archetype",
+    contractStatus: "TUNABLE",
+    selectable: true,
+    archetypeId: PLAYER_SHIP_ARCHETYPE_ID,
+    archetype: PLAYER_SHIP_ARCHETYPE_ID,
+    adapterId: PLAYER_SHIP_ARCHETYPE_ID,
+    selectionKey: `archetype:${PLAYER_SHIP_ARCHETYPE_ID}`,
+    inspector: { adapterId: PLAYER_SHIP_ARCHETYPE_ID, label: "Standard Player Ship" },
+    thrustAcceleration: tuning.thrustAcceleration,
+    radius: 24,
+    home: { wx: placement.wx, wy: placement.wy },
+    facing: 0,
+    scenarioState: "idle",
+    scenarioStateLabel: "Idle — engines cold",
+    scenarioActions: PLAYER_SHIP_ACTIONS.map((action) => ({ ...action })),
+    thrusting: false,
+    thrustVector: {
+      from: { wx: placement.wx, wy: placement.wy },
+      to: { wx: placement.wx, wy: placement.wy },
+      magnitude: 0,
+      unit: "world units/s²",
+    },
+    vx: 0,
+    vy: 0,
+    simulationKind: "player-ship-scenario",
+    scenarioTicks: 0,
+    scenarioPhase: placement.id.endsWith(":a") ? 0.12 : 0.62,
+  }));
 }
 
 function createWellEntities(exhibit, tuning) {
@@ -372,6 +421,7 @@ function createBenchEntity(exhibit, bayIndex, familyIndex) {
 
 function createBenchGalleryWorld({
   activeBayId = BAY_DEFINITIONS[0].id,
+  playerShipTuning = PLAYER_SHIP_DEFAULTS,
   wellTuning = WELL_DEFAULTS,
   scavengerTuning = SCAVENGER_DEFAULTS,
   wreckTuning = WRECK_DEFAULTS,
@@ -379,7 +429,9 @@ function createBenchGalleryWorld({
 } = {}) {
   const gallery = createBenchGallery({ activeBayId });
   const entities = gallery.bays.flatMap((bay, bayIndex) => bay.exhibits.flatMap((exhibit, familyIndex) =>
-    exhibit.family === "wells"
+    exhibit.family === "player-ships"
+      ? createPlayerShipEntities(exhibit, { ...PLAYER_SHIP_DEFAULTS, ...playerShipTuning })
+      : exhibit.family === "wells"
       ? createWellEntities(exhibit, { ...WELL_DEFAULTS, ...wellTuning })
       : exhibit.family === "scavengers"
         ? createScavengerEntities(exhibit, { ...SCAVENGER_DEFAULTS, ...scavengerTuning })
@@ -416,6 +468,8 @@ function applyBenchScenarioAction(world, { entityId = null, adapterId = null, ac
   const archetypeId = requestedTargets[0]?.archetypeId;
   const supportedActions = archetypeId === SCAVENGER_ARCHETYPE_ID
     ? SCAVENGER_ACTIONS
+    : archetypeId === PLAYER_SHIP_ARCHETYPE_ID
+      ? PLAYER_SHIP_ACTIONS
     : archetypeId === WRECK_ARCHETYPE_ID
       ? WRECK_ACTIONS
       : archetypeId === PORTAL_ARCHETYPE_ID ? PORTAL_ACTIONS : [];
@@ -424,6 +478,54 @@ function applyBenchScenarioAction(world, { entityId = null, adapterId = null, ac
   }
   const targets = requestedTargets.filter((entity) => entity.archetypeId === archetypeId);
   if (targets.length === 0) throw benchValidation("Bench scenario action target was not found");
+
+  if (archetypeId === PLAYER_SHIP_ARCHETYPE_ID) {
+    for (const entity of targets) {
+      if (normalizedAction === "idle" || normalizedAction === "reset") {
+        entity.wx = entity.home.wx;
+        entity.wy = entity.home.wy;
+        entity.scenarioState = "idle";
+        entity.scenarioStateLabel = "Idle — engines cold";
+        entity.thrusting = false;
+        entity.vx = 0;
+        entity.vy = 0;
+        entity.thrustVector = {
+          from: { ...entity.home },
+          to: { ...entity.home },
+          magnitude: 0,
+          unit: "world units/s²",
+        };
+        continue;
+      }
+      if (normalizedAction === "coast") {
+        entity.scenarioState = "coasting";
+        entity.scenarioStateLabel = "Coasting — engines off";
+        entity.thrusting = false;
+        entity.vx = 0;
+        entity.vy = 0;
+        continue;
+      }
+      const displayDistance = Number((entity.thrustAcceleration * 24).toFixed(3));
+      entity.wx = Number((entity.home.wx + displayDistance).toFixed(3));
+      entity.wy = entity.home.wy;
+      entity.scenarioState = "thrusting";
+      entity.scenarioStateLabel = `Thrusting — ${entity.thrustAcceleration} world units/s²`;
+      entity.thrusting = true;
+      entity.vx = Number((entity.thrustAcceleration * 12).toFixed(3));
+      entity.vy = 0;
+      entity.thrustVector = {
+        from: { ...entity.home },
+        to: { wx: entity.wx, wy: entity.wy },
+        magnitude: entity.thrustAcceleration,
+        unit: "world units/s²",
+      };
+    }
+    return {
+      actionId: normalizedAction,
+      targetIds: targets.map((entity) => entity.id),
+      scenarioStates: targets.map((entity) => ({ entityId: entity.id, state: entity.scenarioState })),
+    };
+  }
 
   if (archetypeId === WRECK_ARCHETYPE_ID) {
     const debris = world.entities.filter((entity) => entity.family === "debris");
@@ -571,6 +673,9 @@ module.exports = {
   BENCH_GALLERY_SEED,
   WELL_ARCHETYPE_ID,
   WELL_DEFAULTS,
+  PLAYER_SHIP_ACTIONS,
+  PLAYER_SHIP_ARCHETYPE_ID,
+  PLAYER_SHIP_DEFAULTS,
   SCAVENGER_ACTIONS,
   SCAVENGER_ARCHETYPE_ID,
   SCAVENGER_DEFAULTS,

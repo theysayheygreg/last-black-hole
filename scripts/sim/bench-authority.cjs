@@ -11,6 +11,8 @@ const {
   tickBenchGalleryWorld,
   WELL_ARCHETYPE_ID,
   WELL_DEFAULTS,
+  PLAYER_SHIP_ARCHETYPE_ID,
+  PLAYER_SHIP_DEFAULTS,
   SCAVENGER_ARCHETYPE_ID,
   SCAVENGER_DEFAULTS,
   WRECK_ARCHETYPE_ID,
@@ -76,13 +78,29 @@ function createBenchAuthority(options = {}) {
   const ownsRegistry = !options.registry;
   let gallery = createBenchGallery();
   const wellTuning = { ...WELL_DEFAULTS };
+  const playerShipTuning = { ...PLAYER_SHIP_DEFAULTS };
   const scavengerTuning = { ...SCAVENGER_DEFAULTS };
   const wreckTuning = { ...WRECK_DEFAULTS };
   const portalTuning = { ...PORTAL_DEFAULTS };
-  let world = createBenchGalleryWorld({ wellTuning, scavengerTuning, wreckTuning, portalTuning });
+  let world = createBenchGalleryWorld({ playerShipTuning, wellTuning, scavengerTuning, wreckTuning, portalTuning });
   const live = new Map();
   const restart = new Map();
   let undo = null;
+
+  function propagatePlayerShipTuning() {
+    for (const entity of world.entities) {
+      if (entity.archetypeId !== PLAYER_SHIP_ARCHETYPE_ID) continue;
+      entity.thrustAcceleration = playerShipTuning.thrustAcceleration;
+      if (entity.scenarioState === "thrusting") {
+        const displayDistance = Number((entity.thrustAcceleration * 24).toFixed(3));
+        entity.wx = Number((entity.home.wx + displayDistance).toFixed(3));
+        entity.vx = Number((entity.thrustAcceleration * 12).toFixed(3));
+        entity.scenarioStateLabel = `Thrusting — ${entity.thrustAcceleration} world units/s²`;
+        entity.thrustVector.to = { wx: entity.wx, wy: entity.wy };
+        entity.thrustVector.magnitude = entity.thrustAcceleration;
+      }
+    }
+  }
 
   function propagateWellTuning() {
     for (const entity of world.entities) {
@@ -129,6 +147,33 @@ function createBenchAuthority(options = {}) {
   }
 
   if (ownsRegistry) {
+    registry.register({
+      id: PLAYER_SHIP_ARCHETYPE_ID,
+      label: "Standard Player Ship",
+      properties: [{
+        id: "thrustAcceleration",
+        label: "Thrust Acceleration",
+        effect: "Changes forward acceleration for every Standard Player Ship and the distance shown by its thrust scenario.",
+        group: "Drive",
+        unit: "world units/s²",
+        min: 1,
+        max: 6,
+        step: 0.5,
+        scope: "type",
+        applies: "live",
+        drawKind: "vector",
+        reset: "Restore the shipped player thrust acceleration.",
+      }],
+      getCurrent(property) { return playerShipTuning[property.id]; },
+      apply({ property, value }) {
+        playerShipTuning[property.id] = value;
+        propagatePlayerShipTuning();
+      },
+      reset({ property }) {
+        playerShipTuning[property.id] = PLAYER_SHIP_DEFAULTS[property.id];
+        propagatePlayerShipTuning();
+      },
+    });
     registry.register({
       id: WELL_ARCHETYPE_ID,
       label: "Standard Well",
@@ -347,6 +392,7 @@ function createBenchAuthority(options = {}) {
       gallery = createBenchGallery({ activeBayId: gallery.activeBayId });
       world = createBenchGalleryWorld({
         activeBayId: gallery.activeBayId,
+        playerShipTuning,
         wellTuning,
         scavengerTuning,
         wreckTuning,
