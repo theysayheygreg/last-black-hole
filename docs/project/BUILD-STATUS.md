@@ -22,22 +22,20 @@ Solo path, locked physical units, retired per-player time dilation, ratified
 normal-input slingshot path, and map-relative 480/600/720-second schedule. The
 new source has not yet completed package or physical Deck acceptance.
 
-**Package status:** green only for the older `0.3.1.2b93b077` hash.
-`release:internal` built all targets, the release
-checker found the matching hash directory, and the Linux artifact's actual
-`app.asar` booted its embedded control plane and `lbh-local-v2` sim with live
-registration. The macOS package also reaches a rendered Three title, keeps its
-idle authority resident through an extended attract-screen wait, and joins a
-live run through normal keyboard input. `npm run release:status` is the
-authority for an exact built hash. A new package must be produced from the
-current source before package-green can be claimed for this candidate.
+**Package status:** green for source `dd9e5149`, build `0.3.1.dd9e5149`.
+`release:internal` built all five targets, `release:status` found the matching
+hash directory, and `test:package` booted the staged and extracted control
+plane, sim, and Three client under `lbh-local-v2`. The playtest ZIP SHA-256 is
+`9cfd14b433cb4b0113a6f1a84cb8a643eb1e35752e1fce1bd679c9a70c8bbeba`;
+Linux `app.asar` is
+`561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`.
 
-**Physical Steam Deck status:** the older `0.3.1.2b93b077` candidate is
-deployed and checksum-verified, but Greg marked that build needs-fix. Steam did
-not exit within the supported shortcut-refresh
-timeout, so the Gaming Mode entry still displays the prior v0.3 Preview name.
-That metadata refresh and physical launch, controller, readability,
-suspend/resume, feel, and audio acceptance remain pending.
+**Physical Steam Deck status:** the older `0.3.1.2b93b077` candidate remains
+installed. The new package resolved the Deck at `100.77.19.24`, but both
+supported preflight attempts stopped at `Tailscale SSH requires an additional
+check`; no deploy or shortcut refresh occurred. Authorization, deployment,
+physical launch, controller, readability, suspend/resume, feel, and audio
+acceptance remain pending.
 
 **Human status:** Greg approved the v0.3.1 slingshot and schedule baselines;
 final movement feel, visual taste, audio, and updated Deck acceptance remain.

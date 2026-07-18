@@ -5,8 +5,9 @@
 
 ## Current Verdict
 
-**The v0.3.1 source candidate is focused-contract green. A new package, Deck
-deploy, physical-device acceptance, and Greg's final review remain.**
+**The v0.3.1 source candidate and exact package are green. Deck deployment is
+blocked on Tailscale SSH authorization; physical-device acceptance and Greg's
+final review remain.**
 
 `codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
 protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
@@ -14,11 +15,10 @@ agent-eval work, plus the v0.3 generated visual kit and UI motion system.
 `main` remains the v0.2 public/demo line.
 
 The previously deployed `0.3.1.2b93b077` artifact remains valid evidence for
-that older hash, but Greg marked it needs-fix. The current source adds the
+that older hash, but Greg marked it needs-fix. Source `dd9e5149` adds the
 Orrery blocker fixes, locked units, retired time dilation, ratified normal-input
-slingshot path, and map-relative schedule. It has no matching package or Deck
-deployment yet, so those gates are open rather than inherited from the older
-artifact.
+slingshot path, and map-relative schedule. Its matching package is green; it
+has not reached the Deck because Tailscale SSH requires an additional check.
 
 Orrery's review exposed a client ownership bug during extraction: after the
 phase changed, local `SimCore` could advance server-owned snapshot entities.
@@ -60,15 +60,26 @@ Latest package evidence, superseded as the current RC by newer source:
   recent Last Singularity coredumps were recorded. Existing logs predate this
   deployment and are not claimed as fresh candidate boot evidence.
 
-Current source-only evidence after that package:
+Current focused source evidence after that package:
 
 - normal-input slingshot proof exercised keyboard F engagement and controller
   Y release through InputManager, SimClient, local authority, and visible
   lock/arc/release-ghost presentation;
 - Conductor `14/14`, map-relative schedule `2/2`, Inhibitor `6/6`, portal clock
   `3/3`, and bounded Deep Field `1/1` pass for the 480/600/720-second schedule;
-- current-source package boot, deployment identity, and physical Deck behavior
-  are not yet claimed.
+- deployment identity and physical Deck behavior are not yet claimed.
+
+Current package evidence:
+
+- source/build: `dd9e5149` / `0.3.1.dd9e5149`;
+- `release:internal`, `release:status`, and `test:package` passed for all five
+  targets and extracted protocol `lbh-local-v2` authority/client boot;
+- Linux `app.asar` SHA-256:
+  `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`;
+- playtest ZIP SHA-256:
+  `9cfd14b433cb4b0113a6f1a84cb8a643eb1e35752e1fce1bd679c9a70c8bbeba`;
+- Deck preflight reached `100.77.19.24` but could not pass the additional
+  Tailscale SSH check. No deployment or shortcut refresh occurred.
 
 Latest completed evidence from the clean 2026-07-14 RC pass:
 
@@ -194,9 +205,11 @@ npm run release:status
 npm run test:package
 ```
 
-- [ ] Build a hash-named artifact from the current source candidate.
-- [x] Artifact version `0.3.1.2b93b077` is preserved as prior-hash evidence.
-- [x] Its checksum and path are reported by `npm run test:package` and
+- [x] Build `0.3.1.dd9e5149` from the current source candidate.
+- [x] Current `app.asar` and playtest ZIP checksums are reported above and
+  verified by `npm run release:status` plus `npm run test:package`.
+- [x] Artifact version `0.3.1.2b93b077` remains prior-hash evidence.
+- [x] Its historical checksum and path were reported by `npm run test:package` and
   verified by `npm run release:status`.
 - [x] Embedded control plane and sim boot from staged and extracted package
   resources.
@@ -217,8 +230,8 @@ LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck
 LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
 
-- [ ] Deploy the new source candidate; the installed build is the older
-  `0.3.1.2b93b077` artifact.
+- [ ] Deploy `0.3.1.dd9e5149`; the installed build is the older
+  `0.3.1.2b93b077` artifact and Tailscale SSH authorization is pending.
 - [ ] Gaming Mode shortcut display name is refreshed to `Last Singularity
   v0.3.1 Preview`; Steam must first be closed manually in Desktop Mode.
 - [ ] Build launches from Non-Steam Games in Gaming Mode.

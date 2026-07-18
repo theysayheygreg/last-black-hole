@@ -2,6 +2,18 @@
 
 ## 2026-07-17
 
+- **v0.3.1 RC package:** built all five targets from source `dd9e5149` as
+  `0.3.1.dd9e5149`; `release:status` and staged/extracted `test:package` are
+  green under `lbh-local-v2`. Linux `resources/app.asar` SHA-256 is
+  `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`;
+  the playtest ZIP SHA-256 is
+  `9cfd14b433cb4b0113a6f1a84cb8a643eb1e35752e1fce1bd679c9a70c8bbeba`.
+- **Deck deployment boundary:** the Deck resolved at `100.77.19.24`, but two
+  supported preflight checks stopped at `Tailscale SSH requires an additional
+  check`. No files, shortcut, logs, or v0.2 state were changed. The verified
+  Linux artifact is retained for an authorization-following `--no-build`
+  deploy.
+
 - **v0.3.1 map-relative schedule:** canonical map durations are now `480s`,
   `600s`, and `720s` across ESM/CJS, server, build, snapshot, UI clock, and
   results consumers. Whole-run collapse, Inhibitor, optional portal, and final
