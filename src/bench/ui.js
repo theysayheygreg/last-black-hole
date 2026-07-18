@@ -96,6 +96,42 @@ function rulerFacts(entity) {
   })).filter((fact) => Number.isFinite(fact.radius) && fact.radius > 0);
 }
 
+function scenarioState(entity) {
+  return String(entity?.scenarioState || entity?.state || 'idle').trim().toLowerCase() || 'idle';
+}
+
+function scenarioStateLabel(entity) {
+  return String(entity?.scenarioStateLabel || humanize(scenarioState(entity)));
+}
+
+function scenarioActions(adapter, entity) {
+  const advertised = entity?.scenarioActions || entity?.actions || adapter?.scenarioActions || adapter?.actions || [];
+  return advertised.map((action) => {
+    if (typeof action === 'string') return { id: action, label: humanize(action) };
+    return {
+      id: String(action?.id || action?.actionId || ''),
+      label: action?.label || humanize(action?.id || action?.actionId),
+      effect: action?.effect || action?.description || '',
+    };
+  }).filter((action) => action.id);
+}
+
+function scenarioTargetPosition(entity) {
+  const target = entity?.targetPosition || entity?.scenarioTarget || entity?.target;
+  if (!target || typeof target !== 'object') return null;
+  const x = Number(target.x ?? target.wx);
+  const y = Number(target.y ?? target.wy);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+function scavengerColor(state) {
+  if (state.includes('chase')) return '#ff5f56';
+  if (state.includes('detect') || state.includes('alert')) return '#ffb938';
+  if (state.includes('attack')) return '#ff2d78';
+  if (state.includes('die') || state.includes('dead')) return '#77637f';
+  return '#12a594';
+}
+
 function adapterForEntity(state, entity) {
   if (!entity) return null;
   const adapters = Array.isArray(state?.adapters) ? state.adapters : [];
@@ -249,6 +285,7 @@ export async function initBenchUi({ simClient }) {
     const selectedGroup = selected ? entityGroupKey(selected) : null;
     for (const entity of entities) {
       const position = entityPosition(entity);
+      const entityState = scenarioState(entity);
       const sameType = selectedGroup && entityGroupKey(entity) === selectedGroup;
       const isSelected = entity.id === selectedId;
       const group = svgNode('g', { transform: `translate(${position.x} ${position.y})`, role: 'button', tabindex: '0' });
@@ -260,6 +297,18 @@ export async function initBenchUi({ simClient }) {
           'stroke-dasharray': '12 8', opacity: sameType ? .8 : .45,
         }));
       }
+      const target = scenarioTargetPosition(entity);
+      if (target) {
+        group.appendChild(svgNode('line', {
+          x1: 0, y1: 0, x2: target.x - position.x, y2: target.y - position.y,
+          stroke: entityState.includes('chase') ? '#ff5f56' : '#ffb938',
+          'stroke-width': isSelected ? 5 : 3, 'stroke-dasharray': '10 7', opacity: sameType ? .9 : .5,
+        }));
+        group.appendChild(svgNode('circle', {
+          cx: target.x - position.x, cy: target.y - position.y, r: 10,
+          fill: 'none', stroke: '#ffb938', 'stroke-width': 3,
+        }));
+      }
       const radius = Math.max(16, Math.min(42, Number(entity.radius) || 22));
       group.appendChild(svgNode('circle', {
         cx: 0, cy: 0, r: radius + (isSelected ? 12 : sameType ? 7 : 0), fill: 'none',
@@ -268,15 +317,36 @@ export async function initBenchUi({ simClient }) {
       }));
       group.appendChild(svgNode('circle', {
         cx: 0, cy: 0, r: radius,
-        fill: entity.family === 'wells' || entity.family === 'well' ? '#8b5cf6' : '#087f95',
+        fill: entity.family === 'wells' || entity.family === 'well'
+          ? '#8b5cf6'
+          : entity.family === 'scavengers' || entity.family === 'scavenger'
+            ? scavengerColor(entityState)
+            : '#087f95',
         stroke: '#9ff6ff', 'stroke-width': 3,
       }));
+      if (entity.family === 'scavengers' || entity.family === 'scavenger') {
+        const nose = radius + Math.max(10, Math.min(28, Math.hypot(Number(entity.vx) || 0, Number(entity.vy) || 0) * 14));
+        const angle = Number(entity.heading ?? entity.angle) || Math.atan2(Number(entity.vy) || 0, Number(entity.vx) || 1);
+        group.appendChild(svgNode('line', {
+          x1: 0, y1: 0, x2: Math.cos(angle) * nose, y2: Math.sin(angle) * nose,
+          stroke: '#ecfeff', 'stroke-width': 4, 'stroke-linecap': 'round',
+        }));
+      }
       const label = svgNode('text', {
         x: 0, y: radius + 30, fill: isSelected ? '#ffffff' : '#b7e9ef',
         'font-size': 20, 'text-anchor': 'middle', 'font-family': 'var(--lbh-font-ui)',
       });
       label.textContent = entity.name || humanize(entity.archetype || entity.family);
       group.appendChild(label);
+      if (entity.family === 'scavengers' || entity.family === 'scavenger') {
+        const stateLabel = svgNode('text', {
+          x: 0, y: radius + 51, fill: scavengerColor(entityState),
+          'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle',
+          'font-family': 'var(--lbh-font-mono)',
+        });
+        stateLabel.textContent = scenarioStateLabel(entity).toUpperCase();
+        group.appendChild(stateLabel);
+      }
       group.addEventListener('click', () => {
         selectedId = entity.id;
         renderStage();
@@ -320,6 +390,33 @@ export async function initBenchUi({ simClient }) {
     adapterTitle.textContent = adapter.label;
     adapterTitle.style.cssText = 'margin:12px 0 8px;color:#f1fbff';
     selection.appendChild(adapterTitle);
+
+    const actions = scenarioActions(adapter, entity);
+    if (actions.length) {
+      const scenario = style(document.createElement('section'), {
+        padding: '10px', margin: '0 0 12px', background: 'rgba(42,26,12,.72)',
+        border: '1px solid rgba(255,185,56,.34)',
+      });
+      const scenarioTitle = document.createElement('strong');
+      scenarioTitle.textContent = `SCENARIO · ${scenarioStateLabel(entity).toUpperCase()}`;
+      const scenarioHint = document.createElement('div');
+      scenarioHint.textContent = 'Observe this authority-owned type in a named behavior state.';
+      scenarioHint.style.cssText = 'color:#d9bd86;line-height:1.4;margin:4px 0 8px';
+      const controls = style(document.createElement('div'), { display: 'flex', flexWrap: 'wrap', gap: '6px' });
+      for (const action of actions) {
+        const control = button(action.label, async () => {
+          await mutate(() => simClient.runBenchAction({
+            entityId: entity.id,
+            adapterId: adapter.id,
+            actionId: action.id,
+          }));
+        }, reportOutcome);
+        control.title = action.effect;
+        controls.appendChild(control);
+      }
+      scenario.append(scenarioTitle, scenarioHint, controls);
+      selection.appendChild(scenario);
+    }
 
     for (const property of adapter.properties || []) {
       const row = style(document.createElement('section'), {

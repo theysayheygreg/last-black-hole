@@ -107,6 +107,13 @@ export class SimClient {
     });
   }
 
+  async runBenchAction({ entityId, adapterId, actionId }) {
+    return this._json('/bench/action', {
+      method: 'POST',
+      body: JSON.stringify({ entityId, adapterId, actionId }),
+    });
+  }
+
   async replayBenchSameSetup(worldTruth = {}) {
     return this._json('/bench/replay', {
       method: 'POST',
