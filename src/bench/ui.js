@@ -144,6 +144,78 @@ function isPortalFamily(entity) {
   return ['portal', 'portals', 'objective', 'objectives'].includes(entityFamily(entity));
 }
 
+function isPlayerShip(entity) {
+  const family = entityFamily(entity);
+  const archetype = entityArchetype(entity).toLowerCase();
+  return ['ship', 'ships', 'player-ship', 'player-ships', 'player_ships'].includes(family)
+    || archetype.startsWith('ship.') || archetype.startsWith('player-ship.');
+}
+
+function shipColor(state) {
+  if (state.includes('thrust') || state.includes('burn')) return '#38f58a';
+  if (state.includes('brake')) return '#ffb938';
+  if (state.includes('coast')) return '#65c7ff';
+  return '#65a9c7';
+}
+
+function shipVelocity(entity) {
+  const velocity = entity?.velocity || entity?.motion?.velocity || {};
+  const x = Number(entity?.vx ?? velocity.x ?? velocity.wx) || 0;
+  const y = Number(entity?.vy ?? velocity.y ?? velocity.wy) || 0;
+  return { x, y, speed: Math.hypot(x, y) };
+}
+
+function shipHeading(entity, velocity) {
+  const explicit = Number(entity?.heading ?? entity?.facing ?? entity?.angle ?? entity?.orientation);
+  if (Number.isFinite(explicit)) return explicit;
+  return velocity.speed > 0 ? Math.atan2(velocity.y, velocity.x) : 0;
+}
+
+function shipThrustAcceleration(entity) {
+  const tuning = entity?.tuning || entity?.properties || entity?.archetypeProperties || {};
+  const value = Number(entity?.thrustAcceleration ?? tuning.thrustAcceleration);
+  return Number.isFinite(value) ? value : null;
+}
+
+function appendShipBody(group, entity, state, radius) {
+  const velocity = shipVelocity(entity);
+  const heading = shipHeading(entity, velocity);
+  const color = shipColor(state);
+  const visual = svgNode('g', { transform: `rotate(${heading * 180 / Math.PI})` });
+
+  if (state.includes('thrust') || state.includes('burn')) {
+    const acceleration = shipThrustAcceleration(entity);
+    const plumeScale = acceleration == null ? 1 : Math.max(.75, Math.min(2.15, acceleration / 80));
+    visual.appendChild(svgNode('polygon', {
+      points: `${-radius * .65},${-radius * .28} ${-radius * (1.25 + plumeScale * .45)},0 ${-radius * .65},${radius * .28}`,
+      fill: '#38f58a', stroke: '#dfffea', 'stroke-width': 2, opacity: .88,
+    }));
+  }
+
+  visual.appendChild(svgNode('polygon', {
+    points: `${radius * 1.18},0 ${-radius * .72},${-radius * .72} ${-radius * .38},0 ${-radius * .72},${radius * .72}`,
+    fill: color, stroke: '#e8fbff', 'stroke-width': 3, 'stroke-linejoin': 'round',
+  }));
+  visual.appendChild(svgNode('path', {
+    d: `M ${radius * .62} 0 L ${-radius * .24} 0 M ${-radius * .05} ${-radius * .38} L ${-radius * .05} ${radius * .38}`,
+    fill: 'none', stroke: '#06303d', 'stroke-width': 3, 'stroke-linecap': 'round',
+  }));
+  group.appendChild(visual);
+
+  if (velocity.speed > 0) {
+    const vectorLength = radius * (1.45 + Math.min(3.2, Math.log1p(velocity.speed) * 1.25));
+    const dx = velocity.x / velocity.speed * vectorLength;
+    const dy = velocity.y / velocity.speed * vectorLength;
+    group.insertBefore(svgNode('line', {
+      x1: 0, y1: 0, x2: dx, y2: dy, stroke: '#d8f7ff', 'stroke-width': 4,
+      'stroke-linecap': 'round', opacity: .72,
+    }), group.firstChild);
+    group.appendChild(svgNode('circle', {
+      cx: dx, cy: dy, r: 5, fill: '#d8f7ff', opacity: .9,
+    }));
+  }
+}
+
 function portalColor(state) {
   if (state.includes('block') || state.includes('deny')) return '#ff5f56';
   if (state.includes('extract') || state.includes('complete')) return '#38f58a';
@@ -432,6 +504,8 @@ export async function initBenchUi({ simClient }) {
         appendSalvageBody(group, entity, entityState, radius);
       } else if (isPortalFamily(entity)) {
         appendPortalBody(group, entityState, radius);
+      } else if (isPlayerShip(entity)) {
+        appendShipBody(group, entity, entityState, radius);
       } else {
         group.appendChild(svgNode('circle', {
           cx: 0, cy: 0, r: radius,
@@ -480,6 +554,19 @@ export async function initBenchUi({ simClient }) {
           'font-family': 'var(--lbh-font-mono)',
         });
         stateLabel.textContent = scenarioStateLabel(entity).toUpperCase();
+        group.appendChild(stateLabel);
+      } else if (isPlayerShip(entity)) {
+        const velocity = shipVelocity(entity);
+        const acceleration = shipThrustAcceleration(entity);
+        const motion = acceleration == null
+          ? `SPEED ${velocity.speed.toFixed(2)}`
+          : `${scenarioStateLabel(entity).toUpperCase()} · ACCEL ${acceleration} · SPEED ${velocity.speed.toFixed(2)}`;
+        const stateLabel = svgNode('text', {
+          x: 0, y: radius + 51, fill: shipColor(entityState),
+          'font-size': 15, 'font-weight': 700, 'text-anchor': 'middle',
+          'font-family': 'var(--lbh-font-mono)',
+        });
+        stateLabel.textContent = motion;
         group.appendChild(stateLabel);
       }
       group.addEventListener('click', () => {
@@ -539,6 +626,8 @@ export async function initBenchUi({ simClient }) {
         ? 'Drive this salvage object through its named authority states and observe the yard change.'
         : isPortalFamily(entity)
           ? 'Announce, open, block, or extract through this authority-owned objective gate.'
+          : isPlayerShip(entity)
+            ? 'Thrust, coast, or brake this authority-owned ship and compare its real motion response.'
           : 'Observe this authority-owned type in a named behavior state.';
       scenarioHint.style.cssText = 'color:#d9bd86;line-height:1.4;margin:4px 0 8px';
       const controls = style(document.createElement('div'), { display: 'flex', flexWrap: 'wrap', gap: '6px' });
