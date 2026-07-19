@@ -272,6 +272,9 @@ const TITLE_GLITCH_GLYPHS = 'ΨΩ∞⌁∆≈≠╳╱╲#$%@&*!?';
 const TITLE_LAYOUT_DEFAULT = 'left';
 const TITLE_LAYOUT_IDS = new Set(['center', 'left', 'right', 'opposite-left']);
 let titleLayout = TITLE_LAYOUT_DEFAULT;
+// Capture-only presentation seam: preserves the living title environment and
+// its diegetic telemetry while removing foreground menu chrome for promo shots.
+let titleEnvironmentCaptureOnly = false;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -1224,6 +1227,10 @@ function init() {
       setTitleLayoutForTest: (value) => {
         titleLayout = normalizeTitleLayout(value);
         return titleLayout;
+      },
+      setTitleEnvironmentCaptureOnlyForTest: (enabled) => {
+        titleEnvironmentCaptureOnly = Boolean(enabled);
+        return titleEnvironmentCaptureOnly;
       },
       setProfileCursorForTest: (index) => {
         profileCursor = Math.max(0, Math.min(2, Math.round(Number(index) || 0)));
@@ -3455,6 +3462,11 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.textBaseline = 'alphabetic';
 
   drawUiScanlines(ctx, w, h, 0.018, 5);
+  drawTitleObjectTelemetry(ctx, w, h, time, layout, telemetryReveal);
+  if (titleEnvironmentCaptureOnly) {
+    ctx.restore();
+    return;
+  }
   drawTitleTextMatte(ctx, {
     x: layout.panelX,
     y: layout.panelY,
@@ -3462,7 +3474,6 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
     h: layout.panelH,
     align: layout.align,
   }, matteReveal);
-  drawTitleObjectTelemetry(ctx, w, h, time, layout, telemetryReveal);
 
   ctx.shadowColor = roleColor('flow', 0.48);
   ctx.shadowBlur = 26;

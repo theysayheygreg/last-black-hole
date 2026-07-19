@@ -379,6 +379,12 @@ export function initTestAPI(getState) {
       return true;
     },
 
+    setTitleEnvironmentCaptureOnly(enabled) {
+      const { setTitleEnvironmentCaptureOnlyForTest } = getState();
+      if (!setTitleEnvironmentCaptureOnlyForTest) return false;
+      return setTitleEnvironmentCaptureOnlyForTest(enabled);
+    },
+
     setRendererView(mode) {
       const { setRendererView } = getState();
       if (!setRendererView) return false;
