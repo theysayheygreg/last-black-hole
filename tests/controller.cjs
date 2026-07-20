@@ -253,9 +253,15 @@ async function run() {
           return input && input.lastInputSource === 'gamepad' && input.thrustIntensity > 0.9;
         }, { timeout: 3000 });
         await sleep(900);
+        const propulsion = await page.evaluate(() => window.__TEST_API.getThreeSceneState()?.ship || null);
+        assert(propulsion?.thrusting === true && propulsion?.braking === false,
+          `Three scene must publish delivered thrust state: ${JSON.stringify(propulsion)}`);
         await setGamepadButton(page, 7, false, 0);
         await setGamepadAxes(page, [0, 0, 0, 0, 0, 0]);
         await sleep(180);
+        const coastPropulsion = await page.evaluate(() => window.__TEST_API.getThreeSceneState()?.ship || null);
+        assert(coastPropulsion?.thrusting === false && coastPropulsion?.braking === false,
+          `Three scene must clear delivered propulsion after release: ${JSON.stringify(coastPropulsion)}`);
         const after = await page.evaluate(() => ({
           pos: window.__TEST_API.getShipPos(),
           inventory: window.__TEST_API.getInventory(),

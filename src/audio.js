@@ -204,6 +204,13 @@ export class AudioEngine {
     this._audioState = normalizeBedState(state);
     const now = this.ctx.currentTime;
     const target = bedTarget(this._audioState);
+    // Death owns a deliberate master fade. Every other phase explicitly
+    // restores the mix so returning Home cannot inherit terminal silence.
+    if (this.master && this._audioState !== 'terminal-linger') {
+      this.master.gain.cancelScheduledValues(now);
+      this.master.gain.setValueAtTime(this.master.gain.value, now);
+      this.master.gain.linearRampToValueAtTime(this._effectiveMasterVolume(), now + Math.min(target.ramp, 0.12));
+    }
     for (const [bus, value] of Object.entries(target)) {
       if (bus === 'ramp' || !this.busGains?.[bus]) continue;
       const gain = this.busGains[bus].gain;
@@ -229,7 +236,9 @@ export class AudioEngine {
     for (const key of ['masterVolume', 'effectsVolume', 'uiVolume', 'muted']) {
       if (Object.hasOwn(settings, key)) this._mix[key] = settings[key];
     }
-    if (this.master) this.master.gain.value = this._effectiveMasterVolume();
+    if (this.master && this._audioState !== 'terminal-linger') {
+      this.master.gain.value = this._effectiveMasterVolume();
+    }
   }
 
   /**
@@ -265,7 +274,9 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     const ramp = 0.05;
 
-    this.master.gain.linearRampToValueAtTime(this._effectiveMasterVolume(), now + ramp);
+    if (this._audioState !== 'terminal-linger') {
+      this.master.gain.linearRampToValueAtTime(this._effectiveMasterVolume(), now + ramp);
+    }
 
     // Drone: pitch drops and distortion grows as universe ages
     if (this.drone && this._audioState === 'gameplay-pressure') {
@@ -687,7 +698,17 @@ export class AudioEngine {
     const held = this._portalReadyVoice;
     if (!held) return;
     const { osc, gain, voice } = held;
-    try { gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value, now); gain.gain.exponentialRampToValueAtTime(.001, now + .04); osc.stop(now + .05); osc.disconnect(); gain.disconnect(); voice.panner.disconnect(); } catch (e) {}
+    try {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.exponentialRampToValueAtTime(.001, now + .04);
+      osc.onended = () => {
+        try { osc.disconnect(); gain.disconnect(); voice.panner.disconnect(); } catch (e) {}
+      };
+      osc.stop(now + .05);
+    } catch (e) {
+      try { osc.disconnect(); gain.disconnect(); voice.panner.disconnect(); } catch (disconnectError) {}
+    }
     this._portalReadyVoice = null;
   }
   _setPortalReady(active, now, vol, pan, bus = 'world') {

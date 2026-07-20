@@ -1923,6 +1923,7 @@ function applyRemoteSnapshot(snapshot) {
     if (phase === 'playing' && (gamePhase === 'dead' || gamePhase === 'loading')) {
       gamePhase = 'playing';
       deathTimer = 0;
+      audioRouter?.setPhase('gameplay');
       showHUD();
     } else if (phase === 'dead' && gamePhase === 'playing') {
       gamePhase = 'dead';
@@ -3740,6 +3741,13 @@ function collectThreeSceneState() {
   const authorityPlayer = remoteAuthorityActive
     ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
     : null;
+  const deliveredThrust = remoteAuthorityActive
+    ? (authorityPlayer?.deliveredThrust ?? 0)
+    : (ship?.lastDeliveredThrustIntensity ?? 0);
+  const deliveredBrake = remoteAuthorityActive
+    ? (authorityPlayer?.deliveredBrake ?? 0)
+    : (ship?.lastDeliveredBrakeIntensity ?? 0);
+  const propulsionActive = gamePhase === 'playing';
   const authoritySlingshot = authorityPlayer?.slingshot || null;
   const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
@@ -3761,6 +3769,10 @@ function collectThreeSceneState() {
       forceLedger: authorityPlayer?.forceLedger || null,
       ruler: authorityPlayer?.ruler || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
+      // Render propulsion from delivered control, not raw input intent, so
+      // authority rejection and local fuel gates cannot produce false wakes.
+      thrusting: propulsionActive && Number(deliveredThrust) > 0.01,
+      braking: propulsionActive && Number(deliveredBrake) > 0.01,
     } : null,
     wells: (wellSystem?.wells || []).map((well, index) => ({
       id: well.id || well.name || `well-${index}`,
@@ -4727,6 +4739,7 @@ function gameLoop(now) {
         deathTimer = 0;
         freezeRunEnd(simState);
         ship.setThrust(false);
+        audioEngine.playEvent('death');
       }
     } else if (gamePhase === 'dead') {
         deathTimer += dt;
@@ -4820,8 +4833,12 @@ function gameLoop(now) {
     : null;
   audioRouter?.movementState({
     active: gamePhase === 'playing' && !inventoryOpen,
-    deliveredThrust: authorityPlayer?.deliveredThrust ?? ship.lastDeliveredThrustIntensity,
-    deliveredBrake: authorityPlayer?.deliveredBrake ?? ship.lastDeliveredBrakeIntensity,
+    deliveredThrust: remoteAuthorityActive
+      ? (authorityPlayer?.deliveredThrust ?? 0)
+      : ship.lastDeliveredThrustIntensity,
+    deliveredBrake: remoteAuthorityActive
+      ? (authorityPlayer?.deliveredBrake ?? 0)
+      : ship.lastDeliveredBrakeIntensity,
     speed: Math.hypot(ship.vx || 0, ship.vy || 0),
   });
   if (!inMenu) {

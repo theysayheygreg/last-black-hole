@@ -32,11 +32,20 @@ class FakeAudioContext {
   createWaveShaper() { return this._node('waveshaper'); }
   createDelay() { const node = this._node('delay'); node.delayTime = new AudioParam(); return node; }
   createStereoPanner() { const node = this._node('panner'); node.pan = new AudioParam(); return node; }
-  createOscillator() { const node = this._node('oscillator'); node.frequency = new AudioParam(); node.detune = new AudioParam(); node.setPeriodicWave = () => {}; node.start = () => { node.started = true; }; node.stop = () => { node.stopped = true; if (node.onended) node.onended(); }; return node; }
+  createOscillator() { const node = this._node('oscillator'); node.frequency = new AudioParam(); node.detune = new AudioParam(); node.setPeriodicWave = () => {}; node.start = () => { node.started = true; }; node.stop = (at = this.currentTime) => { node.stopped = true; node.stopAt = at; if (at <= this.currentTime && node.onended) { node.ended = true; node.onended(); } }; return node; }
   createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) }; }
   createBufferSource() { const node = this._node('buffer'); node.start = () => { node.started = true; }; node.stop = () => { node.stopped = true; if (node.onended) node.onended(); }; return node; }
   createPeriodicWave() { return {}; }
   resume() { this.state = 'running'; return Promise.resolve(); }
+  advanceTo(at) {
+    this.currentTime = at;
+    for (const node of this.nodes) {
+      if (node.kind === 'oscillator' && node.stopped && !node.ended && node.stopAt <= at && node.onended) {
+        node.ended = true;
+        node.onended();
+      }
+    }
+  }
 }
 
 function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) => node.kind === 'panner'); }
@@ -83,6 +92,9 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
   engine.reset();
   assert.strictEqual(engine._portalReadyVoice, null, 'reset clears held portal-ready voice');
   assert.strictEqual(held.osc.stopped, true, 'reset stops held portal-ready oscillator');
+  assert.strictEqual(held.osc.disconnected, undefined, 'held voice remains connected during its release fade');
+  ctx.advanceTo(ctx.currentTime + 0.06);
+  assert.strictEqual(held.osc.disconnected, true, 'held voice disconnects after its scheduled stop');
 
   for (const terminalCue of ['portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death']) {
     engine.reset();
@@ -93,7 +105,22 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
     assert.strictEqual(engine.playEvent(terminalCue), true, `${terminalCue}: terminal cue admitted`);
     assert.strictEqual(engine._portalReadyVoice, null, `${terminalCue}: terminal cue clears held portal-ready voice`);
     assert.strictEqual(activeHeld.osc.stopped, true, `${terminalCue}: terminal cue stops held oscillator`);
+    ctx.advanceTo(ctx.currentTime + 0.06);
   }
+
+  engine.reset();
+  engine.setMixSettings({ muted: false, masterVolume: 0.7 });
+  engine.setContext('gameplay');
+  ctx.currentTime += 1;
+  assert.strictEqual(engine.playEvent('death'), true, 'death cue enters terminal audio state');
+  assert.strictEqual(engine.getDiagnostics().phase, 'terminal-linger', 'death owns terminal-linger state');
+  const fadeEventCount = engine.master.gain.events.length;
+  engine.update(1, [], {}, 0, 0, 0, 0, 0, 1);
+  assert.strictEqual(engine.master.gain.value, 0, 'frame updates do not overwrite the terminal master fade');
+  assert.strictEqual(engine.master.gain.events.length, fadeEventCount,
+    'terminal frame update does not schedule a competing master ramp');
+  engine.setContext('menu');
+  assert.strictEqual(engine.master.gain.value, 0.7, 'leaving terminal state restores the configured master level');
 
   engine.reset();
   ctx.currentTime = 120;
