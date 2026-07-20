@@ -21,6 +21,7 @@ import { PortalSystem } from './portals.js';
 import { PlanetoidSystem } from './planetoids.js';
 import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
+import { drawPromoWink } from './render/promo-wink.js';
 import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
 import { createPresentationFrame } from './presentation/presentation-frame.js';
@@ -1184,6 +1185,7 @@ function init() {
         return {
           fps,
           perfStats,
+          totalTime,
           rendererBackend: rendererBackend?.name || 'legacy',
         };
       },
@@ -4975,6 +4977,26 @@ function gameLoop(now) {
   // 8. Render overlay
   const overlayStart = performance.now();
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  // Promo fixture theater (render-only, never gameplay truth)
+  if (rendererFixtureActive && activeRendererFixture?.promoWink) {
+    const winkWell = activeRendererFixture.wells?.[0];
+    if (winkWell) {
+      const [eyeX, eyeY] = worldToScreen(winkWell.x, winkWell.y, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      const eyeRadiusWorld = activeRendererFixture.promoWink.eyeRadiusWorld ?? 0.64;
+      const [edgeX] = worldToScreen(winkWell.x + eyeRadiusWorld, winkWell.y, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      drawPromoWink(ctx, {
+        cx: eyeX,
+        cy: eyeY,
+        radius: Math.abs(edgeX - eyeX),
+        // Capture scripts pin the wink clock for exact-phase frames; live
+        // viewing runs off the real clock.
+        time: typeof window.__LBH_PROMO_TIME === 'number' ? window.__LBH_PROMO_TIME : totalTime,
+        config: activeRendererFixture.promoWink,
+        viewH: overlayCanvas.height,
+      });
+    }
+  }
 
   // Loading screen — shown between map select and first snapshot
   if (gamePhase === 'loading') {

@@ -243,8 +243,30 @@ export const FIXTURE_SHIP_BAKEOFF = {
   },
 };
 
+/**
+ * Promo fixture: the title composition, staged for capture. The central
+ * well winks (see src/render/promo-wink.js) — deliberate non-game-reality
+ * theater for promotional stills and clips. Never reachable from play.
+ */
+export const FIXTURE_PROMO_VOID_STARES = {
+  ...TITLE_SCREEN_MAP,
+  name: 'Promo — Void Stares Back',
+  promoWink: {
+    periodSeconds: 6,
+    closeSeconds: 0.22,
+    holdSeconds: 0.18,
+    reopenSeconds: 0.28,
+    glintSeconds: 0.6,
+    tagline: 'the void stares back',
+    // Outer accretion ring of the title well, in world units — the
+    // wink overlay sizes the eye from this.
+    eyeRadiusWorld: 0.64,
+  },
+};
+
 export const RENDERER_FIXTURES = {
   title: FIXTURE_TITLE,
+  promoVoidStares: FIXTURE_PROMO_VOID_STARES,
   titleVfx: FIXTURE_TITLE_VFX,
   titleVfxHeavy: FIXTURE_TITLE_VFX_HEAVY,
   singleWell: FIXTURE_SINGLE_WELL,

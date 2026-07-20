@@ -19,3 +19,4 @@ tools/**/__pycache__/
 ios/LastSingularity/WebApp/*
 !ios/LastSingularity/WebApp/.gitkeep
 ios/Config/Local.xcconfig
+docs/promo/void-stares-back/frames/
