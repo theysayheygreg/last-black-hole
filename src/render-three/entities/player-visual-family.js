@@ -8,6 +8,13 @@ function heading(entity) {
   return Math.atan2(-(velocity.y || 0), velocity.x || 0);
 }
 
+function unitVector(from, to) {
+  const x = (to?.x || 0) - (from?.x || 0);
+  const y = (to?.y || 0) - (from?.y || 0);
+  const length = Math.hypot(x, y) || 1;
+  return { x: x / length, y: y / length };
+}
+
 export class PlayerVisualFamily extends VisualFamilyLifecycle {
   constructor({ group, geometries, materials }) {
     super('player');
@@ -34,8 +41,21 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
         draw.budgetCull?.('player', player, 0.044);
       } else {
         const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
-          0.044, -player.movement.facing - Math.PI * 0.5, 'player', player);
+          0.052, -player.movement.facing - Math.PI * 0.5, 'player', player);
         if (core) { this.countObject(1); remaining -= 1; }
+        // Two short port strokes make propulsion a first-glance direction cue
+        // without promoting a generic bloom blob over the ASCII fabric.
+        const facing = heading(player);
+        const wake = { x: -Math.cos(facing), y: Math.sin(facing) };
+        const lateral = { x: -wake.y, y: wake.x };
+        for (const side of [-1, 1]) {
+          const start = {
+            x: player.world.x + wake.x * 0.017 + lateral.x * side * 0.010,
+            y: player.world.y + wake.y * 0.017 + lateral.y * side * 0.010,
+          };
+          const end = { x: start.x + wake.x * 0.027, y: start.y + wake.y * 0.027 };
+          if (draw.line(start.x, start.y, end.x, end.y, this.materials.thrusterWake)) this.submittedParts += 1;
+        }
       }
     }
 
@@ -76,16 +96,19 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     const telegraph = sling?.telegraph;
     const aimAnchor = telegraph?.aimCue?.anchor || sling?.affordance;
     const slingAnchor = sling?.anchor || sling?.affordance || telegraph?.lock?.anchor;
-    if (aimAnchor) {
-      draw.semantic(this.geometries.ring, this.materials.surfRing,
-        aimAnchor.world.x, aimAnchor.world.y, aimAnchor.range || 0.1, 0, 0.13);
-      this.submittedParts += 1;
-    }
     if (slingAnchor) {
-      if (!aimAnchor || slingAnchor.world.x !== aimAnchor.world.x || slingAnchor.world.y !== aimAnchor.world.y) {
-        draw.semantic(this.geometries.ring, this.materials.surfRing,
-          slingAnchor.world.x, slingAnchor.world.y, slingAnchor.range || 0.1, 0, 0.13);
-        this.submittedParts += 1;
+      // A clipped orbital chord and anchor ticks replace the diagnostic range
+      // ellipse. The route remains authored even when labels are hidden.
+      const radius = Math.max(0.045, slingAnchor.range || aimAnchor?.range || 0.1);
+      const towardPlayer = player ? unitVector(slingAnchor.world, player.world) : { x: 1, y: 0 };
+      const tangent = { x: -towardPlayer.y, y: towardPlayer.x };
+      const near = { x: slingAnchor.world.x + tangent.x * radius * 0.76, y: slingAnchor.world.y + tangent.y * radius * 0.76 };
+      const far = { x: slingAnchor.world.x - tangent.x * radius * 0.76, y: slingAnchor.world.y - tangent.y * radius * 0.76 };
+      if (draw.line(near.x, near.y, far.x, far.y, this.materials.tether)) this.submittedParts += 1;
+      for (const side of [-1, 1]) {
+        const tick = { x: slingAnchor.world.x + tangent.x * radius * side, y: slingAnchor.world.y + tangent.y * radius * side };
+        const tip = { x: tick.x + towardPlayer.x * radius * 0.18, y: tick.y + towardPlayer.y * radius * 0.18 };
+        if (draw.line(tick.x, tick.y, tip.x, tip.y, this.materials.thrusterWake)) this.submittedParts += 1;
       }
       if ((sling.engaged || telegraph?.lock || telegraph?.ownedArc) && player && draw.line(
         player.world.x, player.world.y, slingAnchor.world.x, slingAnchor.world.y, this.materials.tether
@@ -95,7 +118,7 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     if (ghost && player) {
       const direction = ghost.direction || { x: 1, y: 0 };
       const magnitude = Math.hypot(direction.x, direction.y) || 1;
-      const ghostDistance = 0.16;
+      const ghostDistance = 0.20;
       if (draw.line(
         player.world.x,
         player.world.y,

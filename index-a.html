@@ -189,7 +189,7 @@
       top: 12px; left: var(--lbh-edge-margin);
       color: var(--lbh-timer-normal);
       text-shadow: 0 0 6px var(--lbh-timer-glow);
-      line-height: 1.5;
+      line-height: 1.25;
       border-color: rgba(234, 247, 255, 0.18);
     }
     #hud-collapse .hud-label {
@@ -199,7 +199,7 @@
       text-transform: uppercase;
     }
     #hud-collapse .hud-value {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: bold;
     }
     #hud-collapse .hud-sub {
@@ -207,9 +207,9 @@
       color: rgba(140, 160, 190, 0.65);
     }
     #hud-vitals {
-      top: 118px;
+      top: 120px;
       left: var(--lbh-edge-margin);
-      width: 254px;
+      width: 270px;
       display: grid;
       gap: var(--lbh-deck-panel-gap);
       padding: var(--lbh-deck-panel-pad-y) var(--lbh-deck-panel-pad-x);
@@ -230,15 +230,16 @@
       align-items: baseline;
       justify-content: space-between;
       gap: 12px;
-      min-height: 18px;
+      min-height: 20px;
     }
     #hud-vitals .hud-label {
-      font-size: var(--lbh-couch-micro);
+      font-size: var(--lbh-couch-small);
       letter-spacing: 0;
       text-transform: uppercase;
     }
     #hud-vitals .hud-vital-readout {
-      font-size: var(--lbh-couch-small);
+      font-size: var(--lbh-couch-body);
+      font-weight: 650;
       color: var(--lbh-text-primary);
       text-align: right;
     }
@@ -253,7 +254,7 @@
       text-transform: uppercase;
     }
     #hud-signal-bar {
-      width: 100%; height: var(--lbh-gauge-height);
+      width: 100%; height: 18px;
       background: var(--lbh-track-bg);
       border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
@@ -281,7 +282,7 @@
       text-transform: uppercase;
     }
     #hud-fuel-bar {
-      width: 100%; height: var(--lbh-gauge-height);
+      width: 100%; height: 18px;
       background: var(--lbh-track-bg);
       border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
@@ -304,7 +305,7 @@
     }
     #hud-hull .hud-label { color: var(--lbh-text-muted); }
     #hud-hull-bar {
-      width: 100%; height: var(--lbh-gauge-height);
+      width: 100%; height: 18px;
       background: var(--lbh-track-bg);
       border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
@@ -371,7 +372,7 @@
       text-transform: uppercase;
     }
     #hud-portals .hud-value {
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 650;
     }
     #hud-portals .hud-sub {
@@ -411,7 +412,7 @@
     #hud-actions {
       right: var(--lbh-edge-margin);
       bottom: var(--lbh-edge-margin);
-      width: 336px;
+      width: 348px;
       display: grid;
       gap: var(--lbh-deck-panel-gap);
       padding: 14px 18px;
@@ -451,8 +452,8 @@
       display: grid;
       grid-template-columns: 1fr;
       gap: 3px;
-      min-height: 92px;
-      padding-top: 12px;
+      min-height: 78px;
+      padding-top: 9px;
       border-top: 1px solid rgba(0, 226, 255, 0.12);
     }
     .hud-ability-line {
@@ -476,9 +477,16 @@
     .hud-ability.ready .hud-ability-name {
       color: rgba(180, 200, 220, 0.8);
     }
+    .hud-ability.ready,
+    .hud-ability.active {
+      padding: 9px 10px 8px;
+      margin: 0 -10px;
+      border-left: 2px solid rgba(0, 226, 255, 0.72);
+      background: rgba(0, 226, 255, 0.07);
+    }
     .hud-ability-detail {
       color: rgba(154, 180, 206, 0.64);
-      font-size: var(--lbh-couch-micro);
+      font-size: var(--lbh-couch-small);
       max-width: 100%;
       white-space: nowrap;
       overflow: hidden;

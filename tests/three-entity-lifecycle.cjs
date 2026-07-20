@@ -20,6 +20,7 @@ function makeResources() {
       remoteShip: { id: 'remote' },
       surfRing: { id: 'surf-ring' },
       tether: { id: 'tether' },
+      thrusterWake: { id: 'thruster-wake' },
       wreck: { id: 'wreck' },
       lootedWreck: { id: 'looted-wreck' },
       portal: { id: 'route-cyan-portal' },
@@ -155,7 +156,7 @@ async function run() {
       'Renderer stats must expose well diagnostic primitive counts');
   });
 
-  await runner.run('Player family prioritizes local ship and stays inside its object budget', async () => {
+  await runner.run('Player family prioritizes local ship and submits authored thrust and slingshot grammar', async () => {
     const resources = makeResources();
     const family = new PlayerVisualFamily(resources).create();
     const log = makeDrawLog();
@@ -179,6 +180,8 @@ async function run() {
     assert(stats.activeObjects === 3, `Expected 3 player objects, got ${stats.activeObjects}`);
     assert(stats.droppedObjects === 6, `Expected 6 dropped remotes, got ${stats.droppedObjects}`);
     assert(log.calls.some((call) => call.type === 'line'), 'Engaged slingshot should submit a tether');
+    assert(log.calls.filter((call) => call.type === 'line').length >= 5,
+      'Player should submit thrust ports plus lane/tether grammar, not a lone diagnostic ring');
 
     family.update({ ...frame, localPlayer: null, world: { remotePlayers: [], shipCandidates: [] } }, log.draw);
     assert(family.getStats().activeObjects === 0, 'Empty update must return family to idle');
