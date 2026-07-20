@@ -64,7 +64,8 @@ const path = require('path');
   assert(!homeSource.includes('tab to LAUNCH when ready'), 'Home launch prompt must not emit raw Tab copy');
   assert(main.includes("action: actionDescriptor('inventory', currentPromptOptions())"), 'Cargo-full HUD must carry a shared inventory action');
   assert(hudSource.includes('actionCaptionMarkup(options.action.actionId'), 'HUD warning actions must render shared glyph markup');
-  assert(hudSource.includes('_interactionCaptionEl.innerHTML = interaction.caption;'), 'Contextual interaction must render caption markup as DOM');
+  assert(/_interactionCaptionEl\.innerHTML\s*=\s*interaction\.caption(?:\s*\|\|\s*'')?\s*;/.test(hudSource),
+    'Contextual interaction must render caption markup as DOM');
   assert(!hudSource.includes('_interactionCaptionEl.textContent = interaction.caption;'), 'Contextual interaction must not expose literal caption markup');
   assert(hudSource.includes("affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)"), 'HUD salvage prompt must use one active-device caption');
   assert(!hudSource.includes('hold space for salvage'), 'HUD salvage prompt must not emit raw Space copy');
