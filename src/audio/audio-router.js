@@ -50,10 +50,7 @@ export class AudioRouter {
     if (!event || typeof event.type !== 'string') return false;
     const eventRunId = event.runId || event.payload?.runId || null;
     if (eventRunId && this.runId && eventRunId !== this.runId) {
-      this.runId = eventRunId;
-      this.seen.clear();
-      this.seenOrder.length = 0;
-      this.portalActive = false;
+      this.reset(eventRunId);
     } else if (eventRunId && !this.runId) {
       this.runId = eventRunId;
     }

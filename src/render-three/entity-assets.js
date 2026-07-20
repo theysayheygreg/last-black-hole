@@ -37,7 +37,7 @@ export function selectPlayerAsset(entity = {}, { remote = false } = {}) {
 
 export function selectWreckAsset(entity = {}) {
   if (entity.visualState === 'looted' || entity.looted) return 'wreckLooted';
-  if (entity.visualState === 'valuable' || entity.valuable || entity.valueTier === 'valuable') return 'wreckValuable';
+  if (entity.visualState === 'valuable' || entity.valuable || entity.valueTier === 'valuable' || entity.variant === 'vault') return 'wreckValuable';
   if (entity.visualState === 'cluster' || entity.size === 'scattered' || entity.variant === 'debris') {
     return 'wreckCluster';
   }

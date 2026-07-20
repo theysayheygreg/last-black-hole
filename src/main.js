@@ -1813,6 +1813,15 @@ function syncRemoteNetworkPerfStats() {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
+  const previousRunId = remoteSnapshot?.runId || remoteSnapshot?.session?.runId || null;
+  const incomingRunId = snapshot.runId || snapshot.session?.runId || null;
+  if (previousRunId && incomingRunId && incomingRunId !== previousRunId) {
+    // A rematch can adopt a new run without returning through Map Select.
+    // Reset presentation audio at that authority boundary so held voices and
+    // ducking from the old run cannot leak into the new one.
+    audioRouter?.reset(incomingRunId);
+    audioRouter?.setPhase('loading');
+  }
   const covered = gamePhase === 'paused';
   if (covered) {
     const previousLatest = pauseResumeState.latestSnapshot;
@@ -1930,6 +1939,9 @@ function applyRemoteSnapshot(snapshot) {
       deathTimer = 0;
       freezeRunEnd(simState);
       ship.setThrust(false);
+      // The event stream normally owns the death cue. Snapshot phase is still
+      // sufficient to stop the gameplay bed when that event was missed.
+      audioRouter?.setPhase('dead');
     } else if (phase === 'escaped' && gamePhase === 'playing') {
       gamePhase = 'escaped';
       escapeTimer = 0;
@@ -2926,6 +2938,7 @@ function applyPauseResumeDecision(decision) {
     deathTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+    audioRouter?.setPhase('dead');
     return;
   }
   if (decision.phase === 'escaped') {
@@ -2940,6 +2953,7 @@ function applyPauseResumeDecision(decision) {
   if (decision.phase === 'recovery' || decision.rematched) {
     gamePhase = 'recovery';
     loadingMapName = 'authority recovery';
+    audioRouter?.setPhase('loading');
     hideHUD();
     return;
   }
@@ -3804,6 +3818,9 @@ function collectThreeSceneState() {
       pickupCooldown: Math.max(0, wreck.pickupCooldown || 0),
       isEcho: wreck.type === 'echo' || wreck.isEcho === true,
       looted: Boolean(wreck.looted),
+      valuable: wreck.valuable === true || wreck.type === 'vault',
+      valueTier: wreck.valueTier || null,
+      visualState: wreck.visualState || null,
     })),
     portals: (portalSystem?.portals || []).filter((portal) => portal.alive !== false).map((portal, index) => ({
       id: portal.id || `portal-${index}`,

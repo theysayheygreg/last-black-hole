@@ -45,7 +45,10 @@ async function run() {
           affordance: { wx: 0.05, wy: 0.2, range: 0.22, type: 'star' },
           engaged: null,
         },
-        wrecks: [{ id: 'wreck-a', wx: 0.1, wy: 0.2, size: 'scattered', type: 'debris', looted: false, loot: ['sim-secret'] }],
+        wrecks: [
+          { id: 'wreck-a', wx: 0.1, wy: 0.2, size: 'scattered', type: 'debris', looted: false, loot: ['sim-secret'] },
+          { id: 'wreck-vault', wx: 0.2, wy: 0.25, size: 'large', type: 'vault', tier: 3, looted: false },
+        ],
         portals: [{ id: 'exit-a', wx: 0.2, wy: 0.3, radius: 0.1, type: 'standard', blockedByInhibitor: true }],
         remotePlayers: [{ id: 'friend-a', wx: 0.4, wy: 0.5, vx: 0.2, vy: 0, hullType: 'drifter' }],
       },
@@ -79,6 +82,8 @@ async function run() {
     assert(frame.world.wrecks[0].hint.category === 'salvage', 'Expected semantic wreck hint');
     assert(frame.world.portals[0].hint.roleColor === 'routeCyan', 'Expected cyan route hint');
     assert(frame.world.wrecks[0].visualState === 'cluster', 'Expected normalized wreck visual state');
+    assert(frame.world.wrecks[1].visualState === 'valuable' && frame.world.wrecks[1].valuable === true,
+      'Vault wrecks must retain their valuable presentation classification');
     assert(frame.world.portals[0].visualState === 'blocked', 'Expected normalized portal visual state');
     assert(frame.world.remotePlayers[0].hint.category === 'remoteShip', 'Expected remote-player hint');
     assert(!('loot' in frame.world.wrecks[0]), 'Presentation frame must omit inventory internals');

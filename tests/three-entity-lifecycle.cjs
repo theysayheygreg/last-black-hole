@@ -297,6 +297,7 @@ async function run() {
     assert(assets.selectPlayerAsset({}, { remote: true }) === 'shipRemote', 'Remote hull selection failed');
     assert(assets.selectWreckAsset({ visualState: 'looted' }) === 'wreckLooted', 'Looted wreck selection failed');
     assert(assets.selectWreckAsset({ visualState: 'cluster' }) === 'wreckCluster', 'Cluster wreck selection failed');
+    assert(assets.selectWreckAsset({ variant: 'vault' }) === 'wreckValuable', 'Vault wreck value selection failed');
     assert(assets.selectPortalAsset({ visualState: 'rift' }) === 'portalRift', 'Rift portal selection failed');
     assert(assets.selectFaunaAsset({ variant: 'jelly' }) === 'faunaOrganic', 'Fauna must retain the organic sprite');
     assert(assets.selectSentryAsset({ status: 'alert' }) === 'sentryThreat', 'Sentries must use the threat sprite');

@@ -304,15 +304,22 @@ function normalizeEntity(family, source, index) {
     case 'wrecks':
       {
       const variant = text(source.type, 'derelict');
+      const valuable = source.visualState === 'valuable'
+        || source.valuable === true
+        || source.valueTier === 'valuable'
+        || variant === 'vault';
       const visualState = source.looted === true
         ? 'looted'
-        : (source.cluster === true || source.size === 'scattered' || variant === 'debris' ? 'cluster' : 'intact');
+        : valuable
+          ? 'valuable'
+          : (source.cluster === true || source.size === 'scattered' || variant === 'debris' ? 'cluster' : 'intact');
       return Object.freeze({
         ...base,
         size: text(source.size, 'medium'),
         tier: Math.max(1, Math.floor(finite(source.tier, 1))),
         variant,
         looted: source.looted === true,
+        valuable,
         visualState,
         hint: hint('wreck', source.looted ? { priority: 'low', roleColor: 'neutralWhite' } : null),
       });

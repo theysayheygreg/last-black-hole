@@ -35,6 +35,8 @@ async function run() {
   assert.strictEqual(bounded.seen.size, 32, 'dedupe history stays bounded within a run');
   assert.strictEqual(bounded.authoritative({ runId: 'run-d', seq: 1, type: 'player.loot', payload: { clientId: 'local' } }, ctx), true);
   assert.strictEqual(bounded.seen.size, 1, 'new authority run clears prior sequence history');
+  assert(calls.filter((call) => call[0] === 'reset').length >= 3,
+    'new authority runs reset held voices and mixer state, not only dedupe history');
   assert.strictEqual(bounded.authoritative({ runId: 'run-d', seq: 2, type: 'player.died', payload: {} }, ctx), false,
     'ownerless private events fail closed');
 
@@ -48,6 +50,10 @@ async function run() {
   assert(mainSource.includes('audioRouter?.reset(`remote:${targetMapEntry.id}:${briefingSeed}`)'), 'remote runs reset router dedupe');
   assert(/phase === 'playing'[\s\S]*?gamePhase = 'playing';[\s\S]*?audioRouter\?\.setPhase\('gameplay'\);[\s\S]*?showHUD\(\);/.test(mainSource),
     'authoritative snapshot recovery must restore the gameplay audio phase');
+  assert(/phase === 'dead'[\s\S]*?gamePhase = 'dead';[\s\S]*?audioRouter\?\.setPhase\('dead'\);/.test(mainSource),
+    'snapshot-only death must leave the gameplay audio phase');
+  assert(mainSource.includes("loadingMapName = 'authority recovery';") && mainSource.includes("audioRouter?.setPhase('loading');"),
+    'rematch recovery must enter the loading audio phase');
   const testApiSource = fs.readFileSync(path.join(ROOT, 'src/test-api.js'), 'utf8');
   assert(testApiSource.includes('getAudioDiagnostics()'), 'reviewers need structural audio diagnostics when output is inaudible');
   console.log('AudioRouter: 1 passed, 0 failed');
