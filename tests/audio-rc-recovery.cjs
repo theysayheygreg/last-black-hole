@@ -57,6 +57,16 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
   assert.strictEqual(engine.playEvent('hullWarning'), true);
   assert(pannersSince(ctx, warningStart).every((panner) => panner.connections.includes(engine.busGains.critical)), 'hull warning routes to critical bus');
 
+  engine.reset();
+  engine.setContext('gameplay');
+  assert.strictEqual(engine.busGains.ambient.gain.value, 0.42, 'gameplay bed owns ambient target');
+  assert.strictEqual(engine.busGains.world.gain.value, 0.72, 'gameplay bed owns world target');
+  assert.strictEqual(engine.playEvent('pulse'), true);
+  assert.strictEqual(engine.busGains.ambient.gain.value, 0.42, 'duck release must not overwrite ambient bed target');
+  assert.strictEqual(engine.busGains.world.gain.value, 0.72, 'duck release must not overwrite world bed target');
+  assert(engine.busDuckGains.ambient.gain.events.some((event) => event[0] === 'linear' && event[1] < 1),
+    'pulse should schedule attenuation on the separate ambient duck stage');
+
   engine.setMixSettings({ muted: true });
   engine.update(1, [], {}, 0, 0, 0, 0, 0, 1);
   assert.strictEqual(engine.master.gain.value, 0, 'mute survives update');
@@ -73,6 +83,30 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
   engine.reset();
   assert.strictEqual(engine._portalReadyVoice, null, 'reset clears held portal-ready voice');
   assert.strictEqual(held.osc.stopped, true, 'reset stops held portal-ready oscillator');
+
+  for (const terminalCue of ['portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death']) {
+    engine.reset();
+    ctx.currentTime += 1;
+    assert.strictEqual(engine.playEvent('portalReady'), true, `${terminalCue}: portal-ready starts`);
+    const activeHeld = engine._portalReadyVoice;
+    ctx.currentTime += 0.1;
+    assert.strictEqual(engine.playEvent(terminalCue), true, `${terminalCue}: terminal cue admitted`);
+    assert.strictEqual(engine._portalReadyVoice, null, `${terminalCue}: terminal cue clears held portal-ready voice`);
+    assert.strictEqual(activeHeld.osc.stopped, true, `${terminalCue}: terminal cue stops held oscillator`);
+  }
+
+  engine.reset();
+  ctx.currentTime = 120;
+  engine.setVariationSeed('relative-trace');
+  ctx.currentTime = 122.5;
+  assert.strictEqual(engine.playEvent('menuConfirm'), true, 'trace fixture admits first cue');
+  const trace = engine.getCaptureManifest();
+  assert.strictEqual(trace.timeBasis, 'run-relative', 'trace declares run-relative time');
+  assert.strictEqual(trace.eventCount, 1, 'trace records admitted cues only');
+  assert.strictEqual(trace.events[0].at, 2.5, 'trace subtracts its reset origin');
+  assert.strictEqual(engine.playEvent('menuConfirm'), false, 'duplicate cue is rejected by the active voice budget');
+  assert.strictEqual(engine.playEvent('unknownCue'), false, 'unknown cue is rejected');
+  assert.strictEqual(engine.getCaptureManifest().eventCount, 1, 'rejected cues are absent from capture evidence');
 
   console.log('AudioRCRecovery: 1 passed, 0 failed');
 })().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

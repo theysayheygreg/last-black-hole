@@ -1769,8 +1769,6 @@ function startGame(map, seed = null) {
   }
 
   gamePhase = 'playing';
-  audioRouter?.setPhase('gameplay');
-  audioRouter?.local('resume', { presentationId: `resume:${performance.now()}` });
   audioEngine.setContext('gameplay');
   showHUD();
 }
@@ -1831,7 +1829,7 @@ function applyRemoteSnapshot(snapshot) {
   // First snapshot received — transition from loading to playing
   if (gamePhase === 'loading') {
     gamePhase = 'playing';
-    audioEngine.setContext('gameplay');
+    audioRouter?.setPhase('gameplay');
     showHUD();
   }
   const authoritativeMapId = snapshot.session?.mapId;
@@ -2946,7 +2944,8 @@ function applyPauseResumeDecision(decision) {
   }
 
   gamePhase = 'playing';
-  audioEngine.setContext('gameplay');
+  audioRouter?.setPhase('gameplay');
+  audioRouter?.local('resume', { presentationId: `resume:${performance.now()}` });
   showHUD();
 }
 

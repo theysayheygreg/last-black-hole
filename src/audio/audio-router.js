@@ -100,7 +100,9 @@ export class AudioRouter {
     const spec = cueSpec(cue);
     if (!spec) return false;
     if (cue === 'portalReady') this.portalActive = true;
-    if (cue === 'portalAbort' || cue === 'portalConfirm' || cue === 'portalBlocked') this.portalActive = false;
+    if (['portalAbort', 'portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death'].includes(cue)) {
+      this.portalActive = false;
+    }
     return Boolean(this.audio?.playEvent?.(cue, payload.wx, payload.wy, context.camX, context.camY, context.canvasW, context.canvasH));
   }
 

@@ -41,6 +41,7 @@ export class AudioEngine {
     this._movementLastUpdate = -Infinity;
     this._movementVoice = null;
     this.busGains = null;
+    this.busDuckGains = null;
     this._duckRequests = new Map();
     this._variationSeed = 'local';
     this._variationIndex = 0;
@@ -55,6 +56,7 @@ export class AudioEngine {
       movement: { state: this._movementState, persistentVoices: this._movementVoice ? 2 : 0 },
       mixer: this._mixer.snapshot(this.ctx?.currentTime ?? 0),
       buses: Object.fromEntries(Object.entries(this.busGains || {}).map(([name, gain]) => [name, gain.gain.value])),
+      ducking: Object.fromEntries(Object.entries(this.busDuckGains || {}).map(([name, gain]) => [name, gain.gain.value])),
       trace: this._trace.manifest(),
     };
   }
@@ -79,8 +81,14 @@ export class AudioEngine {
     this.busGains = Object.fromEntries(['ambient', 'world', 'player', 'ui', 'critical'].map((bus) => {
       const gain = this.ctx.createGain(); gain.gain.value = 1; return [bus, gain];
     }));
+    this.busDuckGains = Object.fromEntries(['ambient', 'world', 'player', 'ui', 'critical'].map((bus) => {
+      const gain = this.ctx.createGain(); gain.gain.value = 1; return [bus, gain];
+    }));
     this.duckGain = this.ctx.createGain();
-    Object.values(this.busGains).forEach((gain) => gain.connect(this.duckGain));
+    for (const bus of Object.keys(this.busGains)) {
+      this.busGains[bus].connect(this.busDuckGains[bus]);
+      this.busDuckGains[bus].connect(this.duckGain);
+    }
 
     // SNES SPC700 emulation — three stacked processing stages:
     //
@@ -149,7 +157,7 @@ export class AudioEngine {
 
   reset() {
     this._eventBudget.reset();
-    this._trace.reset(this._variationSeed);
+    this._trace.reset(this._variationSeed, this.ctx?.currentTime ?? 0);
     this._duckRequests.clear();
     this._mixer.reset();
     this._portalProximityActive = false;
@@ -183,6 +191,10 @@ export class AudioEngine {
       this.duckGain.gain.cancelScheduledValues(now);
       this.duckGain.gain.value = 1;
     }
+    for (const gain of Object.values(this.busDuckGains || {})) {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.value = 1;
+    }
     this._setMovementVoice({ active: false }, now, 0.06);
   }
 
@@ -210,7 +222,7 @@ export class AudioEngine {
     this._setMovementVoice({ active: gameplay }, now, target.ramp);
   }
 
-  setVariationSeed(seed = 'local') { this._variationSeed = String(seed); this._variationIndex = 0; this._trace.reset(this._variationSeed); }
+  setVariationSeed(seed = 'local') { this._variationSeed = String(seed); this._variationIndex = 0; this._trace.reset(this._variationSeed, this.ctx?.currentTime ?? 0); }
   getCaptureManifest() { return this._trace.manifest(); }
   _effectiveMasterVolume() { return this._mix.muted ? 0 : this._mix.masterVolume; }
   setMixSettings(settings = {}) {
@@ -284,13 +296,18 @@ export class AudioEngine {
     if (!this.initiated || !CONFIG.audio.enabled) return false;
 
     const now = this.ctx.currentTime;
-    const bus = cueSpec(type)?.bus || 'world';
-    this._trace.mark(type, now, { bus });
+    const spec = cueSpec(type);
+    if (!spec) return false;
+    const bus = spec.bus;
     const vol = CONFIG.audio.eventVolume * (bus === 'ui' ? this._mix.uiVolume : this._mix.effectsVolume);
     if (type !== 'death' && !this._eventBudget.admit(type, now)) return false;
     if (!this._mixer.admit(type, now)) {
       this._eventBudget.release(type, now);
       return false;
+    }
+    this._trace.mark(type, now, { bus });
+    if (['portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death'].includes(type)) {
+      this._clearPortalReadyVoice(now);
     }
 
     let pan = 0;
@@ -656,7 +673,9 @@ export class AudioEngine {
     const id = `${now}:${this._variationIndex++}`;
     this._duckRequests.set(id, { amount, until: now + duration, buses });
     for (const bus of buses) {
-      const gain = this.busGains?.[bus]?.gain; if (!gain) continue;
+      // Ducking owns a separate stage so its release cannot overwrite the
+      // adaptive bed target on the semantic bus gain.
+      const gain = this.busDuckGains?.[bus]?.gain; if (!gain) continue;
       const floor = Math.min(...[...this._duckRequests.values()].filter((request) => request.buses.includes(bus) && request.until > now).map((request) => request.amount), 1);
       const latest = Math.max(...[...this._duckRequests.values()].filter((request) => request.buses.includes(bus) && request.until > now).map((request) => request.until), now);
       gain.cancelScheduledValues(now); gain.setValueAtTime(gain.value, now); gain.linearRampToValueAtTime(floor, now + .015); gain.linearRampToValueAtTime(1, latest);
