@@ -1,30 +1,78 @@
 const assert = require('assert');
 const path = require('path');
-const fs = require('fs');
 const { pathToFileURL } = require('url');
 const ROOT = path.resolve(__dirname, '..');
 
+class AudioParam {
+  constructor(value = 0) { this.value = value; this.events = []; }
+  cancelScheduledValues(at) { this.events.push(['cancel', at]); }
+  setValueAtTime(value, at) { this.value = value; this.events.push(['set', value, at]); }
+  linearRampToValueAtTime(value, at) { this.value = value; this.events.push(['linear', value, at]); }
+  exponentialRampToValueAtTime(value, at) { this.value = value; this.events.push(['exponential', value, at]); }
+}
+
+class Node {
+  constructor(kind) { this.kind = kind; this.connections = []; }
+  connect(destination) { this.connections.push(destination); return destination; }
+  disconnect() { this.disconnected = true; this.connections.length = 0; }
+}
+
+class FakeAudioContext {
+  constructor() {
+    this.currentTime = 0;
+    this.state = 'running';
+    this.sampleRate = 48000;
+    this.destination = new Node('destination');
+    this.nodes = [];
+  }
+  _node(kind) { const node = new Node(kind); this.nodes.push(node); return node; }
+  createGain() { const node = this._node('gain'); node.gain = new AudioParam(); return node; }
+  createDynamicsCompressor() { const node = this._node('compressor'); for (const key of ['threshold', 'knee', 'ratio', 'attack', 'release']) node[key] = new AudioParam(); return node; }
+  createBiquadFilter() { const node = this._node('filter'); node.frequency = new AudioParam(); node.Q = new AudioParam(); return node; }
+  createWaveShaper() { return this._node('waveshaper'); }
+  createDelay() { const node = this._node('delay'); node.delayTime = new AudioParam(); return node; }
+  createStereoPanner() { const node = this._node('panner'); node.pan = new AudioParam(); return node; }
+  createOscillator() { const node = this._node('oscillator'); node.frequency = new AudioParam(); node.detune = new AudioParam(); node.setPeriodicWave = () => {}; node.start = () => { node.started = true; }; node.stop = () => { node.stopped = true; if (node.onended) node.onended(); }; return node; }
+  createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+  createBufferSource() { const node = this._node('buffer'); node.start = () => { node.started = true; }; node.stop = () => { node.stopped = true; if (node.onended) node.onended(); }; return node; }
+  createPeriodicWave() { return {}; }
+  resume() { this.state = 'running'; return Promise.resolve(); }
+}
+
+function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) => node.kind === 'panner'); }
+
 (async () => {
-  const cue = await import(pathToFileURL(path.join(ROOT, 'src/audio/cue-spec.js')).href);
-  const { bedTarget, normalizeBedState, BED_STATES } = await import(pathToFileURL(path.join(ROOT, 'src/audio/adaptive-bed.js')).href);
-  const { hashSeed, seededUnit } = await import(pathToFileURL(path.join(ROOT, 'src/audio/deterministic.js')).href);
-  const { AudioTraceCapture } = await import(pathToFileURL(path.join(ROOT, 'src/audio/capture.js')).href);
-  for (const id of ['portalReady', 'portalAbort', 'portalBlocked', 'hullWarning', 'fuelWarning', 'signalWarning', 'pause', 'resume', 'results']) assert(cue.cueSpec(id), `missing ${id}`);
-  assert.deepStrictEqual(BED_STATES, ['title-terminal', 'briefing-loading', 'gameplay-pressure', 'pause-results', 'terminal-linger']);
-  assert.strictEqual(normalizeBedState('dead'), 'terminal-linger');
-  assert.strictEqual(bedTarget('gameplay-pressure').player, 1);
-  assert.strictEqual(hashSeed('run-1'), hashSeed('run-1'));
-  assert.strictEqual(seededUnit('run-1', 4), seededUnit('run-1', 4));
-  assert.notStrictEqual(seededUnit('run-1', 4), seededUnit('run-1', 5));
-  const capture = new AudioTraceCapture('run-rc');
-  capture.mark('title-terminal', 0); capture.mark('portalReady', 4.2); capture.mark('portalAbort', 5.1);
-  const trace = capture.manifest();
-  assert.strictEqual(trace.eventCount, 3); assert.strictEqual(trace.events[1].id, 'run-rc:portalReady:1');
-  const source = fs.readFileSync(path.join(ROOT, 'src/audio.js'), 'utf8');
-  for (const bus of ['ambient', 'world', 'player', 'ui', 'critical']) assert(source.includes(`'${bus}'`), `physical ${bus} bus missing`);
-  assert(source.includes('createDynamicsCompressor'), 'master safety stage missing');
-  assert(source.includes('this.busGains'), 'bus gain routing missing');
-  assert(source.includes('setVariationSeed'), 'run-seeded variation seam missing');
-  assert(source.includes('getCaptureManifest'), 'capture manifest seam missing');
+  global.window = { AudioContext: FakeAudioContext };
+  const { AudioEngine } = await import(pathToFileURL(path.join(ROOT, 'src/audio.js')).href);
+  const engine = new AudioEngine();
+  engine.init();
+  const ctx = engine.ctx;
+
+  engine.setContext('menu');
+  const menuStart = ctx.nodes.length;
+  assert.strictEqual(engine.playEvent('menuConfirm'), true);
+  assert(pannersSince(ctx, menuStart).every((panner) => panner.connections.includes(engine.busGains.ui)), 'menu confirmation routes to ui bus');
+
+  const warningStart = ctx.nodes.length;
+  assert.strictEqual(engine.playEvent('hullWarning'), true);
+  assert(pannersSince(ctx, warningStart).every((panner) => panner.connections.includes(engine.busGains.critical)), 'hull warning routes to critical bus');
+
+  engine.setMixSettings({ muted: true });
+  engine.update(1, [], {}, 0, 0, 0, 0, 0, 1);
+  assert.strictEqual(engine.master.gain.value, 0, 'mute survives update');
+  engine.reset();
+  assert.strictEqual(engine.master.gain.value, 0, 'mute survives reset');
+
+  engine.setMixSettings({ muted: false });
+  const heldStart = ctx.nodes.length;
+  assert.strictEqual(engine.playEvent('portalReady'), true);
+  const held = engine._portalReadyVoice;
+  assert(held && held.voice.persistent, 'portal-ready voice is persistent');
+  assert.strictEqual(held.voice._cleanup, null, 'persistent voice bypasses one-shot cleanup');
+  assert(pannersSince(ctx, heldStart).every((panner) => panner.connections.includes(engine.busGains.world)), 'portal-ready routes to its world bus');
+  engine.reset();
+  assert.strictEqual(engine._portalReadyVoice, null, 'reset clears held portal-ready voice');
+  assert.strictEqual(held.osc.stopped, true, 'reset stops held portal-ready oscillator');
+
   console.log('AudioRCRecovery: 1 passed, 0 failed');
 })().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

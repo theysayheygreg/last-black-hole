@@ -1936,6 +1936,8 @@ function applyRemoteSnapshot(snapshot) {
       escapeTimer = 0;
       freezeRunEnd(simState);
       ship.setThrust(false);
+      audioRouter?.setPhase('results');
+      audioRouter?.local('results', { presentationId: `results:${performance.now()}` });
     }
   }
 }
@@ -2932,6 +2934,8 @@ function applyPauseResumeDecision(decision) {
     escapeTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+    audioRouter?.setPhase('results');
+    audioRouter?.local('results', { presentationId: `results:${performance.now()}` });
     return;
   }
   if (decision.phase === 'recovery' || decision.rematched) {
@@ -2995,9 +2999,10 @@ function togglePause() {
     clearRemotePendingActions();
     inputManager.neutralizeForPause();
     neutralizeRemoteAuthorityInput();
+    // UI bus stays audible while the gameplay bed attenuates.
+    audioRouter?.local('pause', { presentationId: `pause:${performance.now()}` });
     gamePhase = 'paused';
     audioRouter?.setPhase('paused');
-    audioRouter?.local('pause', { presentationId: `pause:${performance.now()}` });
     pauseMenuSelection = 0;  // default to "return to game"
     ship.setThrust(false);
   } else if (gamePhase === 'paused') {
@@ -4708,6 +4713,8 @@ function gameLoop(now) {
           escapeTimer = 0;
           freezeRunEnd(simState);
           ship.setThrust(false);
+          audioRouter?.setPhase('results');
+          audioRouter?.local('results', { presentationId: `results:${performance.now()}` });
           audioEngine.playEvent('extract');
         }
       }

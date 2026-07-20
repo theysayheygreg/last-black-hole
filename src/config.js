@@ -385,12 +385,9 @@ export const CONFIG = {
   audio: {
     enabled: true,               // synthesis audio — drone, well harmonics, events
     masterVolume: 0.7,
-    ambienceVolume: 0.72,
     effectsVolume: 0.82,
     uiVolume: 0.78,
     muted: false,
-    dynamicRange: 'default', // default | night | wide; runtime-safe and UI-ready
-    mono: false, // fold noncritical spatial sends to center
     droneVolume: 0.15,
     droneBaseFreq: 60,           // Hz, start of run
     droneEndFreq: 35,            // Hz, end of run (pitch drops with universe age)
