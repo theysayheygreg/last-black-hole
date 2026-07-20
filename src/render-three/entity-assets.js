@@ -8,6 +8,7 @@ export const ENTITY_ASSET_MANIFEST = Object.freeze({
   scavengerBreacher: { path: 'assets/visual/entities/scavenger-breacher.png', classification: 'runtime' },
   wreckIntact: { path: 'assets/visual/entities/wreck-intact.png', classification: 'runtime' },
   wreckLooted: { path: 'assets/visual/entities/wreck-looted.png', classification: 'runtime' },
+  wreckValuable: { path: 'assets/visual/entities/wreck-valuable.png', classification: 'runtime' },
   wreckCluster: { path: 'assets/visual/entities/wreck-cluster.png', classification: 'runtime' },
   planetoid: { path: 'assets/visual/entities/planetoid.png', classification: 'runtime' },
   comet: { path: 'assets/visual/entities/comet.png', classification: 'runtime' },
@@ -36,6 +37,7 @@ export function selectPlayerAsset(entity = {}, { remote = false } = {}) {
 
 export function selectWreckAsset(entity = {}) {
   if (entity.visualState === 'looted' || entity.looted) return 'wreckLooted';
+  if (entity.visualState === 'valuable' || entity.valuable || entity.valueTier === 'valuable') return 'wreckValuable';
   if (entity.visualState === 'cluster' || entity.size === 'scattered' || entity.variant === 'debris') {
     return 'wreckCluster';
   }
