@@ -1829,7 +1829,7 @@ function applyRemoteSnapshot(snapshot) {
   // First snapshot received — transition from loading to playing
   if (gamePhase === 'loading') {
     gamePhase = 'playing';
-    audioEngine.setContext('gameplay');
+    audioRouter?.setPhase('gameplay');
     showHUD();
   }
   const authoritativeMapId = snapshot.session?.mapId;
@@ -1923,6 +1923,7 @@ function applyRemoteSnapshot(snapshot) {
     if (phase === 'playing' && (gamePhase === 'dead' || gamePhase === 'loading')) {
       gamePhase = 'playing';
       deathTimer = 0;
+      audioRouter?.setPhase('gameplay');
       showHUD();
     } else if (phase === 'dead' && gamePhase === 'playing') {
       gamePhase = 'dead';
@@ -1934,6 +1935,8 @@ function applyRemoteSnapshot(snapshot) {
       escapeTimer = 0;
       freezeRunEnd(simState);
       ship.setThrust(false);
+      audioRouter?.setPhase('results');
+      audioRouter?.local('results', { presentationId: `results:${performance.now()}` });
     }
   }
 }
@@ -2930,6 +2933,8 @@ function applyPauseResumeDecision(decision) {
     escapeTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+    audioRouter?.setPhase('results');
+    audioRouter?.local('results', { presentationId: `results:${performance.now()}` });
     return;
   }
   if (decision.phase === 'recovery' || decision.rematched) {
@@ -2940,7 +2945,8 @@ function applyPauseResumeDecision(decision) {
   }
 
   gamePhase = 'playing';
-  audioEngine.setContext('gameplay');
+  audioRouter?.setPhase('gameplay');
+  audioRouter?.local('resume', { presentationId: `resume:${performance.now()}` });
   showHUD();
 }
 
@@ -2952,6 +2958,8 @@ function resumeFromPause() {
       inputNeutralized: false,
     };
     gamePhase = 'playing';
+    audioRouter?.setPhase('gameplay');
+    audioRouter?.local('resume', { presentationId: `resume:${performance.now()}` });
     return;
   }
 
@@ -2991,7 +2999,10 @@ function togglePause() {
     clearRemotePendingActions();
     inputManager.neutralizeForPause();
     neutralizeRemoteAuthorityInput();
+    // UI bus stays audible while the gameplay bed attenuates.
+    audioRouter?.local('pause', { presentationId: `pause:${performance.now()}` });
     gamePhase = 'paused';
+    audioRouter?.setPhase('paused');
     pauseMenuSelection = 0;  // default to "return to game"
     ship.setThrust(false);
   } else if (gamePhase === 'paused') {
@@ -3730,6 +3741,13 @@ function collectThreeSceneState() {
   const authorityPlayer = remoteAuthorityActive
     ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
     : null;
+  const deliveredThrust = remoteAuthorityActive
+    ? (authorityPlayer?.deliveredThrust ?? 0)
+    : (ship?.lastDeliveredThrustIntensity ?? 0);
+  const deliveredBrake = remoteAuthorityActive
+    ? (authorityPlayer?.deliveredBrake ?? 0)
+    : (ship?.lastDeliveredBrakeIntensity ?? 0);
+  const propulsionActive = gamePhase === 'playing';
   const authoritySlingshot = authorityPlayer?.slingshot || null;
   const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
@@ -3751,6 +3769,10 @@ function collectThreeSceneState() {
       forceLedger: authorityPlayer?.forceLedger || null,
       ruler: authorityPlayer?.ruler || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
+      // Render propulsion from delivered control, not raw input intent, so
+      // authority rejection and local fuel gates cannot produce false wakes.
+      thrusting: propulsionActive && Number(deliveredThrust) > 0.01,
+      braking: propulsionActive && Number(deliveredBrake) > 0.01,
     } : null,
     wells: (wellSystem?.wells || []).map((well, index) => ({
       id: well.id || well.name || `well-${index}`,
@@ -4702,6 +4724,8 @@ function gameLoop(now) {
           escapeTimer = 0;
           freezeRunEnd(simState);
           ship.setThrust(false);
+          audioRouter?.setPhase('results');
+          audioRouter?.local('results', { presentationId: `results:${performance.now()}` });
           audioEngine.playEvent('extract');
         }
       }
@@ -4715,6 +4739,7 @@ function gameLoop(now) {
         deathTimer = 0;
         freezeRunEnd(simState);
         ship.setThrust(false);
+        audioEngine.playEvent('death');
       }
     } else if (gamePhase === 'dead') {
         deathTimer += dt;
@@ -4808,8 +4833,12 @@ function gameLoop(now) {
     : null;
   audioRouter?.movementState({
     active: gamePhase === 'playing' && !inventoryOpen,
-    deliveredThrust: authorityPlayer?.deliveredThrust ?? ship.lastDeliveredThrustIntensity,
-    deliveredBrake: authorityPlayer?.deliveredBrake ?? ship.lastDeliveredBrakeIntensity,
+    deliveredThrust: remoteAuthorityActive
+      ? (authorityPlayer?.deliveredThrust ?? 0)
+      : ship.lastDeliveredThrustIntensity,
+    deliveredBrake: remoteAuthorityActive
+      ? (authorityPlayer?.deliveredBrake ?? 0)
+      : ship.lastDeliveredBrakeIntensity,
     speed: Math.hypot(ship.vx || 0, ship.vy || 0),
   });
   if (!inMenu) {

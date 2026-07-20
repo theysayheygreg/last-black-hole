@@ -41,6 +41,7 @@ export class AudioRouter {
     this.seenOrder.length = 0;
     this.portalActive = false;
     this.audio?.reset?.();
+    this.audio?.setVariationSeed?.(runId || 'local');
   }
 
   setClientId(clientId) { this.clientId = clientId || null; }
@@ -79,6 +80,8 @@ export class AudioRouter {
     const next = Boolean(active);
     if (next === this.portalActive) return false;
     this.portalActive = next;
+    // Proximity exit is intentionally quiet; explicit authority portalAborted owns
+    // the readable abort cue so an ordinary distance wobble cannot impersonate cancel.
     return next ? this.local('portalProximity', { ...payload, presentationId: payload.presentationId || `portal:${payload.portalId || 'unknown'}:enter` }, context) : false;
   }
 
@@ -96,6 +99,10 @@ export class AudioRouter {
   play(cue, payload = {}, context = {}) {
     const spec = cueSpec(cue);
     if (!spec) return false;
+    if (cue === 'portalReady') this.portalActive = true;
+    if (['portalAbort', 'portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death'].includes(cue)) {
+      this.portalActive = false;
+    }
     return Boolean(this.audio?.playEvent?.(cue, payload.wx, payload.wy, context.camX, context.camY, context.canvasW, context.canvasH));
   }
 

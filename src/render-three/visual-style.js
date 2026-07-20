@@ -33,9 +33,11 @@ export function makeVisualMaterial(color, opacity, {
 }
 
 export const ENTITY_CONTACT_MATTE_TREATMENTS = Object.freeze({
-  player: Object.freeze({ matteRadius: 1.72, matteY: 0.78 }),
+  // The pilot gets a tight local cutout, not a gray dinner plate. Its bright
+  // sprite/rim and thrust language do the work above the fabric.
+  player: Object.freeze({ matteRadius: 1.32, matteY: 0.72 }),
   remotePlayers: Object.freeze({ matteRadius: 1.65, matteY: 0.78 }),
-  wrecks: Object.freeze({ matteRadius: 2.05, matteY: 0.82 }),
+  wrecks: Object.freeze({ matteRadius: 1.48, matteY: 0.76 }),
   portals: Object.freeze({ matteRadius: 1.24, matteY: 1 }),
   stars: Object.freeze({ matteRadius: 1.35, matteY: 1 }),
   planetoids: Object.freeze({ matteRadius: 1.45, matteY: 0.82 }),
@@ -48,7 +50,7 @@ export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
   const normal = THREE.NormalBlending;
   const add = THREE.AdditiveBlending;
   return {
-    matteContact: makeVisualMaterial(palette.voidBlack, 0.24, { blending: normal }),
+    matteContact: makeVisualMaterial(palette.voidBlack, 0.17, { blending: normal }),
 
     ship: makeVisualMaterial(palette.neutralWhite, 1.0, { blending: normal }),
     remoteShip: makeVisualMaterial(palette.remoteWhite, 0.96, { blending: normal }),
@@ -76,6 +78,14 @@ export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
       color: palette.playerWhite,
       transparent: true,
       opacity: 0.72,
+      depthTest: false,
+      depthWrite: false,
+      blending: add,
+    }),
+    thrusterWake: new THREE.LineBasicMaterial({
+      color: palette.playerCyan,
+      transparent: true,
+      opacity: 0.88,
       depthTest: false,
       depthWrite: false,
       blending: add,

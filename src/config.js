@@ -385,6 +385,9 @@ export const CONFIG = {
   audio: {
     enabled: true,               // synthesis audio — drone, well harmonics, events
     masterVolume: 0.7,
+    effectsVolume: 0.82,
+    uiVolume: 0.78,
+    muted: false,
     droneVolume: 0.15,
     droneBaseFreq: 60,           // Hz, start of run
     droneEndFreq: 35,            // Hz, end of run (pitch drops with universe age)

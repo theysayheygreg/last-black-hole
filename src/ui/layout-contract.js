@@ -217,7 +217,7 @@ export function hudSurfaceLayout(width, height) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
   const edge = 18;
-  const vitals = rect(edge, 118, 286, 188);
+  const vitals = rect(edge, 120, 286, 188);
   const portals = rect(w - edge - 320, edge, 320, 74);
   const actions = rect(w - edge - 360, h - edge - 260, 360, 260);
   const interaction = rect(actions.x - UI_DECK_GEOMETRY.panel.gap - 380, h - edge - 84, 380, 70);
