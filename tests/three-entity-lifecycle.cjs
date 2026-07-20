@@ -163,7 +163,7 @@ async function run() {
     const frame = {
       localPlayer: {
         id: 'local', world: { x: 0, y: 0 }, status: 'alive',
-        movement: { facing: 0, velocity: { x: 1, y: 0 } },
+        movement: { facing: 0, velocity: { x: 1, y: 0 }, thrusting: true },
         slingshot: { engaged: true, anchor: { world: { x: 0.1, y: 0 }, range: 0.2 } },
       },
       world: {
@@ -182,6 +182,28 @@ async function run() {
     assert(log.calls.some((call) => call.type === 'line'), 'Engaged slingshot should submit a tether');
     assert(log.calls.filter((call) => call.type === 'line').length >= 5,
       'Player should submit thrust ports plus lane/tether grammar, not a lone diagnostic ring');
+
+    const propulsionLines = (movement) => {
+      const stateLog = makeDrawLog();
+      family.update({
+        ...frame,
+        localPlayer: { ...frame.localPlayer, movement, slingshot: {} },
+        world: { remotePlayers: [], shipCandidates: [] },
+      }, stateLog.draw);
+      return stateLog.calls.filter((call) => call.type === 'line').map((call) => call.args);
+    };
+    const coast = propulsionLines({ facing: 0, velocity: { x: 1, y: 0 } });
+    const parkedThrust = propulsionLines({ facing: 0, velocity: { x: 0, y: 0 }, thrusting: true });
+    const thrust = propulsionLines({ facing: 0, velocity: { x: 1, y: 0 }, thrusting: true });
+    const brake = propulsionLines({ facing: 0, velocity: { x: 1, y: 0 }, braking: true });
+    assert(coast.length === 0 && parkedThrust.length === 0,
+      'Coasting and near-stationary ships must not retain arbitrary thrust-port marks');
+    assert(thrust.length === 2 && brake.length === 2,
+      'Moving thrust and braking must each submit their two state-specific ports');
+    assert(thrust[0][0] < brake[0][0] && thrust[0][2] < brake[0][2],
+      'Brake ports must move to the forward side instead of reading as thrust');
+    assert(Math.abs(thrust[0][2] - thrust[0][0]) > Math.abs(brake[0][2] - brake[0][0]),
+      'Brake ports must remain visibly shorter than thrust ports');
 
     family.update({ ...frame, localPlayer: null, world: { remotePlayers: [], shipCandidates: [] } }, log.draw);
     assert(family.getStats().activeObjects === 0, 'Empty update must return family to idle');

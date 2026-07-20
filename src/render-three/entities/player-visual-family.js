@@ -43,18 +43,27 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
         const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
           0.052, -player.movement.facing - Math.PI * 0.5, 'player', player);
         if (core) { this.countObject(1); remaining -= 1; }
-        // Two short port strokes make propulsion a first-glance direction cue
-        // without promoting a generic bloom blob over the ASCII fabric.
-        const facing = heading(player);
-        const wake = { x: -Math.cos(facing), y: Math.sin(facing) };
-        const lateral = { x: -wake.y, y: wake.x };
-        for (const side of [-1, 1]) {
-          const start = {
-            x: player.world.x + wake.x * 0.017 + lateral.x * side * 0.010,
-            y: player.world.y + wake.y * 0.017 + lateral.y * side * 0.010,
-          };
-          const end = { x: start.x + wake.x * 0.027, y: start.y + wake.y * 0.027 };
-          if (draw.line(start.x, start.y, end.x, end.y, this.materials.thrusterWake)) this.submittedParts += 1;
+        // Ports carry propulsion state, not a permanent heading decoration:
+        // rear strokes for thrust, forward puffs for braking, nothing while coasting.
+        const movement = player.movement || {};
+        const speed = Math.hypot(movement.velocity?.x || 0, movement.velocity?.y || 0);
+        const mode = speed >= 0.002 && (movement.thrusting || movement.braking)
+          ? (movement.braking ? 'braking' : 'thrusting')
+          : null;
+        if (mode) {
+          const facing = heading(player);
+          const wake = { x: -Math.cos(facing), y: Math.sin(facing) };
+          const lateral = { x: -wake.y, y: wake.x };
+          const direction = mode === 'braking' ? { x: -wake.x, y: -wake.y } : wake;
+          const length = mode === 'braking' ? 0.018 : 0.034;
+          for (const side of [-1, 1]) {
+            const start = {
+              x: player.world.x + direction.x * 0.017 + lateral.x * side * 0.010,
+              y: player.world.y + direction.y * 0.017 + lateral.y * side * 0.010,
+            };
+            const end = { x: start.x + direction.x * length, y: start.y + direction.y * length };
+            if (draw.line(start.x, start.y, end.x, end.y, this.materials.thrusterWake)) this.submittedParts += 1;
+          }
         }
       }
     }
