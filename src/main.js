@@ -3926,6 +3926,9 @@ function collectFrameVfxEvents(ctx, w, h) {
     });
   }
   if (gamePhase === 'title') {
+    // The clean title-environment capture removes the title wordmark, so its
+    // screen-space glyph faults must not survive as orphaned presentation.
+    if (titleEnvironmentCaptureOnly) return [];
     return collectTitleVfxEvents(ctx, w, h, totalTime);
   }
   return [];
