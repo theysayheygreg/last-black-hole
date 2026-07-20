@@ -13,6 +13,7 @@ const {
   assert,
   waitFor,
   withQuery,
+  stepGameFrames,
 } = require('./helpers.cjs');
 
 const htmlFile = process.argv[2] || 'index-a.html';
@@ -248,17 +249,18 @@ async function run() {
         const before = await page.evaluate(() => window.__TEST_API.getShipPos());
         await setGamepadAxes(page, [1, 0, 0, 0, 0, 0]);
         await setGamepadButton(page, 7, true, 1);
-        await waitFor(page, () => {
+        await stepGameFrames(page, 8, 1 / 60);
+        await waitForLabeled(page, 'local gamepad thrust input', () => {
           const input = window.__TEST_API.getInputState();
           return input && input.lastInputSource === 'gamepad' && input.thrustIntensity > 0.9;
         }, { timeout: 3000 });
-        await sleep(900);
+        await stepGameFrames(page, 54, 1 / 60);
         const propulsion = await page.evaluate(() => window.__TEST_API.getThreeSceneState()?.ship || null);
         assert(propulsion?.thrusting === true && propulsion?.braking === false,
           `Three scene must publish delivered thrust state: ${JSON.stringify(propulsion)}`);
         await setGamepadButton(page, 7, false, 0);
         await setGamepadAxes(page, [0, 0, 0, 0, 0, 0]);
-        await sleep(180);
+        await stepGameFrames(page, 12, 1 / 60);
         const coastPropulsion = await page.evaluate(() => window.__TEST_API.getThreeSceneState()?.ship || null);
         assert(coastPropulsion?.thrusting === false && coastPropulsion?.braking === false,
           `Three scene must clear delivered propulsion after release: ${JSON.stringify(coastPropulsion)}`);
@@ -270,9 +272,9 @@ async function run() {
         assert(moved > 0.005, `Expected local controller movement, got ${moved}`);
 
         await tapGamepadButton(page, 17); // inventory open
-        await waitFor(page, () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
+        await waitForLabeled(page, 'local inventory open', () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
         await tapGamepadButton(page, 1); // back/close
-        await waitFor(page, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
+        await waitForLabeled(page, 'local inventory close', () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
         localShot = await screenshot(page, 'controller-local');
       });
     });
