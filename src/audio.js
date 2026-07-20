@@ -17,6 +17,10 @@ import { worldToScreen, worldDistance } from './coords.js';
 import { cueForAuthoritativeEvent, EventVoiceBudget } from './audio-events.js';
 import { AudioMixer } from './audio/mixer.js';
 import { movementAudioLevels, resolveMovementAudioState } from './audio/movement-state.js';
+import { cueSpec } from './audio/cue-spec.js';
+import { seededUnit } from './audio/deterministic.js';
+import { AudioTraceCapture } from './audio/capture.js';
+import { bedTarget, normalizeBedState } from './audio/adaptive-bed.js';
 
 export class AudioEngine {
   constructor() {
@@ -36,6 +40,13 @@ export class AudioEngine {
     this._movementState = 'idle';
     this._movementLastUpdate = -Infinity;
     this._movementVoice = null;
+    this.busGains = null;
+    this._duckRequests = new Map();
+    this._activeBus = 'world';
+    this._variationSeed = 'local';
+    this._variationIndex = 0;
+    this._trace = new AudioTraceCapture('local');
+    this._portalReadyVoice = null;
   }
 
   getDiagnostics() {
@@ -43,6 +54,8 @@ export class AudioEngine {
       phase: this._audioState,
       movement: { state: this._movementState, persistentVoices: this._movementVoice ? 2 : 0 },
       mixer: this._mixer.snapshot(this.ctx?.currentTime ?? 0),
+      buses: Object.fromEntries(Object.entries(this.busGains || {}).map(([name, gain]) => [name, gain.gain.value])),
+      trace: this._trace.manifest(),
     };
   }
 
@@ -56,13 +69,18 @@ export class AudioEngine {
     this.ctx = new AC();
     this.initiated = true;
 
-    // Master output
+    // Physical bus topology: each semantic bus owns a gain stage before shared character/safety.
     this.master = this.ctx.createGain();
     this.master.gain.value = CONFIG.audio.masterVolume;
-    this.master.connect(this.ctx.destination);
-
-    // SNES signal chain: duckGain → snesFilter → crusher → echo → master
+    this._safety = this.ctx.createDynamicsCompressor();
+    this._safety.threshold.value = -10; this._safety.knee.value = 18; this._safety.ratio.value = 8;
+    this._safety.attack.value = 0.003; this._safety.release.value = 0.18;
+    this.master.connect(this._safety); this._safety.connect(this.ctx.destination);
+    this.busGains = Object.fromEntries(['ambient', 'world', 'player', 'ui', 'critical'].map((bus) => {
+      const gain = this.ctx.createGain(); gain.gain.value = 1; return [bus, gain];
+    }));
     this.duckGain = this.ctx.createGain();
+    Object.values(this.busGains).forEach((gain) => gain.connect(this.duckGain));
 
     // SNES SPC700 emulation — three stacked processing stages:
     //
@@ -131,6 +149,8 @@ export class AudioEngine {
 
   reset() {
     this._eventBudget.reset();
+    this._trace.reset(this._variationSeed);
+    this._duckRequests.clear();
     this._mixer.reset();
     this._portalProximityActive = false;
     this._controlAccumulator = 0;
@@ -165,38 +185,35 @@ export class AudioEngine {
     this._setMovementVoice({ active: false }, now, 0.06);
   }
 
-  /** Set audio context: 'title', 'menu', 'gameplay', 'meta' */
+  /** Crossfade five adaptive beds. Presentation only; authority still owns outcomes. */
   setContext(state) {
     if (!this.initiated) return;
-    this._audioState = state;
+    this._audioState = normalizeBedState(state);
     const now = this.ctx.currentTime;
-    const ramp = 0.3;
-
-    if (state === 'title') {
-      // Deep ominous drone — lower than gameplay, all three layers
-      if (this.drone) {
-        this.drone.osc.frequency.linearRampToValueAtTime(40, now + ramp);
-        this.drone.subOsc.frequency.linearRampToValueAtTime(20, now + ramp);
-        this.drone.fifthOsc.frequency.linearRampToValueAtTime(60, now + ramp);
-        this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume * 1.3, now + ramp);
-      }
-      for (const v of this.wellVoices) v.gain.gain.linearRampToValueAtTime(0, now + ramp);
-    } else if (state === 'menu' || state === 'meta') {
-      // Quiet ambient, no drone, no wells
-      if (this.drone) this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume * 0.3, now + ramp);
-      for (const v of this.wellVoices) v.gain.gain.linearRampToValueAtTime(0, now + ramp);
-    } else if (state === 'gameplay') {
-      // Full audio — all layers active
-      if (this.drone) {
-        this.drone.osc.frequency.linearRampToValueAtTime(CONFIG.audio.droneBaseFreq, now + ramp);
-        this.drone.subOsc.frequency.linearRampToValueAtTime(CONFIG.audio.droneBaseFreq * 0.5, now + ramp);
-        this.drone.fifthOsc.frequency.linearRampToValueAtTime(CONFIG.audio.droneBaseFreq * 1.5, now + ramp);
-        this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume, now + ramp);
-      }
-      this._setMovementVoice({ active: true }, now, ramp);
-    } else {
-      this._setMovementVoice({ active: false }, now, ramp);
+    const target = bedTarget(this._audioState);
+    for (const [bus, value] of Object.entries(target)) {
+      if (bus === 'ramp' || !this.busGains?.[bus]) continue;
+      const gain = this.busGains[bus].gain;
+      gain.cancelScheduledValues(now); gain.setValueAtTime(gain.value, now);
+      gain.linearRampToValueAtTime(value, now + target.ramp);
     }
+    const gameplay = this._audioState === 'gameplay-pressure';
+    if (this.drone) {
+      const freq = gameplay ? CONFIG.audio.droneBaseFreq : this._audioState === 'title-terminal' ? 40 : 32;
+      this.drone.osc.frequency.linearRampToValueAtTime(freq, now + target.ramp);
+      this.drone.subOsc.frequency.linearRampToValueAtTime(freq * .5, now + target.ramp);
+      this.drone.fifthOsc.frequency.linearRampToValueAtTime(freq * 1.5, now + target.ramp);
+      this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume * (gameplay ? 1 : .7), now + target.ramp);
+    }
+    for (const voice of this.wellVoices) if (!gameplay) voice.gain.gain.linearRampToValueAtTime(0, now + target.ramp);
+    this._setMovementVoice({ active: gameplay }, now, target.ramp);
+  }
+
+  setVariationSeed(seed = 'local') { this._variationSeed = String(seed); this._variationIndex = 0; this._trace.reset(this._variationSeed); }
+  getCaptureManifest() { return this._trace.manifest(); }
+  setMixSettings(settings = {}) {
+    Object.assign(CONFIG.audio, Object.fromEntries(Object.entries(settings).filter(([key]) => ['masterVolume','ambienceVolume','effectsVolume','uiVolume','muted','dynamicRange','mono'].includes(key))));
+    if (this.master) this.master.gain.value = CONFIG.audio.muted ? 0 : CONFIG.audio.masterVolume;
   }
 
   /**
@@ -235,7 +252,7 @@ export class AudioEngine {
     this.master.gain.linearRampToValueAtTime(CONFIG.audio.masterVolume, now + ramp);
 
     // Drone: pitch drops and distortion grows as universe ages
-    if (this.drone && this._audioState === 'gameplay') {
+    if (this.drone && this._audioState === 'gameplay-pressure') {
       const progress = Math.min(runElapsed / Math.max(runDuration, 1), 1);
       const freq = CONFIG.audio.droneBaseFreq +
         (CONFIG.audio.droneEndFreq - CONFIG.audio.droneBaseFreq) * progress;
@@ -251,7 +268,7 @@ export class AudioEngine {
     }
 
     // Well harmonics (gameplay only)
-    if (this._audioState === 'gameplay') {
+    if (this._audioState === 'gameplay-pressure') {
       this._updateWellVoices(wells, ship, camX, camY, canvasW, canvasH, now, ramp);
       this._updateInhibitorVoice(inhibitorState, ship, now, ramp);
     }
@@ -263,7 +280,9 @@ export class AudioEngine {
     if (!this.initiated || !CONFIG.audio.enabled) return false;
 
     const now = this.ctx.currentTime;
-    const vol = CONFIG.audio.eventVolume;
+    this._activeBus = cueSpec(type)?.bus || 'world';
+    this._trace.mark(type, now, { bus: this._activeBus });
+    const vol = CONFIG.audio.eventVolume * (this._activeBus === 'ui' ? CONFIG.audio.uiVolume : CONFIG.audio.effectsVolume);
     if (type !== 'death' && !this._eventBudget.admit(type, now)) return false;
     if (!this._mixer.admit(type, now)) {
       this._eventBudget.release(type, now);
@@ -282,6 +301,10 @@ export class AudioEngine {
       case 'slingshotEngage':   this._playSlingshotEngage(now, vol, pan); break;
       case 'slingshotRelease':  this._playSlingshotRelease(now, vol, pan); break;
       case 'portalProximity':   this._playPortalProximity(now, vol, pan); break;
+      case 'portalReady':       this._setPortalReady(true, now, vol, pan); break;
+      case 'portalAbort':       this._setPortalReady(false, now, vol, pan); break;
+      case 'portalBlocked':     this._playPortalBlocked(now, vol); break;
+      case 'portalFinal':       this._playPortalDeath(now, vol, pan); break;
       case 'portalConfirm':     this._playPortalConfirm(now, vol, pan); break;
       case 'scavengerBump':     this._playScavengerBump(now, vol, pan); break;
       case 'inhibitorGlitch':   this._playInhibitorGlitch(now, vol); break;
@@ -295,6 +318,11 @@ export class AudioEngine {
       case 'breachFlare':       this._playBreachFlare(now, vol); break;
       case 'wellProximity':     this._playWellRumble(now, vol); break;
       case 'hullWarning':       this._playHullWarning(now, vol); break;
+      case 'fuelWarning':       this._playWarning(now, vol, 118); break;
+      case 'signalWarning':     this._playWarning(now, vol, 164); break;
+      case 'pause':             this._playPause(now, vol, false); break;
+      case 'resume':            this._playPause(now, vol, true); break;
+      case 'results':           this._playResults(now, vol); break;
       case 'starConsumed':      this._playStarConsumed(now, vol, pan); break;
       case 'scavDeath':         this._playDebrisClatter(now, vol, pan); break;
       case 'wreckConsumed':     this._playCrunch(now, vol, pan); break;
@@ -384,7 +412,7 @@ export class AudioEngine {
     fifthOsc.connect(fifthGain);
     fifthGain.connect(shaper);
     shaper.connect(gain);
-    gain.connect(this.duckGain);
+    gain.connect(this.busGains.ambient);
     osc.start();
     subOsc.start();
     fifthOsc.start();
@@ -414,7 +442,7 @@ export class AudioEngine {
       subOsc.connect(subGain);
       subGain.connect(gain);
       gain.connect(panner);
-      panner.connect(this.duckGain);
+      panner.connect(this.busGains.world);
       osc.start();
       subOsc.start();
       this.wellVoices.push({ osc, subOsc, subGain, gain, panner, active: false, wellIndex: -1 });
@@ -432,7 +460,7 @@ export class AudioEngine {
     filter.Q.value = 5;
     osc.connect(filter);
     filter.connect(gain);
-    gain.connect(this.duckGain);
+    gain.connect(this.busGains.critical);
     osc.start();
     this.inhibitorVoice = { osc, filter, gain };
   }
@@ -460,7 +488,7 @@ export class AudioEngine {
     noise.connect(filter);
     filter.connect(textureGain);
     textureGain.connect(gain);
-    gain.connect(this.duckGain);
+    gain.connect(this.busGains.player);
     tone.start();
     noise.start();
     this._movementVoice = { tone, toneGain, noise, filter, textureGain, gain };
@@ -468,7 +496,7 @@ export class AudioEngine {
 
   _setMovementVoice(state = {}, now = this.ctx?.currentTime ?? 0, ramp = 0.08) {
     if (!this._movementVoice) return;
-    const active = state.active !== false && this._audioState === 'gameplay';
+    const active = state.active !== false && this._audioState === 'gameplay-pressure';
     const mode = state.state || (active ? this._movementState : 'idle');
     const levels = active ? movementAudioLevels(state, mode) : movementAudioLevels({}, 'idle');
     const voice = this._movementVoice;
@@ -562,13 +590,13 @@ export class AudioEngine {
     return curve;
   }
 
-  _createVoice(pan = 0) {
+  _createVoice(pan = 0, bus = this._activeBus || 'world') {
     const gain = this.ctx.createGain();
     gain.gain.value = 0;
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = pan;
     gain.connect(panner);
-    panner.connect(this.duckGain);
+    panner.connect(this.busGains.world);
     // Auto-cleanup: schedule disconnect after a generous timeout.
     // This catches any source that doesn't have its own onended handler.
     const cleanup = setTimeout(() => {
@@ -593,6 +621,7 @@ export class AudioEngine {
         for (const f of filters) f.disconnect();
         voice.gain.disconnect();
         voice.panner.disconnect();
+        clearTimeout(voice._cleanup);
       } catch (e) {} // ignore if already disconnected
     };
   }
@@ -602,7 +631,7 @@ export class AudioEngine {
     const length = sampleRate * duration;
     const buffer = this.ctx.createBuffer(1, length, sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < length; i++) data[i] = seededUnit(this._variationSeed, this._variationIndex++ + i) * 2 - 1;
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     return source;
@@ -620,19 +649,39 @@ export class AudioEngine {
     return osc;
   }
 
-  _duck(now, amount, duration) {
-    if (this.duckGain) {
-      this.duckGain.gain.setValueAtTime(amount, now);
-      this.duckGain.gain.linearRampToValueAtTime(1, now + duration);
+  _duck(now, amount, duration, buses = ['ambient', 'world', 'player']) {
+    const id = `${now}:${this._variationIndex++}`;
+    this._duckRequests.set(id, { amount, until: now + duration, buses });
+    for (const bus of buses) {
+      const gain = this.busGains?.[bus]?.gain; if (!gain) continue;
+      const floor = Math.min(...[...this._duckRequests.values()].filter((request) => request.buses.includes(bus) && request.until > now).map((request) => request.amount), 1);
+      gain.cancelScheduledValues(now); gain.setValueAtTime(gain.value, now); gain.linearRampToValueAtTime(floor, now + .015); gain.linearRampToValueAtTime(1, now + duration);
     }
+    setTimeout(() => this._duckRequests.delete(id), Math.ceil(duration * 1000) + 20);
   }
+
+  _setPortalReady(active, now, vol, pan) {
+    if (!active) {
+      if (this._portalReadyVoice) { const { osc, gain } = this._portalReadyVoice; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value, now); gain.gain.exponentialRampToValueAtTime(.001, now + .16); osc.stop(now + .18); this._portalReadyVoice = null; }
+      this._playPortalAbort(now, vol); return;
+    }
+    if (this._portalReadyVoice) return;
+    const osc = this.ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = 392;
+    const voice = this._createVoice(pan, 'world'); osc.connect(voice.gain); voice.gain.gain.setValueAtTime(.001, now); voice.gain.gain.linearRampToValueAtTime(vol * .09, now + .12); osc.start(now);
+    this._portalReadyVoice = { osc, gain: voice.gain };
+  }
+  _playPortalAbort(now, vol) { const osc = this.ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.setValueAtTime(392, now); osc.frequency.linearRampToValueAtTime(294, now + .18); const voice = this._createVoice(0, 'ui'); osc.connect(voice.gain); voice.gain.gain.setValueAtTime(vol * .18, now); voice.gain.gain.exponentialRampToValueAtTime(.001, now + .22); osc.start(now); osc.stop(now + .24); }
+  _playPortalBlocked(now, vol) { this._playWarning(now, vol, 176); }
+  _playWarning(now, vol, base = 146) { const osc = this.ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.setValueAtTime(base, now); osc.frequency.linearRampToValueAtTime(base * 15 / 16, now + .13); const voice = this._createVoice(0, 'critical'); osc.connect(voice.gain); voice.gain.gain.setValueAtTime(vol * .28, now); voice.gain.gain.exponentialRampToValueAtTime(.001, now + .18); osc.start(now); osc.stop(now + .2); }
+  _playPause(now, vol, resume) { const osc = this.ctx.createOscillator(); osc.type = 'sine'; osc.frequency.setValueAtTime(resume ? 250 : 330, now); osc.frequency.linearRampToValueAtTime(resume ? 330 : 250, now + .16); const voice = this._createVoice(0, 'ui'); osc.connect(voice.gain); voice.gain.gain.setValueAtTime(vol * .16, now); voice.gain.gain.exponentialRampToValueAtTime(.001, now + .23); osc.start(now); osc.stop(now + .25); }
+  _playResults(now, vol) { const osc = this.ctx.createOscillator(); osc.type = 'sine'; osc.frequency.setValueAtTime(73, now); const voice = this._createVoice(0, 'ambient'); osc.connect(voice.gain); voice.gain.gain.setValueAtTime(vol * .2, now); voice.gain.gain.exponentialRampToValueAtTime(.001, now + .8); osc.start(now); osc.stop(now + .85); }
 
   // ==== GAMEPLAY EVENT SOUNDS ====
 
   _playLootChime(now, vol, pan) {
-    const freqs = [523, 659, 784]; // C5 E5 G5
-    for (let i = 0; i < 3; i++) {
-      const osc = this._createSquare(0.25);
+    const freqs = [330, 495]; // amber imperfect fifth, not a major reward triad
+    for (let i = 0; i < freqs.length; i++) {
+      const osc = this.ctx.createOscillator(); osc.type = 'triangle';
       osc.frequency.value = freqs[i];
       const voice = this._createVoice(pan);
       osc.connect(voice.gain);
@@ -815,6 +864,8 @@ export class AudioEngine {
   }
 
   _playDeath(now) {
+    this.setContext('dead');
+    this._playWarning(now, CONFIG.audio.eventVolume, 92);
     if (this.drone) {
       this.drone.osc.frequency.linearRampToValueAtTime(15, now + 1.5);
       this.drone.subOsc.frequency.linearRampToValueAtTime(8, now + 1.5);
@@ -945,9 +996,9 @@ export class AudioEngine {
       const noise = this._createNoise(0.05);
       const filter = this.ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.value = 500 + Math.random() * 2000;
+      filter.frequency.value = 500 + seededUnit(this._variationSeed, this._variationIndex++) * 2000;
       filter.Q.value = 2;
-      const voice = this._createVoice(Math.max(-1, Math.min(1, pan + (Math.random() - 0.5) * 0.3)));
+      const voice = this._createVoice(Math.max(-1, Math.min(1, pan + (seededUnit(this._variationSeed, this._variationIndex++) - 0.5) * 0.3)));
       noise.connect(filter); filter.connect(voice.gain);
       const t = now + i * 0.04;
       voice.gain.gain.setValueAtTime(vol * 0.2, t);
@@ -1007,8 +1058,8 @@ export class AudioEngine {
   // ==== MENU / UI SOUNDS ====
 
   _playMenuBlip(now, vol) {
-    const osc = this._createSquare(0.25);
-    osc.frequency.value = 1200;
+    const osc = this.ctx.createOscillator(); osc.type = 'triangle';
+    osc.frequency.value = 720;
     const voice = this._createVoice(0);
     osc.connect(voice.gain);
     voice.gain.gain.setValueAtTime(vol, now);
@@ -1018,9 +1069,9 @@ export class AudioEngine {
 
   _playMenuConfirm(now, vol) {
     // Two-note ascending: G5 → C6
-    const freqs = [784, 1047];
+    const freqs = [294, 392]; // cyan perfect-fourth route cell
     for (let i = 0; i < 2; i++) {
-      const osc = this._createSquare(0.25);
+      const osc = this.ctx.createOscillator(); osc.type = 'triangle';
       osc.frequency.value = freqs[i];
       const voice = this._createVoice(0);
       osc.connect(voice.gain);
@@ -1079,9 +1130,9 @@ export class AudioEngine {
 
   _playUpgrade(now, vol) {
     // Ascending 4-note arpeggio: C5 → E5 → G5 → C6
-    const freqs = [523, 659, 784, 1047];
-    for (let i = 0; i < 4; i++) {
-      const osc = this._createSquare(0.25);
+    const freqs = [330, 495]; // amber material interval
+    for (let i = 0; i < freqs.length; i++) {
+      const osc = this.ctx.createOscillator(); osc.type = 'triangle';
       osc.frequency.value = freqs[i];
       const voice = this._createVoice(0);
       osc.connect(voice.gain);
@@ -1123,7 +1174,7 @@ export class AudioEngine {
   _playItemPlink(now, vol) {
     // Tiny high ping
     const osc = this._createSquare(0.125);
-    osc.frequency.value = 2400 + Math.random() * 400;
+    osc.frequency.value = 2400 + seededUnit(this._variationSeed, this._variationIndex++) * 400;
     const voice = this._createVoice(0);
     osc.connect(voice.gain);
     voice.gain.gain.setValueAtTime(vol, now);

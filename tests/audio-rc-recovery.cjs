@@ -1,0 +1,30 @@
+const assert = require('assert');
+const path = require('path');
+const fs = require('fs');
+const { pathToFileURL } = require('url');
+const ROOT = path.resolve(__dirname, '..');
+
+(async () => {
+  const cue = await import(pathToFileURL(path.join(ROOT, 'src/audio/cue-spec.js')).href);
+  const { bedTarget, normalizeBedState, BED_STATES } = await import(pathToFileURL(path.join(ROOT, 'src/audio/adaptive-bed.js')).href);
+  const { hashSeed, seededUnit } = await import(pathToFileURL(path.join(ROOT, 'src/audio/deterministic.js')).href);
+  const { AudioTraceCapture } = await import(pathToFileURL(path.join(ROOT, 'src/audio/capture.js')).href);
+  for (const id of ['portalReady', 'portalAbort', 'portalBlocked', 'hullWarning', 'fuelWarning', 'signalWarning', 'pause', 'resume', 'results']) assert(cue.cueSpec(id), `missing ${id}`);
+  assert.deepStrictEqual(BED_STATES, ['title-terminal', 'briefing-loading', 'gameplay-pressure', 'pause-results', 'terminal-linger']);
+  assert.strictEqual(normalizeBedState('dead'), 'terminal-linger');
+  assert.strictEqual(bedTarget('gameplay-pressure').player, 1);
+  assert.strictEqual(hashSeed('run-1'), hashSeed('run-1'));
+  assert.strictEqual(seededUnit('run-1', 4), seededUnit('run-1', 4));
+  assert.notStrictEqual(seededUnit('run-1', 4), seededUnit('run-1', 5));
+  const capture = new AudioTraceCapture('run-rc');
+  capture.mark('title-terminal', 0); capture.mark('portalReady', 4.2); capture.mark('portalAbort', 5.1);
+  const trace = capture.manifest();
+  assert.strictEqual(trace.eventCount, 3); assert.strictEqual(trace.events[1].id, 'run-rc:portalReady:1');
+  const source = fs.readFileSync(path.join(ROOT, 'src/audio.js'), 'utf8');
+  for (const bus of ['ambient', 'world', 'player', 'ui', 'critical']) assert(source.includes(`'${bus}'`), `physical ${bus} bus missing`);
+  assert(source.includes('createDynamicsCompressor'), 'master safety stage missing');
+  assert(source.includes('this.busGains'), 'bus gain routing missing');
+  assert(source.includes('setVariationSeed'), 'run-seeded variation seam missing');
+  assert(source.includes('getCaptureManifest'), 'capture manifest seam missing');
+  console.log('AudioRCRecovery: 1 passed, 0 failed');
+})().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

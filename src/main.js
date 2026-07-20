@@ -1769,6 +1769,8 @@ function startGame(map, seed = null) {
   }
 
   gamePhase = 'playing';
+  audioRouter?.setPhase('gameplay');
+  audioRouter?.local('resume', { presentationId: `resume:${performance.now()}` });
   audioEngine.setContext('gameplay');
   showHUD();
 }
@@ -2952,6 +2954,8 @@ function resumeFromPause() {
       inputNeutralized: false,
     };
     gamePhase = 'playing';
+    audioRouter?.setPhase('gameplay');
+    audioRouter?.local('resume', { presentationId: `resume:${performance.now()}` });
     return;
   }
 
@@ -2992,6 +2996,8 @@ function togglePause() {
     inputManager.neutralizeForPause();
     neutralizeRemoteAuthorityInput();
     gamePhase = 'paused';
+    audioRouter?.setPhase('paused');
+    audioRouter?.local('pause', { presentationId: `pause:${performance.now()}` });
     pauseMenuSelection = 0;  // default to "return to game"
     ship.setThrust(false);
   } else if (gamePhase === 'paused') {

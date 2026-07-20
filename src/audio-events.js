@@ -16,6 +16,9 @@ const LOCAL_PLAYER_EVENTS = new Set([
   'player.portalConfirmed',
   'player.escaped',
   'player.scavengerBumped',
+  'player.portalReady',
+  'player.portalAborted',
+  'player.portalBlocked',
 ]);
 
 function isLocalEvent(payload, clientId) {
@@ -33,6 +36,9 @@ export function cueForAuthoritativeEvent(event, { clientId = null } = {}) {
     case 'player.slingshotEngaged': return { cue: 'slingshotEngage', payload };
     case 'player.slingshotReleased': return { cue: 'slingshotRelease', payload };
     case 'player.portalProximity': return payload.entered === false ? null : { cue: 'portalProximity', payload };
+    case 'player.portalReady': return { cue: 'portalReady', payload };
+    case 'player.portalAborted': return { cue: 'portalAbort', payload };
+    case 'player.portalBlocked': return { cue: 'portalBlocked', payload };
     case 'player.portalConfirmed': return { cue: 'portalConfirm', payload };
     case 'player.escaped': return { cue: 'extract', payload };
     case 'player.scavengerBumped': return { cue: 'scavengerBump', payload };
