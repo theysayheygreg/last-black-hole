@@ -67,7 +67,7 @@ async function run() {
   assert(input.thrustIntensity === 0 && input.brakeIntensity === 0,
     `zero-centered legacy axes must stay neutral, got thrust=${input.thrustIntensity} brake=${input.brakeIntensity}`);
 
-  console.log('ControllerTriggerTruth: 7/7 passed');
+  console.log('ControllerTriggerTruth: 8/8 passed');
 }
 
 run().catch((error) => {
