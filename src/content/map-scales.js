@@ -23,6 +23,41 @@ export function getMapScaleByWorldScale(worldScale) {
       && definition.dimensions.height === scale) || null;
 }
 
+export function getPortalPlacementPolicy(mapId) {
+  const definition = getMapScaleDefinition(mapId);
+  const source = AUTHORED_MAP_CONTRACT.portalPlacement;
+  if (!definition || !source) throw new RangeError(`Unknown portal placement map: ${mapId}`);
+  const worldScale = definition.dimensions.width;
+  const scaleFraction = (fraction) => Math.round(fraction * worldScale * 1e12) / 1e12;
+  const resolveBand = (band) => {
+    const resolved = {
+      anchor: source.anchor,
+      minRadius: scaleFraction(band.minRadiusFraction),
+      maxRadius: scaleFraction(band.maxRadiusFraction),
+    };
+    if (band.minWellDistanceFraction !== undefined) {
+      resolved.minWellDistance = scaleFraction(band.minWellDistanceFraction);
+    }
+    if (band.maxWellDistanceFraction !== undefined) {
+      resolved.maxWellDistance = scaleFraction(band.maxWellDistanceFraction);
+    }
+    if (band.minWellClearanceFraction !== undefined) {
+      resolved.minWellClearance = scaleFraction(band.minWellClearanceFraction);
+    }
+    return resolved;
+  };
+  return {
+    policyId: source.policyId,
+    mapId: definition.mapId,
+    worldScale,
+    anchor: source.anchor,
+    minPortalSpacing: scaleFraction(source.minPortalSpacingFraction),
+    spawnRadiusBands: Object.fromEntries(
+      Object.entries(source.bands).map(([kind, band]) => [kind, resolveBand(band)]),
+    ),
+  };
+}
+
 export function assertMapDefinitionParity(map) {
   const definition = getMapScaleDefinition(map?.id);
   if (!definition) throw new Error(`Unknown active map id: ${map?.id}`);

@@ -64,8 +64,9 @@ const INTERNAL = Object.freeze({
   lockTelegraphDurationSeconds: 0.25,
   releaseGhostDurationSeconds: 1.0,
   rangeBreakGraceFactor: 1.1,
-  // Internal prompt/snapshot-to-command transport allowance, not a knob.
-  promptTransportTicks: 4,
+  // Four ticks at the original 15 Hz teaching profile. Store that allowance
+  // as wall time so lower-rate map profiles do not change the player's window.
+  promptTransportAllowanceMs: (4 * 1000) / 15,
 });
 
 const QUARTER_TURN_RADIANS = Math.PI / 2;
@@ -142,11 +143,13 @@ function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSH
 }
 
 // Prompt presentation and command delivery each cross an authority tick. The
-// allowance is internal transport behavior, not a sixth gameplay knob.
-function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, fixedStepSeconds = 0) {
+// allowance is internal wall time, not a sixth gameplay knob or a per-tier tick
+// count. The optional second argument remains accepted for old callers but is
+// deliberately ignored so profile dt cannot change the player's window.
+function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, _fixedStepSeconds = 0) {
   const duration = Math.max(0, finite(coyoteTimeMs));
   if (duration <= 0) return 0;
-  return duration + Math.max(0, finite(fixedStepSeconds)) * 1000 * INTERNAL.promptTransportTicks;
+  return duration + INTERNAL.promptTransportAllowanceMs;
 }
 
 function resolveChainCount({

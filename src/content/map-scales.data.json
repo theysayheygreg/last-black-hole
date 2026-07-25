@@ -74,27 +74,81 @@
       "wrecks": { "min": 1.0, "max": 2.0 },
       "planetoids": { "min": 0.4, "max": 0.8 }
     },
+    "portalPlacement": {
+      "policyId": "map-center-fractional-bands-v1",
+      "anchor": "map-center",
+      "minPortalSpacingFraction": 0.06,
+      "bands": {
+        "standard": {
+          "minRadiusFraction": 0.09,
+          "maxRadiusFraction": 0.25,
+          "minWellDistanceFraction": 0.09
+        },
+        "unstable": {
+          "minRadiusFraction": 0.06,
+          "maxRadiusFraction": 0.27,
+          "minWellDistanceFraction": 0.024
+        },
+        "rift": {
+          "minRadiusFraction": 0.04,
+          "maxRadiusFraction": 0.26,
+          "minWellDistanceFraction": 0.036,
+          "maxWellDistanceFraction": 0.14
+        },
+        "finalExfil": {
+          "minRadiusFraction": 0.14,
+          "maxRadiusFraction": 0.27,
+          "minWellClearanceFraction": 0.044
+        }
+      }
+    },
     "travel": {
       "minimumRouteLegWorldUnits": 0.75,
       "maximumRouteLegFraction": 0.7,
-      "model": "canonical-direct-no-flow-baseline-v1",
-      "integrationHz": 60,
-      "sufficientDeltaV": true,
+      "model": "canonical-route-movement-v2",
+      "baseline": {
+        "integrationHz": 60,
+        "purpose": "zero-flow diagnostic baseline only",
+        "sufficientDeltaV": true
+      },
+      "productRate": {
+        "rateHzByMap": {
+          "shallows": 15,
+          "expanse": 12,
+          "deep-field": 10
+        },
+        "dtSource": "SESSION_PROFILES[map.profileId].tickHz",
+        "protocol": "zero-flow full-thrust route with one finite tank carried across authored legs",
+        "fuel": {
+          "initialDeltaV": 100,
+          "deltaVMax": 100,
+          "deltaVBurnRate": 12,
+          "deltaVRegen": 1.5,
+          "deltaVRegenBoost": 6,
+          "deltaVRegenDelaySeconds": 0.5
+        }
+      },
       "tiers": {
         "shallows": {
-          "floorSeconds": 1.4,
-          "ceilingSeconds": 1.6,
-          "observedLegSeconds": [1.48]
+          "baselineObservedLegSeconds": [1.48],
+          "baselineBoundsSeconds": { "floor": 1.4, "ceiling": 1.6 },
+          "productObservedLegSeconds": [1.53],
+          "productFuelRemaining": [81.6],
+          "productRouteSeconds": 1.53
         },
         "expanse": {
-          "floorSeconds": 1.1,
-          "ceilingSeconds": 8.75,
-          "observedLegSeconds": [1.55, 8.52, 1.22]
+          "baselineObservedLegSeconds": [1.55, 8.52, 1.22],
+          "baselineBoundsSeconds": { "floor": 1.1, "ceiling": 8.75 },
+          "productObservedLegSeconds": [1.67, 20.17, 6.0],
+          "productFuelRemaining": [80.0, 0.38, 0.63],
+          "productRouteSeconds": 27.84
         },
         "deep-field": {
-          "floorSeconds": 1.9,
-          "ceilingSeconds": 14.5,
-          "observedLegSeconds": [1.98, 14.22]
+          "baselineObservedLegSeconds": [1.98, 14.22],
+          "baselineBoundsSeconds": { "floor": 1.9, "ceiling": 14.5 },
+          "productObservedLegSeconds": [2.2, 59.3],
+          "productFuelRemaining": [73.6, 1.15],
+          "productRouteSeconds": 61.5
         }
       }
     }

@@ -180,19 +180,21 @@ async function run() {
       const anchors = routeAnchors(map);
       const legs = anchors.slice(1).map((point, index) => torusDistance(anchors[index], point, scale));
       const observedSeconds = [];
+      const baseline = travelContract.baseline;
+      const tierContract = travelContract.tiers[mapId];
       assert(legs.length > 0, `${mapId}: authored route has no movement legs`);
       for (const leg of legs) {
         assert(leg >= travelContract.minimumRouteLegWorldUnits,
           `${mapId}: route leg ${leg} below movement floor`);
         assert(leg <= scale * travelContract.maximumRouteLegFraction,
           `${mapId}: route leg ${leg} exceeds scale fraction`);
-        const seconds = directNoFlowTravelSeconds(leg, travelContract.integrationHz);
-        const tierContract = travelContract.tiers[mapId];
-        assert(seconds >= tierContract.floorSeconds && seconds <= tierContract.ceilingSeconds,
-          `${mapId}: direct no-flow leg ${leg} takes ${seconds}s outside ${tierContract.floorSeconds}-${tierContract.ceilingSeconds}s`);
+        const seconds = directNoFlowTravelSeconds(leg, baseline.integrationHz);
+        assert(seconds >= tierContract.baselineBoundsSeconds.floor
+          && seconds <= tierContract.baselineBoundsSeconds.ceiling,
+        `${mapId}: direct no-flow leg ${leg} takes ${seconds}s outside ${tierContract.baselineBoundsSeconds.floor}-${tierContract.baselineBoundsSeconds.ceiling}s`);
         observedSeconds.push(Number(seconds.toFixed(2)));
       }
-      assert.deepStrictEqual(observedSeconds, travelContract.tiers[mapId].observedLegSeconds,
+      assert.deepStrictEqual(observedSeconds, tierContract.baselineObservedLegSeconds,
         `${mapId}: canonical no-flow observations changed`);
     }
   });
