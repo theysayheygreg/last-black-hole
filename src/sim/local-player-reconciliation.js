@@ -3,18 +3,19 @@ import {
   MOVEMENT_INPUT,
   stepPlayerMovementCore,
 } from '../content/movement-step.js';
+import { UNIT_SCALE } from '../content/units.js';
 
 // This is a presentation bridge, not a second authority. The client predicts
 // only its own input and uses the last authoritative force sample as a short
-// lived hint while the next snapshot is in flight. It does not replay pending
-// packets or predict client fluid flow; those remain server-owned.
+// lived hint while the next snapshot is in flight. It selects the newest
+// unacknowledged command rather than replaying a queue, and it never predicts
+// client fluid flow; those remain server-owned.
 export const LOCAL_PLAYER_RECONCILIATION = Object.freeze({
   positionCorrectionHalfLifeSeconds: 0.09,
   velocityCorrectionHalfLifeSeconds: 0.12,
   hardSnapDistanceWorld: 0.75,
   hardSnapVelocityDeltaWorld: 4,
   maxExtrapolationSeconds: 0.75,
-  metersPerSimUnit: 1000,
 });
 
 function finite(value, fallback = 0) {
@@ -37,11 +38,36 @@ function phaseKey(player = {}) {
 function forceAcceleration(forceLedger) {
   const gravity = forceLedger?.vectors?.gravity || {};
   const wave = forceLedger?.vectors?.wave || {};
-  const scale = LOCAL_PLAYER_RECONCILIATION.metersPerSimUnit;
+  const scale = UNIT_SCALE.metersPerSimUnit;
   return {
     x: (finite(gravity.x) + finite(wave.x)) / scale,
     y: (finite(gravity.y) + finite(wave.y)) / scale,
   };
+}
+
+function normalizeMovementInput(input = {}) {
+  return {
+    moveX: finite(input.moveX),
+    moveY: finite(input.moveY),
+    thrust: Math.max(0, finite(input.thrust)),
+    brake: Math.max(0, finite(input.brake)),
+  };
+}
+
+function latestUnacknowledgedMovement(pendingInputs, acknowledgedSeq) {
+  if (!Array.isArray(pendingInputs) || pendingInputs.length === 0) return null;
+  const ack = Number.isFinite(Number(acknowledgedSeq)) ? Number(acknowledgedSeq) : -Infinity;
+  let latest = null;
+  for (const entry of pendingInputs) {
+    const seq = Number(entry?.seq);
+    if (!Number.isFinite(seq) || seq <= ack) continue;
+    if (latest && seq <= latest.seq) continue;
+    latest = {
+      seq,
+      input: normalizeMovementInput(entry),
+    };
+  }
+  return latest;
 }
 
 function authorityState(player, { runId = null, now = 0 } = {}) {
@@ -125,6 +151,8 @@ export function createLocalPlayerReconciliationState({
       LOCAL_PLAYER_RECONCILIATION.maxExtrapolationSeconds)),
     pendingInputCount: 0,
     lastAcknowledgedSeq: null,
+    predictionInputSource: 'current',
+    predictionInputSeq: null,
     correctionDistance: 0,
     correctionVelocity: 0,
     lastMode: 'idle',
@@ -197,6 +225,14 @@ export function advanceLocalPlayerReconciliation(state, {
 } = {}) {
   if (!state.authority) return { state, hardReset: false };
   const stepDt = Math.max(0, Math.min(1 / 30, finite(dt)));
+  const pendingInputCount = pendingInputs === undefined
+    ? (state.pendingInputCount || 0)
+    : (Array.isArray(pendingInputs) ? pendingInputs.length : 0);
+  const lastAcknowledgedSeq = acknowledgedSeq === undefined
+    ? (state.lastAcknowledgedSeq ?? null)
+    : (Number.isFinite(Number(acknowledgedSeq)) ? Number(acknowledgedSeq) : null);
+  const pendingMovement = latestUnacknowledgedMovement(pendingInputs, lastAcknowledgedSeq);
+  const predictionInput = pendingMovement?.input || normalizeMovementInput(input);
   const predicted = predictionFromAuthority({
     ...state,
     wx: state.wx,
@@ -213,7 +249,7 @@ export function advanceLocalPlayerReconciliation(state, {
   });
   predicted.brain = state.brain;
   predicted.inputConfig = state.inputConfig || MOVEMENT_INPUT;
-  stepPlayerMovementCore(predicted, input, stepDt, {
+  stepPlayerMovementCore(predicted, predictionInput, stepDt, {
     brain: predicted.brain,
     inputConfig: predicted.inputConfig,
     flowSample: { current: { x: 0, y: 0 } },
@@ -226,12 +262,6 @@ export function advanceLocalPlayerReconciliation(state, {
     now,
     state.maxExtrapolationSeconds ?? LOCAL_PLAYER_RECONCILIATION.maxExtrapolationSeconds,
   );
-  const pendingInputCount = pendingInputs === undefined
-    ? (state.pendingInputCount || 0)
-    : (Array.isArray(pendingInputs) ? pendingInputs.length : 0);
-  const lastAcknowledgedSeq = acknowledgedSeq === undefined
-    ? (state.lastAcknowledgedSeq ?? null)
-    : (Number.isFinite(Number(acknowledgedSeq)) ? Number(acknowledgedSeq) : null);
   const [dx, dy] = worldDisplacement(predicted.wx, predicted.wy, target.wx, target.wy);
   const distance = Math.hypot(dx, dy);
   const velocityDistance = Math.hypot(predicted.vx - target.vx, predicted.vy - target.vy);
@@ -245,6 +275,8 @@ export function advanceLocalPlayerReconciliation(state, {
         correctionVelocity: velocityDistance,
         pendingInputCount,
         lastAcknowledgedSeq,
+        predictionInputSource: pendingMovement ? 'pending' : 'current',
+        predictionInputSeq: pendingMovement?.seq ?? null,
         lastMode: 'hard-reset',
       },
       hardReset: true,
@@ -271,6 +303,8 @@ export function advanceLocalPlayerReconciliation(state, {
       correctionVelocity: velocityDistance,
       pendingInputCount,
       lastAcknowledgedSeq,
+      predictionInputSource: pendingMovement ? 'pending' : 'current',
+      predictionInputSeq: pendingMovement?.seq ?? null,
       lastMode: 'blend',
     },
     hardReset: false,

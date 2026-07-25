@@ -10,6 +10,8 @@ async function run() {
   const coords = await import(pathToFileURL(path.join(ROOT, 'src/coords.js')).href);
   const movement = await import(pathToFileURL(path.join(ROOT, 'src/content/movement-step.js')).href);
   const reconciliation = await import(pathToFileURL(path.join(ROOT, 'src/sim/local-player-reconciliation.js')).href);
+  const { UNIT_SCALE } = await import(pathToFileURL(path.join(ROOT, 'src/content/units.js')).href);
+  const { SimClient } = await import(pathToFileURL(path.join(ROOT, 'src/sim/sim-client.js')).href);
   coords.setWorldScale(3);
 
   const brain = { thrustScale: 1, dragScale: 1, currentCoupling: 1 };
@@ -36,10 +38,37 @@ async function run() {
     source,
     { runId: options.runId || 'run-a', now: options.now || 0, brain, inputConfig, ...options },
   );
-  const advance = (state, input, now) => reconciliation.advanceLocalPlayerReconciliation(state, {
+  const advance = (state, input, now, options = {}) => reconciliation.advanceLocalPlayerReconciliation(state, {
     dt: DT,
     now,
     input,
+    ...options,
+  });
+
+  await runner.run('SimClient keeps pending movement private and bounded', async () => {
+    const client = new SimClient('http://local-authority.invalid');
+    client.commandCredential = 'test-command';
+    client.authorityRunId = 'run-a';
+    client.runId = 'run-a';
+    client._json = async () => ({ acceptedSeq: client.seq, tick: client.seq });
+    for (let index = 0; index < 34; index += 1) {
+      await client.sendInput({
+        moveX: 0.25,
+        moveY: -0.5,
+        thrust: 0.75,
+        brake: 0.1,
+      });
+    }
+    const pending = client.getPendingInputs();
+    assert(pending.length === 32, `Expected bounded pending payloads, got ${pending.length}`);
+    assert(pending[pending.length - 1].moveX === 0.25, 'Expected pending moveX');
+    assert(pending[pending.length - 1].moveY === -0.5, 'Expected pending moveY');
+    assert(pending[pending.length - 1].thrust === 0.75, 'Expected pending thrust');
+    assert(pending[pending.length - 1].brake === 0.1, 'Expected pending brake');
+    client._recordSnapshotMetrics({
+      players: [{ clientId: client.clientId, lastInputSeq: client.seq }],
+    });
+    assert(client.getPendingInputs().length === 0, 'Expected acknowledged payloads to be pruned');
   });
 
   await runner.run('thrust starts locally before the next authority snapshot', async () => {
@@ -65,6 +94,40 @@ async function run() {
     assert(state.lastMode === 'blend', `Expected blended presentation, got ${state.lastMode}`);
   });
 
+  await runner.run('latest unacknowledged command survives local release until ack', async () => {
+    const held = [{
+      seq: 1,
+      sentAt: 0,
+      moveX: 1,
+      moveY: 0,
+      thrust: 1,
+      brake: 0,
+    }];
+    const releasedInput = { moveX: 1, moveY: 0, thrust: 0, brake: 0 };
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player(), {
+      pendingInputs: held,
+      acknowledgedSeq: 0,
+    }).state;
+    const fuelBeforePending = state.deltaV;
+    state = advance(state, releasedInput, 16, {
+      pendingInputs: held,
+      acknowledgedSeq: 0,
+    }).state;
+    assert(state.predictionInputSource === 'pending', 'Expected pending command to drive prediction');
+    assert(state.predictionInputSeq === 1, `Expected pending seq 1, got ${state.predictionInputSeq}`);
+    assert(state.deltaV < fuelBeforePending, 'Expected unacknowledged held thrust to keep applying');
+
+    const fuelAtAck = state.deltaV;
+    state = advance(state, releasedInput, 32, {
+      pendingInputs: held,
+      acknowledgedSeq: 1,
+    }).state;
+    assert(state.predictionInputSource === 'current', 'Expected acked command to stop prediction');
+    assert(state.predictionInputSeq === null, 'Expected no pending prediction sequence after ack');
+    assert(state.deltaV >= fuelAtAck, 'Expected acked thrust to stop consuming fuel');
+  });
+
   await runner.run('brake reversal responds locally without waiting for authority', async () => {
     let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
     state = rebase(state, player({ vx: 0.5 })).state;
@@ -75,7 +138,10 @@ async function run() {
   await runner.run('gravity and wave hints bend presentation between snapshots', async () => {
     let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
     state = rebase(state, player({ forceLedger: {
-      vectors: { gravity: { x: 1000, y: 0 }, wave: { x: 0, y: 0 } },
+      vectors: {
+        gravity: { x: UNIT_SCALE.metersPerSimUnit, y: 0 },
+        wave: { x: 0, y: 0 },
+      },
     } })).state;
     state = advance(state, { moveX: 0, moveY: 0, thrust: 0, brake: 0 }, 100).state;
     assert(state.vx > 0, `Expected authority gravity hint to bend velocity, got ${state.vx}`);

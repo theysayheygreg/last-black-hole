@@ -350,8 +350,9 @@ export class SimClient {
     };
   }
 
-  // Prediction may inspect pending movement locally, but these entries never
-  // cross the protocol or become authoritative until a snapshot acknowledges them.
+  // Prediction may inspect pending movement locally, but these bounded entries
+  // never cross the protocol or become authoritative until a snapshot
+  // acknowledges them.
   getPendingInputs() {
     return this.pendingInputs.map((entry) => ({ ...entry }));
   }
@@ -375,7 +376,14 @@ export class SimClient {
       consumeSlot,
       sentAt,
     };
-    this.pendingInputs.push({ seq: this.seq, sentAt });
+    this.pendingInputs.push({
+      seq: this.seq,
+      sentAt,
+      moveX,
+      moveY,
+      thrust,
+      brake,
+    });
     if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
     const inputPayload = { ...this.lastSentInput, timestamp: Date.now() };
     const response = await this._enqueueCommand(() => this._json('/input', {
