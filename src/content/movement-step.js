@@ -138,6 +138,11 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
 
 function stepPlayerMovementCore(player, input, dt, options = {}) {
   const drive = applyPlayerDriveAndFlow(player, input, dt, options);
+  const externalAcceleration = options.externalAcceleration || null;
+  if (externalAcceleration) {
+    player.vx += finiteNumber(externalAcceleration.x, 0) * dt;
+    player.vy += finiteNumber(externalAcceleration.y, 0) * dt;
+  }
   const brake = applyPlayerBrakeAndIntegrate(player, input, dt, {
     ...options,
     thrustIntensity: drive.thrustIntensity,

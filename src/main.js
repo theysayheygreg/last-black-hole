@@ -63,6 +63,11 @@ import {
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
+import {
+  advanceLocalPlayerReconciliation,
+  createLocalPlayerReconciliationState,
+  rebaseLocalPlayerReconciliation,
+} from './sim/local-player-reconciliation.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
 import {
   PAUSE_LONG_AWAY_THRESHOLD_MS,
@@ -1972,49 +1977,60 @@ function applyRemoteSlingshotState(state) {
 }
 
 function updateRemoteShipTarget(localPlayer, snapshot) {
-  const target = {
-    wx: localPlayer.wx,
-    wy: localPlayer.wy,
-    vx: localPlayer.vx || 0,
-    vy: localPlayer.vy || 0,
-    receivedAt: performance.now(),
-    simTime: snapshot.simTime ?? 0,
-  };
-  const needsSnap = !remoteShipPresentation ||
-    gamePhase === 'loading' ||
-    worldDistance(ship.wx, ship.wy, target.wx, target.wy) > 0.75;
-
-  remoteShipPresentation = target;
-  ship.vx = target.vx;
-  ship.vy = target.vy;
-  if (needsSnap) {
-    ship.teleport(target.wx, target.wy);
+  const result = rebaseLocalPlayerReconciliation(
+    remoteShipPresentation || createLocalPlayerReconciliationState({
+      brain: ship,
+      worldScale: WORLD_SCALE,
+      maxExtrapolationSeconds: REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
+    }),
+    localPlayer,
+    {
+      runId: snapshot.runId || snapshot.session?.runId || null,
+      now: performance.now(),
+      brain: ship,
+      worldScale: WORLD_SCALE,
+      maxExtrapolationSeconds: REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
+      pendingInputs: simClient?.getPendingInputs?.() || [],
+      acknowledgedSeq: localPlayer.lastInputSeq,
+    },
+  );
+  remoteShipPresentation = result.state;
+  if (result.hardReset) {
+    ship.teleport(result.state.wx, result.state.wy);
+    ship.vx = result.state.vx;
+    ship.vy = result.state.vy;
   }
 }
 
 function updateRemoteShipPresentation(dt) {
   if (!remoteAuthorityActive || !remoteShipPresentation) return;
-  // Keep moving through normal polling jitter so remote play does not
-  // visibly pause between authoritative snapshots.
+  const now = performance.now();
   const elapsed = Math.min(
     REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
-    Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000),
+    Math.max(0, (now - remoteShipPresentation.authority.receivedAt) / 1000),
   );
   perfStats.remotePresentationAgeMs = elapsed * 1000;
   syncRemoteNetworkPerfStats();
-  const targetX = wrapWorld(remoteShipPresentation.wx + remoteShipPresentation.vx * elapsed);
-  const targetY = wrapWorld(remoteShipPresentation.wy + remoteShipPresentation.vy * elapsed);
-  const [dx, dy] = worldDisplacement(ship.wx, ship.wy, targetX, targetY);
-  const distance = Math.hypot(dx, dy);
-  if (distance > 0.75) {
-    ship.teleport(targetX, targetY);
-  } else {
-    const blend = 1 - Math.exp(-18 * dt);
-    ship.wx = wrapWorld(ship.wx + dx * blend);
-    ship.wy = wrapWorld(ship.wy + dy * blend);
+  const result = advanceLocalPlayerReconciliation(remoteShipPresentation, {
+    dt,
+    now,
+    input: {
+      moveX: inputManager.moveX,
+      moveY: inputManager.moveY,
+      thrust: inputManager.thrustIntensity,
+      brake: inputManager.brakeIntensity,
+    },
+    pendingInputs: simClient?.getPendingInputs?.() || [],
+    acknowledgedSeq: remoteShipPresentation.lastAcknowledgedSeq,
+  });
+  remoteShipPresentation = result.state;
+  if (result.hardReset) ship.teleport(result.state.wx, result.state.wy);
+  else {
+    ship.wx = result.state.wx;
+    ship.wy = result.state.wy;
   }
-  ship.vx = remoteShipPresentation.vx;
-  ship.vy = remoteShipPresentation.vy;
+  ship.vx = result.state.vx;
+  ship.vy = result.state.vy;
 }
 
 function currentRemoteControlState() {
@@ -2902,17 +2918,28 @@ function snapRemotePresentationToAuthority(snapshot) {
   const wy = Number(localPlayer.wy);
   if (!Number.isFinite(wx) || !Number.isFinite(wy)) return false;
 
-  remoteShipPresentation = {
-    wx,
-    wy,
-    vx: Number(localPlayer.vx) || 0,
-    vy: Number(localPlayer.vy) || 0,
-    receivedAt: performance.now(),
-    simTime: snapshot.simTime ?? 0,
-  };
-  ship.teleport(wx, wy);
-  ship.vx = remoteShipPresentation.vx;
-  ship.vy = remoteShipPresentation.vy;
+  const result = rebaseLocalPlayerReconciliation(
+    remoteShipPresentation || createLocalPlayerReconciliationState({
+      brain: ship,
+      worldScale: WORLD_SCALE,
+      maxExtrapolationSeconds: REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
+    }),
+    { ...localPlayer, wx, wy },
+    {
+      runId: snapshot.runId || snapshot.session?.runId || null,
+      now: performance.now(),
+      brain: ship,
+      worldScale: WORLD_SCALE,
+      maxExtrapolationSeconds: REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
+      pendingInputs: simClient?.getPendingInputs?.() || [],
+      acknowledgedSeq: localPlayer.lastInputSeq,
+      forceReset: true,
+    },
+  );
+  remoteShipPresentation = result.state;
+  ship.teleport(result.state.wx, result.state.wy);
+  ship.vx = result.state.vx;
+  ship.vy = result.state.vy;
   camX = wrapWorld(wx);
   camY = wrapWorld(wy);
   setFluidCamera(camX, camY);

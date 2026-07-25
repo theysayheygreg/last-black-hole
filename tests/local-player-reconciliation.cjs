@@ -1,0 +1,123 @@
+const path = require('path');
+const { pathToFileURL } = require('url');
+const { TestRunner, assert } = require('./helpers.cjs');
+
+const ROOT = path.resolve(__dirname, '..');
+const DT = 1 / 30;
+
+async function run() {
+  const runner = new TestRunner('LocalPlayerReconciliation');
+  const coords = await import(pathToFileURL(path.join(ROOT, 'src/coords.js')).href);
+  const movement = await import(pathToFileURL(path.join(ROOT, 'src/content/movement-step.js')).href);
+  const reconciliation = await import(pathToFileURL(path.join(ROOT, 'src/sim/local-player-reconciliation.js')).href);
+  coords.setWorldScale(3);
+
+  const brain = { thrustScale: 1, dragScale: 1, currentCoupling: 1 };
+  const inputConfig = movement.MOVEMENT_INPUT;
+  const player = (overrides = {}) => ({
+    status: 'alive',
+    wx: 1,
+    wy: 1,
+    vx: 0,
+    vy: 0,
+    deltaV: 80,
+    deltaVMax: 100,
+    deltaVRegen: 1.5,
+    deltaVRegenBoost: 6,
+    deltaVBurnEff: 1,
+    deltaVBurnRate: 12,
+    timeSinceThrust: 0,
+    slingshot: { phase: 'idle' },
+    ...overrides,
+  });
+
+  const rebase = (state, source, options = {}) => reconciliation.rebaseLocalPlayerReconciliation(
+    state,
+    source,
+    { runId: options.runId || 'run-a', now: options.now || 0, brain, inputConfig, ...options },
+  );
+  const advance = (state, input, now) => reconciliation.advanceLocalPlayerReconciliation(state, {
+    dt: DT,
+    now,
+    input,
+  });
+
+  await runner.run('thrust starts locally before the next authority snapshot', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player(), {
+      pendingInputs: [{ seq: 1, thrust: 1 }],
+      acknowledgedSeq: 0,
+    }).state;
+    assert(state.pendingInputCount === 1, 'Expected pending input metadata to remain local');
+    assert(state.lastAcknowledgedSeq === 0, 'Expected snapshot ack sequence to be retained');
+    const start = state.wx;
+    state = advance(state, { moveX: 1, moveY: 0, thrust: 1, brake: 0 }, 16).state;
+    assert(state.wx > start, `Expected local thrust displacement, got ${state.wx - start}`);
+    assert(state.vx > 0, `Expected local thrust velocity, got ${state.vx}`);
+  });
+
+  await runner.run('release coasts while correction stays blended', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player({ vx: 0.8 })).state;
+    const before = state.vx;
+    state = advance(state, { moveX: 1, moveY: 0, thrust: 0, brake: 0 }, 16).state;
+    assert(state.vx > 0 && state.vx < before, `Expected coasting decay, got ${state.vx}`);
+    assert(state.lastMode === 'blend', `Expected blended presentation, got ${state.lastMode}`);
+  });
+
+  await runner.run('brake reversal responds locally without waiting for authority', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player({ vx: 0.5 })).state;
+    state = advance(state, { moveX: -1, moveY: 0, thrust: 0, brake: 1 }, 16).state;
+    assert(state.vx < 0.5, `Expected brake to reduce velocity, got ${state.vx}`);
+  });
+
+  await runner.run('gravity and wave hints bend presentation between snapshots', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player({ forceLedger: {
+      vectors: { gravity: { x: 1000, y: 0 }, wave: { x: 0, y: 0 } },
+    } })).state;
+    state = advance(state, { moveX: 0, moveY: 0, thrust: 0, brake: 0 }, 100).state;
+    assert(state.vx > 0, `Expected authority gravity hint to bend velocity, got ${state.vx}`);
+  });
+
+  await runner.run('ordinary corrections do not teleport', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player()).state;
+    state = advance(state, { moveX: 1, moveY: 0, thrust: 1, brake: 0 }, 16).state;
+    const result = rebase(state, player({ wx: state.wx + 0.1 }), { now: 40 });
+    assert(result.hardReset === false, 'Expected small correction to blend');
+    assert(result.state.lastMode === 'rebase', `Expected rebase mode, got ${result.state.lastMode}`);
+  });
+
+  await runner.run('slingshot release phase follows authority without replay', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player({ slingshot: { phase: 'engaged' } })).state;
+    const released = rebase(state, player({
+      wx: 1.15,
+      vx: 0.25,
+      slingshot: { phase: 'release' },
+    }), { now: 100 });
+    assert(released.hardReset === true, 'Expected slingshot release phase boundary to reset');
+    assert(released.state.wx === 1.15, 'Expected release presentation to use authority position');
+    assert(released.state.vx === 0.25, 'Expected release presentation to use authority velocity');
+  });
+
+  await runner.run('run changes and catastrophic divergence hard reset', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player()).state;
+    const runChanged = rebase(state, player({ wx: 2 }), { runId: 'run-b', now: 100 });
+    assert(runChanged.hardReset === true, 'Expected run change to hard reset');
+    const catastrophic = rebase(runChanged.state, player({ wx: 0.1 }), { runId: 'run-b', now: 200 });
+    assert(catastrophic.hardReset === true, 'Expected catastrophic divergence to hard reset');
+    assert(catastrophic.state.wx === 0.1, 'Expected hard reset to authoritative position');
+  });
+
+  const passed = runner.summary();
+  process.exit(passed ? 0 : 1);
+}
+
+run().catch((error) => {
+  console.error(error.stack || error.message);
+  process.exit(1);
+});

@@ -350,6 +350,12 @@ export class SimClient {
     };
   }
 
+  // Prediction may inspect pending movement locally, but these entries never
+  // cross the protocol or become authoritative until a snapshot acknowledges them.
+  getPendingInputs() {
+    return this.pendingInputs.map((entry) => ({ ...entry }));
+  }
+
   async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, extractConfirm = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
     const sentAt = this._nowMs();
