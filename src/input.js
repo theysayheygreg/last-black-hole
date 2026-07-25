@@ -14,7 +14,7 @@
 
 import { CONFIG } from './config.js';
 import { screenToWorld, worldDirectionTo, worldToScreen } from './coords.js';
-import { gamepadActionPressed } from './ui/input-bindings.js';
+import { GAMEPAD_ACTION_BUTTONS, gamepadActionPressed } from './ui/input-bindings.js';
 
 // ---- Stick processing helpers ----
 
@@ -48,6 +48,27 @@ function smoothAngle(current, target, dt, smoothTime, smallDeg, bigDeg) {
   const t = 1.0 - Math.exp(-dt / Math.max(smoothTime, 0.001));
   const effectiveT = smoothFactor * t + (1.0 - smoothFactor) * 1.0;
   return current + delta * effectiveT;
+}
+
+function clampTriggerValue(value) {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+/** Read standard button triggers, with a narrow legacy axis fallback. */
+function readGamepadTrigger(gamepad, action, legacyAxisIndex) {
+  const buttonIndex = GAMEPAD_ACTION_BUTTONS[action]?.[0];
+  const button = Number.isInteger(buttonIndex) ? gamepad?.buttons?.[buttonIndex] : null;
+  const buttonValue = Number(button?.value);
+  const hasButtonSignal = button?.pressed || (Number.isFinite(buttonValue) && buttonValue > 0);
+  if (gamepad?.mapping === 'standard' || hasButtonSignal) {
+    return button?.pressed && buttonValue === 0 ? 1 : clampTriggerValue(buttonValue);
+  }
+
+  // Standard pads expose analog triggers as buttons. Only non-standard pads
+  // may use the old -1..1 axis convention; a zero-centered axis stays neutral.
+  const axisValue = Number(gamepad?.axes?.[legacyAxisIndex]);
+  if (!Number.isFinite(axisValue) || (axisValue > -0.5 && axisValue < 0.5)) return 0;
+  return clampTriggerValue((axisValue + 1) / 2);
 }
 
 
@@ -469,15 +490,8 @@ export class InputManager {
       }
 
       // Triggers
-      let r2 = 0, l2 = 0;
-      if (gp.buttons.length > 7) {
-        r2 = gp.buttons[7].value;
-        l2 = gp.buttons[6].value;
-      }
-      if (gp.axes.length > 5) {
-        r2 = Math.max(r2, Math.max(0, (gp.axes[5] + 1) / 2));
-        l2 = Math.max(l2, Math.max(0, (gp.axes[4] + 1) / 2));
-      }
+      const r2 = readGamepadTrigger(gp, 'thrust', 5);
+      const l2 = readGamepadTrigger(gp, 'brake', 4);
       gpThrust = r2 > cfg.triggerThreshold ? r2 : 0;
       gpBrake = l2 > cfg.triggerThreshold ? l2 : 0;
     }
