@@ -1,6 +1,6 @@
 # v0.3 Roadmap: Ballpark Authority
 
-> Document revision: v0.3. Updated 2026-07-17 from live branch and harness
+> Document revision: v0.3. Updated 2026-07-25 from live branch and harness
 > evidence. Earlier mirror-scaffold plans are retained as history in the review
 > documents they came from, not as current implementation claims.
 
@@ -27,6 +27,15 @@ whole-run fronts from normalized progress, and client/server/build/result
 surfaces consume the selected duration. The focused contract preserves the
 600-second Expanse anchor, with epoch 3 intentionally at 75%. This locked
 baseline is ready for playtest; later multiplier balance remains tunable.
+
+Goal D now adds the product-rate movement contract: route probes use the
+selected `15/12/10 Hz` authority profiles, canonical drag/fluid coupling, and
+one finite delta-v tank rather than treating the 60 Hz diagnostic baseline as
+the product. Slingshot transport allowance is fixed wall time across those
+profiles, and portal/exfil placement resolves from one map-center fractional
+policy. Deep Field's long finite-fuel route is recorded as a playtest/content
+risk, not hidden tuning. Ballpark remains the spatial/materialized-payload
+layer; the local/offline seeded-sea presentation split is backlog work.
 
 ### Production Polish Candidate
 

@@ -1,5 +1,19 @@
 # v0.3 Changelog
 
+## 2026-07-25
+
+- **Goal D map-rate movement contract:** route proof now uses the canonical
+  Shallows/Expanse/Deep Field authority rates of `15/12/10 Hz`, finite fuel,
+  and the shared drag/fluid movement step. The prior 60 Hz route remains a
+  diagnostic baseline rather than product closure.
+- **Wall-time slingshot transport:** the canonical `50ms` gameplay coyote is
+  preserved while the internal four-tick prompt transport allowance is stored
+  as fixed wall time, so slower map profiles do not silently widen the window.
+- **Map-relative portal placement:** optional and final-exfil placement now
+  consume `map-center-fractional-bands-v1` from the canonical ESM/CJS map-scale
+  adapters. Shallows preserves its existing bands while larger tiers scale
+  intentionally from map width.
+
 ## 2026-07-17
 
 - **v0.3.1 RC package:** built all five targets from source `dd9e5149` as
