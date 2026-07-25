@@ -6763,22 +6763,8 @@ function tickSim() {
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
 
-  const alivePlayerCount = relevance.alivePlayers.length;
-  const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
-  const activeWreckCount = relevance.wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted).length;
-  const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
-  const activeWaveCount = runtime.waveRings.length;
-  const forcePressure = Math.max(
-    runtime.mapState.wells.length / Math.max(1, alivePlayerCount * (runtime.session.maxWellInfluencesPerPlayer || 1)),
-    activeWaveCount / Math.max(1, alivePlayerCount * (runtime.session.maxWaveInfluencesPerPlayer || 1)),
-    activeWreckCount / Math.max(1, alivePlayerCount * (runtime.session.maxPickupChecksPerPlayer || 1)),
-    activePortalCount / Math.max(1, alivePlayerCount * (runtime.session.maxPortalChecksPerPlayer || 1))
-  );
   const overload = advanceOverload(runtime.overload, {
     tickCostMs: performance.now() - tickStart,
-    playerCount: alivePlayerCount,
-    aiCount: activeAiCount,
-    forcePressure,
   });
   runtime.session.overloadPressure = overload.pressure;
   if (overload.changed) {

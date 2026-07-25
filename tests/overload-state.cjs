@@ -48,33 +48,46 @@ async function run() {
     let state = controller.state;
     for (let i = 0; i < 6; i++) {
       state = advanceOverload(controller, {
-        tickCostMs: 16,
-        playerCount: 8,
-        aiCount: 7,
-        forcePressure: 1.3,
+        tickCostMs: 110,
       }).state;
     }
     assert(state === "THROTTLED", `Expected THROTTLED, got ${state}`);
 
     for (let i = 0; i < 6; i++) {
       state = advanceOverload(controller, {
-        tickCostMs: 14,
-        playerCount: 8,
-        aiCount: 7,
-        forcePressure: 1.1,
+        tickCostMs: 110,
       }).state;
     }
     assert(state === "DEGRADED", `Expected DEGRADED, got ${state}`);
 
     for (let i = 0; i < 6; i++) {
       state = advanceOverload(controller, {
-        tickCostMs: 22,
-        playerCount: 8,
-        aiCount: 7,
-        forcePressure: 1.8,
+        tickCostMs: 110,
       }).state;
     }
     assert(state === "DILATED", `Expected DILATED, got ${state}`);
+  });
+
+  await runner.run("Map population cannot classify a healthy tick as overloaded", async () => {
+    const sparse = createOverloadController(makeBase());
+    const dense = createOverloadController(makeBase());
+    for (let i = 0; i < 8; i++) {
+      advanceOverload(sparse, {
+        tickCostMs: 2,
+        playerCount: 1,
+        aiCount: 1,
+        forcePressure: 0,
+      });
+      advanceOverload(dense, {
+        tickCostMs: 2,
+        playerCount: 1,
+        aiCount: 1000,
+        forcePressure: 1000,
+      });
+    }
+    assert(sparse.state === "NORMAL", `Expected sparse healthy state NORMAL, got ${sparse.state}`);
+    assert(dense.state === "NORMAL", `Expected dense healthy state NORMAL, got ${dense.state}`);
+    assert(dense.pressure < 1, `Expected measured healthy pressure, got ${dense.pressure}`);
   });
 
   await runner.run("Dilation projection slows the shared run and trims budgets", async () => {
@@ -93,20 +106,14 @@ async function run() {
     const controller = createOverloadController(makeBase());
     for (let stage = 0; stage < 18; stage++) {
       advanceOverload(controller, {
-        tickCostMs: 22,
-        playerCount: 8,
-        aiCount: 7,
-        forcePressure: 1.8,
+        tickCostMs: 110,
       });
     }
     assert(controller.state === "DILATED", `Expected DILATED before recovery, got ${controller.state}`);
 
-    for (let i = 0; i < 72; i++) {
+    for (let i = 0; i < 120; i++) {
       advanceOverload(controller, {
         tickCostMs: 2,
-        playerCount: 1,
-        aiCount: 1,
-        forcePressure: 0.1,
       });
     }
     assert(controller.state === "NORMAL", `Expected recovery to NORMAL, got ${controller.state}`);
