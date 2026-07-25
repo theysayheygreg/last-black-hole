@@ -7,7 +7,7 @@ const crypto = require("crypto");
 const { performance } = require("perf_hooks");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
-const { getMapDurationSeconds } = require("./content/map-scales.cjs");
+const { getMapDurationSeconds, getPortalPlacementPolicy } = require("./content/map-scales.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
 const { sanitizeRetiredItems } = require("./content/items.cjs");
 const SEEDED_GEN = require("./seeded-generation.cjs");
@@ -156,15 +156,8 @@ const PORTAL_CONFIG = Object.freeze({
       { minInhibitorPhase: 2, countMultiplier: 0.5, durationMultiplier: 0.8 },
       { minInhibitorPhase: 3, countMultiplier: 0, durationMultiplier: 0.6 },
     ]),
-    spawnRadiusBands: Object.freeze({
-      standard: { anchor: "map-center", minRadius: 0.45, maxRadius: 1.25, minWellDistance: 0.45 },
-      unstable: { anchor: "map-center", minRadius: 0.30, maxRadius: 1.35, minWellDistance: 0.12 },
-      rift: { anchor: "map-center", minRadius: 0.20, maxRadius: 1.30, minWellDistance: 0.18, maxWellDistance: 0.70 },
-      finalExfil: { anchor: "map-center", minRadius: 0.70, maxRadius: 1.35, minWellClearance: 0.22 },
-    }),
     finalExfilDuration: readNumber(process.env.LBH_SIM_FINAL_EXFIL_DURATION, 60, 1),
     placementAttempts: 128,
-    minPortalSpacing: 0.30,
   }),
 });
 const AUTHORITY_INPUT_CONFIG = Object.freeze({
@@ -449,6 +442,7 @@ function portalWindowMetadata(
   phase,
   openProgress,
   requestedOpenProgress = openProgress,
+  portalPlacement,
 ) {
   const lateRule = latePortalRuleForPhase(phase);
   return {
@@ -465,17 +459,19 @@ function portalWindowMetadata(
     durationMultiplier: lateRule.durationMultiplier,
     durationSeconds: declaration.durationSeconds * lateRule.durationMultiplier,
     latePhaseRule: lateRule,
-    spawnRadiusBands: PORTAL_CONFIG.schedule.spawnRadiusBands,
-    minPortalSpacing: PORTAL_CONFIG.schedule.minPortalSpacing,
+    portalPlacementPolicyId: portalPlacement.policyId,
+    spawnRadiusBands: portalPlacement.spawnRadiusBands,
+    minPortalSpacing: portalPlacement.minPortalSpacing,
     finalExfil: false,
   };
 }
 
-function createInhibitorConductor(seed, runDurationSeconds) {
+function createInhibitorConductor(seed, runDurationSeconds, mapId) {
   const duration = Number(runDurationSeconds);
   if (!Number.isFinite(duration) || duration <= 0) {
     throw new RangeError("runDurationSeconds must be greater than zero");
   }
+  const portalPlacement = getPortalPlacementPolicy(mapId);
   const conductor = createConductor({
     seed,
     conductorId: "match-conductor",
@@ -546,6 +542,7 @@ function createInhibitorConductor(seed, runDurationSeconds) {
         phase,
         openTime / duration,
         requestedOpenProgress,
+        portalPlacement,
       ).durationSeconds;
       let nextOpenTime = openTime;
       for (const frontTime of inhibitorFrontTimes) {
@@ -570,6 +567,7 @@ function createInhibitorConductor(seed, runDurationSeconds) {
       phase,
       openProgress,
       requestedOpenProgress,
+      portalPlacement,
     );
     previousOptionalCloseTime = openTime + metadata.durationSeconds;
     return [{
@@ -606,8 +604,9 @@ function createInhibitorConductor(seed, runDurationSeconds) {
       durationMultiplier: 1,
       durationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
       latePhaseRule: { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 },
-      spawnRadiusBands: PORTAL_CONFIG.schedule.spawnRadiusBands,
-      minPortalSpacing: PORTAL_CONFIG.schedule.minPortalSpacing,
+      portalPlacementPolicyId: portalPlacement.policyId,
+      spawnRadiusBands: portalPlacement.spawnRadiusBands,
+      minPortalSpacing: portalPlacement.minPortalSpacing,
       finalExfil: true,
     },
   });
@@ -1148,7 +1147,8 @@ function portalSpawnAnchor(anchorName, worldScale) {
 }
 
 function portalSpawnBand(portalType, finalExfil = false) {
-  const bands = PORTAL_CONFIG.schedule.spawnRadiusBands;
+  const bands = runtime.portalPlacement?.spawnRadiusBands;
+  if (!bands) throw new RangeError("Portal placement policy is not initialized");
   const band = finalExfil ? bands.finalExfil : bands[portalType];
   if (!band) throw new RangeError(`No portal spawn radius band for ${portalType}`);
   return band;
@@ -1164,7 +1164,7 @@ function portalPlacementIsValid(position, portalType, band, { finalExfil = false
       if (portal.alive === false) return nearest;
       return Math.min(nearest, worldDistance(position.wx, position.wy, portal.wx, portal.wy, worldScale));
     }, Infinity);
-    if (nearestPortal < (band.minPortalSpacing || PORTAL_CONFIG.schedule.minPortalSpacing)) return false;
+    if (nearestPortal < (runtime.portalPlacement?.minPortalSpacing || 0)) return false;
   }
 
   const nearestWell = runtime.mapState.wells.reduce((nearest, well) => {
@@ -1319,6 +1319,7 @@ const runtime = {
   conductor: null,
   inhibitorSchedule: null,
   portalSchedule: null,
+  portalPlacement: null,
   portalClock: null,
   inhibitor: {
     form: 0,          // 0=inactive, 1=glitch, 2=swarm, 3=vessel
@@ -1757,8 +1758,14 @@ function startSession(config = {}) {
     waves: 0,
     field: 0,
   };
-  // The Conductor is one match-scoped authority built from the run seed.
-  runtime.conductor = createInhibitorConductor(runtime.session.seed, runtime.session.runDurationSeconds);
+  // The Conductor is one match-scoped authority built from the run seed. Its
+  // portal geometry comes from the same map-scale registry as the session.
+  runtime.portalPlacement = getPortalPlacementPolicy(runtime.session.mapId);
+  runtime.conductor = createInhibitorConductor(
+    runtime.session.seed,
+    runtime.session.runDurationSeconds,
+    runtime.session.mapId,
+  );
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
   runtime.portalSchedule = runtime.inhibitorSchedule;
   runtime.portalClock = {
@@ -4988,7 +4995,7 @@ function findNearestSlingshotAffordance(player) {
 function updateSlingshotAim(player, currentTime, dt = 0) {
   const state = ensurePlayerSlingshot(player);
   if (state.engaged) return null;
-  const coyoteTimeMs = effectiveCoyoteTimeMs(SLINGSHOT_SERVER.coyoteTime, dt);
+  const coyoteTimeMs = effectiveCoyoteTimeMs(SLINGSHOT_SERVER.coyoteTime);
   const current = findNearestSlingshotAffordance(player);
   if (current) {
     const key = slingshotAnchorKey(current.anchor);
@@ -5042,7 +5049,7 @@ function findSlingshotAffordance(player, currentTime = runtime.simTime, dt = 0) 
   const normal = findNearestSlingshotAffordance(player);
   if (normal) return normal;
   const state = ensurePlayerSlingshot(player);
-  const coyoteTimeMs = effectiveCoyoteTimeMs(SLINGSHOT_SERVER.coyoteTime, dt);
+  const coyoteTimeMs = effectiveCoyoteTimeMs(SLINGSHOT_SERVER.coyoteTime);
   if (!state.aimAnchorKey || !coyoteWindowOpen(currentTime, state.lastAimSeenTime, coyoteTimeMs)) {
     return null;
   }

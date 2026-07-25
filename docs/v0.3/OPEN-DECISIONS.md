@@ -37,6 +37,15 @@ Shallows is the first-current route: movement/slingshot, salvage, signal
 consequence, then extraction. Seed preview and authority use the same route
 facts.
 
+### Product-Rate Route Contract
+
+Resolved for the Goal D source pass. Route measurements use the selected
+authority profile (`15/12/10 Hz`) with canonical drag/fluid coupling and one
+finite delta-v tank. The 60 Hz route remains a diagnostic baseline only. The
+Deep Field measurement leaves a narrow final fuel margin; whether that route
+feels generous enough is a Greg playtest question, not a reason to alter the
+movement constants in this slice.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

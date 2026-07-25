@@ -201,7 +201,7 @@ async function run() {
     }
   });
 
-  await runner.run("Transport coyote allowance accepts within four ticks and rejects beyond it", async () => {
+  await runner.run("Transport coyote allowance uses fixed wall time across profiles", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {
       const start = await postJson("/session/start", {

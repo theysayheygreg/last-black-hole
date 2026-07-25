@@ -1,6 +1,6 @@
 # v0.3 Decisions
 
-> Document revision: v0.3. Updated 2026-07-17. This file records accepted
+> Document revision: v0.3. Updated 2026-07-25. This file records accepted
 > implementation decisions for the current source line. Remaining Greg-owned
 > decisions stay in `OPEN-DECISIONS.md`.
 
@@ -36,18 +36,35 @@ The declared authored contract is linear density per world unit:
 - planetoids: `0.4` to `0.8`
 
 Route legs must be at least `0.75` world units and no more than `0.7` of the
-map width. Travel proof is a direct no-flow baseline integrated through the
-canonical movement core at 60 Hz with baseline thrust, drag, and fluid
-coupling, zero current, and sufficient delta-v. It is not an assisted-route or
-total-run promise. The observed authored legs and tier contracts are:
+map width. The 60 Hz no-flow integration is retained as a diagnostic baseline,
+not as product-rate closure. Product-rate route proof uses the selected
+session profile (`15/12/10 Hz` for Shallows/Expanse/Deep Field), canonical
+drag/fluid coupling, zero current, full thrust, and one finite `100` delta-v
+tank carried across the authored legs. It is a transport/readability contract,
+not an assisted-route or total-run promise:
 
-- Shallows: `1.48` seconds, within `1.4` to `1.6`.
-- Expanse: `1.55`, `8.52`, and `1.22` seconds, within `1.1` to `8.75`.
-- Deep Field: `1.98` and `14.22` seconds, within `1.9` to `14.5`.
+| Tier | Product leg seconds | Delta-v remaining after each leg | Route total |
+|---|---|---|---:|
+| Shallows `15 Hz` | `1.53` | `81.60` | `1.53s` |
+| Expanse `12 Hz` | `1.67 / 20.17 / 6.00` | `80.00 / 0.38 / 0.63` | `27.84s` |
+| Deep Field `10 Hz` | `2.20 / 59.30` | `73.60 / 1.15` | `61.50s` |
+
+The diagnostic 60 Hz observations remain `1.48`, `1.55 / 8.52 / 1.22`, and
+`1.98 / 14.22` seconds respectively, with the original tier-aware bounds.
+No movement constant was tuned. The long Deep Field route and its narrow final
+delta-v margin are a playtest/route-content risk, not a hidden retune or a
+blocker for the map-scale authority.
 
 All three authored maps pass without a population correction or movement
 retune. Currents, slingshots, and other route assistance remain gameplay
-effects rather than assumptions in this floor/ceiling contract.
+effects rather than assumptions in this contract.
+
+Portal placement is centralized in `AUTHORED_MAP_CONTRACT.portalPlacement` and
+resolved by both map-scale adapters. `map-center-fractional-bands-v1` scales
+the existing Shallows policy by canonical map width, preserving the Shallows
+absolute bands while making Expanse and Deep Field placement intentional rather
+than copied numeric folklore. Optional and final-exfil placement consume this
+policy; the server remains authoritative.
 
 The 25x25 tier uses the existing coarse-field seam. Browser allocations remain
 `192` fluid, a `3` world-unit local window, and a `64` coarse texture; no
@@ -59,7 +76,9 @@ state. Expanse's executable coarse-cell ceiling is `2304` for `2209` cells.
 
 S24 catalog population is explicitly deferred. W2-A4 only proves the current
 authored population is playable under the density/travel contract; it does not
-begin a new encounter catalog or add a Map Select surface.
+begin a new encounter catalog or add a Map Select surface. The local/offline
+seeded-sea presentation split remains backlog work; it is not a Goal D movement
+or map-scale blocker.
 
 ## v0.3.1 Map-Relative Run Schedule
 
