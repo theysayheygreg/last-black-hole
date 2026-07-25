@@ -124,14 +124,13 @@ function createOverloadController(baseSession) {
 }
 
 function measurePressure(sample, controller) {
-  const base = controller.base;
   const budgetMs = controller.budgetMs;
   const avgPressure = clampPositive(sample.avgTickMs, 0) / Math.max(1, budgetMs * 0.82);
   const worstPressure = clampPositive(sample.worstTickMs, 0) / Math.max(1, budgetMs * 1.2);
-  const playerPressure = clampPositive(sample.playerCount, 0) / Math.max(1, base.maxPlayers);
-  const aiPressure = clampPositive(sample.aiCount, 0) / Math.max(1, base.maxScavengers);
-  const forcePressure = clampPositive(sample.forcePressure, 0);
-  return Math.max(avgPressure, worstPressure, playerPressure * 0.7 + aiPressure * 0.4, forcePressure);
+  // Population and map-content counts describe the workload, but cannot
+  // classify a healthy tier as overloaded. Actual tick cost is the authority
+  // for admission; budgets still shape the response after a real breach.
+  return Math.max(avgPressure, worstPressure);
 }
 
 function projectOverloadBudget(baseSession, state) {
