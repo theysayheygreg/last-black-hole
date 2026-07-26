@@ -15,9 +15,10 @@ const STATIC_PORT = 8846;
 const SIM_PORT = 8847;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const OUTPUT_DIR = path.join(__dirname, "screenshots", "slingshot-v2-live-20260714");
-// The public engage gate is 0.05 tangential speed. This keeps the authored
-// capture in-range through the lock and arc frames instead of outrunning it.
-const CAPTURE_TANGENTIAL_SPEED = 0.2;
+// The bounded angle search avoids transient overlaps; every tangent remains
+// twice the public 0.05 engage gate without outrunning the capture.
+const CAPTURE_RADIUS_OFFSET = 0.20;
+const CAPTURE_TANGENTIAL_SPEED = 0.10;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,6 +68,16 @@ async function playerSlingshotEvents(clientId, since = 0) {
     event.payload?.clientId === clientId && event.type.startsWith("player.slingshot"));
 }
 
+async function nextPlayerSlingshotEvent(clientId, afterSeq, label, timeoutMs = 10000) {
+  const available = await waitFor(
+    () => playerSlingshotEvents(clientId, afterSeq),
+    (currentEvents) => currentEvents.length > 0,
+    label,
+    timeoutMs,
+  );
+  return available[0];
+}
+
 async function post(route, body) {
   const response = await fetch(`${SIM_URL}${route}`, {
     method: "POST",
@@ -75,6 +86,112 @@ async function post(route, body) {
   });
   if (!response.ok) throw new Error(`${route} failed: ${response.status}`);
   return response.json();
+}
+
+async function armSelectedWellFixture(clientId, well, worldScale, angle) {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  return post("/debug/player-state", {
+    clientId,
+    wx: (well.wx + cosine * CAPTURE_RADIUS_OFFSET + worldScale) % worldScale,
+    wy: (well.wy + sine * CAPTURE_RADIUS_OFFSET + worldScale) % worldScale,
+    vx: -sine * CAPTURE_TANGENTIAL_SPEED,
+    vy: cosine * CAPTURE_TANGENTIAL_SPEED,
+    deltaV: 80,
+    resetSlingshot: true,
+    status: "alive",
+  });
+}
+
+async function armAndWaitForSelectedWell(label, clientId, well, worldScale) {
+  const attempts = [];
+  let lastAim = null;
+  for (let index = 0; index < 8; index++) {
+    const angle = index * Math.PI / 4;
+    const placed = await armSelectedWellFixture(clientId, well, worldScale, angle);
+    const armTick = placed.snapshot?.tick ?? (await snapshot()).tick;
+    const deadline = Date.now() + 1500;
+    let lastTick = armTick;
+    while (Date.now() < deadline) {
+      await sleep(35);
+      const current = await snapshot();
+      lastTick = current.tick;
+      if (current.tick <= armTick) continue;
+      const player = current.players?.find((entry) => entry.clientId === clientId) || null;
+      lastAim = player?.slingshot?.aim || null;
+      if (current.tick >= armTick + 6) break;
+      if (player?.slingshot?.phase === "aim"
+        && lastAim?.anchorType === "well"
+        && lastAim?.anchorId === well.id
+        && lastAim?.engageEligible === true
+        && lastAim?.distance <= 0.25) {
+        return {
+          player,
+          receipt: {
+            label,
+            index,
+            degrees: index * 45,
+            armTick,
+            acceptedTick: current.tick,
+          },
+        };
+      }
+    }
+    attempts.push({
+      index,
+      degrees: index * 45,
+      armTick,
+      lastTick,
+      lastAim,
+    });
+  }
+  throw new Error(`Failed to arm selected well: ${JSON.stringify({ label, attempts, lastAim })}`);
+}
+
+function assertSelectedWellEvent(event, expectedType, clientId, well, reason) {
+  assert.strictEqual(event.type, expectedType,
+    `Expected next slingshot event ${expectedType}, got ${JSON.stringify(event)}`);
+  assert.strictEqual(event.payload?.clientId, clientId,
+    `Slingshot event selected the wrong client: ${JSON.stringify(event.payload)}`);
+  assert.strictEqual(event.payload?.anchorType, "well",
+    `Slingshot event selected the wrong anchor type: ${JSON.stringify(event.payload)}`);
+  assert.strictEqual(event.payload?.anchorId, well.id,
+    `Slingshot event selected the wrong anchor: ${JSON.stringify(event.payload)}`);
+  if (reason !== undefined) {
+    assert.strictEqual(event.payload?.reason, reason,
+      `Slingshot event selected the wrong release reason: ${JSON.stringify(event.payload)}`);
+  }
+  return event;
+}
+
+function isSelectedWellAnchor(anchor, well) {
+  return anchor?.type === "well"
+    && (anchor.id == null || anchor.id === well.id)
+    && Math.abs(anchor.wx - well.wx) < 1e-6
+    && Math.abs(anchor.wy - well.wy) < 1e-6;
+}
+
+function hasAuthorityPhase(player, phase, telegraphKey, well) {
+  return player?.slingshot?.engaged === true
+    && player.slingshot.phase === phase
+    && player.slingshot.anchorType === "well"
+    && player.slingshot.anchorId === well.id
+    && isSelectedWellAnchor(player.slingshot.telegraph?.[telegraphKey]?.anchor, well);
+}
+
+async function visibleState(page) {
+  return page.evaluate(() => ({
+    scene: window.__TEST_API.getThreeSceneState(),
+    ruler: window.__TEST_API.getRulerOverlayStats(),
+  }));
+}
+
+function compactAck(ack) {
+  return {
+    requested: ack.requestedEdgeIds,
+    accepted: ack.acceptedEdgeIds,
+    serverTick: ack.serverTick,
+  };
 }
 
 async function slingshotEdgeAcks(page) {
@@ -157,24 +274,11 @@ async function main() {
     const well = initial.world?.wells?.[0];
     if (!well) throw new Error("No well available for live slingshot capture");
     const worldScale = initial.session.worldScale;
-    await post("/debug/player-state", {
-      clientId: network.clientId,
-      // A right-side fixture overlaps this seed's moving planetoid. Use the
-      // unobstructed lower edge of the selected well and its tangent instead.
-      wx: well.wx,
-      wy: (well.wy + 0.30) % worldScale,
-      vx: CAPTURE_TANGENTIAL_SPEED,
-      vy: 0,
-      deltaV: 80,
-      resetSlingshot: true,
-      status: "alive",
-    });
 
     const playerFor = async () => {
       const current = await snapshot();
       return current.players?.find((player) => player.clientId === network.clientId) || null;
     };
-    const eventWatermark = Math.max(0, ...(await events()).map((event) => event.seq || 0));
     const capture = async (name) => {
       const file = path.join(OUTPUT_DIR, `${name}.png`);
       await page.screenshot({ path: file });
@@ -183,94 +287,236 @@ async function main() {
       return file;
     };
 
-    const aim = await waitFor(
-      playerFor,
-      (player) => player?.slingshot?.phase === "aim"
-        && player.slingshot?.aim?.anchorId === well.id
-        && player.slingshot?.aim?.engageEligible === true,
-      "engageable aim cue",
+    const arming = [];
+    const initialArm = await armAndWaitForSelectedWell(
+      "capture-aim",
+      network.clientId,
+      well,
+      worldScale,
     );
+    arming.push(initialArm.receipt);
+    const aim = initialArm.player;
     assert(aim.slingshot?.aim?.anchorId === well.id && aim.slingshot?.aim?.engageEligible === true,
       `Capture setup must be authority-engageable: ${JSON.stringify(aim.slingshot?.aim)}`);
+    const aimVisible = await waitFor(
+      () => visibleState(page),
+      (visible) => isSelectedWellAnchor(visible.scene?.slingshot?.affordance, well),
+      "visible selected-well affordance",
+      1500,
+    );
     await capture("01-aim-cue");
-    const engageAck = await pressAcknowledgedSlingshotEdge(page, "engage");
-    const engagedEvents = await waitFor(
-      () => playerSlingshotEvents(network.clientId, eventWatermark),
-      (currentEvents) => currentEvents.length === 1
-        && currentEvents[0].type === "player.slingshotEngaged",
-      "exactly one authoritative engage event",
+
+    const lockArm = await armAndWaitForSelectedWell(
+      "lock-leg",
+      network.clientId,
+      well,
+      worldScale,
     );
-    const engagedEvent = engagedEvents[0];
-    const lock = await waitFor(playerFor, (player) => player?.slingshot?.phase === "lock", "lock telegraph");
+    arming.push(lockArm.receipt);
+
+    // All three proof legs share one watermark so the final check covers the
+    // complete client slingshot stream without reason-based filtering.
+    const eventWatermark = Math.max(0, ...(await events()).map((event) => event.seq || 0));
+    const ackWatermark = (await slingshotEdgeAcks(page)).length;
+
+    const lockEngageAck = await pressAcknowledgedSlingshotEdge(page, "lock leg engage");
+    const lockEngaged = assertSelectedWellEvent(
+      await nextPlayerSlingshotEvent(
+        network.clientId,
+        eventWatermark,
+        "lock leg next authoritative event",
+      ),
+      "player.slingshotEngaged",
+      network.clientId,
+      well,
+    );
+    const lockGate = await waitFor(
+      async () => {
+        const [player, visible] = await Promise.all([playerFor(), visibleState(page)]);
+        return { player, visible };
+      },
+      ({ player, visible }) => hasAuthorityPhase(player, "lock", "lock", well)
+        && isSelectedWellAnchor(visible.scene?.slingshot?.telegraph?.lock?.anchor, well),
+      "authoritative and visible selected-well lock",
+      1500,
+    );
     await capture("02-lock");
-    const arc = await waitFor(
-      playerFor,
-      (player) => player?.slingshot?.engaged === true
-        && player?.slingshot?.phase === "arc"
-        && player?.slingshot?.telegraph?.ownedArc,
-      "owned arc authority snapshot",
+    const lockReleased = assertSelectedWellEvent(
+      await nextPlayerSlingshotEvent(
+        network.clientId,
+        lockEngaged.seq,
+        "lock leg next authoritative release",
+        6000,
+      ),
+      "player.slingshotReleased",
+      network.clientId,
+      well,
+      "range-break",
     );
-    const overlay = await waitFor(
-      () => page.evaluate(() => window.__TEST_API.getRulerOverlayStats()),
-      (value) => value?.enabled && value.handlerCount === 11 && value.forceTick != null,
-      "ruler and force ledger evidence",
+
+    const arcArm = await armAndWaitForSelectedWell(
+      "arc-leg",
+      network.clientId,
+      well,
+      worldScale,
+    );
+    arming.push(arcArm.receipt);
+    const arcEngageAck = await pressAcknowledgedSlingshotEdge(page, "arc leg engage");
+    const arcEngaged = assertSelectedWellEvent(
+      await nextPlayerSlingshotEvent(
+        network.clientId,
+        lockReleased.seq,
+        "arc leg next authoritative event",
+      ),
+      "player.slingshotEngaged",
+      network.clientId,
+      well,
+    );
+    const arcAuthority = await waitFor(
+      playerFor,
+      (player) => hasAuthorityPhase(player, "arc", "ownedArc", well),
+      "arc leg selected-well authority",
+      1500,
+    );
+    const arcForceTick = arcAuthority.forceLedger?.tick ?? null;
+    const arcVisible = await waitFor(
+      () => visibleState(page),
+      (visible) => isSelectedWellAnchor(
+        visible.scene?.slingshot?.telegraph?.ownedArc?.anchor,
+        well,
+      )
+        && visible.ruler?.enabled
+        && visible.ruler.handlerCount === 11
+        && visible.ruler.forceTick != null
+        && (arcForceTick == null || visible.ruler.forceTick >= arcForceTick),
+      "visible selected-well arc and fresh ruler evidence",
+      1500,
     );
     await capture("03-owned-arc-ruler-force");
-    const engagedBeforeRelease = await playerFor();
-    assert(engagedBeforeRelease?.slingshot?.engaged === true,
-      `Slingshot auto-released before the requested release: ${JSON.stringify(engagedBeforeRelease?.slingshot)}`);
-    const eventsBeforeRelease = await playerSlingshotEvents(network.clientId, eventWatermark);
-    assert.deepStrictEqual(eventsBeforeRelease.map((event) => event.type), [
-      "player.slingshotEngaged",
-    ], "Expected only the authoritative engage event before release");
-    assert.strictEqual(eventsBeforeRelease[0].seq, engagedEvent.seq,
-      "Engage event changed before the requested release");
-
-    const releaseAck = await pressAcknowledgedSlingshotEdge(page, "release");
-    const releaseEvents = await waitFor(
-      () => playerSlingshotEvents(network.clientId, engagedEvent.seq),
-      (currentEvents) => currentEvents.length === 1
-        && currentEvents[0].type === "player.slingshotReleased"
-        && currentEvents[0].payload?.reason === "release",
-      "exactly one requested release event",
+    const arcReleased = assertSelectedWellEvent(
+      await nextPlayerSlingshotEvent(
+        network.clientId,
+        arcEngaged.seq,
+        "arc leg next authoritative release",
+        6000,
+      ),
+      "player.slingshotReleased",
+      network.clientId,
+      well,
+      "range-break",
     );
-    const releasedEvent = releaseEvents[0];
-    const released = await waitFor(
-      playerFor,
-      (player) => player?.slingshot?.engaged === false && player?.slingshot?.telegraph?.releaseGhost,
-      "release ghost",
+
+    const releaseArm = await armAndWaitForSelectedWell(
+      "release-leg",
+      network.clientId,
+      well,
+      worldScale,
+    );
+    arming.push(releaseArm.receipt);
+    const releaseEngageAck = await pressAcknowledgedSlingshotEdge(page, "release leg engage");
+    const releaseEngaged = assertSelectedWellEvent(
+      await nextPlayerSlingshotEvent(
+        network.clientId,
+        arcReleased.seq,
+        "release leg next authoritative event",
+      ),
+      "player.slingshotEngaged",
+      network.clientId,
+      well,
+    );
+    await waitFor(
+      async () => {
+        const [player, visible] = await Promise.all([playerFor(), visibleState(page)]);
+        return { player, visible };
+      },
+      ({ player, visible }) => hasAuthorityPhase(player, "arc", "ownedArc", well)
+        && isSelectedWellAnchor(visible.scene?.slingshot?.telegraph?.ownedArc?.anchor, well),
+      "release leg authoritative and visible selected-well arc",
+      1500,
+    );
+    const releaseCommandAck = await pressAcknowledgedSlingshotEdge(page, "release leg command");
+    const releaseReleased = assertSelectedWellEvent(
+      await nextPlayerSlingshotEvent(
+        network.clientId,
+        releaseEngaged.seq,
+        "release leg next authoritative release",
+      ),
+      "player.slingshotReleased",
+      network.clientId,
+      well,
+      "release",
+    );
+    const releaseGate = await waitFor(
+      async () => {
+        const [player, visible] = await Promise.all([playerFor(), visibleState(page)]);
+        return { player, visible };
+      },
+      ({ player, visible }) => player?.slingshot?.engaged === false
+        && isSelectedWellAnchor(player.slingshot?.telegraph?.releaseGhost?.anchor, well)
+        && isSelectedWellAnchor(visible.scene?.slingshot?.telegraph?.releaseGhost?.anchor, well),
+      "authoritative and visible selected-well release ghost",
+      1500,
     );
     await capture("04-release-ghost");
 
     const slingshotEvents = await playerSlingshotEvents(network.clientId, eventWatermark);
-    assert.deepStrictEqual(slingshotEvents.map((event) => event.type), [
-      "player.slingshotEngaged",
-      "player.slingshotReleased",
-    ], "Expected one authoritative slingshot engage/release sequence");
-    assert.strictEqual(slingshotEvents[0].seq, engagedEvent.seq,
-      "Final event window did not retain the engaged event");
-    assert.strictEqual(slingshotEvents[1].seq, releasedEvent.seq,
-      "Final event window did not retain the released event");
-    assert.strictEqual(slingshotEvents[1].payload?.reason, "release",
-      "Final slingshot release must be player-requested");
+    const eventRecords = slingshotEvents.map((event) => ({
+      seq: event.seq,
+      type: event.type,
+      clientId: event.payload?.clientId,
+      anchorId: event.payload?.anchorId,
+      anchorType: event.payload?.anchorType,
+      reason: event.payload?.reason || null,
+    }));
+    assert.deepStrictEqual(eventRecords, [
+      lockEngaged,
+      lockReleased,
+      arcEngaged,
+      arcReleased,
+      releaseEngaged,
+      releaseReleased,
+    ].map((event) => ({
+      seq: event.seq,
+      type: event.type,
+      clientId: event.payload.clientId,
+      anchorId: event.payload.anchorId,
+      anchorType: event.payload.anchorType,
+      reason: event.payload.reason || null,
+    })), "Expected the complete ordered three-leg slingshot event stream");
+
+    const finalAcks = await slingshotEdgeAcks(page);
+    assert.strictEqual(finalAcks.length, ackWatermark + 4,
+      "The three proof legs must add exactly four slingshot edge acknowledgements");
 
     const result = {
       outputDir: OUTPUT_DIR,
-      phases: [aim.slingshot.phase, lock.slingshot.phase, arc.slingshot.phase, released.slingshot.phase],
-      telegraphKeys: Object.keys(released.slingshot.telegraph || {}).filter((key) => released.slingshot.telegraph[key]),
-      overlay: {
-        handlerCount: overlay.handlerCount,
-        handlerIds: overlay.handlerIds,
-        forceTick: overlay.forceTick,
-        geometry: overlay.geometry,
-        reducedMotion: overlay.reducedMotion,
+      capturePhases: {
+        aim: aimVisible.scene.slingshot.phase,
+        lock: lockGate.visible.scene.slingshot.phase,
+        arc: arcVisible.scene.slingshot.phase,
+        releaseGhost: releaseGate.visible.scene.slingshot.phase,
       },
-      edgeAcks: { engage: engageAck, release: releaseAck },
-      events: slingshotEvents.map((event) => ({
-        seq: event.seq,
-        type: event.type,
-        reason: event.payload?.reason || null,
-      })),
+      overlay: {
+        handlerCount: arcVisible.ruler.handlerCount,
+        handlerIds: arcVisible.ruler.handlerIds,
+        authorityForceTick: arcForceTick,
+        forceTick: arcVisible.ruler.forceTick,
+        geometry: arcVisible.ruler.geometry,
+        reducedMotion: arcVisible.ruler.reducedMotion,
+      },
+      legs: {
+        lock: [lockEngaged.seq, lockReleased.seq],
+        arc: [arcEngaged.seq, arcReleased.seq],
+        release: [releaseEngaged.seq, releaseReleased.seq],
+      },
+      arming,
+      edgeAcks: {
+        lockEngage: compactAck(lockEngageAck),
+        arcEngage: compactAck(arcEngageAck),
+        releaseEngage: compactAck(releaseEngageAck),
+        releaseCommand: compactAck(releaseCommandAck),
+      },
+      events: eventRecords,
       browserErrors: launched.errors,
       captures,
     };
