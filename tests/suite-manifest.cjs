@@ -598,8 +598,8 @@ const SUITES = [
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
     browser: true,
-    // Run after journey isolation, then share with one ordinary browser.
-    browserPriority: "renderer",
+    // Fixture capture is CPU/GPU-bound; do not contend with another browser.
+    browserExclusive: true,
     visual: true,
     timeout: 240000,
   },
