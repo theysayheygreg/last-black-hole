@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -136,6 +135,7 @@ const {
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 const { serializeRuntimeJson } = require("./sim/serialization-budget.cjs");
+const { createJsonHttpLifecycle } = require("./sim/http-lifecycle.cjs");
 const {
   createCollapseEpochSchedule,
   createCollapseEpochState,
@@ -737,39 +737,11 @@ function parseArgs(argv) {
   return args;
 }
 
-function readJson(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (chunk) => {
-      data += chunk;
-      if (data.length > 1024 * 1024) {
-        reject(new Error("Request body too large"));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      if (!data.trim()) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(data));
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-function sendJson(res, statusCode, body) {
-  const payload = serializeRuntimeJson(body);
-  res.statusCode = statusCode;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
-  res.end(payload);
-}
+const httpLifecycle = createJsonHttpLifecycle({
+  serialize: serializeRuntimeJson,
+  allowedHeaders: [AUTHORITY_HEADER, PLAYER_ID_HEADER, RUN_ID_HEADER],
+});
+const { readJson, sendJson } = httpLifecycle;
 
 async function handleBenchRoute(req, res, handler) {
   try {
@@ -6728,250 +6700,222 @@ function writeFiles() {
   }
 }
 
-const server = http.createServer(async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.statusCode = 204;
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.end();
+async function routeRequest(req, res) {
+  if (req.method === "GET" && req.url === "/health") {
+    const idleState = getIdleState();
+    sendJson(res, 200, {
+      ok: true,
+      protocolVersion: PROTOCOL_VERSION,
+      simInstanceId: SIM_INSTANCE_ID,
+      controlPlaneUrl: CONTROL_PLANE_URL || null,
+      session: getPublicSession(),
+      tick: runtime.tick,
+      simTime: runtime.simTime,
+      playerCount: runtime.players.size,
+      mapId: benchAuthority ? benchAuthority.snapshot().galleryId : runtime.mapState.id,
+      ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
+      ballparkRelevance: runtime.ballparkRelevance,
+      eventJournal: runtime.eventJournal ? runtime.eventJournal.describe() : null,
+      snapshotRing: runtime.snapshotRing ? runtime.snapshotRing.describe() : null,
+      match: {
+        maxSimTime: runtime.session.runDurationSeconds,
+        terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
+        wreckRepeatWaveCount: runtime._wreckRepeatWaveCount || 0,
+        maxWreckRepeatWaves: MAX_WRECK_REPEAT_WAVES,
+        maxLiveWrecks: MAX_LIVE_WRECKS,
+      },
+      process: {
+        pid: process.pid,
+        uptimeSec: Number(process.uptime().toFixed(3)),
+        memory: process.memoryUsage(),
+      },
+      // Keep deadline delivery inspectable without retaining per-tick timing
+      // history in the authority process.
+      scheduler: tickLoop?.diagnostics() || null,
+      idleState,
+      shutdownReason: runtime.shutdownReason,
+      bench: BENCH_GATE.enabled
+        ? { enabled: true, gateSource: BENCH_GATE.source, galleryId: benchAuthority.state().gallery.id }
+        : { enabled: false },
+    });
     return;
   }
 
-  try {
-    if (req.method === "GET" && req.url === "/health") {
-      const idleState = getIdleState();
-      sendJson(res, 200, {
-        ok: true,
-        protocolVersion: PROTOCOL_VERSION,
-        simInstanceId: SIM_INSTANCE_ID,
-        controlPlaneUrl: CONTROL_PLANE_URL || null,
-        session: getPublicSession(),
-        tick: runtime.tick,
-        simTime: runtime.simTime,
-        playerCount: runtime.players.size,
-        mapId: benchAuthority ? benchAuthority.snapshot().galleryId : runtime.mapState.id,
-        ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
-        ballparkRelevance: runtime.ballparkRelevance,
-        eventJournal: runtime.eventJournal ? runtime.eventJournal.describe() : null,
-        snapshotRing: runtime.snapshotRing ? runtime.snapshotRing.describe() : null,
-        match: {
-          maxSimTime: runtime.session.runDurationSeconds,
-          terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
-          wreckRepeatWaveCount: runtime._wreckRepeatWaveCount || 0,
-          maxWreckRepeatWaves: MAX_WRECK_REPEAT_WAVES,
-          maxLiveWrecks: MAX_LIVE_WRECKS,
-        },
-        process: {
-          pid: process.pid,
-          uptimeSec: Number(process.uptime().toFixed(3)),
-          memory: process.memoryUsage(),
-        },
-        // Keep deadline delivery inspectable without retaining per-tick timing
-        // history in the authority process.
-        scheduler: tickLoop?.diagnostics() || null,
-        idleState,
-        shutdownReason: runtime.shutdownReason,
-        bench: BENCH_GATE.enabled
-          ? { enabled: true, gateSource: BENCH_GATE.source, galleryId: benchAuthority.state().gallery.id }
-          : { enabled: false },
-      });
-      return;
-    }
+  if (req.url?.startsWith("/bench") && !BENCH_GATE.enabled) {
+    sendJson(res, 404, { ok: false, error: "Bench authority is disabled; launch with the explicit Bench gate" });
+    return;
+  }
 
-    if (req.url?.startsWith("/bench") && !BENCH_GATE.enabled) {
-      sendJson(res, 404, { ok: false, error: "Bench authority is disabled; launch with the explicit Bench gate" });
-      return;
-    }
+  if (req.method === "GET" && req.url === "/bench") {
+    sendJson(res, 200, { ok: true, gateSource: BENCH_GATE.source, ...benchAuthority.state() });
+    return;
+  }
 
-    if (req.method === "GET" && req.url === "/bench") {
-      sendJson(res, 200, { ok: true, gateSource: BENCH_GATE.source, ...benchAuthority.state() });
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/bay") {
+    await handleBenchRoute(req, res, (body) => ({ ok: true, ...benchAuthority.activateBay(body.activeBayId) }));
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/bay") {
-      await handleBenchRoute(req, res, (body) => ({ ok: true, ...benchAuthority.activateBay(body.activeBayId) }));
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/patch") {
+    await handleBenchRoute(req, res, (body) => ({ ok: true, patch: benchAuthority.importPatch(body.patch) }));
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/patch") {
-      await handleBenchRoute(req, res, (body) => ({ ok: true, patch: benchAuthority.importPatch(body.patch) }));
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/edit") {
+    await handleBenchRoute(req, res, (body) => ({
+      ok: true,
+      entry: benchAuthority.applyEntry({
+        adapterId: body.adapterId,
+        propertyId: body.propertyId,
+        value: body.value,
+      }),
+      state: benchAuthority.state(),
+    }));
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/edit") {
-      await handleBenchRoute(req, res, (body) => ({
-        ok: true,
-        entry: benchAuthority.applyEntry({
-          adapterId: body.adapterId,
-          propertyId: body.propertyId,
-          value: body.value,
-        }),
-        state: benchAuthority.state(),
-      }));
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/action") {
+    await handleBenchRoute(req, res, (body) => ({
+      ok: true,
+      ...benchAuthority.runScenarioAction({
+        entityId: body.entityId,
+        adapterId: body.adapterId,
+        actionId: body.actionId,
+      }),
+    }));
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/action") {
-      await handleBenchRoute(req, res, (body) => ({
-        ok: true,
-        ...benchAuthority.runScenarioAction({
-          entityId: body.entityId,
-          adapterId: body.adapterId,
-          actionId: body.actionId,
-        }),
-      }));
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/replay") {
+    await handleBenchRoute(req, res, () => ({ ok: true, authorityTruth: benchAuthority.replaySameSetup() }));
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/replay") {
-      await handleBenchRoute(req, res, () => ({ ok: true, authorityTruth: benchAuthority.replaySameSetup() }));
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/reset") {
+    await handleBenchRoute(req, res, (body) => {
+      let patch;
+      if (body.propertyId) patch = benchAuthority.resetProperty(body.adapterId, body.propertyId);
+      else if (body.adapterId) patch = benchAuthority.resetType(body.adapterId);
+      else patch = benchAuthority.resetAll();
+      return { ok: true, patch };
+    });
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/reset") {
-      await handleBenchRoute(req, res, (body) => {
-        let patch;
-        if (body.propertyId) patch = benchAuthority.resetProperty(body.adapterId, body.propertyId);
-        else if (body.adapterId) patch = benchAuthority.resetType(body.adapterId);
-        else patch = benchAuthority.resetAll();
-        return { ok: true, patch };
-      });
-      return;
-    }
+  if (req.method === "POST" && req.url === "/bench/undo") {
+    await handleBenchRoute(req, res, () => ({
+      ok: true,
+      undone: benchAuthority.undoLastChange(),
+      patch: benchAuthority.exportPatch(),
+    }));
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/bench/undo") {
-      await handleBenchRoute(req, res, () => ({
-        ok: true,
-        undone: benchAuthority.undoLastChange(),
-        patch: benchAuthority.exportPatch(),
-      }));
-      return;
-    }
+  if (req.method === "GET" && req.url === "/debug/ballpark") {
+    sendJson(res, 200, {
+      ok: true,
+      ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
+      relevance: runtime.ballparkRelevance,
+    });
+    return;
+  }
 
-    if (req.method === "GET" && req.url === "/debug/ballpark") {
-      sendJson(res, 200, {
-        ok: true,
-        ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
-        relevance: runtime.ballparkRelevance,
-      });
-      return;
-    }
-
-    if (req.method === "GET" && req.url === "/maps") {
-      sendJson(res, 200, {
-        type: "maps",
-        maps: Object.values(PLAYABLE_MAPS).map((map) => {
-          const profile = getSessionProfile(map.id, map.worldScale);
-          return {
-            id: map.id,
-            mapClass: map.mapClass,
-            profileId: map.profileId,
-            dimensions: { ...map.dimensions },
-            name: map.name,
+  if (req.method === "GET" && req.url === "/maps") {
+    sendJson(res, 200, {
+      type: "maps",
+      maps: Object.values(PLAYABLE_MAPS).map((map) => {
+        const profile = getSessionProfile(map.id, map.worldScale);
+        return {
+          id: map.id,
+          mapClass: map.mapClass,
+          profileId: map.profileId,
+          dimensions: { ...map.dimensions },
+          name: map.name,
+          worldScale: map.worldScale,
+          fluidResolution: map.fluidResolution,
+          wellCount: map.wells.length,
+          starCount: map.stars.length,
+          wreckCount: map.wrecks.length,
+          planetoidCount: map.planetoids.length,
+          simScaleProfile: profile.profileId,
+          clientPerfProfile: profile.clientPerfProfile,
+          tickHz: AUTHORITY_INTEGRATION_HZ,
+          snapshotHz: profile.snapshotHz,
+          ...getLegacySessionCompatibility({
             worldScale: map.worldScale,
-            fluidResolution: map.fluidResolution,
-            wellCount: map.wells.length,
-            starCount: map.stars.length,
-            wreckCount: map.wrecks.length,
-            planetoidCount: map.planetoids.length,
-            simScaleProfile: profile.profileId,
-            clientPerfProfile: profile.clientPerfProfile,
-            tickHz: AUTHORITY_INTEGRATION_HZ,
-            snapshotHz: profile.snapshotHz,
-            ...getLegacySessionCompatibility({
-              worldScale: map.worldScale,
-              mapState: map,
-            }),
-            useCoarseField: profile.useCoarseField,
-            flowFieldCellSize: profile.flowFieldCellSize,
-            fieldFlowScale: profile.fieldFlowScale,
-            spawnScavengersBase: profile.spawnScavengersBase,
-            spawnScavengersPerPlayer: profile.spawnScavengersPerPlayer,
-            maxScavengers: profile.maxScavengers,
-            localFluidResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].fluidResolution,
-            localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[profile.clientPerfProfile].localWindowWorldUnits,
-            coarseTextureResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].coarseTextureResolution,
-            maxCoarseFieldCells: profile.maxCoarseFieldCells,
-            snapshotBudgetBytes: profile.snapshotBudgetBytes,
-            snapshotBudgetBytesPerSecond: profile.snapshotBudgetBytesPerSecond,
-            ballparkSyncBudgetMs: profile.ballparkSyncBudgetMs,
-          };
-        }),
-      });
-      return;
-    }
+            mapState: map,
+          }),
+          useCoarseField: profile.useCoarseField,
+          flowFieldCellSize: profile.flowFieldCellSize,
+          fieldFlowScale: profile.fieldFlowScale,
+          spawnScavengersBase: profile.spawnScavengersBase,
+          spawnScavengersPerPlayer: profile.spawnScavengersPerPlayer,
+          maxScavengers: profile.maxScavengers,
+          localFluidResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].fluidResolution,
+          localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[profile.clientPerfProfile].localWindowWorldUnits,
+          coarseTextureResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].coarseTextureResolution,
+          maxCoarseFieldCells: profile.maxCoarseFieldCells,
+          snapshotBudgetBytes: profile.snapshotBudgetBytes,
+          snapshotBudgetBytesPerSecond: profile.snapshotBudgetBytesPerSecond,
+          ballparkSyncBudgetMs: profile.ballparkSyncBudgetMs,
+        };
+      }),
+    });
+    return;
+  }
 
-    if (req.method === "GET" && req.url === "/protocol") {
-      sendJson(res, 200, protocol);
-      return;
-    }
+  if (req.method === "GET" && req.url === "/protocol") {
+    sendJson(res, 200, protocol);
+    return;
+  }
 
-    if (req.method === "GET" && req.url?.startsWith("/snapshots")) {
-      const url = new URL(req.url, `http://${HOST}:${PORT}`);
-      const sinceSnapshotId = Number(url.searchParams.get("since") || 0);
-      const runId = url.searchParams.get("runId") || null;
-      sendJson(res, 200, {
-        type: "snapshots",
-        protocolVersion: PROTOCOL_VERSION,
-        ...runtime.snapshotRing.list({ sinceSnapshotId, runId }),
-      });
-      return;
-    }
+  if (req.method === "GET" && req.url?.startsWith("/snapshots")) {
+    const url = new URL(req.url, `http://${HOST}:${PORT}`);
+    const sinceSnapshotId = Number(url.searchParams.get("since") || 0);
+    const runId = url.searchParams.get("runId") || null;
+    sendJson(res, 200, {
+      type: "snapshots",
+      protocolVersion: PROTOCOL_VERSION,
+      ...runtime.snapshotRing.list({ sinceSnapshotId, runId }),
+    });
+    return;
+  }
 
-    if (req.method === "GET" && req.url?.startsWith("/snapshot")) {
-      sendJson(res, 200, snapshotBody());
-      return;
-    }
+  if (req.method === "GET" && req.url?.startsWith("/snapshot")) {
+    sendJson(res, 200, snapshotBody());
+    return;
+  }
 
-    if (req.method === "GET" && req.url?.startsWith("/events")) {
-      const url = new URL(req.url, `http://${HOST}:${PORT}`);
-      const since = Number(url.searchParams.get("since") || 0);
-      const lane = url.searchParams.get("lane") || url.searchParams.get("lanes") || null;
-      const runId = url.searchParams.get("runId") || null;
-      const wantsPrivateEvents = Boolean(
-        req.headers[AUTHORITY_HEADER] || req.headers[PLAYER_ID_HEADER]
-      );
-      let playerId = null;
-      if (wantsPrivateEvents) {
-        const auth = authorizePlayerRequest(req, { runId }, { requireCommandSeq: false });
-        if (!auth.ok) {
-          sendAuthorityError(res, auth);
-          return;
-        }
-        playerId = auth.authority.playerId;
+  if (req.method === "GET" && req.url?.startsWith("/events")) {
+    const url = new URL(req.url, `http://${HOST}:${PORT}`);
+    const since = Number(url.searchParams.get("since") || 0);
+    const lane = url.searchParams.get("lane") || url.searchParams.get("lanes") || null;
+    const runId = url.searchParams.get("runId") || null;
+    const wantsPrivateEvents = Boolean(
+      req.headers[AUTHORITY_HEADER] || req.headers[PLAYER_ID_HEADER]
+    );
+    let playerId = null;
+    if (wantsPrivateEvents) {
+      const auth = authorizePlayerRequest(req, { runId }, { requireCommandSeq: false });
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
+        return;
       }
-      const journalRead = runtime.eventJournal.read({ since, lane, runId });
-      sendJson(res, 200, {
-        type: "events",
-        protocolVersion: PROTOCOL_VERSION,
-        ...journalRead,
-        events: filterEventsForPlayer(journalRead.events, playerId),
-      });
-      return;
+      playerId = auth.authority.playerId;
     }
+    const journalRead = runtime.eventJournal.read({ since, lane, runId });
+    sendJson(res, 200, {
+      type: "events",
+      protocolVersion: PROTOCOL_VERSION,
+      ...journalRead,
+      events: filterEventsForPlayer(journalRead.events, playerId),
+    });
+    return;
+  }
 
-    if (req.method === "POST" && req.url === "/session/start") {
-      const body = await readJson(req);
-      if (runtime.session.status === "running") {
-        const permission = ensureHostAuthority(req, {
-          ...body,
-          playerId: body.playerId || body.requesterId,
-        });
-        if (!permission.ok) {
-          sendAuthorityError(res, permission);
-          return;
-        }
-        if (permission.authority) acceptCommand(permission);
-      }
-      startSession(body);
-      const joinTicket = issueJoinClaim(body.requesterId || body.playerId);
-      sendJson(res, 200, { ok: true, session: getPublicSession(), joinTicket });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/session/reset") {
-      const body = await readJson(req);
+  if (req.method === "POST" && req.url === "/session/start") {
+    const body = await readJson(req);
+    if (runtime.session.status === "running") {
       const permission = ensureHostAuthority(req, {
         ...body,
         playerId: body.playerId || body.requesterId,
@@ -6981,353 +6925,370 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       if (permission.authority) acceptCommand(permission);
-      const requesterId = runtime.session.hostClientId || body.requesterId || body.playerId;
-      const requesterName = runtime.session.hostName;
-      startSession({
-        ...runtime.session,
-        requesterId,
-        requesterName,
-      });
-      const joinTicket = issueJoinClaim(requesterId);
-      sendJson(res, 200, { ok: true, session: getPublicSession(), joinTicket });
-      return;
     }
-
-    if (req.method === "POST" && req.url === "/join") {
-      const body = await readJson(req);
-      if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session" });
-        return;
-      }
-
-      const clientId = String(body.clientId || "").trim();
-      if (!clientId) {
-        sendJson(res, 400, { ok: false, error: "clientId is required" });
-        return;
-      }
-
-      const requestedRunId = String(body.runId || "").trim();
-      if (requestedRunId && requestedRunId !== runtime.session.runId) {
-        sendJson(res, 409, {
-          ok: false,
-          code: "stale-run",
-          error: "Join does not belong to the active run",
-          activeRunId: runtime.session.runId,
-        });
-        return;
-      }
-
-      let player = runtime.players.get(clientId);
-      let authority = runtime.playerAuthorities.get(clientId) || null;
-      const reconnected = Boolean(player);
-      if (player) {
-        const auth = authorizePlayerRequest(req, {
-          ...body,
-          runId: requestedRunId || runtime.session.runId,
-          playerId: clientId,
-        }, { requireCommandSeq: false });
-        if (!auth.ok) {
-          sendAuthorityError(res, auth);
-          return;
-        }
-        authority = auth.authority;
-      } else {
-        const pendingClaim = runtime.joinClaims.get(clientId);
-        if (pendingClaim && !secretsMatch(body.joinTicket, pendingClaim)) {
-          sendJson(res, 403, { ok: false, code: "join-claim-required", error: "A valid host join ticket is required" });
-          return;
-        }
-      }
-      if (!player) {
-        const humanCount = Array.from(runtime.players.values()).filter(p => !p.isAI).length;
-        if (humanCount >= runtime.session.maxPlayers) {
-          sendJson(res, 409, { ok: false, error: "Session full" });
-          return;
-        }
-        const profileId = body.profileId ? String(body.profileId).trim() : null;
-        const durableProfile = profileId
-          ? await controlPlane.bootstrapProfile({
-              profileId,
-              snapshot: body.profileSnapshot || null,
-              fallbackName: body.name,
-            })
-          : null;
-        const explicitHullType = normalizePublicHullType(
-          body.hullType,
-          durableProfile?.hullType,
-          durableProfile?.shipType,
-          body.profileSnapshot?.hullType,
-          body.profileSnapshot?.shipType
-        );
-        const durableLoadout = cloneProfileLoadout(durableProfile);
-        const equipped = durableProfile ? durableLoadout.equipped : cloneRetiredSafeItems(body.equipped);
-        const consumables = durableProfile ? durableLoadout.consumables : cloneRetiredSafeItems(body.consumables);
-        player = createPlayer(clientId, body.name, explicitHullType, {
-          profileShipType: durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType || null,
-          profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || null,
-          rigLevels: durableProfile?.rigLevels || body.profileSnapshot?.rigLevels || null,
-          equipped,
-          consumables,
-        });
-        player.profileId = durableProfile?.id || profileId || null;
-        player.name = durableProfile?.name || player.name;
-        player.equipped = equipped;
-        player.consumables = consumables;
-        refreshPlayerBrain(player, durableProfile);
-        refreshPlayerEffects(player);
-        const spawn = findSafeSpawn(runtime.mapState);
-        player.wx = spawn.wx;
-        player.wy = spawn.wy;
-        runtime.players.set(clientId, player);
-        authority = issuePlayerAuthority(clientId);
-        runtime.joinClaims.delete(clientId);
-        telemetry.info("player.joined", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, hullType: player.hullType, mapId: runtime.session.mapId });
-        if (!runtime.session.hostClientId) assignHost(clientId, player.name);
-        publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
-        persistSessionRegistry();
-      } else {
-        if (body.name) {
-          player.name = String(body.name);
-        }
-        if (body.profileId) {
-          player.profileId = String(body.profileId);
-        }
-        if (body.profileSnapshot?.rigLevels) {
-          player.rigLevels = normalizeRigLevels(body.profileSnapshot.rigLevels, player.hullType);
-        }
-        if (body.profileSnapshot?.upgrades) {
-          player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
-        }
-        if (body.profileSnapshot?.shipType) {
-          player.profileShipType = normalizePublicHullType(body.profileSnapshot.shipType);
-          player.hullType = normalizePublicHullType(player.profileShipType, player.hullType);
-        }
-        if (Array.isArray(body.equipped)) {
-          player.equipped = cloneRetiredSafeItems(body.equipped);
-        }
-        if (Array.isArray(body.consumables)) {
-          player.consumables = cloneRetiredSafeItems(body.consumables);
-        }
-        refreshPlayerBrain(player);
-        refreshPlayerEffects(player);
-      }
-
-      if (!player.isAI) {
-        // A session starts idle because AI pilots are spawned before humans
-        // arrive. Promote the loop as soon as a real player joins or rejoins.
-        runtime.emptySince = null;
-        restartTickLoop();
-      }
-
-      refreshBallparkMirror("player-joined");
-      sendJson(res, 200, { ok: true, player, authority: publicAuthority(authority, { reconnected }) });
-      return;
-    }
-
-    if (req.method === "GET" && req.url.startsWith("/profile")) {
-      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
-      const profileId = String(requestUrl.searchParams.get("profileId") || "").trim();
-      if (!profileId) {
-        sendJson(res, 400, { ok: false, error: "profileId is required" });
-        return;
-      }
-      const profile = await controlPlane.getProfile(profileId);
-      if (!profile) {
-        sendJson(res, 404, { ok: false, error: "Unknown profile" });
-        return;
-      }
-      const recentRuns = await controlPlane.getRecentRuns(profileId, 5);
-      sendJson(res, 200, {
-        ok: true,
-        profile: { ...profile, runRecords: recentRuns },
-        recentRuns,
-      });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/leave") {
-      const body = await readJson(req);
-      const auth = authorizePlayerRequest(req, body);
-      if (!auth.ok) {
-        sendAuthorityError(res, auth);
-        return;
-      }
-      acceptCommand(auth);
-      const clientId = auth.authority.playerId;
-      const player = runtime.players.get(clientId);
-      if (!player) {
-        sendJson(res, 404, { ok: false, error: "Unknown client" });
-        return;
-      }
-      if (!player.isAI && !player.committedOutcome) {
-        commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
-      }
-      runtime.players.delete(clientId);
-      runtime.playerAuthorities.delete(clientId);
-      telemetry.info("player.left", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, status: player.status });
-      publishEvent("player.left", {
-        clientId,
-        name: player.name,
-      });
-      promoteHostIfNeeded();
-      persistSessionRegistry();
-      refreshBallparkMirror("player-left");
-      sendJson(res, 200, { ok: true, session: getPublicSession(), playerCount: runtime.players.size });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/input") {
-      const body = await readJson(req);
-      if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session", session: getPublicSession() });
-        return;
-      }
-      const message = normalizeInputMessage(body);
-      const auth = authorizePlayerRequest(req, message);
-      if (!auth.ok) {
-        sendAuthorityError(res, auth);
-        return;
-      }
-      acceptCommand(auth);
-      const player = runtime.players.get(auth.authority.playerId);
-      if (!player) {
-        sendJson(res, 404, { ok: false, error: "Unknown client" });
-        return;
-      }
-      if (message.seq <= player.lastInput.seq) {
-        sendJson(res, 409, {
-          ok: false,
-          code: "stale-input",
-          error: "Input sequence is not newer than the last accepted input",
-          acceptedCommandSeq: auth.authority.lastCommandSeq,
-          acceptedSeq: player.lastInput.seq,
-        });
-        return;
-      }
-      const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) =>
-        edgeId > (auth.authority.lastSlingshotEdgeId || 0)
-      );
-      if (acceptedSlingshotEdges.length > 0) {
-        auth.authority.lastSlingshotEdgeId = acceptedSlingshotEdges[acceptedSlingshotEdges.length - 1];
-      }
-      const { commandCredential: _commandCredential, ...inputState } = message;
-      player.lastInput = {
-        ...inputState,
-        receivedAt: Date.now(),
-        slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
-        pulse: Boolean(player.lastInput.pulse || message.pulse),
-        extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),
-        consumeSlot:
-          message.consumeSlot === null || message.consumeSlot === undefined
-            ? player.lastInput.consumeSlot
-            : message.consumeSlot,
-      };
-      sendJson(res, 200, {
-        ok: true,
-        acceptedCommandSeq: auth.authority.lastCommandSeq,
-        acceptedSeq: message.seq,
-        acceptedSlingshotEdges,
-        pendingSlingshotEdgeCount: player.lastInput.slingshotEdges.length,
-        tick: runtime.tick,
-      });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/inventory/action") {
-      const body = await readJson(req);
-      if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session", session: getPublicSession() });
-        return;
-      }
-      const message = normalizeInventoryAction(body);
-      const auth = authorizePlayerRequest(req, message);
-      if (!auth.ok) {
-        sendAuthorityError(res, auth);
-        return;
-      }
-      acceptCommand(auth);
-      const player = runtime.players.get(auth.authority.playerId);
-      if (!player) {
-        sendJson(res, 404, { ok: false, error: "Unknown client" });
-        return;
-      }
-      const result = applyInventoryAction(player, message);
-      if (!result.ok) {
-        sendJson(res, 409, { ok: false, error: result.error });
-        return;
-      }
-      refreshBallparkMirror("inventory-action");
-      sendJson(res, 200, {
-        ok: true,
-        acceptedCommandSeq: auth.authority.lastCommandSeq,
-        player,
-        snapshot: snapshotBody({ force: true }),
-      });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/debug/player-state") {
-      const body = await readJson(req);
-      const clientId = String(body.clientId || "").trim();
-      if (!clientId) {
-        sendJson(res, 400, { ok: false, error: "clientId is required" });
-        return;
-      }
-      const player = runtime.players.get(clientId);
-      if (!player) {
-        sendJson(res, 404, { ok: false, error: "Unknown client" });
-        return;
-      }
-      applyDebugPlayerState(player, body);
-      maybeEndTerminalSession("terminal-players");
-      refreshBallparkMirror("debug-player-state");
-      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody({ force: true }) });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/debug/inhibitor-state") {
-      const body = await readJson(req);
-      const inhibitor = applyDebugInhibitorState(body);
-      if (!inhibitor) {
-        sendJson(res, 409, { ok: false, error: "No inhibitor runtime state" });
-        return;
-      }
-      refreshBallparkMirror("debug-inhibitor-state");
-      sendJson(res, 200, { ok: true, inhibitor, snapshot: snapshotBody({ force: true }) });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/debug/portal-state") {
-      const body = await readJson(req);
-      const portal = applyDebugPortalState(body);
-      refreshBallparkMirror("debug-portal-state");
-      sendJson(res, 200, { ok: true, portal, snapshot: snapshotBody({ force: true }) });
-      return;
-    }
-
-    if (req.method === "POST" && req.url === "/debug/scavenger-state") {
-      const body = await readJson(req);
-      const scavengerId = String(body.scavengerId || "").trim();
-      if (!scavengerId) {
-        sendJson(res, 400, { ok: false, error: "scavengerId is required" });
-        return;
-      }
-      const scavenger = runtime.mapState.scavengers.find((entry) => entry.id === scavengerId);
-      if (!scavenger) {
-        sendJson(res, 404, { ok: false, error: "Unknown scavenger" });
-        return;
-      }
-      applyDebugScavengerState(scavenger, body);
-      refreshBallparkMirror("debug-scavenger-state");
-      sendJson(res, 200, { ok: true, scavenger, snapshot: snapshotBody({ force: true }) });
-      return;
-    }
-
-    sendJson(res, 404, { ok: false, error: "Not found" });
-  } catch (err) {
-    sendJson(res, 500, { ok: false, error: err.message });
+    startSession(body);
+    const joinTicket = issueJoinClaim(body.requesterId || body.playerId);
+    sendJson(res, 200, { ok: true, session: getPublicSession(), joinTicket });
+    return;
   }
-});
+
+  if (req.method === "POST" && req.url === "/session/reset") {
+    const body = await readJson(req);
+    const permission = ensureHostAuthority(req, {
+      ...body,
+      playerId: body.playerId || body.requesterId,
+    });
+    if (!permission.ok) {
+      sendAuthorityError(res, permission);
+      return;
+    }
+    if (permission.authority) acceptCommand(permission);
+    const requesterId = runtime.session.hostClientId || body.requesterId || body.playerId;
+    const requesterName = runtime.session.hostName;
+    startSession({
+      ...runtime.session,
+      requesterId,
+      requesterName,
+    });
+    const joinTicket = issueJoinClaim(requesterId);
+    sendJson(res, 200, { ok: true, session: getPublicSession(), joinTicket });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/join") {
+    const body = await readJson(req);
+    if (runtime.session.status !== "running") {
+      sendJson(res, 409, { ok: false, error: "No active session" });
+      return;
+    }
+
+    const clientId = String(body.clientId || "").trim();
+    if (!clientId) {
+      sendJson(res, 400, { ok: false, error: "clientId is required" });
+      return;
+    }
+
+    const requestedRunId = String(body.runId || "").trim();
+    if (requestedRunId && requestedRunId !== runtime.session.runId) {
+      sendJson(res, 409, {
+        ok: false,
+        code: "stale-run",
+        error: "Join does not belong to the active run",
+        activeRunId: runtime.session.runId,
+      });
+      return;
+    }
+
+    let player = runtime.players.get(clientId);
+    let authority = runtime.playerAuthorities.get(clientId) || null;
+    const reconnected = Boolean(player);
+    if (player) {
+      const auth = authorizePlayerRequest(req, {
+        ...body,
+        runId: requestedRunId || runtime.session.runId,
+        playerId: clientId,
+      }, { requireCommandSeq: false });
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
+        return;
+      }
+      authority = auth.authority;
+    } else {
+      const pendingClaim = runtime.joinClaims.get(clientId);
+      if (pendingClaim && !secretsMatch(body.joinTicket, pendingClaim)) {
+        sendJson(res, 403, { ok: false, code: "join-claim-required", error: "A valid host join ticket is required" });
+        return;
+      }
+    }
+    if (!player) {
+      const humanCount = Array.from(runtime.players.values()).filter(p => !p.isAI).length;
+      if (humanCount >= runtime.session.maxPlayers) {
+        sendJson(res, 409, { ok: false, error: "Session full" });
+        return;
+      }
+      const profileId = body.profileId ? String(body.profileId).trim() : null;
+      const durableProfile = profileId
+        ? await controlPlane.bootstrapProfile({
+            profileId,
+            snapshot: body.profileSnapshot || null,
+            fallbackName: body.name,
+          })
+        : null;
+      const explicitHullType = normalizePublicHullType(
+        body.hullType,
+        durableProfile?.hullType,
+        durableProfile?.shipType,
+        body.profileSnapshot?.hullType,
+        body.profileSnapshot?.shipType
+      );
+      const durableLoadout = cloneProfileLoadout(durableProfile);
+      const equipped = durableProfile ? durableLoadout.equipped : cloneRetiredSafeItems(body.equipped);
+      const consumables = durableProfile ? durableLoadout.consumables : cloneRetiredSafeItems(body.consumables);
+      player = createPlayer(clientId, body.name, explicitHullType, {
+        profileShipType: durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType || null,
+        profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || null,
+        rigLevels: durableProfile?.rigLevels || body.profileSnapshot?.rigLevels || null,
+        equipped,
+        consumables,
+      });
+      player.profileId = durableProfile?.id || profileId || null;
+      player.name = durableProfile?.name || player.name;
+      player.equipped = equipped;
+      player.consumables = consumables;
+      refreshPlayerBrain(player, durableProfile);
+      refreshPlayerEffects(player);
+      const spawn = findSafeSpawn(runtime.mapState);
+      player.wx = spawn.wx;
+      player.wy = spawn.wy;
+      runtime.players.set(clientId, player);
+      authority = issuePlayerAuthority(clientId);
+      runtime.joinClaims.delete(clientId);
+      telemetry.info("player.joined", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, hullType: player.hullType, mapId: runtime.session.mapId });
+      if (!runtime.session.hostClientId) assignHost(clientId, player.name);
+      publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
+      persistSessionRegistry();
+    } else {
+      if (body.name) {
+        player.name = String(body.name);
+      }
+      if (body.profileId) {
+        player.profileId = String(body.profileId);
+      }
+      if (body.profileSnapshot?.rigLevels) {
+        player.rigLevels = normalizeRigLevels(body.profileSnapshot.rigLevels, player.hullType);
+      }
+      if (body.profileSnapshot?.upgrades) {
+        player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
+      }
+      if (body.profileSnapshot?.shipType) {
+        player.profileShipType = normalizePublicHullType(body.profileSnapshot.shipType);
+        player.hullType = normalizePublicHullType(player.profileShipType, player.hullType);
+      }
+      if (Array.isArray(body.equipped)) {
+        player.equipped = cloneRetiredSafeItems(body.equipped);
+      }
+      if (Array.isArray(body.consumables)) {
+        player.consumables = cloneRetiredSafeItems(body.consumables);
+      }
+      refreshPlayerBrain(player);
+      refreshPlayerEffects(player);
+    }
+
+    if (!player.isAI) {
+      // A session starts idle because AI pilots are spawned before humans
+      // arrive. Promote the loop as soon as a real player joins or rejoins.
+      runtime.emptySince = null;
+      restartTickLoop();
+    }
+
+    refreshBallparkMirror("player-joined");
+    sendJson(res, 200, { ok: true, player, authority: publicAuthority(authority, { reconnected }) });
+    return;
+  }
+
+  if (req.method === "GET" && req.url.startsWith("/profile")) {
+    const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+    const profileId = String(requestUrl.searchParams.get("profileId") || "").trim();
+    if (!profileId) {
+      sendJson(res, 400, { ok: false, error: "profileId is required" });
+      return;
+    }
+    const profile = await controlPlane.getProfile(profileId);
+    if (!profile) {
+      sendJson(res, 404, { ok: false, error: "Unknown profile" });
+      return;
+    }
+    const recentRuns = await controlPlane.getRecentRuns(profileId, 5);
+    sendJson(res, 200, {
+      ok: true,
+      profile: { ...profile, runRecords: recentRuns },
+      recentRuns,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/leave") {
+    const body = await readJson(req);
+    const auth = authorizePlayerRequest(req, body);
+    if (!auth.ok) {
+      sendAuthorityError(res, auth);
+      return;
+    }
+    acceptCommand(auth);
+    const clientId = auth.authority.playerId;
+    const player = runtime.players.get(clientId);
+    if (!player) {
+      sendJson(res, 404, { ok: false, error: "Unknown client" });
+      return;
+    }
+    if (!player.isAI && !player.committedOutcome) {
+      commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
+    }
+    runtime.players.delete(clientId);
+    runtime.playerAuthorities.delete(clientId);
+    telemetry.info("player.left", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, status: player.status });
+    publishEvent("player.left", {
+      clientId,
+      name: player.name,
+    });
+    promoteHostIfNeeded();
+    persistSessionRegistry();
+    refreshBallparkMirror("player-left");
+    sendJson(res, 200, { ok: true, session: getPublicSession(), playerCount: runtime.players.size });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/input") {
+    const body = await readJson(req);
+    if (runtime.session.status !== "running") {
+      sendJson(res, 409, { ok: false, error: "No active session", session: getPublicSession() });
+      return;
+    }
+    const message = normalizeInputMessage(body);
+    const auth = authorizePlayerRequest(req, message);
+    if (!auth.ok) {
+      sendAuthorityError(res, auth);
+      return;
+    }
+    acceptCommand(auth);
+    const player = runtime.players.get(auth.authority.playerId);
+    if (!player) {
+      sendJson(res, 404, { ok: false, error: "Unknown client" });
+      return;
+    }
+    if (message.seq <= player.lastInput.seq) {
+      sendJson(res, 409, {
+        ok: false,
+        code: "stale-input",
+        error: "Input sequence is not newer than the last accepted input",
+        acceptedCommandSeq: auth.authority.lastCommandSeq,
+        acceptedSeq: player.lastInput.seq,
+      });
+      return;
+    }
+    const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) =>
+      edgeId > (auth.authority.lastSlingshotEdgeId || 0)
+    );
+    if (acceptedSlingshotEdges.length > 0) {
+      auth.authority.lastSlingshotEdgeId = acceptedSlingshotEdges[acceptedSlingshotEdges.length - 1];
+    }
+    const { commandCredential: _commandCredential, ...inputState } = message;
+    player.lastInput = {
+      ...inputState,
+      receivedAt: Date.now(),
+      slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
+      pulse: Boolean(player.lastInput.pulse || message.pulse),
+      extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),
+      consumeSlot:
+        message.consumeSlot === null || message.consumeSlot === undefined
+          ? player.lastInput.consumeSlot
+          : message.consumeSlot,
+    };
+    sendJson(res, 200, {
+      ok: true,
+      acceptedCommandSeq: auth.authority.lastCommandSeq,
+      acceptedSeq: message.seq,
+      acceptedSlingshotEdges,
+      pendingSlingshotEdgeCount: player.lastInput.slingshotEdges.length,
+      tick: runtime.tick,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/inventory/action") {
+    const body = await readJson(req);
+    if (runtime.session.status !== "running") {
+      sendJson(res, 409, { ok: false, error: "No active session", session: getPublicSession() });
+      return;
+    }
+    const message = normalizeInventoryAction(body);
+    const auth = authorizePlayerRequest(req, message);
+    if (!auth.ok) {
+      sendAuthorityError(res, auth);
+      return;
+    }
+    acceptCommand(auth);
+    const player = runtime.players.get(auth.authority.playerId);
+    if (!player) {
+      sendJson(res, 404, { ok: false, error: "Unknown client" });
+      return;
+    }
+    const result = applyInventoryAction(player, message);
+    if (!result.ok) {
+      sendJson(res, 409, { ok: false, error: result.error });
+      return;
+    }
+    refreshBallparkMirror("inventory-action");
+    sendJson(res, 200, {
+      ok: true,
+      acceptedCommandSeq: auth.authority.lastCommandSeq,
+      player,
+      snapshot: snapshotBody({ force: true }),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/debug/player-state") {
+    const body = await readJson(req);
+    const clientId = String(body.clientId || "").trim();
+    if (!clientId) {
+      sendJson(res, 400, { ok: false, error: "clientId is required" });
+      return;
+    }
+    const player = runtime.players.get(clientId);
+    if (!player) {
+      sendJson(res, 404, { ok: false, error: "Unknown client" });
+      return;
+    }
+    applyDebugPlayerState(player, body);
+    maybeEndTerminalSession("terminal-players");
+    refreshBallparkMirror("debug-player-state");
+    sendJson(res, 200, { ok: true, player, snapshot: snapshotBody({ force: true }) });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/debug/inhibitor-state") {
+    const body = await readJson(req);
+    const inhibitor = applyDebugInhibitorState(body);
+    if (!inhibitor) {
+      sendJson(res, 409, { ok: false, error: "No inhibitor runtime state" });
+      return;
+    }
+    refreshBallparkMirror("debug-inhibitor-state");
+    sendJson(res, 200, { ok: true, inhibitor, snapshot: snapshotBody({ force: true }) });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/debug/portal-state") {
+    const body = await readJson(req);
+    const portal = applyDebugPortalState(body);
+    refreshBallparkMirror("debug-portal-state");
+    sendJson(res, 200, { ok: true, portal, snapshot: snapshotBody({ force: true }) });
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/debug/scavenger-state") {
+    const body = await readJson(req);
+    const scavengerId = String(body.scavengerId || "").trim();
+    if (!scavengerId) {
+      sendJson(res, 400, { ok: false, error: "scavengerId is required" });
+      return;
+    }
+    const scavenger = runtime.mapState.scavengers.find((entry) => entry.id === scavengerId);
+    if (!scavenger) {
+      sendJson(res, 404, { ok: false, error: "Unknown scavenger" });
+      return;
+    }
+    applyDebugScavengerState(scavenger, body);
+    refreshBallparkMirror("debug-scavenger-state");
+    sendJson(res, 200, { ok: true, scavenger, snapshot: snapshotBody({ force: true }) });
+    return;
+  }
+
+  sendJson(res, 404, { ok: false, error: "Not found" });
+}
+
+const server = httpLifecycle.createServer(routeRequest);
 
 server.on("error", (err) => {
   telemetry.error("runtime.error", { message: err.message });
