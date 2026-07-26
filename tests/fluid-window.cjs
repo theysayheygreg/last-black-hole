@@ -1,9 +1,9 @@
 /**
  * Fluid-window tests - browser coverage for the camera-anchored GPU grid.
  *
- * Large maps should keep the same fluid texture cost as the fixed local reference
- * map. Only wells near the camera feed the display shader directly; off-window
- * influence is carried by the coarse field.
+ * Coarse-field maps should keep the same fluid texture cost as the fixed local
+ * reference map. Only wells near the camera feed the display shader directly;
+ * off-window influence is carried by the coarse field.
  *
  * Usage: node tests/fluid-window.js [index-a.html]
  */
@@ -14,7 +14,7 @@ const {
   TestRunner,
   assert,
 } = require("./helpers.cjs");
-const { CLIENT_PERF_PROFILES } = require("../scripts/content/session-profiles.cjs");
+const { CLIENT_PERF_PROFILES, SESSION_PROFILES } = require("../scripts/content/session-profiles.cjs");
 const { PLAYABLE_MAP_IDS, MAP_SCALE_REGISTRY } = require("../scripts/content/map-scales.cjs");
 const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
 
@@ -22,12 +22,17 @@ const htmlFile = process.argv[2] || "index-a.html";
 const EXPECTED_FLUID_RESOLUTION = CLIENT_PERF_PROFILES.fixedGrid.fluidResolution;
 
 const AUTHORITATIVE_MAPS = loadPlayableMaps();
-const MAPS = PLAYABLE_MAP_IDS.map((mapId, index) => ({
-  index,
-  label: mapId,
-  scale: MAP_SCALE_REGISTRY[mapId].dimensions.width,
-  wells: AUTHORITATIVE_MAPS[mapId].wells.length,
-}));
+const MAPS = PLAYABLE_MAP_IDS.map((mapId, index) => {
+  const definition = MAP_SCALE_REGISTRY[mapId];
+  return {
+    index,
+    label: mapId,
+    scale: definition.dimensions.width,
+    profileId: definition.profileId,
+    useCoarseField: SESSION_PROFILES[definition.profileId].useCoarseField,
+    wells: AUTHORITATIVE_MAPS[mapId].wells.length,
+  };
+});
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -83,8 +88,8 @@ async function run() {
       }
     });
 
-    await runner.run("Large maps cull off-window wells from direct rendering", async () => {
-      for (const map of MAPS.filter((m) => m.scale > CLIENT_PERF_PROFILES.fixedGrid.localWindowWorldUnits)) {
+    await runner.run("Coarse-field maps cull off-window wells from direct rendering", async () => {
+      for (const map of MAPS.filter((m) => m.useCoarseField)) {
         const grid = await startMapAndReadGrid(page, map);
         const { visibleWellCount, totalWellCount } = grid.perfStats;
         assert(visibleWellCount < totalWellCount,
