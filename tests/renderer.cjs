@@ -20,16 +20,23 @@ const {
 
 const htmlFile = process.argv[2] || 'index-a.html';
 const ALL_FIXTURES = [
-  { name: 'title', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
-  { name: 'titleVfx', expectedWells: 1, minFps: 10, timesMs: [900, 1800] },
-  { name: 'titleVfxHeavy', expectedWells: 1, minFps: 8, timesMs: [900, 1800] },
-  { name: 'singleWell', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
-  { name: 'interference', expectedWells: 2, minFps: 10, timesMs: [500, 2000, 5000] },
-  { name: 'singleWell5x5', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
-  { name: 'interference10x10', expectedWells: 2, minFps: 5, timesMs: [500, 2000, 5000] },
-  { name: 'entityShowcase', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
-  { name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
-  { name: 'shipBakeoff', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
+  { name: 'title', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000], worldEntities: 'present' },
+  { name: 'titleVfx', expectedWells: 1, minFps: 10, timesMs: [900, 1800], worldEntities: 'present' },
+  { name: 'titleVfxHeavy', expectedWells: 1, minFps: 8, timesMs: [900, 1800], worldEntities: 'present' },
+  { name: 'singleWell', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000], worldEntities: 'present' },
+  { name: 'interference', expectedWells: 2, minFps: 10, timesMs: [500, 2000, 5000], worldEntities: 'present' },
+  { name: 'singleWell5x5', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000], worldEntities: 'none' },
+  // A fabric-only scale probe: wells are the subject, not incidental actors.
+  { name: 'interference10x10', expectedWells: 2, minFps: 5, timesMs: [500, 2000, 5000], worldEntities: 'none' },
+  {
+    name: 'entityShowcase', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000], worldEntities: 'present',
+    requiredVisualFamilies: { player: 2, wreck: 3, portal: 2, worldSprites: 3 },
+  },
+  {
+    name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000], worldEntities: 'present',
+    requiredVisualFamilies: { player: 3, wreck: 3, portal: 2, worldSprites: 4 },
+  },
+  { name: 'shipBakeoff', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000], worldEntities: 'present' },
 ];
 // The bake-off is retained for deliberate art review, not the production visual gate.
 const DEFAULT_FIXTURES = new Set(['title', 'titleVfx', 'interference10x10', 'entityShowcase', 'visualReference']);
@@ -37,7 +44,10 @@ const READABILITY_FIXTURES = new Set(['visualReference']);
 const READABILITY_FAMILY_MINIMUMS = {
   stars: { targets: 4, readable: 4 },
   wrecks: { targets: 3, readable: 2 },
-  portals: { targets: 2, readable: 2 },
+  // The rift aperture is intentionally dark. Its sampled center is not a
+  // stable brightness target, but the board must retain both portals and one
+  // clearly readable route anchor.
+  portals: { targets: 2, readable: 1, perTargetPixels: false },
   ships: { targets: 4, readable: 4 },
   fauna: { targets: 2, readable: 2 },
   sentries: { targets: 2, readable: 2 },
@@ -108,10 +118,12 @@ function assertReferenceReadability(report, fixtureName) {
       `${fixtureName} expected at least ${required.targets} ${family} targets, got ${summary.count}`);
     assert(summary.readable >= required.readable,
       `${fixtureName} ${family} readability too low: ${summary.readable}/${summary.count} readable.${weakest}`);
-    assert(summary.minContrast >= 18,
-      `${fixtureName} ${family} contrast floor too low: ${summary.minContrast.toFixed(1)}.${weakest}`);
-    assert(summary.minPeak >= 42,
-      `${fixtureName} ${family} peak luminance too low: ${summary.minPeak.toFixed(1)}.${weakest}`);
+    if (required.perTargetPixels !== false) {
+      assert(summary.minContrast >= 18,
+        `${fixtureName} ${family} contrast floor too low: ${summary.minContrast.toFixed(1)}.${weakest}`);
+      assert(summary.minPeak >= 42,
+        `${fixtureName} ${family} peak luminance too low: ${summary.minPeak.toFixed(1)}.${weakest}`);
+    }
   }
 }
 
@@ -400,10 +412,17 @@ async function captureFixture(page, outputDir, fixture) {
       && backendStats.three.worldLayers.some((layer) => layer.name === 'world-entity-layer')
       && backendStats.three.worldLayers.some((layer) => layer.name === 'screen-vfx-layer'),
     `Fixture '${fixture.name}' Three world layers missing`);
-    assert((backendStats.three.entityCount || 0) > 0,
-      `Fixture '${fixture.name}' Three scene did not submit world entities`);
-    assert((backendStats.three.semanticCount || 0) > 0,
-      `Fixture '${fixture.name}' Three scene did not submit semantic flow cues`);
+    const entityCount = backendStats.three.entityCount || 0;
+    if (fixture.worldEntities === 'present') {
+      assert(entityCount > 0, `Fixture '${fixture.name}' Three scene did not submit world entities`);
+    } else {
+      assert(entityCount === 0,
+        `Fixture '${fixture.name}' is fabric-only but submitted ${entityCount} world entities`);
+    }
+    // Static fixture boards do not author a slingshot or named portal state.
+    // Keep that overlay empty; a dedicated state fixture must opt into cues.
+    assert((backendStats.three.semanticCount || 0) === 0,
+      `Fixture '${fixture.name}' submitted unrequested semantic flow cues`);
     assert(Array.isArray(backendStats?.three?.passNames) && backendStats.three.passNames.includes('three-screen-space-post'),
       `Fixture '${fixture.name}' Three pass list missing screen-space post`);
     assert(backendStats.three.sharedContext === true,
@@ -421,6 +440,10 @@ async function captureFixture(page, outputDir, fixture) {
         `Fixture '${fixture.name}' ${familyName} visual family has no object budget`);
       assert(family.activeObjects <= family.objectBudget,
         `Fixture '${fixture.name}' ${familyName} visual family exceeded ${family.activeObjects}/${family.objectBudget}`);
+    }
+    for (const [familyName, minimum] of Object.entries(fixture.requiredVisualFamilies || {})) {
+      assert((visualFamilies[familyName]?.activeObjects || 0) >= minimum,
+        `${fixture.name} expected ${minimum}+ active ${familyName} visuals, got ${visualFamilies[familyName]?.activeObjects || 0}`);
     }
     const assets = backendStats.three.entityAssets || {};
     assert((assets.loadErrors || 0) === 0,
