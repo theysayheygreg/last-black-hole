@@ -16,7 +16,6 @@ const {
   assert,
   waitFor,
   withQuery,
-  stepGameFrames,
 } = require('./helpers.cjs');
 
 const htmlFile = process.argv[2] || 'index-a.html?renderer=three';
@@ -77,6 +76,10 @@ async function setUiDebugQuiet(page, { reducedMotion = false } = {}) {
     window.__TEST_API?.setConfig?.('debug.showCoordDiagnostic', false);
     window.__TEST_API?.setConfig?.('ui.motion.reduced', Boolean(reduce));
   }, reducedMotion);
+}
+
+async function waitForNextPaint(page) {
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
 }
 
 async function analyzePngInPage(_page, base64, { scale = 1, regions = [] } = {}) {
@@ -187,11 +190,11 @@ async function captureSurface(page, outputDir, surface) {
   await surface.setup(page);
   await setUiDebugQuiet(page, { reducedMotion: surface.reducedMotion === true });
 
-  // Fixtures author the target state directly. One frame synchronizes a new
-  // phase, then the motion clock is pinned before two frames paint that state.
-  await stepGameFrames(page, 1);
+  // The live loop owns frame scheduling. Wait for it to synchronize a changed
+  // phase, pin the authored clock, then let its next frame paint that state.
+  await waitForNextPaint(page);
   await page.evaluate((time) => window.__TEST_API?.setUiMotionTime?.(time), surface.motionTime ?? 1.2);
-  await stepGameFrames(page, 2);
+  await waitForNextPaint(page);
 
   if (surface.expectPhase) {
     const phase = await page.evaluate(() => window.__TEST_API?.getGamePhase?.() || null);
@@ -204,11 +207,13 @@ async function captureSurface(page, outputDir, surface) {
 
   const motion = await page.evaluate(() => window.__TEST_API?.getUiMotionState?.() || null);
   if (surface.expectSettled != null) {
-    const settledAfter = Math.max(0.5, Number(motion?.settings?.panelDuration || 0));
+    const settledAfter = Math.max(0, Number(motion?.settings?.panelDuration || 0));
     const settled = motion?.settings?.reducedMotion === true || Number(motion?.timer || 0) >= settledAfter;
     assert(settled === surface.expectSettled,
       `${surface.name} expected motion settled=${surface.expectSettled}, got ${settled}`);
   }
+  const evidence = surface.evidence ? await page.evaluate(surface.evidence) : null;
+  surface.assertEvidence?.(evidence);
 
   const filepath = path.join(outputDir, `${surface.name}.png`);
   const base64 = await captureFullPage(page, filepath);
@@ -234,6 +239,7 @@ async function captureSurface(page, outputDir, surface) {
     phase: await page.evaluate(() => window.__TEST_API?.getGamePhase?.() || null),
     viewport,
     motion,
+    evidence,
     path: filepath,
     stats: { ...stats, dataUrl: undefined },
     proxies,
@@ -286,8 +292,21 @@ async function run() {
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
         titleTimer: 1.8,
         layout: 'opposite-left',
-        loopTime: 2.11,
+        loopTime: 2.42,
       })),
+      evidence: () => {
+        const renderer = window.__TEST_API.getRendererBackendStats();
+        const frame = renderer?.three;
+        return {
+          presentationPhase: frame?.presentation?.phase || null,
+          titleGlyphEventCount: frame?.presentation?.eventCount || 0,
+          activeParticles: frame?.vfx?.activeParticles || 0,
+        };
+      },
+      assertEvidence: (evidence) => {
+        assert(evidence?.titleGlyphEventCount > 0,
+          `title-glitch must emit title glyph fault events: ${JSON.stringify(evidence)}`);
+      },
     },
     {
       name: 'title-reduced-motion',
@@ -329,6 +348,7 @@ async function run() {
       name: 'home-transition-entering',
       expectPhase: 'home',
       motionTime: 0.08,
+      expectSettled: false,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 })),
       regions: [{ name: 'home-transition-panel', x: 0.05, y: 0.16, width: 0.90, height: 0.70 }],
     },
