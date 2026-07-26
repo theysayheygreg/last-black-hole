@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
@@ -14,6 +15,9 @@ const STATIC_PORT = 8846;
 const SIM_PORT = 8847;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const OUTPUT_DIR = path.join(__dirname, "screenshots", "slingshot-v2-live-20260714");
+// The public engage gate is 0.05 tangential speed. This keeps the authored
+// capture in-range through the lock and arc frames instead of outrunning it.
+const CAPTURE_TANGENTIAL_SPEED = 0.2;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,6 +56,12 @@ async function snapshot() {
   return response.json();
 }
 
+async function events(since = 0) {
+  const response = await fetch(`${SIM_URL}/events?since=${since}`);
+  if (!response.ok) throw new Error(`Events failed: ${response.status}`);
+  return (await response.json()).events || [];
+}
+
 async function post(route, body) {
   const response = await fetch(`${SIM_URL}${route}`, {
     method: "POST",
@@ -60,6 +70,25 @@ async function post(route, body) {
   });
   if (!response.ok) throw new Error(`${route} failed: ${response.status}`);
   return response.json();
+}
+
+async function slingshotEdgeAcks(page) {
+  return page.evaluate(() => window.__TEST_API?.getNetworkState?.()
+    ?.networkMetrics?.slingshotEdgeAcks || []);
+}
+
+async function pressAcknowledgedSlingshotEdge(page, label) {
+  const before = await slingshotEdgeAcks(page);
+  await page.keyboard.down("KeyF");
+  try {
+    await waitFor(
+      () => slingshotEdgeAcks(page),
+      (acks) => acks.length === before.length + 1,
+      `${label} edge acknowledgement`,
+    );
+  } finally {
+    await page.keyboard.up("KeyF");
+  }
 }
 
 async function main() {
@@ -102,10 +131,12 @@ async function main() {
     const worldScale = initial.session.worldScale;
     await post("/debug/player-state", {
       clientId: network.clientId,
-      wx: (well.wx + 0.30) % worldScale,
-      wy: well.wy,
-      vx: 0,
-      vy: 0.8,
+      // A right-side fixture overlaps this seed's moving planetoid. Use the
+      // unobstructed lower edge of the selected well and its tangent instead.
+      wx: well.wx,
+      wy: (well.wy + 0.30) % worldScale,
+      vx: CAPTURE_TANGENTIAL_SPEED,
+      vy: 0,
       deltaV: 80,
       resetSlingshot: true,
       status: "alive",
@@ -115,6 +146,7 @@ async function main() {
       const current = await snapshot();
       return current.players?.find((player) => player.clientId === network.clientId) || null;
     };
+    const eventWatermark = Math.max(0, ...(await events()).map((event) => event.seq || 0));
     const capture = async (name) => {
       const file = path.join(OUTPUT_DIR, `${name}.png`);
       await page.screenshot({ path: file });
@@ -124,26 +156,41 @@ async function main() {
     };
 
     const aim = await waitFor(playerFor, (player) => player?.slingshot?.phase === "aim", "aim cue");
+    assert(aim.slingshot?.aim?.anchorId === well.id && aim.slingshot?.aim?.engageEligible === true,
+      `Capture setup must be authority-engageable: ${JSON.stringify(aim.slingshot?.aim)}`);
     await capture("01-aim-cue");
-    await page.keyboard.press("KeyF");
+    await pressAcknowledgedSlingshotEdge(page, "engage");
     const lock = await waitFor(playerFor, (player) => player?.slingshot?.phase === "lock", "lock telegraph");
     await capture("02-lock");
     await page.keyboard.down("KeyW");
-    const arc = await waitFor(playerFor, (player) => player?.slingshot?.phase === "arc", "owned arc");
+    const arc = await waitFor(
+      playerFor,
+      (player) => player?.slingshot?.engaged === true
+        && player?.slingshot?.phase === "arc"
+        && player?.slingshot?.telegraph?.ownedArc,
+      "owned arc authority snapshot",
+    );
     const overlay = await waitFor(
       () => page.evaluate(() => window.__TEST_API.getRulerOverlayStats()),
       (value) => value?.enabled && value.handlerCount === 11 && value.forceTick != null,
       "ruler and force ledger evidence",
     );
     await capture("03-owned-arc-ruler-force");
-    await page.keyboard.press("KeyF");
+    await pressAcknowledgedSlingshotEdge(page, "release");
     await page.keyboard.up("KeyW");
     const released = await waitFor(
       playerFor,
-      (player) => player?.slingshot?.phase === "release-ghost" && player?.slingshot?.telegraph?.releaseGhost,
+      (player) => player?.slingshot?.engaged === false && player?.slingshot?.telegraph?.releaseGhost,
       "release ghost",
     );
     await capture("04-release-ghost");
+
+    const slingshotEvents = (await events(eventWatermark))
+      .filter((event) => event.payload?.clientId === network.clientId && event.type.startsWith("player.slingshot"));
+    assert.deepStrictEqual(slingshotEvents.map((event) => event.type), [
+      "player.slingshotEngaged",
+      "player.slingshotReleased",
+    ], "Expected one authoritative slingshot engage/release sequence");
 
     const result = {
       outputDir: OUTPUT_DIR,
