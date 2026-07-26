@@ -709,12 +709,18 @@ export class WorldScenePresentation {
     for (const material of this.entitySpriteMaterials) material.dispose();
     this.entitySpriteMaterials.clear();
     this.entityAssets.dispose();
-    this._disposeObject(this.worldScene);
+    this._disposeObject(this.worldScene, {
+      geometries: [
+        ...Object.values(this.entityGeometries),
+        ...Object.values(this.vfxManager.geometries),
+      ],
+      materials: Object.values(this.entityMaterials),
+    });
   }
 
-  _disposeObject(obj) {
-    const geometries = new Set();
-    const materials = new Set();
+  _disposeObject(obj, { geometries: ownedGeometries = [], materials: ownedMaterials = [] } = {}) {
+    const geometries = new Set(ownedGeometries);
+    const materials = new Set(ownedMaterials);
     obj.traverse?.((child) => {
       if (child.geometry) geometries.add(child.geometry);
       const mats = Array.isArray(child.material) ? child.material : [child.material];

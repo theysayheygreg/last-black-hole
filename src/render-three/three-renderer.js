@@ -306,7 +306,6 @@ export class ThreeRendererBackend {
     this.sourceCanvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.worldPresentation.dispose();
     this.sceneTarget.dispose();
-    this.copyMaterial.dispose();
     this._disposeObject(this.postScene);
     this.renderer.dispose();
   }

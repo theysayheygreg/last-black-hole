@@ -65,6 +65,7 @@ async function run() {
 
   await runner.run('Pooled renderer reuses meshes while isolating opacity and disposing sprite materials', async () => {
     const sharedMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1 });
+    sharedMaterial.name = 'entity-sprite-material:shipDrifter';
     sharedMaterial.userData = { baseOpacity: 1 };
     const presentation = Object.create(WorldScenePresentation.prototype);
     const activeGroup = new THREE.Group();
@@ -83,8 +84,13 @@ async function run() {
     presentation.temporalVisibility = new TemporalVisibilityContract();
     presentation.entityAssets = {
       getMaterial() { return sharedMaterial; },
-      dispose() { this.disposed = true; },
+      dispose() {
+        this.disposed = true;
+        sharedMaterial.dispose();
+      },
     };
+    presentation.entityMaterials = {};
+    presentation.vfxManager = { geometries: {} };
     presentation.currentProjection = createWorldProjection({ x: 0, y: 0, worldScale: 3, view: 3 }, 1);
     presentation.lastSceneState = { cameraX: 0, cameraY: 0, worldScale: 3, cameraView: 3 };
     presentation._addContrastBacking = () => {};
@@ -108,28 +114,83 @@ async function run() {
     assert(reused.material.opacity === 0.6 && second.material.opacity === 0.85,
       'Reuse must update only the reused mesh opacity');
 
-    let disposedMaterials = 0;
-    for (const material of presentation.entitySpriteMaterials) material.addEventListener('dispose', () => { disposedMaterials += 1; });
+    const cloneDisposeCounts = new Map(Array.from(
+      presentation.entitySpriteMaterials,
+      (material) => [material, 0],
+    ));
+    for (const material of presentation.entitySpriteMaterials) {
+      material.addEventListener('dispose', () => {
+        cloneDisposeCounts.set(material, cloneDisposeCounts.get(material) + 1);
+      });
+    }
+    let assetMaterialDisposals = 0;
+    sharedMaterial.addEventListener('dispose', () => { assetMaterialDisposals += 1; });
     presentation.visualFamilies = {};
     presentation.worldScene = new THREE.Scene();
+    presentation.worldScene.add(activeGroup);
+    activeGroup.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sharedMaterial));
     presentation.dispose();
-    assert(disposedMaterials === 2 && presentation.entitySpriteMaterials.size === 0,
+    assert(cloneDisposeCounts.size === 2
+      && Array.from(cloneDisposeCounts.values()).every((count) => count === 1)
+      && presentation.entitySpriteMaterials.size === 0,
       'World-scene disposal must release every pooled sprite material clone');
-    assert(presentation.entityAssets.disposed, 'World-scene disposal must release the asset store');
+    assert(presentation.entityAssets.disposed && assetMaterialDisposals === 1,
+      'Asset-store materials must remain excluded from traversal disposal');
 
-    let worldDisposed = false;
-    let targetDisposed = false;
-    let rendererDisposed = false;
+    const order = [];
+    let copyMaterialDisposals = 0;
     const backend = Object.create(ThreeRendererBackend.prototype);
-    backend.sourceCanvas = { removeEventListener() {} };
-    backend.worldPresentation = { dispose() { worldDisposed = true; } };
-    backend.sceneTarget = { dispose() { targetDisposed = true; } };
-    backend.copyMaterial = { dispose() {} };
+    backend.sourceCanvas = {
+      removeEventListener(type) { order.push(`remove:${type}`); },
+    };
+    backend.worldPresentation = { dispose() { order.push('world'); } };
+    backend.sceneTarget = { dispose() { order.push('target'); } };
+    backend.copyMaterial = new THREE.MeshBasicMaterial();
+    backend.copyMaterial.addEventListener('dispose', () => {
+      copyMaterialDisposals += 1;
+      order.push('copy-material');
+    });
     backend.postScene = new THREE.Scene();
-    backend.renderer = { dispose() { rendererDisposed = true; } };
+    const postGeometry = new THREE.PlaneGeometry(2, 2);
+    postGeometry.addEventListener('dispose', () => order.push('post-geometry'));
+    backend.postScene.add(new THREE.Mesh(postGeometry, backend.copyMaterial));
+    backend.renderer = { dispose() { order.push('renderer'); } };
     backend.dispose();
-    assert(worldDisposed && targetDisposed && rendererDisposed,
-      'Backend disposal must release world presentation, target, and WebGL renderer');
+    assert(copyMaterialDisposals === 1,
+      'Backend traversal must dispose its copy material exactly once');
+    assert(JSON.stringify(order) === JSON.stringify([
+      'remove:webglcontextlost', 'remove:webglcontextrestored',
+      'world', 'target', 'post-geometry', 'copy-material', 'renderer',
+    ]), `Unexpected backend disposal order: ${JSON.stringify(order)}`);
+  });
+
+  await runner.run('Empty world disposal releases attached and never-attached resources exactly once', async () => {
+    const presentation = new WorldScenePresentation();
+    presentation.entityGroup.add(new THREE.Mesh(
+      presentation.entityGeometries.disc,
+      presentation.entityMaterials.ship,
+    ));
+    presentation.screenVfxGroup.add(new THREE.Mesh(
+      presentation.vfxManager.geometries.ember,
+      new THREE.MeshBasicMaterial(),
+    ));
+    const resources = new Set([
+      ...Object.values(presentation.entityGeometries),
+      ...Object.values(presentation.entityMaterials),
+      ...Object.values(presentation.vfxManager.geometries),
+    ]);
+    presentation.scene.traverse((child) => {
+      if (child.geometry) resources.add(child.geometry);
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      for (const material of materials) if (material) resources.add(material);
+    });
+    const disposeCounts = new Map(Array.from(resources, (resource) => [resource, 0]));
+    for (const resource of resources) {
+      resource.addEventListener('dispose', () => disposeCounts.set(resource, disposeCounts.get(resource) + 1));
+    }
+    presentation.dispose();
+    assert(Array.from(disposeCounts.values()).every((count) => count === 1),
+      `Constructor-owned resources must dispose exactly once: ${JSON.stringify(Array.from(disposeCounts.values()))}`);
   });
 
   await runner.run('Product sprite seam has one alpha core and no universal vector parts', async () => {
@@ -197,12 +258,6 @@ async function run() {
       && (index === 0 || render.indexOf(call) > render.indexOf(frameOrder[index - 1]))),
     'Backend frame orchestration order must remain composer → presentation → world → post → stats');
 
-    const dispose = sceneSource.slice(sceneSource.indexOf('  dispose()'), sceneSource.indexOf('  _disposeObject(obj)'));
-    const disposalOrder = ['family.dispose()', 'material.dispose()', 'entitySpriteMaterials.clear()',
-      'entityAssets.dispose()', '_disposeObject(this.worldScene)'];
-    assert(disposalOrder.every((call, index) => dispose.indexOf(call) >= 0
-      && (index === 0 || dispose.indexOf(call) > dispose.indexOf(disposalOrder[index - 1]))),
-    'World resources must dispose families → clones → assets → scene without double-freeing clone materials');
   });
 
   await runner.run('Player family prioritizes local ship and submits authored thrust and slingshot grammar', async () => {
