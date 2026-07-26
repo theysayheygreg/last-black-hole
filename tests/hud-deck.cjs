@@ -19,6 +19,7 @@ async function run() {
   const prompts = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'input-prompts.js')).href);
   const bindings = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'input-bindings.js')).href);
   const hud = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'hud-presentation.js')).href);
+  const inventoryHud = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'hud-inventory.js')).href);
   const facade = await import(pathToFileURL(path.join(ROOT, 'src', 'hud.js')).href);
 
   assert(prompts.affordanceCaption('confirm', 'extract', { deck: true }).includes('ui-action-glyph-face'), 'Deck affordance must be a face-button glyph');
@@ -43,6 +44,48 @@ async function run() {
   assert.strictEqual(burn.slots[0].status, 'fuel 12/30');
   assert.deepStrictEqual(hud.getHullPresentationState({ shieldCharges: 1, ratio: 0.4 }),
     { ratio: 0.4, label: 'shielded', tone: 'shielded' });
+
+  for (const name of [
+    'setDropCallback',
+    'resetInventoryCursor',
+    'inventoryCursorUp',
+    'inventoryCursorDown',
+    'getInventoryActionAtCursor',
+    'inventoryConfirm',
+  ]) {
+    assert.strictEqual(facade[name], inventoryHud[name], `HUD facade must preserve ${name}`);
+  }
+  const equippable = { name: 'lens', subcategory: 'equippable' };
+  const consumable = { name: 'flare', subcategory: 'consumable' };
+  const cargo = [equippable, consumable, { name: 'scrap' }, null, null, null, null, null];
+  const inventory = {
+    cargo,
+    equipped: [null, null],
+    consumables: [null, consumable],
+    cargoFull: false,
+    removeFromCargo(slot) { const item = this.cargo[slot]; this.cargo[slot] = null; return item; },
+    equip(slot, item) { const previous = this.equipped[slot]; this.equipped[slot] = item; return previous; },
+    loadConsumable(slot, item) { const previous = this.consumables[slot]; this.consumables[slot] = item; return previous; },
+    unequip(slot) { const item = this.equipped[slot]; this.equipped[slot] = null; return item; },
+    addToCargo(item) { this.cargo[this.cargo.indexOf(null)] = item; },
+  };
+  inventoryHud.resetInventoryCursor();
+  assert.deepStrictEqual(inventoryHud.getInventoryActionAtCursor(inventory),
+    { type: 'equipCargo', cargoSlot: 0, equipSlot: 0 });
+  inventoryHud.inventoryCursorDown();
+  assert.deepStrictEqual(inventoryHud.getInventoryActionAtCursor(inventory),
+    { type: 'loadConsumable', cargoSlot: 1, consumableSlot: 0 });
+  inventoryHud.inventoryCursorDown();
+  let droppedSlot = null;
+  inventoryHud.setDropCallback((slot) => { droppedSlot = slot; });
+  inventoryHud.inventoryConfirm(inventory);
+  assert.strictEqual(droppedSlot, 2, 'Local drop confirmation must retain the selected cargo slot');
+  inventoryHud.resetInventoryCursor();
+  inventoryHud.inventoryCursorUp();
+  assert.deepStrictEqual(inventoryHud.getInventoryActionAtCursor(inventory),
+    { type: 'unloadConsumable', consumableSlot: 1 });
+  inventoryHud.inventoryConfirm(inventory);
+  assert.strictEqual(inventory.consumables[1], null, 'Consumable unload must preserve local mutation semantics');
 
   const interaction = hud.getInteractionPresentationState({
     label: 'confirm extraction',

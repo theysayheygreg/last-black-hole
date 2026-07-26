@@ -11,10 +11,20 @@ import { CONFIG } from './config.js';
 import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
-import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
-import { actionCaptionMarkup, actionDescriptor, actionGlyphMarkup, affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
+import { portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
+import { actionCaptionMarkup, affordanceCaption, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
-import { itemIconMarkup, preloadInventoryIcons, preloadUiAssets } from './ui/asset-kit.js';
+import { preloadUiAssets } from './ui/asset-kit.js';
+import {
+  getInventoryActionAtCursor,
+  initHudInventory,
+  inventoryConfirm,
+  inventoryCursorDown,
+  inventoryCursorUp,
+  resetInventoryCursor,
+  setDropCallback,
+  updateHudInventoryPanel,
+} from './ui/hud-inventory.js';
 import {
   clamp01,
   createAbilitySlot,
@@ -30,9 +40,15 @@ import {
 export {
   getAbilityPresentationState,
   getHullPresentationState,
+  getInventoryActionAtCursor,
   getInteractionPresentationState,
   getRouteObjectiveState,
   getSlingshotInteractionState,
+  inventoryConfirm,
+  inventoryCursorDown,
+  inventoryCursorUp,
+  resetInventoryCursor,
+  setDropCallback,
 };
 
 let _hudEl;
@@ -43,7 +59,6 @@ let _scavengersCountEl, _scavengersSub;
 let _pulseEl;
 let _signatureEl;
 let _portalArrowEl;
-let _inventoryPanelEl;
 let _warningsEl;
 let _signalFillEl, _signalZoneEl;
 let _fuelFillEl, _fuelReadoutEl;
@@ -52,14 +67,9 @@ let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCapt
 let _abilitiesEl;
 let _ability1El, _ability2El;
 let _inhibitorEl, _inhibitorFormEl;
-let _dropCallback = null;  // set by main.js for drop handling
 let _lastCollapseStr = '';
 let _promptOptions = {};
 const INHIBITOR_FORM_NAMES = ['dormant', 'glitch', 'swarm', 'vessel'];
-
-// Inventory selection state
-let _invCursor = 0;          // which slot is selected (0-7 = cargo, 8-9 = equipped, 10-11 = consumable)
-let _invTotalSlots = 12;     // 8 cargo + 2 equip + 2 consumable
 
 export function initHUD() {
   _hudEl = document.getElementById('hud');
@@ -74,7 +84,7 @@ export function initHUD() {
   _pulseEl = document.getElementById('hud-pulse');
   _signatureEl = document.getElementById('hud-signature');
   _portalArrowEl = document.getElementById('hud-portal-arrow');
-  _inventoryPanelEl = document.getElementById('hud-inventory-panel');
+  initHudInventory(document.getElementById('hud-inventory-panel'));
   _warningsEl = document.getElementById('hud-warnings');
   _signalFillEl = document.getElementById('hud-signal-fill');
   _signalZoneEl = document.getElementById('hud-signal-zone');
@@ -516,14 +526,10 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   }
 
   // === INVENTORY PANEL (Tab toggle) ===
-  if (_inventoryPanelEl && inv) {
-    if (opts.inventoryOpen) {
-      _inventoryPanelEl.classList.add('open');
-      _renderInventoryPanel(inv);
-    } else {
-      _inventoryPanelEl.classList.remove('open');
-    }
-  }
+  updateHudInventoryPanel(inv, {
+    open: opts.inventoryOpen,
+    promptOptions: _promptOptions,
+  });
 
   // === PORTAL DIRECTION ARROW ===
   if (opts.ship && portalSystem && _portalArrowEl && opts.canvasW) {
@@ -586,202 +592,6 @@ function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
     degrees: deg,
     distanceText: distText,
   });
-}
-
-/**
- * Set callback for when player drops from inventory.
- * @param {function(slotIndex: number)} fn
- */
-export function setDropCallback(fn) {
-  _dropCallback = fn;
-}
-
-/** Reset inventory cursor to slot 0. Call when inventory opens. */
-export function resetInventoryCursor() {
-  _invCursor = 0;
-}
-
-/** Move inventory cursor up. */
-export function inventoryCursorUp() {
-  _invCursor = (_invCursor - 1 + _invTotalSlots) % _invTotalSlots;
-}
-
-/** Move inventory cursor down. */
-export function inventoryCursorDown() {
-  _invCursor = (_invCursor + 1) % _invTotalSlots;
-}
-
-export function getInventoryActionAtCursor(inv) {
-  if (!inv) return null;
-
-  if (_invCursor < 8) {
-    const item = inv.cargo[_invCursor];
-    if (!item) return null;
-
-    if (item.subcategory === 'equippable') {
-      const openSlot = inv.equipped.indexOf(null);
-      return {
-        type: 'equipCargo',
-        cargoSlot: _invCursor,
-        equipSlot: openSlot !== -1 ? openSlot : 0,
-      };
-    }
-
-    if (item.subcategory === 'consumable') {
-      const openSlot = inv.consumables.indexOf(null);
-      return {
-        type: 'loadConsumable',
-        cargoSlot: _invCursor,
-        consumableSlot: openSlot !== -1 ? openSlot : 0,
-      };
-    }
-
-    return {
-      type: 'dropCargo',
-      cargoSlot: _invCursor,
-    };
-  }
-
-  if (_invCursor < 10) {
-    const equipIdx = _invCursor - 8;
-    const item = inv.equipped[equipIdx];
-    if (item && !inv.cargoFull) {
-      return {
-        type: 'unequip',
-        equipSlot: equipIdx,
-      };
-    }
-    return null;
-  }
-
-  const consumableIdx = _invCursor - 10;
-  const item = inv.consumables[consumableIdx];
-  if (item && !inv.cargoFull) {
-    return {
-      type: 'unloadConsumable',
-      consumableSlot: consumableIdx,
-    };
-  }
-  return null;
-}
-
-/**
- * Confirm action on current cursor slot.
- * Cargo equippable → equip. Cargo consumable → load hotbar. Cargo other → drop.
- * Equipped → unequip to cargo. Consumable → remove to cargo.
- * @param {InventorySystem} inv
- */
-export function inventoryConfirm(inv) {
-  if (!inv) return;
-  const action = getInventoryActionAtCursor(inv);
-  if (!action) return;
-
-  if (action.type === 'equipCargo') {
-    const item = inv.removeFromCargo(action.cargoSlot);
-    if (!item) return;
-    const prev = inv.equip(action.equipSlot, item);
-    if (prev) inv.cargo[action.cargoSlot] = prev;
-    return;
-  }
-
-  if (action.type === 'loadConsumable') {
-    const item = inv.removeFromCargo(action.cargoSlot);
-    if (!item) return;
-    const prev = inv.loadConsumable(action.consumableSlot, item);
-    if (prev) inv.cargo[action.cargoSlot] = prev;
-    return;
-  }
-
-  if (action.type === 'dropCargo') {
-    if (_dropCallback) _dropCallback(action.cargoSlot);
-    return;
-  }
-
-  if (action.type === 'unequip') {
-    const item = inv.unequip(action.equipSlot);
-    if (item) inv.addToCargo(item);
-    return;
-  }
-
-  if (action.type === 'unloadConsumable') {
-    const item = inv.consumables[action.consumableSlot];
-    if (item && !inv.cargoFull) {
-      inv.consumables[action.consumableSlot] = null;
-      inv.addToCargo(item);
-    }
-  }
-}
-
-/**
- * Render the full inventory panel contents.
- */
-function _renderInventoryPanel(inv) {
-  if (!_inventoryPanelEl) return;
-
-  const sel = _invCursor;
-  const inventoryItems = [...inv.cargo, ...inv.equipped, ...inv.consumables].filter(Boolean);
-  void preloadInventoryIcons(inventoryItems).catch(() => {});
-
-  // ---- Cargo ----
-  let html = `<div class="inv-header"><span>cargo ${inv.cargoCount}/${inv.cargoMax}</span><span class="inv-caption">${inventoryHint(_promptOptions)}</span></div>`;
-
-  for (let i = 0; i < inv.cargo.length; i++) {
-    const isSel = (sel === i);
-    const item = inv.cargo[i];
-    const rowStyle = inventorySelectionStyle(isSel);
-    if (item) {
-      const color = inventoryItemColor(item);
-      const catLabel = item.category === 'artifact' ? item.subcategory : (item.category || '');
-      let actionLabel = 'drop';
-      if (item.subcategory === 'equippable') actionLabel = 'equip';
-      else if (item.subcategory === 'consumable') actionLabel = 'load';
-      const action = isSel ? `<span class="inv-drop">[${actionLabel}]</span>` : '';
-      html += `<div class="inv-item" style="${rowStyle}">
-        ${itemIconMarkup(item, { state: 'cargo', selected: isSel })}
-        <span class="inv-name" style="color:${color}">${item.name}</span>
-        <span class="inv-cat">${catLabel}</span>
-        ${action}
-      </div>`;
-    } else {
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">— empty —</span></div>`;
-    }
-  }
-
-  // ---- Equipped ----
-  html += `<div class="inv-section"><div class="inv-header">equipped</div>`;
-  for (let i = 0; i < inv.equipped.length; i++) {
-    const globalIdx = 8 + i;
-    const isSel = (sel === globalIdx);
-    const item = inv.equipped[i];
-    const rowStyle = inventorySelectionStyle(isSel);
-    if (item) {
-      const action = isSel ? '<span class="inv-drop">[unequip]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'equipped', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span>${action}</div>`;
-    } else {
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">— empty slot —</span></div>`;
-    }
-  }
-  html += '</div>';
-
-  // ---- Consumables ----
-  html += `<div class="inv-section"><div class="inv-header"><span>consumables</span><span class="inv-caption">${affordanceCaption('consumables', 'use', _promptOptions)}</span></div>`;
-  for (let i = 0; i < inv.consumables.length; i++) {
-    const globalIdx = 10 + i;
-    const isSel = (sel === globalIdx);
-    const item = inv.consumables[i];
-    const rowStyle = inventorySelectionStyle(isSel);
-    const slotAction = actionDescriptor(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
-    const slotGlyph = actionGlyphMarkup(slotAction);
-    if (item) {
-      const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'consumable', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${slotGlyph} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
-    } else {
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotGlyph} — empty —</span></div>`;
-    }
-  }
-  html += '</div>';
-
-  _inventoryPanelEl.innerHTML = html;
 }
 
 /**
