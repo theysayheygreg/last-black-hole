@@ -354,6 +354,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthorityDeadlineLoop",
+    file: "authority-deadline-loop.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "AuthorityCadence",
+    file: "authority-cadence.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "ProtocolJournal",
     file: "protocol-journal.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
@@ -760,6 +772,7 @@ const FIXED_SERVICE_SUITES = new Set([
   "SimScale",
   "SimBoundedGrowth",
   "AuthorityBudget",
+  "AuthorityCadence",
   "ProtocolRuntime",
   "Inhibitor",
   "RulerLive",

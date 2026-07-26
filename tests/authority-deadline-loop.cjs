@@ -49,7 +49,7 @@ async function run() {
     assert.strictEqual(starts.length, 15, "Expected one authority step per 15Hz deadline");
     assert(Math.abs(starts.at(-1) - 1000) < 0.011,
       "Fifteen fixed-dt steps must land at one wall second without accumulated rounding");
-    assert.strictEqual(loop.stats().intervalMs, 66.666667, "The loop must retain the canonical fractional interval");
+    assert.strictEqual(loop.diagnostics().intervalMs, 66.666667, "The loop must retain the canonical fractional interval");
   });
 
   await runner.run("re-phases after ordinary timer drift without changing fixed dt", () => {
@@ -82,8 +82,8 @@ async function run() {
     loop.start(15);
     clock.advanceTo(300);
     assert.strictEqual(ticks, 2, "A late callback may recover at most one fixed-dt step");
-    assert.strictEqual(loop.stats().catchUpTicks, 1, "Expected one explicit bounded catch-up step");
-    assert.strictEqual(loop.stats().skippedDeadlines, 2, "Expected stale-deadline accounting beyond the catch-up bound");
+    assert.strictEqual(loop.diagnostics().catchUpTicks, 1, "Expected one explicit bounded catch-up step");
+    assert.strictEqual(loop.diagnostics().skippedDeadlines, 2, "Expected stale-deadline accounting beyond the catch-up bound");
     assert(Math.abs(clock.pending()[0] - 333.33333333333337) < 0.000001,
       "The loop must resume at the next future deadline");
   });

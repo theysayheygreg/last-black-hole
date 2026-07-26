@@ -6767,7 +6767,9 @@ const server = http.createServer(async (req, res) => {
           uptimeSec: Number(process.uptime().toFixed(3)),
           memory: process.memoryUsage(),
         },
-        scheduler: tickLoop?.stats() || null,
+        // Keep deadline delivery inspectable without retaining per-tick timing
+        // history in the authority process.
+        scheduler: tickLoop?.diagnostics() || null,
         idleState,
         shutdownReason: runtime.shutdownReason,
         bench: BENCH_GATE.enabled

@@ -94,7 +94,10 @@ async function measure(mapId, seed) {
       `${mapId}: ${observedTickHz.toFixed(2)}Hz fell outside the 1% wall-clock tolerance`);
     assert(observedTickHz <= targetTickHz * 1.01,
       `${mapId}: ${observedTickHz.toFixed(2)}Hz exceeded the 1% wall-clock tolerance`);
-    assert(scheduler?.intervalMs === 66.666667, `${mapId}: expected canonical fractional 15Hz deadline interval`);
+    assert(scheduler, `${mapId}: expected deadline scheduler diagnostics`);
+    assert(scheduler.intervalMs === 66.666667, `${mapId}: expected canonical fractional 15Hz deadline interval`);
+    assert(scheduler.catchUpTicks === 0, `${mapId}: idle-host receipt must not need catch-up ticks`);
+    assert(scheduler.skippedDeadlines === 0, `${mapId}: idle-host receipt silently lost ${scheduler.skippedDeadlines} deadlines`);
 
     return {
       mapId,
@@ -104,13 +107,8 @@ async function measure(mapId, seed) {
       p95SnapshotKiB: Number((percentile(snapshotBytes, 0.95) / 1024).toFixed(3)),
       p95BallparkSyncMs: Number(percentile(ballparkSyncMs, 0.95).toFixed(3)),
       ballparkQueriesPerTick: Number((circleQueries / Math.max(1, tickCount)).toFixed(2)),
-      scheduler: {
-        tickCostP95Ms: scheduler.tickCost.p95Ms,
-        latenessP95Ms: scheduler.lateness.p95Ms,
-        cadenceP95Ms: scheduler.cadence.p95Ms,
-        catchUpTicks: scheduler.catchUpTicks,
-        skippedDeadlines: scheduler.skippedDeadlines,
-      },
+      catchUpTicks: scheduler.catchUpTicks,
+      skippedDeadlines: scheduler.skippedDeadlines,
     };
   } finally {
     await stopSimServer(SIM_PORT).catch(() => null);
