@@ -105,8 +105,9 @@ const {
 } = require("./sim/well-gravity.cjs");
 const {
   sweptMovingCircleVsCircle,
-  wrappedDistance,
-  wrappedDelta,
+  wrapPosition: wrapWorldPosition,
+  wrappedDistance: worldDistance,
+  wrappedDelta: worldDisplacement,
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
 const {
@@ -795,29 +796,15 @@ function cleanupFiles(pidFile, metaFile) {
   }
 }
 
-function wrapWorld(value, worldScale) {
+// Several legacy content paths intentionally keep [-scale/2, scale/2)
+// coordinates. Toroidal math accepts both representations, but wrapping them
+// into [0, scale) here would change snapshots and seeded outcomes.
+function wrapCenteredCoordinate(value, worldScale) {
   const half = worldScale / 2;
   let wrapped = value;
   while (wrapped < -half) wrapped += worldScale;
   while (wrapped >= half) wrapped -= worldScale;
   return wrapped;
-}
-
-function wrapWorldPosition(value, worldScale) {
-  return ((value % worldScale) + worldScale) % worldScale;
-}
-
-function worldDisplacement(a, b, worldScale) {
-  let dx = b - a;
-  if (dx > worldScale / 2) dx -= worldScale;
-  if (dx < -worldScale / 2) dx += worldScale;
-  return dx;
-}
-
-function worldDistance(ax, ay, bx, by, worldScale) {
-  const dx = worldDisplacement(ax, bx, worldScale);
-  const dy = worldDisplacement(ay, by, worldScale);
-  return Math.hypot(dx, dy);
 }
 
 function worldDirection(ax, ay, bx, by, worldScale) {
@@ -943,11 +930,11 @@ function updatePlanetoidState(planetoid, wells, dt, worldScale) {
     const well = wells[planetoid.pathData.wellIndex];
     if (!well) return;
     planetoid.t += planetoid.pathData.speed * dt;
-    planetoid.wx = wrapWorld(
+    planetoid.wx = wrapCenteredCoordinate(
       well.wx + Math.cos(planetoid.t + planetoid.pathData.tilt) * planetoid.pathData.semiA,
       worldScale
     );
-    planetoid.wy = wrapWorld(
+    planetoid.wy = wrapCenteredCoordinate(
       well.wy + Math.sin(planetoid.t) * planetoid.pathData.semiB,
       worldScale
     );
@@ -957,15 +944,15 @@ function updatePlanetoidState(planetoid, wells, dt, worldScale) {
     if (!wellA || !wellB) return;
     const dx = worldDisplacement(wellA.wx, wellB.wx, worldScale);
     const dy = worldDisplacement(wellA.wy, wellB.wy, worldScale);
-    const midWX = wrapWorld(wellA.wx + dx / 2, worldScale);
-    const midWY = wrapWorld(wellA.wy + dy / 2, worldScale);
+    const midWX = wrapCenteredCoordinate(wellA.wx + dx / 2, worldScale);
+    const midWY = wrapCenteredCoordinate(wellA.wy + dy / 2, worldScale);
     planetoid.t += planetoid.pathData.speed * dt;
-    planetoid.wx = wrapWorld(midWX + (dx / 2) * Math.sin(planetoid.t), worldScale);
-    planetoid.wy = wrapWorld(midWY + (dy / 2) * Math.sin(planetoid.t * 2), worldScale);
+    planetoid.wx = wrapCenteredCoordinate(midWX + (dx / 2) * Math.sin(planetoid.t), worldScale);
+    planetoid.wy = wrapCenteredCoordinate(midWY + (dy / 2) * Math.sin(planetoid.t * 2), worldScale);
   } else if (planetoid.type === "transit") {
     planetoid.age += dt;
-    planetoid.wx = wrapWorld(planetoid.wx + planetoid.vx * dt, worldScale);
-    planetoid.wy = wrapWorld(planetoid.wy + planetoid.vy * dt, worldScale);
+    planetoid.wx = wrapCenteredCoordinate(planetoid.wx + planetoid.vx * dt, worldScale);
+    planetoid.wy = wrapCenteredCoordinate(planetoid.wy + planetoid.vy * dt, worldScale);
     if (planetoid.age > planetoid.pathData.maxAge) {
       planetoid.age = 0;
     }
@@ -2531,31 +2518,18 @@ function hydrateEchoWreck(echo) {
   const ws = runtime.session?.worldScale;
   if (ws && runtime.mapState?.wells) {
     for (const well of runtime.mapState.wells) {
-      const [dx, dy] = worldDisplacementClamped(wreck.wx, wreck.wy, well.wx, well.wy, ws);
+      const dx = worldDisplacement(wreck.wx, well.wx, ws);
+      const dy = worldDisplacement(wreck.wy, well.wy, ws);
       const dist = Math.hypot(dx, dy);
       const minSafe = (well.killRadius || 0) * 1.3;
       if (dist > 0 && dist < minSafe) {
         const scale = minSafe / dist;
-        wreck.wx = ((well.wx - dx * scale) % ws + ws) % ws;
-        wreck.wy = ((well.wy - dy * scale) % ws + ws) % ws;
+        wreck.wx = wrapWorldPosition(well.wx - dx * scale, ws);
+        wreck.wy = wrapWorldPosition(well.wy - dy * scale, ws);
       }
     }
   }
   return wreck;
-}
-
-// Local wrapped-displacement helper for the nudge above. The existing
-// worldDistance/worldDisplacement helpers in this file are 2-arg style,
-// this one returns the 2D delta B→A wrapped by world scale.
-function worldDisplacementClamped(ax, ay, bx, by, ws) {
-  let dx = bx - ax;
-  let dy = by - ay;
-  const half = ws / 2;
-  if (dx > half) dx -= ws;
-  if (dx < -half) dx += ws;
-  if (dy > half) dy -= ws;
-  if (dy < -half) dy += ws;
-  return [dx, dy];
 }
 
 // Tiny FNV-1a hash for stable wreck ids. Same input → same output.
@@ -2992,8 +2966,8 @@ function maybeCollapseRun() {
 function tickStars(dt, stars = runtime.mapState.stars) {
   for (const star of stars) {
     if (star.alive === false) continue;
-    star.wx = wrapWorld(star.wx + (star.driftVX || 0) * dt, runtime.session.worldScale);
-    star.wy = wrapWorld(star.wy + (star.driftVY || 0) * dt, runtime.session.worldScale);
+    star.wx = wrapCenteredCoordinate(star.wx + (star.driftVX || 0) * dt, runtime.session.worldScale);
+    star.wy = wrapCenteredCoordinate(star.wy + (star.driftVY || 0) * dt, runtime.session.worldScale);
 
     for (const well of runtime.mapState.wells) {
       const dist = worldDistance(star.wx, star.wy, well.wx, well.wy, runtime.session.worldScale);
@@ -3012,8 +2986,8 @@ function tickStars(dt, stars = runtime.mapState.stars) {
         const ejectSpeed = 0.4;
         const remnant = {
           id: `wreck-remnant-${star.id}-${runtime.tick}`,
-          wx: wrapWorld(well.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
-          wy: wrapWorld(well.wy + Math.sin(angle) * ejectDist, runtime.session.worldScale),
+          wx: wrapCenteredCoordinate(well.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
+          wy: wrapCenteredCoordinate(well.wy + Math.sin(angle) * ejectDist, runtime.session.worldScale),
           type: "vault",
           tier: 3,
           size: "large",
@@ -3097,8 +3071,8 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
       wreck.vy = 0;
     }
 
-    wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt, ws);
-    wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt, ws);
+    wreck.wx = wrapCenteredCoordinate(wreck.wx + wreck.vx * dt, ws);
+    wreck.wy = wrapCenteredCoordinate(wreck.wy + wreck.vy * dt, ws);
 
     for (const well of runtime.mapState.wells) {
       const dist = worldDistance(wreck.wx, wreck.wy, well.wx, well.wy, ws);
@@ -3174,8 +3148,8 @@ function movementSweep(startWX, startWY, player) {
   return {
     startX: startWX,
     startY: startWY,
-    deltaX: wrappedDelta(startWX, player.wx, worldScale),
-    deltaY: wrappedDelta(startWY, player.wy, worldScale),
+    deltaX: worldDisplacement(startWX, player.wx, worldScale),
+    deltaY: worldDisplacement(startWY, player.wy, worldScale),
     worldScale,
   };
 }
@@ -3193,7 +3167,7 @@ function sweptEntityContact(sweep, entity, radius) {
 }
 
 function portalEndpointDistance(player, portal) {
-  return wrappedDistance(
+  return worldDistance(
     player.wx,
     player.wy,
     portal.wx,
@@ -3299,8 +3273,8 @@ function resolveWellContact(player, well, dt, dx, dy) {
     const ejectAngle = Math.atan2(dy, dx) + Math.PI;
     player.vx = Math.cos(ejectAngle) * 0.3;
     player.vy = Math.sin(ejectAngle) * 0.3;
-    player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    player.wx = wrapWorldPosition(player.wx + Math.cos(ejectAngle) * 0.1, runtime.session.worldScale);
+    player.wy = wrapWorldPosition(player.wy + Math.sin(ejectAngle) * 0.1, runtime.session.worldScale);
     const scatterRng = currentRNG('hullSave');
     const filled = player.cargo.map((cargo, index) => cargo ? index : -1).filter((index) => index >= 0);
     const scatterCount = Math.min(filled.length, 1 + Math.floor(scatterRng() * 2));
@@ -3608,8 +3582,8 @@ function spawnTemporaryPortalNearPlayer(player) {
   const dist = 0.15 + rng() * 0.1;
   const portal = {
     id: `portal-breach-${player.clientId}-${runtime.tick}`,
-    wx: wrapWorld(player.wx + Math.cos(angle) * dist, runtime.session.worldScale),
-    wy: wrapWorld(player.wy + Math.sin(angle) * dist, runtime.session.worldScale),
+    wx: wrapCenteredCoordinate(player.wx + Math.cos(angle) * dist, runtime.session.worldScale),
+    wy: wrapCenteredCoordinate(player.wy + Math.sin(angle) * dist, runtime.session.worldScale),
     type: "unstable",
     wave: 0,
     spawnTime: runtime.simTime,
@@ -3703,8 +3677,8 @@ function applyPulse(player) {
     const dy = worldDisplacement(player.wy, planetoid.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
     if (dist < pulseRadius * 0.5 && dist > 0.001) {
-      planetoid.wx = wrapWorld(planetoid.wx + (dx / dist) * 0.02, runtime.session.worldScale);
-      planetoid.wy = wrapWorld(planetoid.wy + (dy / dist) * 0.02, runtime.session.worldScale);
+      planetoid.wx = wrapCenteredCoordinate(planetoid.wx + (dx / dist) * 0.02, runtime.session.worldScale);
+      planetoid.wy = wrapCenteredCoordinate(planetoid.wy + (dy / dist) * 0.02, runtime.session.worldScale);
     }
   }
 
@@ -3730,8 +3704,8 @@ function addDroppedItemWreck(player, item) {
   const ejectSpeed = 0.3;
   const wreck = {
     id: nextSeededToken(`wreck-drop-${player.clientId}-${runtime.tick}`, "wreckIds"),
-    wx: wrapWorld(player.wx + Math.cos(rearAngle) * ejectDist, runtime.session.worldScale),
-    wy: wrapWorld(player.wy + Math.sin(rearAngle) * ejectDist, runtime.session.worldScale),
+    wx: wrapCenteredCoordinate(player.wx + Math.cos(rearAngle) * ejectDist, runtime.session.worldScale),
+    wy: wrapCenteredCoordinate(player.wy + Math.sin(rearAngle) * ejectDist, runtime.session.worldScale),
     type: "derelict",
     tier: item.tier || "common",
     size: "scattered",
@@ -4268,8 +4242,8 @@ function spawnScavengerDeathDrops(scav) {
     const ejectSpeed = 0.2 + rng() * 0.2;
     const wreck = {
       id: `wreck-scav-${scav.id}-${runtime.tick}-${i + 1}`,
-      wx: wrapWorld(scav.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
-      wy: wrapWorld(scav.wy + Math.sin(angle) * ejectDist, runtime.session.worldScale),
+      wx: wrapCenteredCoordinate(scav.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
+      wy: wrapCenteredCoordinate(scav.wy + Math.sin(angle) * ejectDist, runtime.session.worldScale),
       type: "derelict",
       tier,
       size: "scattered",
@@ -4312,8 +4286,8 @@ function updateScavengerDeathSpiral(scav, dt) {
   const startDist = Math.hypot(dx, dy);
   const radius = startDist * (1 - t);
   scav.deathAngle += (4 + t * 12) * dt;
-  scav.wx = wrapWorld(scav.deathWellWX + Math.cos(scav.deathAngle) * radius, runtime.session.worldScale);
-  scav.wy = wrapWorld(scav.deathWellWY + Math.sin(scav.deathAngle) * radius, runtime.session.worldScale);
+  scav.wx = wrapCenteredCoordinate(scav.deathWellWX + Math.cos(scav.deathAngle) * radius, runtime.session.worldScale);
+  scav.wy = wrapCenteredCoordinate(scav.deathWellWY + Math.sin(scav.deathAngle) * radius, runtime.session.worldScale);
   scav.facing += 15 * dt;
   return true;
 }
@@ -4420,8 +4394,8 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
     const dragFactor = Math.exp(-SCAVENGER_CONFIG.drag * dt * 60);
     scav.vx *= dragFactor;
     scav.vy *= dragFactor;
-    scav.wx = ((scav.wx + scav.vx * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    scav.wy = ((scav.wy + scav.vy * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    scav.wx = wrapWorldPosition(scav.wx + scav.vx * dt, runtime.session.worldScale);
+    scav.wy = wrapWorldPosition(scav.wy + scav.vy * dt, runtime.session.worldScale);
   }
 
   runtime.mapState.scavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false);
@@ -5412,8 +5386,8 @@ function estimatePathAlignment(ax, ay, bx, by, samples) {
   let totalAlign = 0;
   for (let i = 0; i < samples; i++) {
     const t = (i + 0.5) / samples;
-    const sx = ((ax + dx * t) % ws + ws) % ws;
-    const sy = ((ay + dy * t) % ws + ws) % ws;
+    const sx = wrapWorldPosition(ax + dx * t, ws);
+    const sy = wrapWorldPosition(ay + dy * t, ws);
     const flow = estimateFlow(sx, sy);
     const flowMag = Math.hypot(flow.x, flow.y);
     if (flowMag > 0.001) {
@@ -5625,12 +5599,12 @@ function aiNavigateToward(ai, targetWX, targetWY, dt) {
     // Try lateral offset to find better current
     const perpX = -dy / dist, perpY = dx / dist;
     const leftFlow = estimateFlow(
-      ((ai.wx + perpX * 0.1) % ws + ws) % ws,
-      ((ai.wy + perpY * 0.1) % ws + ws) % ws
+      wrapWorldPosition(ai.wx + perpX * 0.1, ws),
+      wrapWorldPosition(ai.wy + perpY * 0.1, ws)
     );
     const rightFlow = estimateFlow(
-      ((ai.wx - perpX * 0.1) % ws + ws) % ws,
-      ((ai.wy - perpY * 0.1) % ws + ws) % ws
+      wrapWorldPosition(ai.wx - perpX * 0.1, ws),
+      wrapWorldPosition(ai.wy - perpY * 0.1, ws)
     );
     const leftAlign = (leftFlow.x * dx + leftFlow.y * dy) / (Math.hypot(leftFlow.x, leftFlow.y) * dist + 0.001);
     const rightAlign = (rightFlow.x * dx + rightFlow.y * dy) / (Math.hypot(rightFlow.x, rightFlow.y) * dist + 0.001);
@@ -5682,8 +5656,8 @@ function tickAIPlayers(dt) {
       const inhDY = worldDisplacement(runtime.inhibitor.wy, player.wy, ws);
       const inhDist = Math.hypot(inhDX, inhDY);
       if (inhDist > 0.01) {
-        targetWX = ((player.wx + (inhDX / inhDist) * 0.5) % ws + ws) % ws;
-        targetWY = ((player.wy + (inhDY / inhDist) * 0.5) % ws + ws) % ws;
+        targetWX = wrapWorldPosition(player.wx + (inhDX / inhDist) * 0.5, ws);
+        targetWY = wrapWorldPosition(player.wy + (inhDY / inhDist) * 0.5, ws);
       }
       ai.thrustIntensity = w.maxThrust;
     }
@@ -5924,8 +5898,8 @@ function tickHullAbilities(player, dt) {
         const dy = worldDisplacement(target.wy, player.wy, ws);
         const d = Math.hypot(dx, dy);
         if (d > 0.01) {
-          target.wx = ((target.wx + (dx / d) * tractorCfg.pullSpeed * dt) % ws + ws) % ws;
-          target.wy = ((target.wy + (dy / d) * tractorCfg.pullSpeed * dt) % ws + ws) % ws;
+          target.wx = wrapWorldPosition(target.wx + (dx / d) * tractorCfg.pullSpeed * dt, ws);
+          target.wy = wrapWorldPosition(target.wy + (dy / d) * tractorCfg.pullSpeed * dt, ws);
         }
         as.tractorChannelTimer += dt;
         if (as.tractorChannelTimer >= tractorCfg.channelTime) {
@@ -5984,8 +5958,8 @@ function spawnSentries(mapState) {
       sentries.push({
         id: `sentry-${well.id}-${i}`,
         wellId: well.id,
-        wx: ((well.wx + Math.cos(angle) * orbitRadius) % mapState.worldScale + mapState.worldScale) % mapState.worldScale,
-        wy: ((well.wy + Math.sin(angle) * orbitRadius) % mapState.worldScale + mapState.worldScale) % mapState.worldScale,
+        wx: wrapWorldPosition(well.wx + Math.cos(angle) * orbitRadius, mapState.worldScale),
+        wy: wrapWorldPosition(well.wy + Math.sin(angle) * orbitRadius, mapState.worldScale),
         orbitRadius,
         orbitAngle: angle,
         orbitSpeed: speed,
@@ -6013,8 +5987,8 @@ function tickSentries(dt) {
     if (sentry.state === "patrol") {
       // Orbit the well
       sentry.orbitAngle += (sentry.orbitSpeed / Math.max(0.01, sentry.orbitRadius)) * sentry.orbitDir * dt;
-      sentry.wx = ((well.wx + Math.cos(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
-      sentry.wy = ((well.wy + Math.sin(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
+      sentry.wx = wrapWorldPosition(well.wx + Math.cos(sentry.orbitAngle) * sentry.orbitRadius, ws);
+      sentry.wy = wrapWorldPosition(well.wy + Math.sin(sentry.orbitAngle) * sentry.orbitRadius, ws);
 
       // Check for nearby players — lunge if within range
       for (const player of runtime.players.values()) {
@@ -6035,8 +6009,8 @@ function tickSentries(dt) {
       const dy = worldDisplacement(sentry.wy, sentry.lungeTargetY, ws);
       const dist = Math.hypot(dx, dy);
       if (dist > 0.005) {
-        sentry.wx = ((sentry.wx + (dx / dist) * cfg.lungeSpeed * dt) % ws + ws) % ws;
-        sentry.wy = ((sentry.wy + (dy / dist) * cfg.lungeSpeed * dt) % ws + ws) % ws;
+        sentry.wx = wrapWorldPosition(sentry.wx + (dx / dist) * cfg.lungeSpeed * dt, ws);
+        sentry.wy = wrapWorldPosition(sentry.wy + (dy / dist) * cfg.lungeSpeed * dt, ws);
       }
 
       // Check contact with players — push toward well
@@ -6066,14 +6040,14 @@ function tickSentries(dt) {
     } else if (sentry.state === "recover") {
       sentry.recoverTimer -= dt;
       // Drift back toward orbit
-      const targetX = ((well.wx + Math.cos(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
-      const targetY = ((well.wy + Math.sin(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
+      const targetX = wrapWorldPosition(well.wx + Math.cos(sentry.orbitAngle) * sentry.orbitRadius, ws);
+      const targetY = wrapWorldPosition(well.wy + Math.sin(sentry.orbitAngle) * sentry.orbitRadius, ws);
       const dx = worldDisplacement(sentry.wx, targetX, ws);
       const dy = worldDisplacement(sentry.wy, targetY, ws);
       const dist = Math.hypot(dx, dy);
       if (dist > 0.005) {
-        sentry.wx = ((sentry.wx + (dx / dist) * cfg.patrolSpeed[0] * dt) % ws + ws) % ws;
-        sentry.wy = ((sentry.wy + (dy / dist) * cfg.patrolSpeed[0] * dt) % ws + ws) % ws;
+        sentry.wx = wrapWorldPosition(sentry.wx + (dx / dist) * cfg.patrolSpeed[0] * dt, ws);
+        sentry.wy = wrapWorldPosition(sentry.wy + (dy / dist) * cfg.patrolSpeed[0] * dt, ws);
       }
       if (sentry.recoverTimer <= 0) {
         sentry.state = "patrol";
@@ -6137,8 +6111,8 @@ function tickFauna(dt) {
       fauna.push({
         id: nextSeededToken(`fauna-${runtime.tick}`, "faunaIds"),
         type: "bloom",
-        wx: ((peakPlayer.wx + Math.cos(angle) * dist) % ws + ws) % ws,
-        wy: ((peakPlayer.wy + Math.sin(angle) * dist) % ws + ws) % ws,
+        wx: wrapWorldPosition(peakPlayer.wx + Math.cos(angle) * dist, ws),
+        wy: wrapWorldPosition(peakPlayer.wy + Math.sin(angle) * dist, ws),
         vx: 0, vy: 0,
         age: 0,
         lifespan: cfg.bloomLifespan[0] + faunaRng() * (cfg.bloomLifespan[1] - cfg.bloomLifespan[0]),
@@ -6174,8 +6148,8 @@ function tickFauna(dt) {
     const dragRetention = Math.pow(cfg.dragRetentionPerSecond, dt);
     f.vx *= dragRetention;
     f.vy *= dragRetention;
-    f.wx = ((f.wx + f.vx * dt) % ws + ws) % ws;
-    f.wy = ((f.wy + f.vy * dt) % ws + ws) % ws;
+    f.wx = wrapWorldPosition(f.wx + f.vx * dt, ws);
+    f.wy = wrapWorldPosition(f.wy + f.vy * dt, ws);
 
     // Collision with players
     for (const player of runtime.players.values()) {

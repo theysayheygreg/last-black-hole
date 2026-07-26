@@ -2,6 +2,7 @@ const { TestRunner, assert } = require("./helpers.cjs");
 const {
   closestPointOnToroidalSegment,
   sweptMovingCircleVsCircle,
+  wrapPosition,
   wrappedDelta,
   wrappedDistance,
   wrappedDistanceSquared,
@@ -17,8 +18,14 @@ async function run() {
   const runner = new TestRunner("WorldGeometry");
 
   await runner.run("wrapped deltas and distances use the shortest world-space path", async () => {
+    near(wrapPosition(-0.2, 10), 9.8, "negative position wrap");
+    near(wrapPosition(10.2, 10), 0.2, "positive position wrap");
     near(wrappedDelta(9.8, 0.2, 10), 0.4, "positive x seam delta");
     near(wrappedDelta(0.2, 9.8, 10), -0.4, "negative x seam delta");
+    near(wrappedDelta(0, 5, 10), 5, "positive half-world tie");
+    near(wrappedDelta(5, 0, 10), -5, "negative half-world tie");
+    near(wrappedDelta(0, 25, 10), 5, "multi-wrap positive half-world tie");
+    near(wrappedDelta(0, -25, 10), -5, "multi-wrap negative half-world tie");
     near(wrappedDistanceSquared(9.8, 9.7, 0.2, 0.1, 10), 0.32, "corner seam distance squared");
     near(wrappedDistance(9.8, 9.7, 0.2, 0.1, 10), Math.sqrt(0.32), "corner seam distance");
   });

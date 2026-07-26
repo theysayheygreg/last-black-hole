@@ -3,10 +3,12 @@ const {
   LIFECYCLE_STATES,
   normalizeBodyInput,
 } = require("./body-schema.cjs");
+const { wrapPosition } = require("./world-geometry.cjs");
 
 function wrapWorld(value, worldScale) {
   const scale = Number.isFinite(worldScale) && worldScale > 0 ? worldScale : 1;
-  return ((value % scale) + scale) % scale;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) ? wrapPosition(coordinate, scale) : NaN;
 }
 
 function makeHandle(slot, generation) {

@@ -33,7 +33,10 @@ function wrapPosition(value, worldScale) {
   return ((coordinate % scale) + scale) % scale;
 }
 
-/** Return the shortest signed displacement from `from` to `to`. */
+/**
+ * Return the shortest signed displacement from `from` to `to`.
+ * Exact half-world ties keep the sign of the unwrapped direction.
+ */
 function wrappedDelta(from, to, worldScale) {
   const scale = validWorldScale(worldScale);
   let delta = finiteNumber(to, "to") - finiteNumber(from, "from");
@@ -51,7 +54,10 @@ function wrappedDistanceSquared(ax, ay, bx, by, worldScale) {
 }
 
 function wrappedDistance(ax, ay, bx, by, worldScale) {
-  return Math.sqrt(wrappedDistanceSquared(ax, ay, bx, by, worldScale));
+  return Math.hypot(
+    wrappedDelta(ax, bx, worldScale),
+    wrappedDelta(ay, by, worldScale)
+  );
 }
 
 function periodicImageRange(point, segmentMin, segmentMax, padding, worldScale) {

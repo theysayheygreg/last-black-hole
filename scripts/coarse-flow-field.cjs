@@ -1,17 +1,12 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
-const { wrapPosition, wrappedDelta } = require("./sim/world-geometry.cjs");
+const {
+  wrapPosition: wrapWorld,
+  wrappedDelta: worldDisplacement,
+} = require("./sim/world-geometry.cjs");
 const { AMBIENT_FLOOR, BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
 const FORCE_MIN_DIST = 0.15;
-
-function wrapWorld(value, worldScale) {
-  return wrapPosition(value, worldScale);
-}
-
-function worldDisplacement(a, b, worldScale) {
-  return wrappedDelta(a, b, worldScale);
-}
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));

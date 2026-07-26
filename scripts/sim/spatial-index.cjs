@@ -2,21 +2,26 @@ const { performance } = require("perf_hooks");
 const { ACTIVE_LIFECYCLE_STATES } = require("./body-schema.cjs");
 const { BODY_MASKS, resolveMask } = require("./body-masks.cjs");
 const { handleKey, wrapWorld } = require("./body-registry.cjs");
+const {
+  wrappedDelta,
+  wrappedDistance,
+} = require("./world-geometry.cjs");
 
 function positiveNumber(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+// Queries historically treat invalid coordinates as an empty search.
 function worldDelta(from, to, worldScale) {
-  let delta = to - from;
-  const half = worldScale / 2;
-  if (delta > half) delta -= worldScale;
-  if (delta < -half) delta += worldScale;
-  return delta;
+  return Number.isFinite(from) && Number.isFinite(to)
+    ? wrappedDelta(from, to, worldScale)
+    : NaN;
 }
 
 function worldDistance(ax, ay, bx, by, worldScale) {
-  return Math.hypot(worldDelta(ax, bx, worldScale), worldDelta(ay, by, worldScale));
+  return [ax, ay, bx, by].every(Number.isFinite)
+    ? wrappedDistance(ax, ay, bx, by, worldScale)
+    : NaN;
 }
 
 function compareQueryResults(a, b) {

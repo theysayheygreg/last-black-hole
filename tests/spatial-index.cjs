@@ -1,7 +1,7 @@
 const { TestRunner, assert } = require("./helpers.cjs");
 const { BODY_MASKS } = require("../scripts/sim/body-masks.cjs");
 const { BodyRegistry } = require("../scripts/sim/body-registry.cjs");
-const { SpatialIndex } = require("../scripts/sim/spatial-index.cjs");
+const { SpatialIndex, worldDelta } = require("../scripts/sim/spatial-index.cjs");
 
 function addBody(registry, index, body, tick = 1) {
   const handle = registry.createBody(body, { tick });
@@ -37,6 +37,8 @@ async function run() {
     assert(hits.length === 1, `Expected one wrapped hit, got ${hits.map((hit) => hit.id).join(", ")}`);
     assert(hits[0].id === "wreck:edge", `Expected wrapped edge wreck, got ${hits[0].id}`);
     assert(Math.abs(hits[0].distance - 0.16) < 1e-12, `Expected wrapped distance 0.16, got ${hits[0].distance}`);
+    assert(worldDelta(0, 2, 4) === 2 && worldDelta(2, 0, 4) === -2, "Expected signed half-world ties");
+    assert(index.queryCircle(NaN, 0, 1).length === 0, "Expected invalid query coordinates to stay empty");
   });
 
   await runner.run("quantizes non-divisible cell sizes to preserve the toroidal period", async () => {
