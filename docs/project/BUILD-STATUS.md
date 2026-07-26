@@ -68,7 +68,7 @@ future RC/promotion remain open.
   wreck, portal, star, planetoid, scavenger, fauna, and sentry families;
 - centralized projection, quality, palette, route cyan, and corruption magenta;
 - reproducible generated source atlases and runtime slices for entity sprites,
-  all 67 catalog item icons, and terminal UI frame parts;
+  all 65 catalog item icons, and terminal UI frame parts;
 - deterministic terminal expansion, focus, stagger, directional transitions,
   and reduced-motion equivalents across major game screens;
 - stronger local backing and restrained shadows that separate windows, titles,
