@@ -1,6 +1,6 @@
 # v0.3 Open Decisions
 
-> Document revision: v0.3. Updated 2026-07-17. Resolved implementation choices
+> Document revision: v0.3. Updated 2026-07-26. Resolved implementation choices
 > are listed first so they are not repeatedly reopened during release work.
 
 ## Resolved For v0.3
@@ -120,8 +120,9 @@ text, and packaged authority health.
 
 **Decision owner:** Greg
 
-When should `codex/v0.3-ballpark-roadmap` promote to `main` and become the
-public/demo line? A green candidate does not make this decision automatically.
+When should `codex/v0.3-sim-harness-simplification` promote to `main` and
+become the public/demo line? A green candidate does not make this decision
+automatically.
 
 ## Deferred Product Decisions
 

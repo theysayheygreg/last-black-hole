@@ -36,19 +36,19 @@ is a playtest/content risk, not hidden tuning. Ballpark remains the
 spatial/materialized-payload layer; the local/offline seeded-sea presentation
 split is backlog work.
 
-The second movement-completion tranche closes three remaining player-facing
+Historical 2026-07-25 movement-tranche note: the second completion tranche
+closed three remaining player-facing
 seams without retuning the game: F/Y reports why an in-range slingshot cannot
 engage yet, reconciliation consumes authoritative fluid coupling, and snapshot
 rebases refresh fuel truth. Ordered replay of rapid pending inputs remains a
-bounded presentation backlog for the separate movement/refactor program. The
-natural browser smoke is still asynchronous because its one-shot probe stopped
-at Home navigation before a map launched; authority and focused movement
-contracts remain green.
+bounded presentation backlog for the separate movement/refactor program. Its
+one-shot browser smoke stopped at Home before map launch; the later terminal
+AgentPlay and full-lane receipts below supersede that historical smoke status.
 
 ### Production Polish Candidate
 
 Branch `codex/v0.3-production-polish` carries a focused post-review batch over
-the green RC:
+the then-green candidate:
 
 - sentries use a distinct directional threat sprite instead of sharing fauna's
   organic silhouette;
@@ -62,10 +62,10 @@ the green RC:
   cannot skip after tab suspension, and remote result exits preserve all input
   edge latches.
 
-Focused receipts passed on 2026-07-14: Three entity lifecycle 9/9, movement
+Historical focused receipts passed on 2026-07-14: Three entity lifecycle 9/9, movement
 audio 10/10, swept authority 5/5, input timeout 1/1, movement golden 5/5, and
-meta flow 8/8. Broader candidate lanes remain asynchronous checkpoint work;
-this feature batch does not claim a new full release gate.
+meta flow 8/8. Broader candidate lanes were asynchronous at that checkpoint;
+the current terminal receipt is recorded below.
 
 v0.3 converts the successful game-jam stack into a small production-shaped
 game architecture without replacing the custom physics or ASCII-fluid visual
@@ -199,13 +199,13 @@ Latest source authority evidence on 2026-07-26 (not package/Deck evidence):
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 15.000 / 15 Hz (Deep Field sample) |
-| snapshot p95 latency | 17.36 ms |
+| authority tick | 14.99 / 15 Hz (Deep Field budget sample) |
+| snapshot p95 latency | 26.06 ms |
 | snapshot p95 size | 212.76 KiB |
-| heap change | +1.56 MiB diagnostic |
-| Ballpark sync p95 | 0.722 ms |
+| heap change | +52.8 MiB diagnostic |
+| Ballpark sync p95 | 0.735 ms |
 | relevance queries | 12 / tick |
-| deadline delivery | 2 catch-ups / 0 skipped |
+| deadline delivery | 0 catch-ups / 0 skipped |
 
 ## Playable Evidence
 
@@ -214,9 +214,9 @@ The natural agent journey starts a fresh sim and disposable browser at
 controller input, and world contact. It does not mutate player, portal, wreck,
 or Inhibitor debug state.
 
-Latest passing report from the clean no-retry RC pass:
+Latest passing report from the terminal exact-source no-retry pass:
 
-`tests/screenshots/agent-play-eval-2026-07-14T191436848Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-26T183542962Z/summary.md`
 
 It proves:
 
@@ -235,14 +235,14 @@ It proves:
 
 The complete lane passed without retries after the visual integration and
 harness-timeout correction. Earlier timing variability remains useful tuning
-history, but it did not recur in this RC pass.
+history, but it did not recur in this exact-source acceptance pass.
 
 ## Remaining Release Gates
 
 These are evidence gates, not missing architecture:
 
-- [ ] Replace the pending exact-head full-lane receipt in the simulation/harness
-  ledger; do not infer it from an earlier package candidate.
+- [x] Record the exact-head full-lane receipt in the simulation/harness ledger:
+  119/119 in 442.18 s at source `3b2cb022`, with no retries.
 - [ ] If Primary selects an RC, build a hash-named artifact and rerun package
   proof from that exact committed source.
 - [ ] If the physical Deck is online, deploy and verify Gaming Mode launch,

@@ -30,9 +30,10 @@ The current manifest registers 121 contracts: 60 fast, 87 core, 57 authority,
 45 sim-structure, 119 full, 6 bench, and 1 optional audio-tools contract. The
 ordinary comparable checkpoint is `npm test -- --no-retries`: 87/87 in 45.72 s
 against the 93.62 s baseline (2.047x). That is the throughput claim. The full
-candidate receipt is separately recorded in
+candidate path is also green at 119/119 in 442.18 s against the 1,028.63 s
+baseline (2.326x). Both receipts are recorded in
 `docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`; never substitute a renamed lane for
-it.
+either comparison.
 
 For "where does the local build stand?", start with
 `docs/project/BUILD-STATUS.md`, then check `node scripts/build-health.cjs
@@ -235,7 +236,10 @@ isolation group gets unique port, browser profile, temporary root, and artifact
 root; fixed services serialize. Buffered output is emitted in manifest order,
 and the final receipt records per-suite duration, retries, process/browser
 launches, and cleanup. Do not share mutable sim/browser state merely to obtain
-a faster number.
+a faster number. AuthorityBudget and AuthorityCadence reserve the host timing
+resource. RulerLive, SlingshotV2Live, AgentPlayEval, and Renderer reserve the
+entire browser capacity; measured attempts to overlap those stateful journeys
+caused real evidence failures.
 
 Renderer values:
 
@@ -257,6 +261,11 @@ generated top-down sprite family. The
 captures intentionally bypass ASCII quantization so shader input can be
 inspected; they can look smooth, bright, or rainbowed around wells and should
 not be treated as promo or target visuals.
+Fixture time advances in exact elapsed chunks no larger than the client's
+`1/30` game-loop cap; the explicit presentation/capture frames remain `1/60`.
+This is a renderer schedule, not the 15 Hz authority clock. Portal readability
+samples the authored sprite-card footprint on the saved canonical ASCII frame,
+with the same object counts and contrast thresholds as before.
 Set `LBH_RENDERER_DEEP=1` to capture every fixture at the older multi-time
 cadence for a deliberate visual audit.
 

@@ -107,10 +107,12 @@ policy; the server remains authoritative.
 The 25x25 tier uses the existing coarse-field seam. Browser allocations remain
 `192` fluid, a `3` world-unit local window, and a `64` coarse texture; no
 full-map 25x25 GPU texture is introduced. Deep Field constructs `3136` of its
-`4096` coarse-cell ceiling. The observed snapshot is `323430` bytes against a
-`500000`-byte ceiling. Coarse-field construction and packet serialization,
-and snapshot-ring serialization, fail closed before retaining over-budget
-state. Expanse's executable coarse-cell ceiling is `2304` for `2209` cells.
+`4096` coarse-cell ceiling. The pre-compaction W2-A4 observation was `323430`
+bytes against a `500000`-byte ceiling; the terminal source budget sample is
+`212.76 KiB` after the whitespace-only compact JSON change. Coarse-field
+construction and packet serialization, and snapshot-ring serialization, fail
+closed before retaining over-budget state. Expanse's executable coarse-cell
+ceiling is `2304` for `2209` cells.
 
 S24 catalog population is explicitly deferred. W2-A4 only proves the current
 authored population is playable under the density/travel contract; it does not

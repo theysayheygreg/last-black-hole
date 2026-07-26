@@ -20,8 +20,11 @@
   uses up to four workers (two browser workers) with isolated resources,
   ordered timing/launch receipts, and child-process cleanup. The ordinary core
   gate is 87/87 in 45.72 s versus the 93.62 s baseline (2.047x). The exact-head
-  full-lane receipt remains pending in the program ledger; no package, Deck,
-  or promotion claim is implied.
+  full lane is 119/119 in 442.18 s versus 1,028.63 s (2.326x), with no retries.
+  Host timing probes and the four stateful browser journeys have explicit
+  exclusive resources; renderer fixture stepping uses exact elapsed client
+  chunks, and live slingshot evidence records every range-break and requested
+  release event. No package, Deck, or promotion claim is implied.
 
 ## 2026-07-25
 

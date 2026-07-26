@@ -5,9 +5,10 @@
 
 ## Current Verdict
 
-**Current source acceptance is limited to the v0.3 simulation/harness checkpoint
-at `c558ae5756205dff2d2e341a0e69c71c5ecf484f`. The exact-head no-retry full
-receipt is pending. No new package, Deck, RC, or promotion claim exists.**
+**Current source acceptance is the v0.3 simulation/harness checkpoint at
+`3b2cb0227414f8567e12a821c64d3190b82e1f42`. Its exact-head no-retry full
+lane passed 119/119 in 442.18 s. No new package, Deck, RC, or promotion claim
+exists.**
 
 `codex/v0.3-sim-harness-simplification` contains the current unified 15 Hz
 authority clock, measured Deep Field relevance/transport work, deadline
@@ -20,11 +21,11 @@ valid only for their exact historical hashes. They do not certify the current
 source checkpoint.
 
 Current source proof: fast is 60/60 in 10.20 s; core is 87/87 in 45.72 s;
-authority is 57/57 in 195.47 s; and the shared 5/15/25 cadence receipt delivers
-14.975/14.999/14.989 Hz with zero skipped deadlines. Deep Field uses 12
-Ballpark relevance queries/tick. A fresh natural AgentPlay journey passed
-no-retry in 164.77 s with 18 captures. The full candidate receipt is still
-`FINAL_FULL_RECEIPT` in the program ledger.
+authority is 57/57 in 195.47 s; and the terminal full lane is 119/119 in
+442.18 s, 2.326x faster than its 1,028.63 s baseline. Its shared 5/15/25
+cadence receipt delivered 14.983/14.995/14.988 Hz with zero skipped deadlines.
+Deep Field uses 12 Ballpark relevance queries/tick. AgentPlayEval passed both
+fresh natural journeys in 123.32 s with 18 captures.
 
 ## Historical Package And Deck Evidence
 
@@ -116,7 +117,9 @@ Historical completed evidence from the clean 2026-07-14 RC pass:
 - The 2026-07-14 review-fix pass produced a clean multi-target package and
   passed `test:package`. Its fresh autonomous journey showed no browser runtime
   errors, but one route attempt missed the portal after running low on fuel;
-  the full no-retry promotion checkbox is therefore still open.
+  at that historical checkpoint the full no-retry promotion checkbox remained
+  open. The current source receipt at the top of this document supersedes that
+  harness status, not the old package hash.
 
 ## Automated Candidate Gate
 
@@ -153,7 +156,8 @@ Requirements:
 
 ## Architecture Gate
 
-- [x] Current `main` merged forward; v0.3 was not merged backward.
+- [x] The accepted source remains version-separated from v0.2 `main` and later
+  version lines.
 - [x] Packaged authority dependency closure is discovered transitively.
 - [x] Staged package test boots control plane and sim.
 - [x] Toroidal geometry and swept circle contact are centralized.
@@ -222,16 +226,21 @@ npm run release:status
 npm run test:package
 ```
 
-- [x] Build `0.3.1.dd9e5149` from the current source candidate.
-- [x] Current `app.asar` and playtest ZIP checksums are reported above and
-  verified by `npm run release:status` plus `npm run test:package`.
-- [x] Artifact version `0.3.1.2b93b077` remains prior-hash evidence.
-- [x] Its historical checksum and path were reported by `npm run test:package` and
-  verified by `npm run release:status`.
-- [x] Embedded control plane and sim boot from staged and extracted package
-  resources.
-- [x] Packaged client reaches a rendered Three title, retains idle authority,
-  and performs an authoritative launch.
+- [ ] If Primary selects `3b2cb022` as an RC, build its hash-named package.
+- [ ] Report and verify that exact source's `app.asar` and playtest ZIP through
+  `release:status` and `test:package`.
+
+Historical package evidence, not certification of `3b2cb022`:
+
+- [x] Build `0.3.1.dd9e5149` passed the historical multi-target package gate.
+- [x] Its `app.asar` and playtest ZIP checksums are reported above and were
+  verified by `release:status` plus `test:package`.
+- [x] Artifact version `0.3.1.2b93b077` remains prior-hash evidence; its
+  checksum and path were reported and verified.
+- [x] Those historical packages booted embedded control plane and sim from
+  staged and extracted resources.
+- [x] Their packaged client reached a rendered Three title, retained idle
+  authority, and performed an authoritative launch.
 
 The package checks above apply only when `npm run release:status` names the
 current committed hash. `-test` drop artifacts do not satisfy this gate.
@@ -268,8 +277,10 @@ device risk. Do not mark it passed from desktop screenshots.
 
 Promotion requires Greg's explicit call. Before merging to `main`:
 
-1. Merge the latest `main` forward once more.
-2. Re-run the automated candidate and package gates.
+1. Primary and Greg select one exact accepted v0.3 source commit.
+2. Re-run the package gate from that exact source without importing another
+   version line.
 3. Update version/build status and public notes.
 4. Preserve the v0.2 tag/history.
-5. Promote in one intentional merge, never by convenience cherry-picks.
+5. Promote in one intentional version merge, never by convenience
+   cherry-picks.

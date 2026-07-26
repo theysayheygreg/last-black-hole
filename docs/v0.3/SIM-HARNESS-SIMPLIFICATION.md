@@ -1,6 +1,6 @@
 # v0.3 Simulation, Harness, and Human-Clarity Simplification
 
-> Status: final source/harness receipt pending one exact-head full-lane result.
+> Status: source/harness acceptance complete at source `3b2cb022`.
 > Updated 2026-07-26 on `codex/v0.3-sim-harness-simplification`.
 >
 > Branch: `codex/v0.3-sim-harness-simplification`
@@ -197,7 +197,7 @@ the pinned baseline) and 22,493 tests (`-74`).
 
 ## Integrated source and harness receipt
 
-The current source checkpoint is `c558ae5756205dff2d2e341a0e69c71c5ecf484f`
+The accepted source checkpoint is `3b2cb0227414f8567e12a821c64d3190b82e1f42`
 on `codex/v0.3-sim-harness-simplification`. It remains a v0.3-only descendant
 of `BASELINE_SHA`; no package, Deck, promotion, or public-release claim is made
 for this checkpoint.
@@ -230,9 +230,9 @@ The current 5/15/25 ten-second cadence receipt is:
 
 | Map | Delivered Hz | Snapshot p95 | Ballpark p95 | Queries/tick | Catch-up / skipped |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Shallows | 14.975 | 7.556 ms | 0.667 ms | 12 | 0 / 0 |
-| Expanse | 14.999 | 17.594 ms | 0.605 ms | 12 | 0 / 0 |
-| Deep Field | 14.989 | 26.130 ms | 0.745 ms | 12 | 0 / 0 |
+| Shallows | 14.983 | 7.869 ms | 0.459 ms | 12 | 0 / 0 |
+| Expanse | 14.995 | 18.493 ms | 0.774 ms | 12 | 0 / 0 |
+| Deep Field | 14.988 | 22.760 ms | 0.788 ms | 12 | 1 / 0 |
 
 The authority receipt also passed 57/57 in 195.47 s (197.36 s summed suite
 time; 12 browser, 3 static, 66 sim, 3 control launches). Its Deep Field sample
@@ -241,6 +241,11 @@ Ballpark p95, 12 queries/tick, two ordinary catch-ups, zero skipped deadlines,
 and +1.56 MiB diagnostic heap change. This closes the former 13.9/15 rounded
 timer artifact without restoring profiles; it is not a claim that pathological
 host stalls cannot be observed through `skippedDeadlines`.
+
+The terminal full-lane Deep Field budget sample also delivered 14.99/15 Hz,
+26.06 ms snapshot p95, 212.76 KiB payload p95, 0.735 ms Ballpark p95, 12
+queries/tick, and zero catch-ups or skipped deadlines. Heap moved +52.8 MiB in
+that host-sensitive sample and remains diagnostic.
 
 ### Harness and behavior evidence
 
@@ -256,7 +261,7 @@ receipts, records launches/timings/retries, and terminates child process groups.
 | Ordinary core | 93.62 s, 65 red | 45.72 s, 87 pass | 2.047x; meets the <=50% target |
 | Authority | 126.53 s, 47 red | 195.47 s, 57 pass | slower: fresh isolation and cadence proof added |
 | Sim structure | 32.55 s, 35 pass | 93.81 s, 45 pass | slower: 5/15/25 cadence proof added |
-| Candidate full | 1,028.63 s, 95 red | FINAL_FULL_RECEIPT | exact-head result pending; do not infer a speedup |
+| Candidate full | 1,028.63 s, 95 red | 442.18 s, 119 pass | 2.326x; 43.0% of baseline |
 
 `test:bench -- --no-retries` is 6/6 green in 0.45 s. `test:audio-tools` is
 intentionally outside candidate/full and remains red in 0.57 s only because
@@ -265,22 +270,25 @@ product gate. The bench endpoint likewise remains behind its explicit bench
 gate, not normal authority behavior.
 
 Focused behavior evidence remains representative rather than exhaustive:
-current renderer fixtures are green; UIVisual is 18/18 in 12.21 s (from
-466.65 s); Smoke passes in fast/core; and the independent no-retry natural
-AgentPlay journey passed in 164.77 s with 18 captures, normal authority/input,
-slingshot, extraction, profile/Chronicle continuity, second run, and natural
-death recovery. The slingshot live proof now observes the authority event
-boundary instead of racing a transient presentation state.
+UIVisual is 18/18 in 12.21 s (from 466.65 s); Smoke passes in fast/core; and
+the terminal full lane passed Renderer in 86.16 s, FluidWindow in 10.18 s,
+SlingshotV2Live in 8.04 s, and AgentPlayEval in 123.32 s. The two AgentPlay
+journeys retain 18 captures, normal authority/input, slingshot, extraction,
+profile/Chronicle continuity, second run, and natural death recovery. The live
+slingshot proof records the complete selected-well event stream: two visual
+capture legs end in validated range-breaks, and a third leg proves the explicit
+requested release without discarding any authority event.
 
 Meaningful vertical commits centralize the movement clock, toroidal geometry,
 authoritative JSON serialization, deadline scheduling, runner isolation, and
 current-contract fixtures. Current nonblank JS-family lines are 50,173
-production (`-45` from baseline) and 23,543 tests (`+976`); production and
+production (`-45` from baseline) and 23,954 tests (`+1,387`); production and
 tests remain reported separately. The test increase is deliberate current
 contract and fresh-process coverage, not hidden runner deletion.
 
-Remaining acceptance work is limited to replacing `FINAL_FULL_RECEIPT` with
-one exact-head no-retry full receipt, then deciding whether any direct
-full-lane regression needs fix-forward. Package and Deck gates are historical
-evidence only until Primary explicitly selects an RC. Greg still owns feel,
-visual/audio taste, physical Deck acceptance, and promotion.
+The exact-head candidate run passed 119/119 with zero retries in 442.18 s
+(442.39 s external wall, 619.60 s summed suite time), using 34 browser
+launches, 18 static starts, 71 sim starts, and 3 control starts. Package and
+Deck gates are historical evidence only until Primary explicitly selects an
+RC. Greg still owns feel, visual/audio taste, physical Deck acceptance, and
+promotion.

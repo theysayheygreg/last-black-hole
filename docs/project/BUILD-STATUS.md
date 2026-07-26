@@ -21,8 +21,9 @@ v0.3 source-only checkpoint, based on behavioral baseline
 `20184fae84b559abf27717c046811673040d987a`. It has one 15 Hz authoritative
 movement clock across Shallows, Expanse, and Deep Field, plus measured
 relevance, compact transport, deadline-delivery, and harness work. This is not
-a newly packaged or deployed RC. The exact-head full-lane result is pending in
-`docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md` as `FINAL_FULL_RECEIPT`.
+a newly packaged or deployed RC. Source checkpoint
+`3b2cb0227414f8567e12a821c64d3190b82e1f42` passed the exact-head no-retry
+full lane 119/119 in 442.18 s.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
@@ -88,32 +89,35 @@ Current source evidence, at the stated branch/checkpoint rather than an RC:
 - `npm run test:authority -- --no-retries`: 57/57 in 195.47 s. It is slower
   than the red 47-suite baseline because it now proves fresh authority groups
   and a ten-second 5/15/25 cadence receipt.
-- current UIVisual is 18/18 in 12.21 s; current renderer fixtures are green;
-  Smoke passes in fast/core; the independent natural AgentPlay journey passed
-  no-retry in 164.77 s with 18 captures.
+- current UIVisual is 18/18 in 12.21 s; the final full lane passed Renderer in
+  86.16 s, FluidWindow in 10.18 s, and SlingshotV2Live in 8.04 s. Smoke passes
+  in fast/core; AgentPlayEval passed both natural journeys in 123.32 s with 18
+  captures.
 - `npm run test:bench -- --no-retries`: 6/6 in 0.45 s. Bench authority is
   explicitly gated and not normal product behavior. `test:audio-tools` remains
   an optional local-tooling red because Python `numpy` is absent.
-- The full candidate lane has not yet been rerun at this exact source
-  checkpoint. Do not treat earlier full/package evidence as proof for it.
+- `npm run test:full -- --no-retries`: 119/119 in 442.18 s with zero retries,
+  34 browser launches, and 92 service starts (18 static, 71 sim, 3 control).
+  This is 2.326x faster than the 1,028.63 s baseline and keeps the full
+  candidate coverage.
 
 Latest Deep Field measurement:
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 15.000 / 15 Hz (Deep Field sample) |
-| snapshot p95 latency | 17.36 ms |
+| authority tick | 14.99 / 15 Hz (Deep Field budget sample) |
+| snapshot p95 latency | 26.06 ms |
 | snapshot p95 size | 212.76 KiB |
 | relevance queries | 12 / tick |
-| heap change | +1.56 MiB diagnostic |
-| Ballpark sync p95 | 0.722 ms |
-| scheduler delivery | 2 catch-ups / 0 skipped |
+| heap change | +52.8 MiB diagnostic |
+| Ballpark sync p95 | 0.735 ms |
+| scheduler delivery | 0 catch-ups / 0 skipped |
 
 ### Natural Playable Evidence
 
 Latest complete passing report:
 
-`tests/screenshots/agent-play-eval-2026-07-14T191436848Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-26T183542962Z/summary.md`
 
 It contains eighteen 1280x800 screenshots and proves two fresh protocol-v2
 Shallows journeys through:
@@ -176,7 +180,7 @@ Installed and checksum-verified on 2026-07-17:
 | Last Singularity v0.2 Demo | `main` at `83953aa`, build `0.2.2.83953aa` | `/home/deck/Games/last-singularity-v02` | `2947990413` |
 | Last Singularity v0.3.1 Preview | v0.3 at `dd9e5149`, build `0.3.1.dd9e5149` | `/home/deck/Games/last-singularity-v03` | `3696252517` |
 
-The current v0.3 package passed `release:internal`, `release:status`, and
+That historical v0.3 package passed `release:internal`, `release:status`, and
 `test:package`; its remote executable and `app.asar` hashes match local. The
 v0.2 directory and shortcut remain key `18`, app id `2947990413`; v0.3 remains
 key `19`, now app id `3696252517` after the supported display-name refresh.
@@ -193,7 +197,8 @@ readability, suspend/resume, movement feel, audio, and current runtime logs.
 `main` remains the stable current-version line. It is the correct place for
 small demo fixes, public README/play instructions, current Deck maintenance,
 and v0.2 packaging. Large authority, protocol, Ballpark, renderer-contract, or
-product-loop changes belong on the v0.3 branch and are merged forward only.
+product-loop changes belong on the v0.3 branch and remain version-isolated
+until Greg explicitly promotes an accepted source commit.
 
 Do not describe a v0.3 branch build as the public `main` build. Do not merge
 v0.3 backward for convenience.

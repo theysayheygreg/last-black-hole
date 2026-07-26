@@ -1,6 +1,6 @@
 # Last Singularity v0.3 Docs
 
-> Document revision: v0.3. Updated 2026-07-10.
+> Document revision: v0.3. Updated 2026-07-26.
 
 This folder is the source-of-truth home for the v0.3 candidate line. The
 architecture is implemented; remaining work is release evidence, physical
@@ -8,15 +8,15 @@ device acceptance, Greg's feel/taste review, and explicit promotion.
 
 ## Branch Contract
 
-v0.3 structural work should happen on a branch, not directly on `main`.
-The initial planning branch is:
+v0.3 structural work happens on a version-owned branch, not directly on
+`main`. The accepted simulation/harness source branch is:
 
-`codex/v0.3-ballpark-roadmap`
+`codex/v0.3-sim-harness-simplification`
 
 `main` remains the v0.2 demo and stabilization line for small fixes, Deck
-deploys, and weekend-build polish. The v0.3 branch should regularly merge
-current `main` after those fixes land, but it should not force unfinished
-architecture work back into the v0.2 demo path.
+deploys, and weekend-build polish. Do not merge, cherry-pick, or rebase v0.2
+or later-version work into this source line. Promotion remains an explicit
+Greg decision after its exact-source gates.
 
 ## Release Thesis
 
