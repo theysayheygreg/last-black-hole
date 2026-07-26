@@ -588,8 +588,8 @@ const SUITES = [
     file: "agent-play-eval.cjs",
     lanes: ["agent-eval", "full"],
     browser: true,
-    // Run after renderer capture, then share only with independent browsers.
-    browserPriority: "playable",
+    // Keep the natural product journey isolated from all other Chrome work.
+    browserExclusive: true,
     slow: true,
     timeout: 240000,
   },
@@ -598,8 +598,8 @@ const SUITES = [
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
     browser: true,
-    // Fixture capture is CPU/GPU-bound; do not contend with another browser.
-    browserExclusive: true,
+    // Run after journey isolation, then share with one ordinary browser.
+    browserPriority: "renderer",
     visual: true,
     timeout: 240000,
   },
