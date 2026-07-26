@@ -3,7 +3,7 @@ const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers
 
 const SIM_PORT = 8830;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
-const SAMPLE_COUNT = 20;
+const SAMPLE_COUNT = 40;
 const SAMPLE_INTERVAL_MS = 250;
 
 function percentile(values, fraction) {
@@ -126,6 +126,8 @@ async function run() {
         heapGrowthMiB: Number((heapGrowth / 1024 / 1024).toFixed(2)),
         p95BallparkSyncMs: Number(p95RebuildMs.toFixed(3)),
         authorityTicks: tickCount,
+        catchUpTicks: lastHealth.body.scheduler?.catchUpTicks ?? null,
+        skippedDeadlines: lastHealth.body.scheduler?.skippedDeadlines ?? null,
         ballparkCircleQueries: circleQueries,
         ballparkQueriesPerTick: Number((circleQueries / Math.max(1, tickCount)).toFixed(2)),
         ballparkCandidates: queryCandidates,
