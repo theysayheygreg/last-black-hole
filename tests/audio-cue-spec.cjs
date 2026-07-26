@@ -9,6 +9,9 @@ async function run() {
   const { AUDIO_BUSES, AUDIO_PRIORITIES, CUE_SPECS, cueSpec } = await import(
     pathToFileURL(path.join(ROOT, 'src', 'audio', 'cue-spec.js')).href
   );
+  const { SYNTHESIZED_CUES } = await import(
+    pathToFileURL(path.join(ROOT, 'src', 'audio', 'cue-synthesis.js')).href
+  );
   assert.deepStrictEqual(AUDIO_BUSES, ['ambient', 'world', 'player', 'ui', 'critical']);
   for (const [id, spec] of Object.entries(CUE_SPECS)) {
     assert.strictEqual(spec.id, id);
@@ -24,16 +27,29 @@ async function run() {
   assert.strictEqual(cueSpec('upgrade').maxVoices, 4);
   assert.strictEqual(cueSpec('missing'), null);
 
+  assert.deepStrictEqual([...SYNTHESIZED_CUES].sort(), Object.keys(CUE_SPECS).sort(),
+    'every declared cue has exactly one synthesis handler');
   const engineSource = fs.readFileSync(path.join(ROOT, 'src', 'audio.js'), 'utf8');
-  const routedCues = [...engineSource.matchAll(/case '([^']+)'/g)].map((match) => match[1]).sort();
-  assert.deepStrictEqual(routedCues, Object.keys(CUE_SPECS).sort(), 'every declared cue has exactly one engine route');
+  const synthesisSource = fs.readFileSync(path.join(ROOT, 'src', 'audio', 'cue-synthesis.js'), 'utf8');
+  const audioSource = engineSource + synthesisSource;
+  const playEventSource = engineSource.slice(engineSource.indexOf('  playEvent('), engineSource.indexOf('  // ---- Init helpers'));
+  let priorStep = -1;
+  for (const step of [
+    '!this.initiated || !CONFIG.audio.enabled', 'cueSpec(type)', '_eventBudget.admit',
+    '_mixer.admit', '_eventBudget.release', '_trace.mark', 'clearPortalReady',
+    'worldToScreen', '_cueSynthesis.play',
+  ]) {
+    const stepIndex = playEventSource.indexOf(step);
+    assert(stepIndex > priorStep, `${step} preserves cue admission order`);
+    priorStep = stepIndex;
+  }
   for (const deadName of [
     'playAuthoritativeEvent', 'setPortalProximity', '_portalProximityActive', '_wireAndPlay',
     '_playScavengerExtract', '_playWellRumble', '_playCrunch', '_playItemPlink',
   ]) {
-    assert(!engineSource.includes(deadName), `${deadName} stays deleted`);
+    assert(!audioSource.includes(deadName), `${deadName} stays deleted`);
   }
-  assert(/case 'portalFinal':\s+this\._playPortalDeath\(/.test(engineSource), 'portalFinal keeps its live terminal cue');
+  assert(/portalFinal:.*_playPortalDeath\(/.test(synthesisSource), 'portalFinal keeps its live terminal cue');
   console.log('AudioCueSpec: 1 passed, 0 failed');
 }
 run().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

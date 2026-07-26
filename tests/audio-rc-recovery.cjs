@@ -85,12 +85,12 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
   engine.setMixSettings({ muted: false });
   const heldStart = ctx.nodes.length;
   assert.strictEqual(engine.playEvent('portalReady'), true);
-  const held = engine._portalReadyVoice;
+  const held = engine._cueSynthesis._portalReadyVoice;
   assert(held && held.voice.persistent, 'portal-ready voice is persistent');
   assert.strictEqual(held.voice._cleanup, null, 'persistent voice bypasses one-shot cleanup');
   assert(pannersSince(ctx, heldStart).every((panner) => panner.connections.includes(engine.busGains.world)), 'portal-ready routes to its world bus');
   engine.reset();
-  assert.strictEqual(engine._portalReadyVoice, null, 'reset clears held portal-ready voice');
+  assert.strictEqual(engine._cueSynthesis._portalReadyVoice, null, 'reset clears held portal-ready voice');
   assert.strictEqual(held.osc.stopped, true, 'reset stops held portal-ready oscillator');
   assert.strictEqual(held.osc.disconnected, undefined, 'held voice remains connected during its release fade');
   ctx.advanceTo(ctx.currentTime + 0.06);
@@ -100,10 +100,10 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
     engine.reset();
     ctx.currentTime += 1;
     assert.strictEqual(engine.playEvent('portalReady'), true, `${terminalCue}: portal-ready starts`);
-    const activeHeld = engine._portalReadyVoice;
+    const activeHeld = engine._cueSynthesis._portalReadyVoice;
     ctx.currentTime += 0.1;
     assert.strictEqual(engine.playEvent(terminalCue), true, `${terminalCue}: terminal cue admitted`);
-    assert.strictEqual(engine._portalReadyVoice, null, `${terminalCue}: terminal cue clears held portal-ready voice`);
+    assert.strictEqual(engine._cueSynthesis._portalReadyVoice, null, `${terminalCue}: terminal cue clears held portal-ready voice`);
     assert.strictEqual(activeHeld.osc.stopped, true, `${terminalCue}: terminal cue stops held oscillator`);
     ctx.advanceTo(ctx.currentTime + 0.06);
   }
