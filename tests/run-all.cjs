@@ -343,6 +343,10 @@ async function runScheduled(entries) {
     if (browserActive + browserWeight > browserWorkers) return false;
     if (entry.suite.hostExclusive) return active.size === 0;
     if (activeHostExclusive.size > 0) return false;
+    // A queued exclusive browser suite drains ordinary Chrome work, but Node
+    // suites can still use the remaining host capacity while it waits.
+    if (browserWeight > 0 && !entry.suite.browserExclusive
+      && pending.some((candidate) => candidate.suite.browserExclusive)) return false;
     return !entry.suite.isolationGroup || !activeGroups.has(entry.suite.isolationGroup);
   }
 
@@ -372,19 +376,38 @@ async function runScheduled(entries) {
 
   while (pending.length > 0 || active.size > 0) {
     let launched = false;
-    // Do not launch work past a pending host-exclusive probe. Let active work
-    // drain, sample on an idle host, then restore normal parallel scheduling.
-    for (let index = 0; index < pending.length && active.size < totalWorkers;) {
-      const barrierIndex = pending.findIndex((entry) => entry.suite.hostExclusive);
-      if (barrierIndex !== -1 && index > barrierIndex) break;
-      const entry = pending[index];
-      if (!canStart(entry)) {
-        index++;
-        continue;
+    const hostExclusiveIndex = pending.findIndex((entry) => entry.suite.hostExclusive);
+
+    // Timing probes are valid only on an otherwise idle host, so admit them
+    // before the general queue and keep each one alone.
+    if (hostExclusiveIndex !== -1) {
+      if (active.size === 0) {
+        const [entry] = pending.splice(hostExclusiveIndex, 1);
+        start(entry);
+        launched = true;
       }
-      pending.splice(index, 1);
-      start(entry);
-      launched = true;
+    } else {
+      const browserExclusiveIndex = pending.findIndex((entry) => entry.suite.browserExclusive);
+
+      // Admit the earliest browser-exclusive suite as soon as ordinary Chrome
+      // work drains. Its full browser weight keeps later browser suites out.
+      if (browserExclusiveIndex !== -1 && browserActive === 0 && activeHostExclusive.size === 0
+        && active.size < totalWorkers && canStart(pending[browserExclusiveIndex])) {
+        const [entry] = pending.splice(browserExclusiveIndex, 1);
+        start(entry);
+        launched = true;
+      }
+
+      for (let index = 0; index < pending.length && active.size < totalWorkers;) {
+        const entry = pending[index];
+        if (!canStart(entry)) {
+          index++;
+          continue;
+        }
+        pending.splice(index, 1);
+        start(entry);
+        launched = true;
+      }
     }
     if (active.size === 0) {
       throw new Error(`No runnable suite remains: ${pending.map(labelFor).join(", ")}`);
