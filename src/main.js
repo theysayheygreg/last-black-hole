@@ -4503,6 +4503,8 @@ function gameLoop(now) {
           const authoritySlingshot = remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)?.slingshot;
           if (!authoritySlingshot?.engaged && !authoritySlingshot?.aim) {
             showWarning('no anchor in range // move toward a ring', 'rgba(120, 190, 255, 0.92)', 1600);
+          } else if (!authoritySlingshot?.engaged && authoritySlingshot?.aim?.engageEligible === false) {
+            showWarning('anchor in range // build tangential speed / follow the ring', 'rgba(120, 190, 255, 0.92)', 1600);
           }
           remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
           if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
