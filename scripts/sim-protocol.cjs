@@ -1,9 +1,10 @@
 const PROTOCOL_VERSION = "lbh-local-v2";
+const { MOVEMENT } = require("./content/movement.cjs");
 const AUTHORITY_HEADER = "x-lbh-command-credential";
 const PLAYER_ID_HEADER = "x-lbh-player-id";
 const RUN_ID_HEADER = "x-lbh-run-id";
 const DEFAULT_SIM_PORT = 8787;
-const DEFAULT_TICK_HZ = 15;
+const DEFAULT_TICK_HZ = MOVEMENT.authority.integrationHz;
 const DEFAULT_SNAPSHOT_HZ = 10;
 const DEFAULT_WORLD_SCALE = 5;
 const DEFAULT_MAX_PLAYERS = 4;

@@ -1,4 +1,7 @@
 {
+  "authority": {
+    "integrationHz": 15
+  },
   "player": {
     "thrustAccel": 2.5,
     "coastHalfLifeSeconds": 0.7643727575403364,

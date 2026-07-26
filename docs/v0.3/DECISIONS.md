@@ -4,6 +4,35 @@
 > implementation decisions for the current source line. Remaining Greg-owned
 > decisions stay in `OPEN-DECISIONS.md`.
 
+## Canonical Authority Movement Clock
+
+Decision: `src/content/movement.data.json` owns the one authoritative movement
+clock as `MOVEMENT.authority.integrationHz = 15`. ESM and CommonJS session
+profile adapters derive public `session.tickHz` from that source; map data may
+not author a gameplay rate. Shallows, Expanse, and Deep Field now advance
+players, AI, wells, flow coupling, collision/contact, fuel, slingshot, portals,
+growth, scavengers, waves, fauna, and seeded sea with `dt = 1 / 15`.
+
+Snapshot transport, rendering/presentation cadence, map duration, coarse-field
+resolution, content density, and byte/Ballpark budgets remain independently
+named map properties. Ballpark still owns authority queries, but it no longer
+applies map-specific relevance or candidate caps that could omit world updates,
+forces, pickups, portal contact, or collision. Overload is pressure telemetry
+plus optional snapshot transport reduction; it never changes `tickHz`,
+`timeScale`, a gameplay system cadence, or force/contact selection.
+
+The 60 Hz no-flow route data remains diagnostic only. The product-rate fixture
+uses the shared 15 Hz source and the existing finite 100 delta-v tank:
+
+| Tier | Product leg seconds | Delta-v remaining after each leg | Route total |
+|---|---|---|---:|
+| Shallows | `1.53` | `81.60` | `1.53s` |
+| Expanse | `1.60 / 18.00 / 5.87` | `80.80 / 0.10 / 0.50` | `25.47s` |
+| Deep Field | `2.13 / 64.07` | `74.40 / 0.00` | `66.20s` |
+
+This is the approved movement-rate delta from `BASELINE_SHA`
+`20184fae84b559abf27717c046811673040d987a`; it is not a physics retune.
+
 ## W2-A4 Authoritative Map Scale
 
 Decision: keep exactly three active maps. The canonical registry in
@@ -37,22 +66,10 @@ The declared authored contract is linear density per world unit:
 
 Route legs must be at least `0.75` world units and no more than `0.7` of the
 map width. The 60 Hz no-flow integration is retained as a diagnostic baseline,
-not as product-rate closure. Product-rate route proof uses the selected
-session profile (`15/12/10 Hz` for Shallows/Expanse/Deep Field), canonical
-drag/fluid coupling, zero current, full thrust, and one finite `100` delta-v
-tank carried across the authored legs. It is a transport/readability contract,
-not an assisted-route or total-run promise:
-
-| Tier | Product leg seconds | Delta-v remaining after each leg | Route total |
-|---|---|---|---:|
-| Shallows `15 Hz` | `1.53` | `81.60` | `1.53s` |
-| Expanse `12 Hz` | `1.67 / 20.17 / 6.00` | `80.00 / 0.38 / 0.63` | `27.84s` |
-| Deep Field `10 Hz` | `2.20 / 59.30` | `73.60 / 1.15` | `61.50s` |
-
-The diagnostic 60 Hz observations remain `1.48`, `1.55 / 8.52 / 1.22`, and
-`1.98 / 14.22` seconds respectively, with the original tier-aware bounds.
-No movement constant was tuned. The long Deep Field route and its narrow final
-delta-v margin are a playtest/route-content risk, not a hidden retune or a
+not as product-rate closure. The canonical 15 Hz product route fixture and its
+finite-tank observations live in the authority-clock decision above. No
+movement constant was tuned. The long Deep Field route and its exhausted final
+delta-v reserve are a playtest/route-content risk, not a hidden retune or a
 blocker for the map-scale authority.
 
 All three authored maps pass without a population correction or movement

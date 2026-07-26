@@ -14,6 +14,7 @@ const {
   tangentialSpeed,
 } = require("../scripts/sim/slingshot-contract.cjs");
 const { simUnitsToMeters } = require("../scripts/content/units.cjs");
+const { MOVEMENT } = require("../scripts/content/movement.cjs");
 
 function run() {
   const names = Object.keys(SLINGSHOT_KNOB_CONTRACT);
@@ -54,15 +55,15 @@ function run() {
   assert(coyoteWindowOpen(10.049, 10, SLINGSHOT_VALUES.coyoteTime));
   assert(!coyoteWindowOpen(10.051, 10, SLINGSHOT_VALUES.coyoteTime));
   assert(!coyoteWindowOpen(10.1, 10, 0), "zero coyote time is truthfully disabled");
-  const profileDts = [1 / 15, 1 / 12, 1 / 10];
+  const profileDts = [1 / MOVEMENT.authority.integrationHz];
   const effectiveCoyoteDurations = profileDts.map((dt) =>
     effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, dt));
   const effectiveCoyoteMs = effectiveCoyoteDurations[0];
   assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "canonical coyote value must remain 50 ms");
   assert(Math.abs(INTERNAL.promptTransportAllowanceMs - (4 * 1000 / 15)) < 1e-9,
-    "Prompt transport allowance must retain the four-tick Shallows wall-time baseline");
+    "Prompt transport allowance must retain the four-tick authority wall-time baseline");
   assert(effectiveCoyoteDurations.every((duration) => Math.abs(duration - effectiveCoyoteMs) < 1e-9),
-    "Coyote transport duration must not drift with map profile dt");
+    "Coyote transport duration must remain fixed at the canonical authority dt");
   assert.strictEqual(INTERNAL.rangeBreakGraceFactor, 1.1, "Range-break grace must remain 1.1x");
   assert.strictEqual(INTERNAL.minimumTangentialSpeed, 0.05, "Tangential gate must remain the internal 0.05 threshold");
   assert(Math.abs(tangentialSpeed({ x: 0, y: 0.08 }, { x: 1, y: 0 }) - 0.08) < 1e-9,

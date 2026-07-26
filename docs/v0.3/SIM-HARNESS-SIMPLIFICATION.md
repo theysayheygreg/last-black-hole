@@ -85,8 +85,8 @@ Production and test LoC are measured separately after every milestone.
 
 ## Baseline behavior manifest
 
-The compatibility boundary is product behavior, not the old 15/12/10 map-rate
-profile. Existing representative proof owns these outcomes:
+The compatibility boundary is product behavior, not the pre-normalization
+15/12/10 map-rate profile. Existing representative proof owns these outcomes:
 
 | Boundary | Baseline proof |
 | --- | --- |
@@ -100,10 +100,13 @@ profile. Existing representative proof owns these outcomes:
 | Menu, results, and continuity | `run-results`, `agent-play-eval`; `__TEST_API` fixture injection is not product proof |
 | Package and entrypoints | `desktop-package`, package scripts for play/stack/sim/control |
 
-All maps need one new representative full-runtime proof for equal 15 Hz
-movement and equal elapsed-wall-time trajectory, fuel, gravity, slingshot, and
-contact semantics. Existing tick-indexed fixtures may change only to express
-the equivalent elapsed seconds. Protocol shape, routes, spawn identity,
+Phase 1 derives every exported session `tickHz` from
+`MOVEMENT.authority.integrationHz`, removes map and overload gameplay clocks,
+and advances wells, world objects, portals, growth, scavengers, waves, seeded
+sea, AI, fauna, contacts, fuel, and slingshot on that one dt. Ballpark remains
+the authoritative query owner but no longer applies map-specific force/contact
+or world-update caps. Existing tick-indexed fixtures now express the matching
+15 Hz elapsed-time boundary; protocol shape, routes, spawn identity,
 presentation semantics, UI phases, results/profile continuity, and package
 entrypoints remain unchanged.
 
@@ -143,7 +146,7 @@ program's shared truth docs.
 ## Deletion and clarity targets
 
 - Remove map-specific movement-rate fields, product-rate metadata, overload
-  movement/time scaling, and phantom `fieldTickHz` policy.
+  movement/time scaling, and gameplay-affecting relevance/contact caps.
 - Replace duplicated authority wrap/distance/direction helpers with the
   existing world-geometry owner (expected 50-100 production lines removed).
 - Classify the 37 test files not registered in the 95-suite manifest as commit,
@@ -165,3 +168,26 @@ production and test LoC, and an independent risk-selected review. Broad lanes
 run at harness milestones and final comparison, not after every refactor.
 Final acceptance also includes the 5/15/25 performance receipt, one fresh
 natural movement journey, and one basic product-loop smoke.
+
+## Phase 1 receipt
+
+The canonical source is `src/content/movement.data.json` at
+`MOVEMENT.authority.integrationHz = 15`. Both ESM and CommonJS session-profile
+adapters derive their public `tickHz` from it; map profiles keep only
+map-specific transport, visual, coarse-field, and content budgets. Overload
+records pressure and may reduce snapshot transport frequency, but always keeps
+authority dt, time scale, force/contact selection, and gameplay cadence fixed.
+
+The travel-time artifact and finite-fuel route fixture were regenerated at the
+shared rate. Focused proof passes for the manifest/adapters/protocol, movement
+and fuel parity, slingshot wall-time, overload invariance, map session shape,
+authoritative field behavior, and the travel probe. The Deep Field budget is
+deliberately red only on short-soak heap growth (`+38.6 MiB`): a 6.3-second,
+95-tick profile recorded 2,280 Ballpark queries, 243,058 candidates, and
+236,074 duplicate candidates; sampled allocation also attributes 4.65 MiB to
+snapshot/ring cloning and 2.08 MiB to coarse-field rebuilding. Phase 2 owns
+that 5/15/25 subsystem work; it must optimize these measured paths without
+restoring caps or lowering the authority rate.
+
+Nonblank JS-family lines at this milestone are 49,986 production (`-232` from
+the pinned baseline) and 22,493 tests (`-74`).

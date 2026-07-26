@@ -6,7 +6,6 @@ const {
   PLAYABLE_MAP_IDS,
   MAP_SCALE_REGISTRY,
 } = require("./content/map-scales.cjs");
-const { getSessionProfile } = require("./content/session-profiles.cjs");
 const { MOVEMENT } = require("./content/movement.cjs");
 const {
   BRAIN_DEFAULTS,
@@ -173,9 +172,8 @@ function buildRawRuns() {
   for (const mapId of PLAYABLE_MAP_IDS) {
     const map = maps[mapId];
     const definition = MAP_SCALE_REGISTRY[mapId];
-    const profile = getSessionProfile(mapId, definition.dimensions.width);
     const worldScale = definition.dimensions.width;
-    const dt = 1 / profile.tickHz;
+    const dt = 1 / MOVEMENT.authority.integrationHz;
     const legs = routeLegs(map, worldScale);
     const probes = [
       {
@@ -232,14 +230,11 @@ function summarize(rawRuns) {
   const maps = loadPlayableMaps();
   return PLAYABLE_MAP_IDS.map((mapId) => {
     const definition = MAP_SCALE_REGISTRY[mapId];
-    const profile = getSessionProfile(mapId, definition.dimensions.width);
     const mapRows = rawRuns.filter((row) => row.mapId === mapId);
     const cruiseRows = mapRows.filter((row) => row.mode === "cruise");
     const burstRows = mapRows.filter((row) => row.mode === "burst");
     const cruiseCell = median(byKey(cruiseRows, "one-cell").map((row) => row.simulatedSeconds));
     const burstCell = median(byKey(burstRows, "one-cell").map((row) => row.simulatedSeconds));
-    const sensorRadiusWorldUnits = profile.entityRelevanceRadius;
-    const sensorRadiusCells = sensorRadiusWorldUnits / 1;
     const route = routeLegs(maps[mapId], definition.dimensions.width);
     const routeSummary = route.map((leg) => ({
       legIndex: leg.index,
@@ -255,8 +250,8 @@ function summarize(rawRuns) {
       mapId,
       dimensions: { ...definition.dimensions },
       profileId: definition.profileId,
-      tickHz: profile.tickHz,
-      dtSeconds: 1 / profile.tickHz,
+      tickHz: MOVEMENT.authority.integrationHz,
+      dtSeconds: 1 / MOVEMENT.authority.integrationHz,
       cruiseSecondsPerCell: cruiseCell,
       burstSecondsPerCell: burstCell,
       cruiseFullWidthCrossingSeconds: median(byKey(cruiseRows, "full-width-crossing").map((row) => row.simulatedSeconds)),
@@ -264,15 +259,6 @@ function summarize(rawRuns) {
       representativeRoute: {
         routeId: maps[mapId].route.id,
         legs: routeSummary,
-      },
-      sensorRead: {
-        source: "session profile entityRelevanceRadius",
-        radiusWorldUnits: sensorRadiusWorldUnits,
-        radiusCellsProvisional: sensorRadiusCells,
-      },
-      decisionsPerMinuteProxy: {
-        definition: "60 / (cruise seconds per cell × sensor radius in provisional cells)",
-        value: 60 / (cruiseCell * sensorRadiusCells),
       },
     };
   });
@@ -296,10 +282,6 @@ function validateReport(report) {
   for (const summary of report.summary) {
     const cellRows = report.rawRuns.filter((row) => row.mapId === summary.mapId && row.mode === "cruise" && row.probeKind === "one-cell");
     assert.strictEqual(summary.cruiseSecondsPerCell, median(cellRows.map((row) => row.simulatedSeconds)));
-    assert.strictEqual(
-      summary.decisionsPerMinuteProxy.value,
-      60 / (summary.cruiseSecondsPerCell * summary.sensorRead.radiusCellsProvisional),
-    );
     for (const leg of summary.representativeRoute.legs) {
       const legRows = report.rawRuns.filter((row) => row.mapId === summary.mapId
         && row.mode === "cruise" && row.probeKind === "representative-route-leg" && row.legIndex === leg.legIndex);
@@ -321,12 +303,11 @@ function createReport() {
     mapIds: [...PLAYABLE_MAP_IDS],
     mapRegistrySource: "src/content/map-scales.data.json:MAP_SCALE_REGISTRY",
     movementSource: "src/content/movement-step.js -> src/content/movement.data.json",
-    sessionProfileSource: "src/content/session-profiles.data.json:SESSION_PROFILES",
     sampleCount: SAMPLE_SEEDS.length,
     sampleSeeds: [...SAMPLE_SEEDS],
     seedInfluence: "none: no RNG draw enters the isolated movement protocol; seeds are reproducibility labels",
     protocol: {
-      dt: "1 / canonical session profile tickHz: 1/15, 1/12, 1/10 seconds for Shallows, Expanse, Deep Field",
+      dt: "1 / src/content/movement.data.json MOVEMENT.authority.integrationHz (15 Hz for every playable map)",
       input: "moveX=shortest-path unit direction, moveY=shortest-path unit direction, thrust=1, brake=0; held for every tick",
       cruise: "canonical baseline brain defaults, sustained full-stick thrust, no burn, no flow, no entity forces",
       burst: "Breacher default brain with existing Burn active; burn thrustMult and fuelMax read from HULL_DEFINITIONS, no slingshot",

@@ -2,6 +2,7 @@
 // implementation detail: it has no dev-panel registration or player-facing
 // tuning surface.
 const { UNIT_SCALE, simUnitsToMeters } = require('../content/units.cjs');
+const { MOVEMENT } = require('../content/movement.cjs');
 
 const SLINGSHOT_KNOB_CONTRACT = Object.freeze({
   captureRadius: Object.freeze({
@@ -64,9 +65,9 @@ const INTERNAL = Object.freeze({
   lockTelegraphDurationSeconds: 0.25,
   releaseGhostDurationSeconds: 1.0,
   rangeBreakGraceFactor: 1.1,
-  // Four ticks at the original 15 Hz teaching profile. Store that allowance
-  // as wall time so lower-rate map profiles do not change the player's window.
-  promptTransportAllowanceMs: (4 * 1000) / 15,
+  // Four authority steps, stored as wall time so transport cannot change the
+  // player's window.
+  promptTransportAllowanceMs: (4 * 1000) / MOVEMENT.authority.integrationHz,
 });
 
 const QUARTER_TURN_RADIANS = Math.PI / 2;

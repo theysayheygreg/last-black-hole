@@ -12,6 +12,7 @@ const fs = require('fs');
 const ROOT = path.resolve(__dirname, '..');
 const { loadPlayableMaps } = require('../scripts/shared-map-loader.cjs');
 const { MAP_SCALE_REGISTRY, PLAYABLE_MAP_IDS } = require('../scripts/content/map-scales.cjs');
+const { MOVEMENT } = require('../scripts/content/movement.cjs');
 
 // ---- Helpers ----
 
@@ -676,10 +677,18 @@ runner.run('Consumable catalog has stable ids, tiers, effects, and values', () =
 // ---- 14. Session profile manifest validation ----
 
 runner.run('Session profile server/client manifests stay in sync', () => {
-  for (const name of SESSION_PROFILE_CONSTANTS) {
+  for (const name of SESSION_PROFILE_CONSTANTS.filter((name) => name !== 'SESSION_PROFILES')) {
     assert(deepEqual(serverSessionProfiles[name], clientSessionProfiles[name]),
       `scripts/content/session-profiles.js ${name} does not match src/content/session-profiles.js`);
   }
+  const expectedProfiles = Object.fromEntries(
+    Object.entries(clientSessionProfiles.SESSION_PROFILES).map(([id, profile]) => [id, {
+      ...profile,
+      tickHz: MOVEMENT.authority.integrationHz,
+    }]),
+  );
+  assert(deepEqual(serverSessionProfiles.SESSION_PROFILES, expectedProfiles),
+    'Session adapters must derive tickHz from MOVEMENT.authority.integrationHz');
 });
 
 runner.run('Session profiles expose complete server/client scale truth', () => {
@@ -690,10 +699,9 @@ runner.run('Session profiles expose complete server/client scale truth', () => {
     for (const field of fields) {
       assert(field in profile, `Session profile ${id}: missing ${field}`);
     }
-    assert(profile.tickHz >= profile.snapshotHz, `${id}: tickHz should be >= snapshotHz`);
-    assert(profile.tickHz >= profile.worldTickHz, `${id}: tickHz should be >= worldTickHz`);
-    assert(profile.tickHz >= profile.scavengerTickHz, `${id}: tickHz should be >= scavengerTickHz`);
-    assert(profile.tickHz >= profile.waveTickHz, `${id}: tickHz should be >= waveTickHz`);
+    assert(profile.tickHz === MOVEMENT.authority.integrationHz,
+      `${id}: tickHz must use the canonical authority movement rate`);
+    assert(profile.snapshotHz <= profile.tickHz, `${id}: snapshotHz should be <= movement tickHz`);
     assert(profile.flowFieldCellSize > 0, `${id}: flowFieldCellSize must be positive`);
     assert(profile.maxScavengers >= 1, `${id}: maxScavengers must be positive`);
     assert(serverSessionProfiles.CLIENT_PERF_PROFILES[profile.clientPerfProfile],
@@ -715,14 +723,14 @@ runner.run('Playable maps bind to known session profiles', () => {
   }
 });
 
-runner.run('Session scale profiles get cheaper with larger playable maps', () => {
+runner.run('Session profiles retain map budgets without lowering authority fidelity', () => {
   const small = serverSessionProfiles.SESSION_PROFILES.small;
   const medium = serverSessionProfiles.SESSION_PROFILES.medium;
   const large = serverSessionProfiles.SESSION_PROFILES.large;
-  assert(small.tickHz > medium.tickHz && medium.tickHz > large.tickHz,
-    'Expected tickHz to step down small > medium > large');
-  assert(small.worldTickHz > medium.worldTickHz && medium.worldTickHz > large.worldTickHz,
-    'Expected worldTickHz to step down small > medium > large');
+  assert(small.tickHz === MOVEMENT.authority.integrationHz
+    && medium.tickHz === MOVEMENT.authority.integrationHz
+    && large.tickHz === MOVEMENT.authority.integrationHz,
+  'Expected one authority tickHz across all playable maps');
   assert(small.snapshotHz > large.snapshotHz,
     'Expected large profile to use cheaper snapshots than small');
   assert(small.useCoarseField === false, 'Expected small profile direct-force path');
@@ -730,9 +738,6 @@ runner.run('Session scale profiles get cheaper with larger playable maps', () =>
     'Expected medium/large profiles to use coarse field');
   assert(medium.flowFieldCellSize < large.flowFieldCellSize,
     'Expected large profile field cells to be coarser than medium');
-  assert(small.entityRelevanceRadius > medium.entityRelevanceRadius
-    && medium.entityRelevanceRadius > large.entityRelevanceRadius,
-    'Expected entity relevance radius to shrink as maps grow');
   assert(small.maxScavengers < large.maxScavengers,
     'Expected larger maps to allow more total scavengers');
 });

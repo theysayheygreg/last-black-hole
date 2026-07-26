@@ -7,6 +7,7 @@ const {
   getPortalPlacementPolicy,
 } = require("../scripts/content/map-scales.cjs");
 const { getSessionProfile } = require("../scripts/content/session-profiles.cjs");
+const { MOVEMENT } = require("../scripts/content/movement.cjs");
 const { stepPlayerMovementCore } = require("../scripts/sim/player-movement-step.cjs");
 const {
   INTERNAL,
@@ -60,7 +61,7 @@ function createRouteProbe(fuel) {
 function measureProductRoute(mapId) {
   const definition = getMapScaleDefinition(mapId);
   const product = AUTHORED_MAP_CONTRACT.travel.productRate;
-  const hz = product.rateHzByMap[mapId];
+  const hz = MOVEMENT.authority.integrationHz;
   const dt = 1 / hz;
   const player = createRouteProbe(product.fuel);
   const legs = [];
@@ -100,13 +101,15 @@ async function run() {
   const travel = AUTHORED_MAP_CONTRACT.travel;
   const clientScales = await import(`file://${path.resolve(__dirname, "../src/content/map-scales.js")}?goalD=portal-policy`);
   assert.strictEqual(travel.baseline.integrationHz, 60, "60 Hz must remain a diagnostic baseline");
-  assert.strictEqual(travel.productRate.dtSource, "SESSION_PROFILES[map.profileId].tickHz");
+  assert.strictEqual(MOVEMENT.authority.integrationHz, 15, "15 Hz is the sole authority movement rate");
+  assert(!("rateHzByMap" in travel.productRate), "Route metadata must not select a map movement rate");
+  assert(!("dtSource" in travel.productRate), "Route metadata must not own movement dt");
 
   for (const mapId of ["shallows", "expanse", "deep-field"]) {
     const measured = measureProductRoute(mapId);
     const expected = travel.tiers[mapId];
     assert.strictEqual(measured.hz, getSessionProfile(mapId, maps[mapId].worldScale).tickHz,
-      `${mapId}: route probe must use the selected session profile rate`);
+      `${mapId}: route probe and session must use the canonical authority rate`);
     assert.deepStrictEqual(
       measured.legs.map((leg) => leg.seconds),
       expected.productObservedLegSeconds,
@@ -121,7 +124,7 @@ async function run() {
       `${mapId}: product route total drifted`);
   }
 
-  const coyoteDurations = [15, 12, 10].map((hz) =>
+  const coyoteDurations = [MOVEMENT.authority.integrationHz].map((hz) =>
     effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, 1 / hz));
   assert(coyoteDurations.every((value) => Math.abs(value - coyoteDurations[0]) < 1e-9),
     "Slingshot transport window must be fixed wall time across map rates");

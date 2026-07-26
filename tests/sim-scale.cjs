@@ -1,11 +1,12 @@
 /**
  * sim-scale.js — Authoritative sim scaling profile checks.
  *
- * Verifies that larger maps advertise and start with cheaper server-side
- * clocks than small maps.
+ * Verifies that map-specific presentation and content budgets stay distinct
+ * while every authority session advances at the shared movement clock.
  */
 const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers.cjs");
 const { SESSION_PROFILES } = require("../scripts/content/session-profiles.cjs");
+const { MOVEMENT } = require("../scripts/content/movement.cjs");
 const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
 const { serializedJsonBytes } = require("../scripts/sim/serialization-budget.cjs");
 
@@ -45,7 +46,7 @@ async function run() {
 
   await startSimServer(SIM_PORT);
   try {
-    await runner.run("Maps endpoint advertises cheaper profiles for larger worlds", async () => {
+    await runner.run("Maps endpoint advertises one authority clock and distinct map budgets", async () => {
       const { status, body } = await getJson("/maps");
       assert(status === 200, `Expected /maps 200, got ${status}`);
       const maps = body.maps || [];
@@ -69,10 +70,10 @@ async function run() {
           `${advertised.id}: advertised profile identity drifted from map truth`);
         assert(source.route?.id, `${advertised.id}: authoritative map is missing route identity`);
       }
-      assert(shallows.tickHz > expanse.tickHz, `Expected shallows tickHz > expanse (${shallows.tickHz} vs ${expanse.tickHz})`);
-      assert(expanse.tickHz > deepField.tickHz, `Expected expanse tickHz > deep-field (${expanse.tickHz} vs ${deepField.tickHz})`);
-      assert(shallows.worldTickHz > expanse.worldTickHz, "Expected shallows worldTickHz > expanse");
-      assert(expanse.worldTickHz > deepField.worldTickHz, "Expected expanse worldTickHz > deep-field");
+      assert(shallows.tickHz === MOVEMENT.authority.integrationHz
+        && expanse.tickHz === MOVEMENT.authority.integrationHz
+        && deepField.tickHz === MOVEMENT.authority.integrationHz,
+      "Every map must advertise the shared authority clock");
       assert(shallows.snapshotHz > deepField.snapshotHz, "Expected shallows snapshotHz > deep-field");
       assert(shallows.useCoarseField === false, "Expected shallows direct-force path");
       assert(expanse.useCoarseField === true, "Expected expanse coarse-field path");
@@ -80,37 +81,8 @@ async function run() {
       assert(shallows.clientPerfProfile === SMALL_PROFILE.clientPerfProfile, "Expected shallows client perf profile from manifest");
       assert(expanse.clientPerfProfile === MEDIUM_PROFILE.clientPerfProfile, "Expected expanse client perf profile from manifest");
       assert(deepField.clientPerfProfile === LARGE_PROFILE.clientPerfProfile, "Expected deep-field client perf profile from manifest");
-      assert(expanse.fieldTickHz > deepField.fieldTickHz, "Expected expanse fieldTickHz > deep-field");
       assert(expanse.flowFieldCellSize < deepField.flowFieldCellSize, "Expected deep-field field cells to be coarser than expanse");
-      assert(
-        shallows.entityRelevanceRadius > expanse.entityRelevanceRadius,
-        "Expected shallows entityRelevanceRadius > expanse"
-      );
-      assert(
-        expanse.entityRelevanceRadius > deepField.entityRelevanceRadius,
-        "Expected expanse entityRelevanceRadius > deep-field"
-      );
-      assert(
-        shallows.scavengerRelevanceRadius > deepField.scavengerRelevanceRadius,
-        "Expected shallows scavengerRelevanceRadius > deep-field"
-      );
       assert(shallows.maxScavengers < deepField.maxScavengers, "Expected deep-field to allow more scavengers than shallows");
-      assert(
-        shallows.maxRelevantStarsPerPlayer > deepField.maxRelevantStarsPerPlayer,
-        "Expected shallows star relevance budget > deep-field"
-      );
-      assert(
-        shallows.maxRelevantScavengersPerPlayer > deepField.maxRelevantScavengersPerPlayer,
-        "Expected shallows scavenger relevance budget > deep-field"
-      );
-      assert(
-        shallows.maxWellInfluencesPerPlayer > deepField.maxWellInfluencesPerPlayer,
-        "Expected shallows well influence budget > deep-field"
-      );
-      assert(
-        shallows.maxWaveInfluencesPerPlayer > deepField.maxWaveInfluencesPerPlayer,
-        "Expected shallows wave influence budget > deep-field"
-      );
     });
 
     await runner.run("Starting deep-field session applies the large-map server profile", async () => {
@@ -133,33 +105,11 @@ async function run() {
       assert(body.session.overloadState === "NORMAL", `Expected NORMAL overload state, got ${body.session.overloadState}`);
       assert(body.session.timeScale === 1, `Expected timeScale 1, got ${body.session.timeScale}`);
       assert(body.session.useCoarseField === true, "Expected deep-field coarse field on");
-      assert(body.session.tickHz === LARGE_PROFILE.tickHz, `Expected large-map tickHz ${LARGE_PROFILE.tickHz}, got ${body.session.tickHz}`);
+      assert(body.session.tickHz === MOVEMENT.authority.integrationHz,
+        `Expected canonical tickHz ${MOVEMENT.authority.integrationHz}, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === LARGE_PROFILE.snapshotHz, `Expected large-map snapshotHz ${LARGE_PROFILE.snapshotHz}, got ${body.session.snapshotHz}`);
-      assert(body.session.worldTickHz === LARGE_PROFILE.worldTickHz, `Expected large-map worldTickHz ${LARGE_PROFILE.worldTickHz}, got ${body.session.worldTickHz}`);
-      assert(body.session.fieldTickHz === LARGE_PROFILE.fieldTickHz, `Expected large-map fieldTickHz ${LARGE_PROFILE.fieldTickHz}, got ${body.session.fieldTickHz}`);
       assert(body.session.flowFieldCellSize === LARGE_PROFILE.flowFieldCellSize, `Expected large-map flowFieldCellSize ${LARGE_PROFILE.flowFieldCellSize}, got ${body.session.flowFieldCellSize}`);
-      assert(body.session.scavengerTickHz === LARGE_PROFILE.scavengerTickHz, `Expected large-map scavengerTickHz ${LARGE_PROFILE.scavengerTickHz}, got ${body.session.scavengerTickHz}`);
-      assert(
-        body.session.entityRelevanceRadius === LARGE_PROFILE.entityRelevanceRadius,
-        `Expected large-map entityRelevanceRadius ${LARGE_PROFILE.entityRelevanceRadius}, got ${body.session.entityRelevanceRadius}`
-      );
-      assert(
-        body.session.scavengerRelevanceRadius === LARGE_PROFILE.scavengerRelevanceRadius,
-        `Expected large-map scavengerRelevanceRadius ${LARGE_PROFILE.scavengerRelevanceRadius}, got ${body.session.scavengerRelevanceRadius}`
-      );
       assert(body.session.maxScavengers === LARGE_PROFILE.maxScavengers, `Expected large-map maxScavengers ${LARGE_PROFILE.maxScavengers}, got ${body.session.maxScavengers}`);
-      assert(
-        body.session.maxRelevantStarsPerPlayer === LARGE_PROFILE.maxRelevantStarsPerPlayer,
-        `Expected large-map maxRelevantStarsPerPlayer ${LARGE_PROFILE.maxRelevantStarsPerPlayer}, got ${body.session.maxRelevantStarsPerPlayer}`
-      );
-      assert(
-        body.session.maxWellInfluencesPerPlayer === LARGE_PROFILE.maxWellInfluencesPerPlayer,
-        `Expected large-map maxWellInfluencesPerPlayer ${LARGE_PROFILE.maxWellInfluencesPerPlayer}, got ${body.session.maxWellInfluencesPerPlayer}`
-      );
-      assert(
-        body.session.maxPortalChecksPerPlayer === LARGE_PROFILE.maxPortalChecksPerPlayer,
-        `Expected large-map maxPortalChecksPerPlayer ${LARGE_PROFILE.maxPortalChecksPerPlayer}, got ${body.session.maxPortalChecksPerPlayer}`
-      );
       assert(body.session.localFluidWindowWorldUnits > 0, "Expected bounded local fluid window");
       assert(body.session.localFluidResolution === 192, "Expected fixed local fluid resolution");
       assert(body.session.coarseTextureResolution === 64, "Expected fixed coarse texture resolution");
@@ -218,24 +168,11 @@ async function run() {
       assert(body.session.overloadState === "NORMAL", `Expected NORMAL overload state, got ${body.session.overloadState}`);
       assert(body.session.timeScale === 1, `Expected timeScale 1, got ${body.session.timeScale}`);
       assert(body.session.useCoarseField === true, "Expected expanse coarse field on");
-      assert(body.session.tickHz === MEDIUM_PROFILE.tickHz, `Expected medium-map tickHz ${MEDIUM_PROFILE.tickHz}, got ${body.session.tickHz}`);
+      assert(body.session.tickHz === MOVEMENT.authority.integrationHz,
+        `Expected canonical tickHz ${MOVEMENT.authority.integrationHz}, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === MEDIUM_PROFILE.snapshotHz, `Expected medium-map snapshotHz ${MEDIUM_PROFILE.snapshotHz}, got ${body.session.snapshotHz}`);
-      assert(body.session.worldTickHz === MEDIUM_PROFILE.worldTickHz, `Expected medium-map worldTickHz ${MEDIUM_PROFILE.worldTickHz}, got ${body.session.worldTickHz}`);
-      assert(body.session.fieldTickHz === MEDIUM_PROFILE.fieldTickHz, `Expected medium-map fieldTickHz ${MEDIUM_PROFILE.fieldTickHz}, got ${body.session.fieldTickHz}`);
       assert(body.session.flowFieldCellSize === MEDIUM_PROFILE.flowFieldCellSize, `Expected medium-map flowFieldCellSize ${MEDIUM_PROFILE.flowFieldCellSize}, got ${body.session.flowFieldCellSize}`);
-      assert(
-        body.session.entityRelevanceRadius === MEDIUM_PROFILE.entityRelevanceRadius,
-        `Expected medium-map entityRelevanceRadius ${MEDIUM_PROFILE.entityRelevanceRadius}, got ${body.session.entityRelevanceRadius}`
-      );
       assert(body.session.maxScavengers === MEDIUM_PROFILE.maxScavengers, `Expected medium-map maxScavengers ${MEDIUM_PROFILE.maxScavengers}, got ${body.session.maxScavengers}`);
-      assert(
-        body.session.maxRelevantScavengersPerPlayer === MEDIUM_PROFILE.maxRelevantScavengersPerPlayer,
-        `Expected medium-map maxRelevantScavengersPerPlayer ${MEDIUM_PROFILE.maxRelevantScavengersPerPlayer}, got ${body.session.maxRelevantScavengersPerPlayer}`
-      );
-      assert(
-        body.session.maxPickupChecksPerPlayer === MEDIUM_PROFILE.maxPickupChecksPerPlayer,
-        `Expected medium-map maxPickupChecksPerPlayer ${MEDIUM_PROFILE.maxPickupChecksPerPlayer}, got ${body.session.maxPickupChecksPerPlayer}`
-      );
     });
 
     await runner.run("Authoritative joins spawn clear of immediate well danger", async () => {

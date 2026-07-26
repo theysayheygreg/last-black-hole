@@ -3,12 +3,22 @@
 // the same JSON file so map/session-scale truth cannot drift.
 const data = require("../../src/content/session-profiles.data.json");
 const { MAP_SCALE_REGISTRY, PLAYABLE_MAP_IDS } = require("./map-scales.cjs");
+const { MOVEMENT } = require("./movement.cjs");
 
 const {
   SESSION_PROFILE_FIELDS,
   CLIENT_PERF_PROFILES,
-  SESSION_PROFILES,
+  SESSION_PROFILES: RAW_SESSION_PROFILES,
 } = data;
+
+// Session profiles may select transport and presentation budgets, never a
+// lower-fidelity simulation clock.
+const SESSION_PROFILES = Object.freeze(Object.fromEntries(
+  Object.entries(RAW_SESSION_PROFILES).map(([id, profile]) => [id, Object.freeze({
+    ...profile,
+    tickHz: MOVEMENT.authority.integrationHz,
+  })]),
+));
 
 const MAP_SESSION_PROFILES = Object.freeze(Object.fromEntries(
   PLAYABLE_MAP_IDS.map((mapId) => [mapId, MAP_SCALE_REGISTRY[mapId].profileId]),

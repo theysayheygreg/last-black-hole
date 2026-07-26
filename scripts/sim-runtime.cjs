@@ -49,6 +49,7 @@ const {
   getSessionProfile,
   CLIENT_PERF_PROFILES,
 } = require("./content/session-profiles.cjs");
+const { MOVEMENT } = require("./content/movement.cjs");
 const { simUnitsToMeters } = require("./content/units.cjs");
 const {
   selectAnomalyCast,
@@ -84,6 +85,7 @@ const {
   playerEventVisibility,
   filterEventsForPlayer,
 } = require("./sim-protocol.cjs");
+const AUTHORITY_INTEGRATION_HZ = MOVEMENT.authority.integrationHz;
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { BODY_SCHEMA_VERSION } = require("./sim/body-schema.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
@@ -630,6 +632,9 @@ const FAUNA_CONFIG = {
   bloomBumpForce: 0.006,
   bloomBumpSignal: 0.01,
   bloomSize: 2,
+  // The former 0.99/tick drag was authored at the 15 Hz authority cadence.
+  // Store its equivalent per-second retention so the unit stays explicit.
+  dragRetentionPerSecond: Math.pow(0.99, MOVEMENT.authority.integrationHz),
   bloomSpawnRate: {
     ghost: 0, whisper: 0.15, presence: 0.25, beacon: 0.5, flare: 1.0, threshold: 1.5,
   },
@@ -1297,14 +1302,6 @@ const runtime = {
   snapshotRing: createSimSnapshotRing({ capacity: 32, runId: "idle" }),
   recentEvents: [],
   nextEventSeq: 1,
-  systemAccumulators: {
-    world: 0,
-    portals: 0,
-    growth: 0,
-    scavengers: 0,
-    waves: 0,
-    field: 0,
-  },
   players: new Map(),
   playerAuthorities: new Map(),
   joinClaims: new Map(),
@@ -1400,42 +1397,14 @@ function refreshBallparkMirror(reason = "runtime") {
   });
 }
 
-function applyOverloadProfile({ forceRestart = false } = {}) {
+function applyOverloadProfile() {
   if (!runtime.overload) return;
   const projection = projectOverloadBudget(runtime.overload.base, runtime.overload.state);
-  const previousTickHz = runtime.session.tickHz;
   runtime.session.overloadState = projection.overloadState;
   runtime.session.overloadPressure = Number(runtime.overload.pressure || 0);
-  runtime.session.timeScale = projection.timeScale;
-  runtime.session.tickHz = projection.tickHz;
+  runtime.session.timeScale = 1;
+  runtime.session.tickHz = AUTHORITY_INTEGRATION_HZ;
   runtime.session.snapshotHz = projection.snapshotHz;
-  runtime.session.worldTickHz = projection.worldTickHz;
-  runtime.session.portalTickHz = projection.portalTickHz;
-  runtime.session.growthTickHz = projection.growthTickHz;
-  runtime.session.scavengerTickHz = projection.scavengerTickHz;
-  runtime.session.waveTickHz = projection.waveTickHz;
-  runtime.session.fieldTickHz = projection.fieldTickHz;
-  runtime.session.entityRelevanceRadius = projection.entityRelevanceRadius;
-  runtime.session.scavengerRelevanceRadius = projection.scavengerRelevanceRadius;
-  runtime.session.useCoarseField = projection.useCoarseField;
-  runtime.session.flowFieldCellSize = projection.flowFieldCellSize;
-  runtime.session.fieldFlowScale = projection.fieldFlowScale;
-  runtime.session.spawnScavengersBase = projection.spawnScavengersBase;
-  runtime.session.spawnScavengersPerPlayer = projection.spawnScavengersPerPlayer;
-  runtime.session.maxScavengers = projection.maxScavengers;
-  runtime.session.maxRelevantStarsPerPlayer = projection.maxRelevantStarsPerPlayer;
-  runtime.session.maxRelevantPlanetoidsPerPlayer = projection.maxRelevantPlanetoidsPerPlayer;
-  runtime.session.maxRelevantWrecksPerPlayer = projection.maxRelevantWrecksPerPlayer;
-  runtime.session.maxRelevantScavengersPerPlayer = projection.maxRelevantScavengersPerPlayer;
-  runtime.session.maxWellInfluencesPerPlayer = projection.maxWellInfluencesPerPlayer;
-  runtime.session.maxWaveInfluencesPerPlayer = projection.maxWaveInfluencesPerPlayer;
-  runtime.session.maxPickupChecksPerPlayer = projection.maxPickupChecksPerPlayer;
-  runtime.session.maxPortalChecksPerPlayer = projection.maxPortalChecksPerPlayer;
-
-  if (forceRestart || previousTickHz !== runtime.session.tickHz) {
-    restartTickLoop();
-  }
-  rebuildAuthoritativeField();
 }
 
 function syncPlayerCargoCapacity(player) {
@@ -1644,53 +1613,21 @@ function startSession(config = {}) {
     overloadPressure: 0,
     timeScale: 1,
     worldScale: mapState.worldScale,
-    baseTickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : scaleProfile.tickHz,
+    baseTickHz: AUTHORITY_INTEGRATION_HZ,
     baseSnapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
-    tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : scaleProfile.tickHz,
+    tickHz: AUTHORITY_INTEGRATION_HZ,
     snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
-    baseWorldTickHz: scaleProfile.worldTickHz,
-    worldTickHz: scaleProfile.worldTickHz,
-    basePortalTickHz: scaleProfile.portalTickHz,
-    portalTickHz: scaleProfile.portalTickHz,
-    baseGrowthTickHz: scaleProfile.growthTickHz,
-    growthTickHz: scaleProfile.growthTickHz,
-    baseScavengerTickHz: scaleProfile.scavengerTickHz,
-    scavengerTickHz: scaleProfile.scavengerTickHz,
-    baseWaveTickHz: scaleProfile.waveTickHz,
-    waveTickHz: scaleProfile.waveTickHz,
-    baseFieldTickHz: scaleProfile.fieldTickHz,
-    fieldTickHz: scaleProfile.fieldTickHz,
     useCoarseField: scaleProfile.useCoarseField,
     baseFlowFieldCellSize: scaleProfile.flowFieldCellSize,
     flowFieldCellSize: scaleProfile.flowFieldCellSize,
     baseFieldFlowScale: scaleProfile.fieldFlowScale,
     fieldFlowScale: scaleProfile.fieldFlowScale,
-    baseEntityRelevanceRadius: scaleProfile.entityRelevanceRadius,
-    entityRelevanceRadius: scaleProfile.entityRelevanceRadius,
-    baseScavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
-    scavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
     baseSpawnScavengersBase: scaleProfile.spawnScavengersBase,
     spawnScavengersBase: scaleProfile.spawnScavengersBase,
     baseSpawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
     spawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
     baseMaxScavengers: scaleProfile.maxScavengers,
     maxScavengers: scaleProfile.maxScavengers,
-    baseMaxRelevantStarsPerPlayer: scaleProfile.maxRelevantStarsPerPlayer,
-    maxRelevantStarsPerPlayer: scaleProfile.maxRelevantStarsPerPlayer,
-    baseMaxRelevantPlanetoidsPerPlayer: scaleProfile.maxRelevantPlanetoidsPerPlayer,
-    maxRelevantPlanetoidsPerPlayer: scaleProfile.maxRelevantPlanetoidsPerPlayer,
-    baseMaxRelevantWrecksPerPlayer: scaleProfile.maxRelevantWrecksPerPlayer,
-    maxRelevantWrecksPerPlayer: scaleProfile.maxRelevantWrecksPerPlayer,
-    baseMaxRelevantScavengersPerPlayer: scaleProfile.maxRelevantScavengersPerPlayer,
-    maxRelevantScavengersPerPlayer: scaleProfile.maxRelevantScavengersPerPlayer,
-    baseMaxWellInfluencesPerPlayer: scaleProfile.maxWellInfluencesPerPlayer,
-    maxWellInfluencesPerPlayer: scaleProfile.maxWellInfluencesPerPlayer,
-    baseMaxWaveInfluencesPerPlayer: scaleProfile.maxWaveInfluencesPerPlayer,
-    maxWaveInfluencesPerPlayer: scaleProfile.maxWaveInfluencesPerPlayer,
-    baseMaxPickupChecksPerPlayer: scaleProfile.maxPickupChecksPerPlayer,
-    maxPickupChecksPerPlayer: scaleProfile.maxPickupChecksPerPlayer,
-    baseMaxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
-    maxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     simScaleProfile: scaleProfile.profileId,
     clientPerfProfile: scaleProfile.clientPerfProfile,
     localFluidResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].fluidResolution,
@@ -1750,14 +1687,6 @@ function startSession(config = {}) {
   runtime.emptySince = null;
   runtime.terminalSince = null;
   runtime.terminalShutdownAt = null;
-  runtime.systemAccumulators = {
-    world: 0,
-    portals: 0,
-    growth: 0,
-    scavengers: 0,
-    waves: 0,
-    field: 0,
-  };
   // The Conductor is one match-scoped authority built from the run seed. Its
   // portal geometry comes from the same map-scale registry as the session.
   runtime.portalPlacement = getPortalPlacementPolicy(runtime.session.mapId);
@@ -1805,31 +1734,7 @@ function startSession(config = {}) {
   runtime.nextEventSeq = runtime.eventJournal.nextSeq;
   runtime.emptySince = null;
   runtime.overload = createOverloadController({
-    tickHz: runtime.session.baseTickHz,
     snapshotHz: runtime.session.baseSnapshotHz,
-    worldTickHz: runtime.session.baseWorldTickHz,
-    portalTickHz: runtime.session.basePortalTickHz,
-    growthTickHz: runtime.session.baseGrowthTickHz,
-    scavengerTickHz: runtime.session.baseScavengerTickHz,
-    waveTickHz: runtime.session.baseWaveTickHz,
-    fieldTickHz: runtime.session.baseFieldTickHz,
-    useCoarseField: runtime.session.useCoarseField,
-    flowFieldCellSize: runtime.session.baseFlowFieldCellSize,
-    fieldFlowScale: runtime.session.baseFieldFlowScale,
-    entityRelevanceRadius: runtime.session.baseEntityRelevanceRadius,
-    scavengerRelevanceRadius: runtime.session.baseScavengerRelevanceRadius,
-    spawnScavengersBase: runtime.session.baseSpawnScavengersBase,
-    spawnScavengersPerPlayer: runtime.session.baseSpawnScavengersPerPlayer,
-    maxScavengers: runtime.session.baseMaxScavengers,
-    maxRelevantStarsPerPlayer: runtime.session.baseMaxRelevantStarsPerPlayer,
-    maxRelevantPlanetoidsPerPlayer: runtime.session.baseMaxRelevantPlanetoidsPerPlayer,
-    maxRelevantWrecksPerPlayer: runtime.session.baseMaxRelevantWrecksPerPlayer,
-    maxRelevantScavengersPerPlayer: runtime.session.baseMaxRelevantScavengersPerPlayer,
-    maxWellInfluencesPerPlayer: runtime.session.baseMaxWellInfluencesPerPlayer,
-    maxWaveInfluencesPerPlayer: runtime.session.baseMaxWaveInfluencesPerPlayer,
-    maxPickupChecksPerPlayer: runtime.session.baseMaxPickupChecksPerPlayer,
-    maxPortalChecksPerPlayer: runtime.session.baseMaxPortalChecksPerPlayer,
-    maxPlayers: runtime.session.maxPlayers,
   });
   applyOverloadProfile();
   // Spawn AI players
@@ -3417,7 +3322,7 @@ function applyWellGravity(player, dt) {
     player.wx,
     player.wy,
     runtime.mapState.wells,
-    runtime.session.maxWellInfluencesPerPlayer || runtime.mapState.wells.length || 1
+    runtime.mapState.wells.length || 1
   );
   let hasWellContact = false;
   for (const { entity: well } of relevantWells) {
@@ -3542,7 +3447,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   if (getCargoCount(player) >= maxCargo) return;
 
   const pickupDist = pickupRadiusForPlayer(player);
-  const limit = clampBudgetCount(runtime.session.maxPickupChecksPerPlayer || wrecks.length || 1, wrecks.length || 1);
+  const limit = wrecks.length || 1;
   const { candidates: endpointCandidates } = collectPickupWreckCandidates(player, wrecks, pickupDist, limit);
   const nearbyById = new Map(endpointCandidates.map((candidate) => [String(candidate.entity.id), {
     ...candidate,
@@ -3629,7 +3534,7 @@ function tickExtraction(player, confirmRequested = false) {
     if (!isPortalAvailable(portal)) return best;
     return Math.max(best, portalCaptureRadius(portal));
   }, PORTAL_CONFIG.captureRadius);
-  const limit = clampBudgetCount(runtime.session.maxPortalChecksPerPlayer || portals.length || 1, portals.length || 1);
+  const limit = portals.length || 1;
   const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
   const portalHit = endpointCandidates
     .filter(({ entity: portal, dist }) => dist < portalCaptureRadius(portal))
@@ -4169,8 +4074,10 @@ function indexEntitiesById(entities) {
 
 function buildRelevanceView() {
   const alivePlayers = getAlivePlayers();
-  const entityRadius = runtime.session.entityRelevanceRadius || runtime.session.worldScale;
-  const scavengerRadius = runtime.session.scavengerRelevanceRadius || entityRadius;
+  // Authority always integrates every gameplay entity. Ballpark remains the
+  // query owner, but map-specific relevance caps cannot drop force/contact work.
+  const entityRadius = runtime.session.worldScale;
+  const scavengerRadius = runtime.session.worldScale;
   const relevanceStats = {
     mode: "ballpark",
     tick: runtime.tick,
@@ -4247,21 +4154,21 @@ function buildRelevanceView() {
     stars: collectRelevantEntities(
       runtime.mapState.stars,
       entityRadius,
-      runtime.session.maxRelevantStarsPerPlayer || runtime.mapState.stars.length || 1,
+      runtime.mapState.stars.length || 1,
       "star",
       { collisionMask: BODY_MASKS.STAR }
     ),
     wrecks: collectRelevantEntities(
       runtime.mapState.wrecks,
       entityRadius,
-      runtime.session.maxRelevantWrecksPerPlayer || runtime.mapState.wrecks.length || 1,
+      runtime.mapState.wrecks.length || 1,
       "wreck",
       { interactionMask: BODY_MASKS.PICKUP }
     ),
     planetoids: collectRelevantEntities(
       runtime.mapState.planetoids,
       entityRadius,
-      runtime.session.maxRelevantPlanetoidsPerPlayer || runtime.mapState.planetoids.length || 1,
+      runtime.mapState.planetoids.length || 1,
       "planetoid",
       { collisionMask: BODY_MASKS.PLANETOID }
     ),
@@ -4270,7 +4177,7 @@ function buildRelevanceView() {
       ...collectRelevantEntities(
         nonDyingScavengers,
         scavengerRadius,
-        runtime.session.maxRelevantScavengersPerPlayer || runtime.mapState.scavengers.length || 1,
+        runtime.mapState.scavengers.length || 1,
         "scavenger",
         { collisionMask: BODY_MASKS.AI, lifecycleStates: ["alive", "spawning"] }
       ),
@@ -4498,21 +4405,6 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
   }
 
   runtime.mapState.scavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false);
-}
-
-function runSystemAtRate(key, hz, baseDt, fn) {
-  if (!Number.isFinite(hz) || hz <= 0) return;
-  const step = 1 / hz;
-  runtime.systemAccumulators[key] = (runtime.systemAccumulators[key] || 0) + baseDt;
-  let iterations = 0;
-  while (runtime.systemAccumulators[key] >= step && iterations < 2) {
-    fn(step);
-    runtime.systemAccumulators[key] -= step;
-    iterations += 1;
-  }
-  if (runtime.systemAccumulators[key] > step * 2) {
-    runtime.systemAccumulators[key] = step;
-  }
 }
 
 // --- Signal System ---
@@ -6259,9 +6151,9 @@ function tickFauna(dt) {
       }
     }
 
-    // Light drag
-    f.vx *= 0.99;
-    f.vy *= 0.99;
+    const dragRetention = Math.pow(cfg.dragRetentionPerSecond, dt);
+    f.vx *= dragRetention;
+    f.vy *= dragRetention;
     f.wx = ((f.wx + f.vx * dt) % ws + ws) % ws;
     f.wy = ((f.wy + f.vy * dt) % ws + ws) % ws;
 
@@ -6636,7 +6528,7 @@ function tickInhibitor(dt) {
 function tickSim() {
   if (runtime.session.status !== "running") return;
   if (benchAuthority) {
-    const dt = 1 / 10;
+    const dt = 1 / AUTHORITY_INTEGRATION_HZ;
     runtime.emptySince = null;
     runtime.tick += 1;
     runtime.simTime = Number((runtime.simTime + dt).toFixed(9));
@@ -6653,26 +6545,24 @@ function tickSim() {
   if (maybeEndTerminalSession()) return;
   runtime.emptySince = null;
   const tickStart = performance.now();
-  const dt = runtime.session.timeScale / runtime.session.tickHz;
+  // Every authority-owned system advances together. Snapshot cadence and
+  // relevance budgets may vary by map; simulation dt may not.
+  const dt = 1 / AUTHORITY_INTEGRATION_HZ;
   runtime.tick += 1;
   runtime.simTime += dt;
   tickCollapseEpochs();
   const relevance = buildRelevanceView();
 
-  runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
-    tickWells(stepDt);
-    tickStars(stepDt, relevance.stars);
-    tickWrecks(stepDt, relevance.wrecks);
-    tickPlanetoids(stepDt, relevance.planetoids);
-  });
-  runSystemAtRate("growth", runtime.session.growthTickHz || runtime.session.tickHz, dt, tickGrowth);
-  runSystemAtRate("portals", runtime.session.portalTickHz || runtime.session.tickHz, dt, tickPortals);
+  tickWells(dt);
+  tickStars(dt, relevance.stars);
+  tickWrecks(dt, relevance.wrecks);
+  tickPlanetoids(dt, relevance.planetoids);
+  tickGrowth(dt);
+  tickPortals(dt);
   if (maybeEnforceMatchLifetime()) return;
   tickWreckWaves(dt);
-  runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, (stepDt) =>
-    tickScavengers(stepDt, relevance.scavengers)
-  );
-  runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
+  tickScavengers(dt, relevance.scavengers);
+  tickWaveRings(dt);
   runtime.session.seededSea = advanceSeededSea(runtime.session.seededSea, dt);
   runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
   rebuildAuthoritativeField();
@@ -6775,7 +6665,7 @@ function tickSim() {
   });
   runtime.session.overloadPressure = overload.pressure;
   if (overload.changed) {
-    applyOverloadProfile({ forceRestart: true });
+    applyOverloadProfile();
     publishEvent("session.overloadChanged", {
       previousState: overload.previousState,
       state: overload.state,
@@ -6790,7 +6680,7 @@ function tickSim() {
 
 function getLoopTickHz() {
   if (runtime.session.status !== "running") return 0;
-  if (benchAuthority) return 10;
+  if (benchAuthority) return AUTHORITY_INTEGRATION_HZ;
   if (getHumanPlayerCount({ activeOnly: true }) === 0) return IDLE_SESSION_TICK_HZ;
   return runtime.session.tickHz;
 }
@@ -6987,30 +6877,14 @@ const server = http.createServer(async (req, res) => {
             planetoidCount: map.planetoids.length,
             simScaleProfile: profile.profileId,
             clientPerfProfile: profile.clientPerfProfile,
-            tickHz: profile.tickHz,
+            tickHz: AUTHORITY_INTEGRATION_HZ,
             snapshotHz: profile.snapshotHz,
-            worldTickHz: profile.worldTickHz,
-            portalTickHz: profile.portalTickHz,
-            growthTickHz: profile.growthTickHz,
-            scavengerTickHz: profile.scavengerTickHz,
-            waveTickHz: profile.waveTickHz,
-            fieldTickHz: profile.fieldTickHz,
             useCoarseField: profile.useCoarseField,
             flowFieldCellSize: profile.flowFieldCellSize,
             fieldFlowScale: profile.fieldFlowScale,
-            entityRelevanceRadius: profile.entityRelevanceRadius,
-            scavengerRelevanceRadius: profile.scavengerRelevanceRadius,
             spawnScavengersBase: profile.spawnScavengersBase,
             spawnScavengersPerPlayer: profile.spawnScavengersPerPlayer,
             maxScavengers: profile.maxScavengers,
-            maxRelevantStarsPerPlayer: profile.maxRelevantStarsPerPlayer,
-            maxRelevantPlanetoidsPerPlayer: profile.maxRelevantPlanetoidsPerPlayer,
-            maxRelevantWrecksPerPlayer: profile.maxRelevantWrecksPerPlayer,
-            maxRelevantScavengersPerPlayer: profile.maxRelevantScavengersPerPlayer,
-            maxWellInfluencesPerPlayer: profile.maxWellInfluencesPerPlayer,
-            maxWaveInfluencesPerPlayer: profile.maxWaveInfluencesPerPlayer,
-            maxPickupChecksPerPlayer: profile.maxPickupChecksPerPlayer,
-            maxPortalChecksPerPlayer: profile.maxPortalChecksPerPlayer,
             localFluidResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].fluidResolution,
             localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[profile.clientPerfProfile].localWindowWorldUnits,
             coarseTextureResolution: CLIENT_PERF_PROFILES[profile.clientPerfProfile].coarseTextureResolution,
