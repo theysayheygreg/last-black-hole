@@ -5,11 +5,11 @@
 
 ## Current Verdict
 
-**Current source is the interim clarity-refactor checkpoint
-`19bb70b6d29acd15af74bf8a23f763a23f559888`. Three no-retry core runs passed
-87/87 in 48.67 s, 45.20 s, and 49.11 s. Final exact-head full, journey,
-Deep Field delivery, and LoC receipts are pending; no new package, Deck, RC, or
-promotion claim exists.**
+**The v0.3 human-clarity program is complete at source
+`ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844`. Final core passed 87/87 in
+45.36 s and full passed 119/119 in 432.91 s, both with zero retries. The fresh
+AgentPlay journey, product-loop contracts, final cadence/Deep Field sample, and
+LoC receipt are complete. No new package, Deck, RC, or promotion claim exists.**
 
 `codex/v0.3-sim-harness-simplification` contains the current unified 15 Hz
 authority clock, measured Deep Field relevance/transport work, deadline
@@ -17,13 +17,18 @@ delivery, runner isolation, and current-contract proof. It is based on
 `BASELINE_SHA=20184fae84b559abf27717c046811673040d987a`; `main` remains the
 v0.2 public/demo line.
 
-The accepted movement/harness checkpoint `3b2cb022` passed 119/119 in 442.18 s
-with zero retries and remains frozen supporting evidence. Its bounded
-5/15/25 samples prove the shared 15 Hz gameplay contract, not final sustained
-Deep Field delivery: a measured run remains at about 13.9/15 Hz. Remeasure on
-the final runner/host and optimize one profiled hot path only if it still
-misses. Do not restore map profiles or promote the GC-sensitive heap delta into
-a gate.
+Compared with the 93.62 s core baseline, final core is 2.064x faster. Compared
+with the 1,028.63 s full baseline, final full is 2.376x faster and consumes
+42.1% of baseline wall time. The direct 5/15/25 receipt delivered 14.981,
+14.998, and 14.996 Hz with zero skipped deadlines. Deep Field separately
+delivered 14.99/15 Hz across 157 ticks, closing the earlier roughly 13.9/15
+residual under final host conditions without restoring map profiles. Heap delta
+remains diagnostic.
+
+The full run recorded 611.61 s summed suite time, 34 browser launches, 18
+static starts, 71 sim starts, and 3 control starts. AgentPlay passed 2/2 in
+117.41 s; Flow 7/7, MetaFlow 8/8, RemoteAuthority 18/18, Renderer 5/5, and
+UIVisual 18/18 passed in that same run.
 
 The earlier `0.3.1.2b93b077` and `dd9e5149` package/Deck receipts below remain
 valid only for their exact historical hashes. They do not certify the current
@@ -153,9 +158,8 @@ Requirements:
 - timing retries are reported rather than silently converted into passes;
 - scheduler cadence samples at the shared 15 Hz require zero skipped deadlines;
   compact JSON preserves values, shapes, status codes, and content type.
-- final acceptance records the exact-head 119-suite/full lane, a fresh natural
-  movement journey, a basic product-loop smoke, the Deep Field recheck, and
-  final production/test LoC.
+- exact-head acceptance records the 119-suite/full lane, fresh natural journey,
+  product-loop contracts, Deep Field recheck, and final production/test LoC.
 
 ## Architecture Gate
 

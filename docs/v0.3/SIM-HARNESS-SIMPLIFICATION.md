@@ -1,7 +1,6 @@
 # v0.3 Simulation, Harness, and Human-Clarity Simplification
 
-> Status: human-clarity refactor checkpoint at source `19bb70b6`; final
-> exact-head acceptance is pending.
+> Status: human-clarity program complete at source `ffbcc0ba`.
 > Updated 2026-07-26 on `codex/v0.3-sim-harness-simplification`.
 >
 > Branch: `codex/v0.3-sim-harness-simplification`
@@ -198,11 +197,11 @@ the pinned baseline) and 22,493 tests (`-74`).
 
 ## Accepted movement and harness receipt
 
-The frozen movement/harness checkpoint is
-`3b2cb0227414f8567e12a821c64d3190b82e1f42`. The current clarity-refactor
-checkpoint is `19bb70b6d29acd15af74bf8a23f763a23f559888`. Both remain v0.3-only
-descendants of `BASELINE_SHA`; no package, Deck, promotion, or public-release
-claim is made for either checkpoint.
+The final source checkpoint is
+`ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844`. The earlier movement/harness
+checkpoint `3b2cb0227414f8567e12a821c64d3190b82e1f42` remains supporting history.
+Both are v0.3-only descendants of `BASELINE_SHA`; completion makes no package,
+Deck, RC, promotion, or public-release claim.
 
 ### Movement and Deep Field
 
@@ -228,32 +227,23 @@ claim is made for either checkpoint.
   host acceptance requires zero skipped deadlines. Heap delta is diagnostic
   because GC is host-sensitive; bounded snapshot/ring gates remain enforced.
 
-The accepted 5/15/25 ten-second cadence receipt at `3b2cb022` is:
+The final direct 5/15/25 cadence receipt at `ffbcc0ba` is:
 
 | Map | Delivered Hz | Snapshot p95 | Ballpark p95 | Queries/tick | Catch-up / skipped |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Shallows | 14.983 | 7.869 ms | 0.459 ms | 12 | 0 / 0 |
-| Expanse | 14.995 | 18.493 ms | 0.774 ms | 12 | 0 / 0 |
-| Deep Field | 14.988 | 22.760 ms | 0.788 ms | 12 | 1 / 0 |
+| Shallows | 14.981 | 10.500 ms | 0.503 ms | 12 | 0 / 0 |
+| Expanse | 14.998 | 16.361 ms | 0.794 ms | 12 | 0 / 0 |
+| Deep Field | 14.996 | 18.559 ms | 0.770 ms | 12 | 1 / 0 |
 
-That authority receipt also passed 57/57 in 195.47 s (197.36 s summed suite
-time; 12 browser, 3 static, 66 sim, 3 control launches). Its Deep Field sample
-delivered 15.000 Hz, 17.36 ms snapshot p95, 212.76 KiB payload p95, 0.722 ms
-Ballpark p95, 12 queries/tick, two ordinary catch-ups, zero skipped deadlines,
-and +1.56 MiB diagnostic heap change.
+The final direct Deep Field budget delivered 14.99/15 Hz across 157 ticks:
+15.49 ms snapshot p95, 212.88 KiB snapshot p95, 1.31 MB/s transport,
+0.869 ms Ballpark p95, 1,884 queries (12/tick), 101,794 candidates, 115,756
+duplicates, one catch-up, and zero skipped deadlines. Heap moved +31.64 MiB and
+remains GC-sensitive diagnostic data.
 
-The `3b2cb022` full-lane Deep Field budget sample also delivered 14.99/15 Hz,
-26.06 ms snapshot p95, 212.76 KiB payload p95, 0.735 ms Ballpark p95, 12
-queries/tick, and zero catch-ups or skipped deadlines. Heap moved +52.8 MiB in
-that host-sensitive sample and remains diagnostic.
-
-These bounded samples prove the one-rate contract and deadline accounting, but
-they do not close sustained Deep Field delivery. A separate measured run
-delivered about 13.9 of the required 15 Hz. Keep the shared gameplay rate fixed
-at 15 Hz, do not restore map profiles, and do not chase the GC-sensitive heap
-assertion. Final acceptance must remeasure Deep Field under the final
-runner/host conditions and route one additional profiled hot-path slice only
-if it still misses the wall-clock target.
+These final-host samples close the former roughly 13.9/15 delivery residual.
+The shared gameplay rate remains fixed at 15 Hz with no map-specific movement
+profiles, and no additional hot-path slice is warranted by this evidence.
 
 ### Harness and behavior evidence
 
@@ -266,10 +256,10 @@ receipts, records launches/timings/retries, and terminates child process groups.
 | Comparable path | Baseline | Current | Result |
 | --- | ---: | ---: | --- |
 | Fast warm | 13.04 s, 46 pass | 10.20 s, 60 pass | 1.278x; more coverage |
-| Ordinary core | 93.62 s, 65 red | 45.72 s, 87 pass | 2.047x; meets the <=50% target |
+| Ordinary core | 93.62 s, 65 red | 45.36 s, 87 pass | 2.064x; meets the <=50% target |
 | Authority | 126.53 s, 47 red | 195.47 s, 57 pass | slower: fresh isolation and cadence proof added |
 | Sim structure | 32.55 s, 35 pass | 93.81 s, 45 pass | slower: 5/15/25 cadence proof added |
-| Candidate full | 1,028.63 s, 95 red | 442.18 s, 119 pass | 2.326x; 43.0% of baseline |
+| Candidate full | 1,028.63 s, 95 red | 432.91 s, 119 pass | 2.376x; 42.1% of baseline |
 
 `test:bench -- --no-retries` is 6/6 green in 0.45 s. `test:audio-tools` is
 intentionally outside candidate/full and remains red in 0.57 s only because
@@ -277,15 +267,11 @@ the optional local audio toolkit cannot import Python `numpy`; it is not a
 product gate. The bench endpoint likewise remains behind its explicit bench
 gate, not normal authority behavior.
 
-Focused behavior evidence remains representative rather than exhaustive:
-UIVisual is 18/18 in 12.21 s (from 466.65 s); Smoke passes in fast/core; and
-the terminal full lane passed Renderer in 86.16 s, FluidWindow in 10.18 s,
-SlingshotV2Live in 8.04 s, and AgentPlayEval in 123.32 s. The two AgentPlay
-journeys retain 18 captures, normal authority/input, slingshot, extraction,
-profile/Chronicle continuity, second run, and natural death recovery. The live
-slingshot proof records the complete selected-well event stream: two visual
-capture legs end in validated range-breaks, and a third leg proves the explicit
-requested release without discarding any authority event.
+The final full run passed Flow 7/7, MetaFlow 8/8, RemoteAuthority 18/18,
+Renderer 5/5, UIVisual 18/18, and AgentPlayEval 2/2. AgentPlayEval completed in
+117.41 s with normal authority/input, slingshot, extraction, profile/Chronicle
+continuity, second run, and natural death recovery. Its worker-local report is
+`tests/screenshots/agent-play-eval-2026-07-26T213311262Z/summary.md`.
 
 Meaningful vertical commits through `3b2cb022` centralize the movement clock,
 toroidal geometry, authoritative JSON serialization, deadline scheduling,
@@ -293,16 +279,16 @@ runner isolation, and current-contract fixtures. At that checkpoint, nonblank
 JS-family lines were 50,173 production (`-45` from baseline) and 23,954 tests
 (`+1,387`); production and tests remain reported separately.
 
-The `3b2cb022` candidate run passed 119/119 with zero retries in 442.18 s
-(442.39 s external wall, 619.60 s summed suite time), using 34 browser
-launches, 18 static starts, 71 sim starts, and 3 control starts. Package and
-Deck gates are historical evidence only until Primary explicitly selects an
-RC. Greg still owns feel, visual/audio taste, physical Deck acceptance, and
-promotion.
+The final core run passed 87/87 with zero retries in 45.36 s, using 8 browser
+launches, 8 static starts, 16 sim starts, and 1 control start. The single final
+full run passed 119/119 with zero retries in 432.91 s (611.61 s summed suite
+time), using 34 browser launches, 18 static starts, 71 sim starts, and 3
+control starts. Package and Deck gates remain historical evidence only. Greg
+still owns feel, visual/audio taste, physical Deck acceptance, and promotion.
 
-## Human-clarity refactor checkpoint
+## Human-clarity refactor completion
 
-Source `19bb70b6d29acd15af74bf8a23f763a23f559888` is the integrated clarity
+Source `ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844` is the completed clarity
 checkpoint. The refactor keeps public facades and runtime behavior stable while
 making lifecycle, projection, presentation, and script ownership explicit.
 
@@ -332,37 +318,43 @@ The milestone commits are deliberately narrow:
 | `b066cfa0` | Canonical ESM content reused by synchronous CommonJS adapters | balance, map-rate/movement, and signature identity contracts |
 | `a5b6477c` | Shared deployment CLI parsing | Deck gaming-mode argument contract |
 | `93671bb9`, `19bb70b6` | Shared direct service supervision | desktop package, control-plane, and sim-lifecycle contracts |
+| `0e8e0825` | Superseded owner-lock cleanup | build, remote-session, renderer-authority, and UI contracts |
+| `eebac8ca`, `ffbcc0ba` | Integrated truth ledger and catalog-count correction | path, command, stale-claim, and line-count consistency checks |
 
 The intermediate `a6e584bf` service-lock experiment was rejected. `19bb70b6`
 deletes the lock/claim hooks and their tests, restores the established direct
 lifecycle semantics, and leaves no new dependency or lock-file contract.
 
-Major-owner size is reported as physical/nonblank lines, comparing the accepted
-`3b2cb022` checkpoint with `19bb70b6`. Extracted modules are included with
-their former owner:
+Final major-owner size is reported as physical/nonblank lines. Extracted
+modules are included with their former owner:
 
-| Vertical | Before | Current |
-| --- | ---: | ---: |
-| Authority runtime + extracted owners | 7,377 / 6,899 | 7,558 / 7,060 |
-| Client main + remote/presentation owners | 6,896 / 6,426 | 7,061 / 6,575 |
-| Fluid runtime + shader source | 1,245 / 1,118 | 1,251 / 1,126 |
-| Three renderer + world presentation | 1,027 / 961 | 1,058 / 985 |
-| HUD facade + presentation/inventory | 1,069 / 975 | 1,066 / 972 |
-| Audio engine + cue synthesis | 1,223 / 1,124 | 1,236 / 1,134 |
-| Service wrappers + supervisor | 674 / 588 | 350 / 316 |
-| Deployment entrypoints + CLI parser | 1,391 / 1,221 | 1,345 / 1,183 |
+| Vertical | Final |
+| --- | ---: |
+| Authority runtime + extracted owners | 7,542 / 7,046 |
+| Client main + remote/presentation owners | 7,061 / 6,575 |
+| Fluid runtime + shader source | 1,251 / 1,126 |
+| Three renderer + world presentation | 1,058 / 985 |
+| HUD facade + presentation/inventory | 1,066 / 972 |
+| Audio engine + cue synthesis | 1,236 / 1,134 |
+| Service wrappers + supervisor | 350 / 316 |
+| Deployment entrypoints + CLI parser | 1,345 / 1,183 |
 
-Across the whole JS-family tree, production moves from 50,173 to 50,095
-nonblank lines and tests from 23,954 to 24,600. The production reduction is
-real but secondary to explicit ownership; test growth is focused
+The direct shells are `scripts/sim-runtime.cjs` 7,097/6,622,
+`src/main.js` 6,602/6,139, `src/render-three/three-renderer.js` 324/297,
+`src/fluid.js` 735/672, `src/audio.js` 561/508, `src/hud.js` 658/603, and
+`scripts/service-supervisor.cjs` 203/182. Their extracted partners are
+`world-scene-presentation.js` 734/688, `fluid.glsl.js` 516/454,
+`cue-synthesis.js` 675/626, `hud-presentation.js` 224/211, and
+`hud-inventory.js` 184/158.
+
+From integrated clarity baseline `c97a41b1` to final source, the whole
+JS-family production tree moves from 201 files / 54,886 physical / 50,173
+nonblank lines to 214 / 54,750 / 50,069 (`-136` physical, `-104` nonblank).
+Tests remain 138 files and move from 26,365 physical / 23,954 nonblank lines to
+26,990 / 24,549 (`+625` physical, `+595` nonblank). The production reduction
+is real but secondary to explicit ownership; test growth is focused
 behavior-preservation evidence.
 
-Three no-retry core runs at `19bb70b6` passed 87/87 in 48.67 s, 45.20 s, and
-49.11 s with zero retries. They preserve the accepted ordinary-path coverage,
-but this checkpoint does not yet claim a new terminal full-lane receipt.
-
-Final acceptance still requires an exact-head 119-suite/full run, the fresh
-natural movement journey and basic product-loop smoke, the final Deep Field
-delivery recheck, and a final LoC receipt after any resulting fix-forward
-slice. The frozen `3b2cb022` full and journey evidence above remains historical
-support, not exact-head certification of `19bb70b6`.
+The exact-head core, full, natural journey, product-loop contracts, cadence,
+Deep Field, and LoC receipts are complete. No package, Deck, RC, promotion, or
+Greg taste claim is implied.

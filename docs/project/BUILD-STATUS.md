@@ -22,9 +22,9 @@ v0.3 source-only checkpoint, based on behavioral baseline
 movement clock across Shallows, Expanse, and Deep Field, plus measured
 relevance, compact transport, deadline-delivery, harness work, and explicit
 authority/client/presentation/script owners. Current source is
-`19bb70b6d29acd15af74bf8a23f763a23f559888`; three no-retry core runs passed
-87/87 in 48.67 s, 45.20 s, and 49.11 s. This is not a newly packaged or
-deployed RC, and its final full/journey/performance acceptance is pending.
+`ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844`; its exact-head core, full,
+natural journey, product-loop, cadence/Deep Field, and LoC receipts complete
+the human-clarity program. This is not a newly packaged or deployed RC.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
@@ -83,51 +83,46 @@ future RC/promotion remain open.
 
 ### Current Automated Evidence
 
-Accepted movement/harness evidence at `3b2cb022`, not current exact-head or RC
-evidence:
+Exact-head evidence at `ffbcc0ba`, not package, Deck, or RC evidence:
 
-- `npm run test:fast -- --no-retries`: 60/60 in 10.20 s; `npm test --
-  --no-retries`: 87/87 in 45.72 s (2.047x faster than the 93.62 s baseline).
-- `npm run test:authority -- --no-retries`: 57/57 in 195.47 s. It is slower
-  than the red 47-suite baseline because it now proves fresh authority groups
-  and a ten-second 5/15/25 cadence receipt.
-- that UIVisual run was 18/18 in 12.21 s; the full lane passed Renderer in
-  86.16 s, FluidWindow in 10.18 s, and SlingshotV2Live in 8.04 s. Smoke passes
-  in fast/core; AgentPlayEval passed both natural journeys in 123.32 s with 18
-  captures.
-- `npm run test:bench -- --no-retries`: 6/6 in 0.45 s. Bench authority is
-  explicitly gated and not normal product behavior. `test:audio-tools` remains
-  an optional local-tooling red because Python `numpy` is absent.
-- `npm run test:full -- --no-retries`: 119/119 in 442.18 s with zero retries,
-  34 browser launches, and 92 service starts (18 static, 71 sim, 3 control).
-  This is 2.326x faster than the 1,028.63 s baseline and keeps the full
-  candidate coverage.
+- `npm test -- --no-retries`: 87/87 in 45.36 s with zero retries, 8 browser
+  launches, 8 static starts, 16 sim starts, and 1 control start. This is 2.064x
+  faster than the 93.62 s baseline.
+- The single `npm run test:full -- --no-retries` run passed 119/119 in
+  432.91 s with zero retries and 611.61 s summed suite time. It used 34 browser
+  launches, 18 static starts, 71 sim starts, and 3 control starts. This is
+  2.376x faster than the 1,028.63 s baseline and 42.1% of baseline wall time.
+- AgentPlay passed 2/2 in 117.41 s. Flow 7/7, MetaFlow 8/8, RemoteAuthority
+  18/18, Renderer 5/5, and UIVisual 18/18 passed in the same full run.
 
-Accepted `3b2cb022` Deep Field measurement:
+Final direct Deep Field measurement:
 
 | Measure | Observed |
 |---|---:|
 | authority tick | 14.99 / 15 Hz (Deep Field budget sample) |
-| snapshot p95 latency | 26.06 ms |
-| snapshot p95 size | 212.76 KiB |
+| snapshot p95 latency | 15.49 ms |
+| snapshot p95 size | 212.88 KiB |
+| transport | 1.31 MB/s |
 | relevance queries | 12 / tick |
-| heap change | +52.8 MiB diagnostic |
-| Ballpark sync p95 | 0.735 ms |
-| scheduler delivery | 0 catch-ups / 0 skipped |
+| heap change | +31.64 MiB diagnostic |
+| Ballpark sync p95 | 0.869 ms |
+| scheduler delivery | 1 catch-up / 0 skipped |
 
-Those bounded samples prove the shared 15 Hz contract, but a separate measured
-Deep Field run delivered about 13.9/15 Hz. Final acceptance must remeasure on
-the final runner/host and route one profiled hot-path slice only if the miss
-persists. Map-rate profiles stay removed; GC-sensitive heap change stays
-diagnostic.
+The direct 5/15/25 cadence receipt delivered 14.981, 14.998, and 14.996 Hz with
+zero skipped deadlines. Deep Field covered 157 ticks and 1,884 queries
+(12/tick), with 101,794 candidates and 115,756 duplicates. This closes the
+earlier roughly 13.9/15 residual under final host conditions; no extra hot-path
+slice is needed. Map-rate profiles stay removed and heap change stays
+GC-sensitive diagnostic data.
 
-Current `19bb70b6` evidence is three zero-retry core passes at 48.67 s, 45.20 s,
-and 49.11 s. Its 119-suite/full run and final LoC receipt remain pending.
+From `c97a41b1` to final source, production moves from 54,886 physical / 50,173
+nonblank lines to 54,750 / 50,069; tests move from 26,365 / 23,954 to
+26,990 / 24,549. Production files move from 201 to 214; test files remain 138.
 
 ### Natural Playable Evidence
 
-The accepted `3b2cb022` receipt records eighteen 1280x800 screenshots from two
-fresh protocol-v2 Shallows journeys through:
+The final AgentPlay receipt records two fresh protocol-v2 Shallows journeys
+through:
 
 1. title, profile, Home, and route briefing;
 2. authoritative launch and intentional controller movement;
@@ -141,10 +136,9 @@ fresh protocol-v2 Shallows journeys through:
 10. public Breacher selection, a visible well approach, authoritative death,
     an authored death label, and normal A-to-Home recovery.
 
-The agent journey does not call sim debug mutation endpoints.
-
-A fresh natural movement journey and basic product-loop smoke are still
-required for final acceptance of `19bb70b6` or any later fix-forward source.
+The journey passed 2/2 in 117.41 s, does not call sim debug mutation endpoints,
+and wrote its worker-local report to
+`tests/screenshots/agent-play-eval-2026-07-26T213311262Z/summary.md`.
 
 ### Visual Review Evidence
 

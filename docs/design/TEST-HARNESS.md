@@ -27,18 +27,19 @@ fixtures, and real playtest flows stay in separate lanes so one stale browser
 or slow menu transition does not make unrelated feature work look broken.
 
 The manifest registers 121 contracts: 60 fast, 87 core, 57 authority,
-45 sim-structure, 119 full, 6 bench, and 1 optional audio-tools contract. The
-accepted `3b2cb022` ordinary comparable checkpoint is
-`npm test -- --no-retries`: 87/87 in 45.72 s against the 93.62 s baseline
-(2.047x). Its full candidate path passed 119/119 in 442.18 s against the
-1,028.63 s baseline (2.326x). Those remain the frozen throughput receipts;
-never substitute a renamed lane for either comparison.
+45 sim-structure, 119 full, 6 bench, and 1 optional audio-tools contract. At
+final source `ffbcc0ba`, `npm test -- --no-retries` passed 87/87 in 45.36 s
+against the 93.62 s baseline (2.064x). It used 8 browser launches, 8 static
+starts, 16 sim starts, and 1 control start.
 
-At clarity-refactor checkpoint `19bb70b6`, three no-retry core runs passed
-87/87 in 48.67 s, 45.20 s, and 49.11 s with zero retries. The current
-119-suite/full run, fresh movement journey, product-loop smoke, Deep Field
-delivery recheck, and final LoC receipt are still pending. The complete receipt
-and ownership map live in `docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`.
+The single final candidate run passed 119/119 in 432.91 s with zero retries
+against the 1,028.63 s baseline: 2.376x faster and 42.1% of baseline wall
+time. Summed suite time was 611.61 s, with 34 browser launches, 18 static
+starts, 71 sim starts, and 3 control starts. AgentPlay passed 2/2 in 117.41 s;
+Flow 7/7, MetaFlow 8/8, RemoteAuthority 18/18, Renderer 5/5, and UIVisual 18/18
+passed in the same run. These are the comparable-path claims; never substitute
+a renamed lane for either comparison. The complete receipt and ownership map
+live in `docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`.
 
 For "where does the local build stand?", start with
 `docs/project/BUILD-STATUS.md`, then check `node scripts/build-health.cjs
