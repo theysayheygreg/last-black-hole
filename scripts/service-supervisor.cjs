@@ -1,7 +1,5 @@
-const crypto = require("crypto");
 const fs = require("fs");
 const net = require("net");
-const path = require("path");
 const { spawn, execFileSync } = require("child_process");
 
 function parseArgs(argv) {
@@ -25,107 +23,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function processIsAlive(pid) {
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readClaim(lockFile) {
-  let fd = null;
-  try {
-    fd = fs.openSync(lockFile, "r");
-    const stat = fs.fstatSync(fd);
-    let claim = {};
-    try {
-      claim = JSON.parse(fs.readFileSync(fd, "utf8"));
-    } catch {}
-    return { ...claim, dev: stat.dev, ino: stat.ino };
-  } catch {
-    return null;
-  } finally {
-    if (fd != null) fs.closeSync(fd);
-  }
-}
-
-function sameClaim(left, right) {
-  return Boolean(left && right
-    && left.token === right.token
-    && left.dev === right.dev
-    && left.ino === right.ino);
-}
-
-// Publish a complete claim in one link operation; token plus inode keeps stale
-// owners from unlinking a successor that reused the same service path.
-function createLifecycleLock(lockFile, {
-  pid = process.pid,
-  isAlive = processIsAlive,
-  hooks = {},
-} = {}) {
-  async function acquire() {
-    fs.mkdirSync(path.dirname(lockFile), { recursive: true });
-    while (true) {
-      const claim = { pid, token: crypto.randomUUID() };
-      const tempFile = `${lockFile}.${claim.token}.tmp`;
-      let fd = null;
-      try {
-        fd = fs.openSync(tempFile, "wx");
-        fs.writeFileSync(fd, `${JSON.stringify(claim)}\n`);
-        fs.fsyncSync(fd);
-        fs.closeSync(fd);
-        fd = null;
-        await hooks.afterClaimPrepared?.({ claim, lockFile, tempFile });
-        try {
-          fs.linkSync(tempFile, lockFile);
-          const owned = readClaim(lockFile);
-          if (!owned || owned.token !== claim.token) throw new Error(`Could not verify lifecycle lock ${lockFile}`);
-          return owned;
-        } catch (error) {
-          if (error.code !== "EEXIST") throw error;
-        }
-      } finally {
-        if (fd != null) fs.closeSync(fd);
-        try {
-          fs.rmSync(tempFile, { force: true });
-        } catch {}
-      }
-
-      const observed = readClaim(lockFile);
-      await hooks.onContention?.({ observed, lockFile });
-      if (!observed || isAlive(observed.pid)) {
-        await sleep(50);
-        continue;
-      }
-
-      await hooks.beforeStaleRecheck?.({ observed, lockFile });
-      if (!sameClaim(observed, readClaim(lockFile))) continue;
-      try {
-        fs.rmSync(lockFile);
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
-    }
-  }
-
-  async function release(owned) {
-    await hooks.beforeReleaseRecheck?.({ owned, lockFile });
-    if (!sameClaim(owned, readClaim(lockFile))) return false;
-    try {
-      fs.rmSync(lockFile);
-      return true;
-    } catch (error) {
-      if (error.code === "ENOENT") return false;
-      throw error;
-    }
-  }
-
-  return { acquire, release };
-}
-
 function createServiceSupervisor({
   serviceName,
   host,
@@ -142,8 +39,6 @@ function createServiceSupervisor({
   statusDetail,
 }) {
   const fallbackUrl = `http://${host}:${port}/`;
-  const lockFile = `${pidFile}.lock`;
-  const lifecycleLock = createLifecycleLock(lockFile);
 
   function readPid() {
     try {
@@ -179,15 +74,6 @@ function createServiceSupervisor({
     }
   }
 
-  async function withLifecycleLock(action) {
-    const claim = await lifecycleLock.acquire();
-    try {
-      return await action();
-    } finally {
-      await lifecycleLock.release(claim);
-    }
-  }
-
   function getPortListener() {
     try {
       const output = execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], {
@@ -217,7 +103,7 @@ function createServiceSupervisor({
     return false;
   }
 
-  async function startUnlocked() {
+  async function start() {
     fs.mkdirSync(tmpDir, { recursive: true });
     const existingPid = readPid();
     if (isAlive(existingPid)) {
@@ -258,7 +144,7 @@ function createServiceSupervisor({
     console.log(`Log: ${logFile}`);
   }
 
-  async function stopUnlocked() {
+  async function stop() {
     const pid = readPid();
     if (!pid || !isAlive(pid)) {
       cleanupFiles();
@@ -282,19 +168,9 @@ function createServiceSupervisor({
     console.log(`Force-stopped ${serviceName} (pid ${pid}).`);
   }
 
-  function start() {
-    return withLifecycleLock(startUnlocked);
-  }
-
-  function stop() {
-    return withLifecycleLock(stopUnlocked);
-  }
-
-  function restart() {
-    return withLifecycleLock(async () => {
-      await stopUnlocked();
-      return startUnlocked();
-    });
+  async function restart() {
+    await stop();
+    return start();
   }
 
   async function status() {
@@ -324,8 +200,4 @@ function createServiceSupervisor({
   return { run, start, stop, status, restart };
 }
 
-module.exports = {
-  createServiceSupervisor,
-  parseArgs,
-  _createLifecycleLock: createLifecycleLock,
-};
+module.exports = { createServiceSupervisor, parseArgs };
