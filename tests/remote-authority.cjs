@@ -246,23 +246,26 @@ async function postLeave(body) {
 
 async function leaveDirectClient(clientId) {
   if (!directAuthorities.has(clientId)) return;
-  try {
-    const result = await postLeave({ clientId });
-    if (!result.ok) console.warn(`Direct client cleanup failed for ${clientId}: ${JSON.stringify(result)}`);
-  } catch (err) {
-    console.warn(`Direct client cleanup failed for ${clientId}: ${err.message}`);
-  } finally {
-    directAuthorities.delete(clientId);
-  }
+  const result = await postLeave({ clientId });
+  if (!result.ok) throw new Error(`Direct client cleanup failed for ${clientId}: ${JSON.stringify(result)}`);
 }
 
 async function withDirectClient(joinRequest, test) {
   const joined = await postJoin(joinRequest);
   assert(joined.ok === true, `Expected ${joinRequest.clientId} to join, got ${JSON.stringify(joined)}`);
+  let testError = null;
   try {
     return await test(joined);
+  } catch (err) {
+    testError = err;
+    throw err;
   } finally {
-    await leaveDirectClient(joinRequest.clientId);
+    try {
+      await leaveDirectClient(joinRequest.clientId);
+    } catch (cleanupError) {
+      if (!testError) throw cleanupError;
+      console.warn(`${cleanupError.message}; preserving primary failure: ${testError.message}`);
+    }
   }
 }
 
