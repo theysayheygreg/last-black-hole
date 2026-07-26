@@ -22,12 +22,18 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   } = reconcile;
   const {
     beginRemoteSession,
+    captureRemotePendingActions,
     clearRemotePendingActions,
     createRemoteSessionState,
+    queueRemoteConsumeSlot,
+    queueRemoteExtractConfirm,
+    queueRemotePulse,
+    queueRemoteSlingshotEdge,
     resetRemoteAfterLeave,
     resetRemoteAfterLaunchFailure,
     resetRemoteForLocalGame,
     resetRemoteForRestart,
+    settleRemoteInputAcknowledgement,
   } = remoteState;
   let passed = 0;
   let total = 0;
@@ -212,6 +218,21 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
     && pauseInput.pendingConsumeSlot === null && pauseInput.pendingSlingshotEdges.length === 0
     && pauseInput.nextSlingshotEdgeId === 8,
   'pause clears unsent actions without rewinding the edge id sequence');
+
+  const queuedInput = createRemoteSessionState();
+  for (let index = 0; index < 10; index += 1) queueRemoteSlingshotEdge(queuedInput);
+  check(JSON.stringify(queuedInput.pendingSlingshotEdges) === JSON.stringify([3, 4, 5, 6, 7, 8, 9, 10]),
+    'pending edge queue stays bounded while ids remain monotonic');
+  queueRemotePulse(queuedInput);
+  queueRemoteExtractConfirm(queuedInput);
+  queueRemoteConsumeSlot(queuedInput, 0);
+  const sentInput = captureRemotePendingActions(queuedInput);
+  queueRemoteConsumeSlot(queuedInput, 1);
+  settleRemoteInputAcknowledgement(queuedInput, sentInput, { acceptedSlingshotEdges: [3, 4] });
+  check(!queuedInput.pendingPulse && !queuedInput.pendingExtractConfirm && queuedInput.pendingConsumeSlot === 1,
+    'ack settlement clears sent one-shots without clearing a newer consumable choice');
+  check(JSON.stringify(queuedInput.pendingSlingshotEdges) === JSON.stringify([5, 6, 7, 8, 9, 10]),
+    'ack settlement removes only accepted slingshot edges');
 
   check(inputSource.includes('neutralizeForPause()'), 'input exposes one pause neutralization operation');
   check(mainSource.includes('const localSandboxPaused = gamePhase === \'paused\' && !remoteSession.active;'), 'local debug freeze remains separate');
