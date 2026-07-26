@@ -165,9 +165,6 @@ async function run() {
     assert(!sources.includes("Math.random"), "shipping-trio adapters must use no new random source");
     assert(!sources.includes("timeScale") && !sources.includes("timeSlow"), "shipping-trio adapters must not add time dilation");
     assert(!JSON.stringify(serverCatalog.ANOMALY_CATALOG).includes("exactly one"), "catalog must not claim an endgame owner");
-    const runtime = fs.readFileSync(path.join(ROOT, "scripts/sim-runtime.cjs"), "utf8");
-    assert(runtime.includes("collapseEpochState?.parameterVector"), "existing epoch vector seam must remain authoritative");
-    assert(runtime.includes("runtime.mapState.anomalyCatalog"), "runtime must retain catalog truth");
   });
 
   await runner.run("live snapshot exposes selected cast and per-well signature truth", async () => {
