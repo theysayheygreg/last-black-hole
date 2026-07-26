@@ -141,6 +141,12 @@ const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 const { serializeRuntimeJson } = require("./sim/serialization-budget.cjs");
 const { createJsonHttpLifecycle } = require("./sim/http-lifecycle.cjs");
 const {
+  createIdleSessionState,
+  createRunningSessionState,
+  createInhibitorState,
+  createRunState,
+} = require("./sim/session-state.cjs");
+const {
   createCollapseEpochSchedule,
   createCollapseEpochState,
   advanceCollapseEpochs,
@@ -1243,31 +1249,18 @@ const PLAYER_LOCAL_EVENT_TYPES = new Set([
 const protocol = createProtocolDescription();
 const runtime = {
   startedAt: new Date().toISOString(),
-  session: {
-    id: null,
-    status: "idle",
-    mapId: null,
-    mapName: null,
-    runDurationSeconds: null,
-    hostClientId: null,
-    hostName: null,
-    overloadState: "NORMAL",
-    overloadPressure: 0,
-    timeScale: 1,
-    baseTickHz: DEFAULT_TICK_HZ,
-    baseSnapshotHz: DEFAULT_SNAPSHOT_HZ,
-    worldScale: DEFAULT_WORLD_SCALE,
-    tickHz: DEFAULT_TICK_HZ,
+  session: createIdleSessionState({
+    movementHz: DEFAULT_TICK_HZ,
     snapshotHz: DEFAULT_SNAPSHOT_HZ,
+    worldScale: DEFAULT_WORLD_SCALE,
     maxPlayers: DEFAULT_MAX_PLAYERS,
-  },
+  }),
   tick: 0,
   simTime: 0,
   loopTickHz: DEFAULT_TICK_HZ,
   eventJournal: createSimEventJournal({ capacity: 256, runId: "idle" }),
   snapshotRing: createSimSnapshotRing({ capacity: 32, runId: "idle" }),
   recentEvents: [],
-  nextEventSeq: 1,
   players: new Map(),
   playerAuthorities: new Map(),
   joinClaims: new Map(),
@@ -1284,30 +1277,7 @@ const runtime = {
   portalSchedule: null,
   portalPlacement: null,
   portalClock: null,
-  inhibitor: {
-    form: 0,          // 0=inactive, 1=glitch, 2=swarm, 3=vessel
-    phase: 0,
-    waveId: "inhibitor:phase-0",
-    scheduledTime: 0,
-    waveBudget: 0,
-    wx: 0, wy: 0,     // world position
-    vx: 0, vy: 0,
-    intensity: 0,      // 0-1, ramps during transitions
-    radius: 0.1,
-    localTime: 0,
-    swarmTrackTimer: 0,
-    swarmTargetX: 0, swarmTargetY: 0,
-    silenceTimer: 0,   // how long peak signal has been low
-    finalPortalSpawned: false,
-    finalPortalExpired: false,
-    formTimes: [null, null, null, null],
-    lastSignalWX: 0,
-    lastSignalWY: 0,
-    lastSignalAge: 0,
-    swarmSearchTimer: 0,
-    swarmSearchAngle: 0,
-    gravityBonus: 0,
-  },
+  inhibitor: createInhibitorState(),
   mapState: {
     id: "shallows",
     name: "The Shallows",
@@ -1345,7 +1315,6 @@ function publishEvent(type, payload = {}, options = {}) {
     visibility: isPlayerLocal ? playerEventVisibility(playerId) : options.visibility,
     payload,
   });
-  runtime.nextEventSeq = runtime.eventJournal.nextSeq;
   runtime.recentEvents = runtime.eventJournal.read({
     since: Math.max(0, runtime.eventJournal.lastSeq - 128),
   }).events;
@@ -1562,49 +1531,29 @@ function startSession(config = {}) {
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
   const runDurationSeconds = resolveRunDurationSeconds(mapState.id);
-  runtime.session = {
-    id: crypto.randomUUID(),
+  const snapshotHz = Number.isFinite(Number(config.snapshotHz))
+    ? Number(config.snapshotHz)
+    : scaleProfile.snapshotHz;
+  runtime.session = createRunningSessionState({
+    sessionId: crypto.randomUUID(),
     runId: crypto.randomUUID(),
-    status: "running",
-    mapId: mapState.id,
-    mapName: mapState.name,
+    mapState,
     runDurationSeconds,
-    anomalyCatalog: mapState.anomalyCatalog,
-    hostClientId: config.requesterId ? String(config.requesterId) : null,
-    hostProfileId: config.requesterProfileId
-      ? String(config.requesterProfileId)
-      : (config.hostProfileId ? String(config.hostProfileId) : null),
-    hostName: config.requesterName ? String(config.requesterName) : null,
-    overloadState: "NORMAL",
-    overloadPressure: 0,
-    timeScale: 1,
-    worldScale: mapState.worldScale,
-    baseTickHz: AUTHORITY_INTEGRATION_HZ,
-    baseSnapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
-    tickHz: AUTHORITY_INTEGRATION_HZ,
-    snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
-    useCoarseField: scaleProfile.useCoarseField,
-    baseFlowFieldCellSize: scaleProfile.flowFieldCellSize,
-    flowFieldCellSize: scaleProfile.flowFieldCellSize,
-    baseFieldFlowScale: scaleProfile.fieldFlowScale,
-    fieldFlowScale: scaleProfile.fieldFlowScale,
-    baseSpawnScavengersBase: scaleProfile.spawnScavengersBase,
-    spawnScavengersBase: scaleProfile.spawnScavengersBase,
-    baseSpawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
-    spawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
-    baseMaxScavengers: scaleProfile.maxScavengers,
-    maxScavengers: scaleProfile.maxScavengers,
-    simScaleProfile: scaleProfile.profileId,
-    clientPerfProfile: scaleProfile.clientPerfProfile,
-    localFluidResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].fluidResolution,
-    localFluidWindowWorldUnits: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].localWindowWorldUnits,
-    coarseTextureResolution: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile].coarseTextureResolution,
-    maxCoarseFieldCells: scaleProfile.maxCoarseFieldCells,
-    snapshotBudgetBytes: scaleProfile.snapshotBudgetBytes,
-    snapshotBudgetBytesPerSecond: scaleProfile.snapshotBudgetBytesPerSecond,
-    ballparkSyncBudgetMs: scaleProfile.ballparkSyncBudgetMs,
-    maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
-  };
+    host: {
+      clientId: config.requesterId ? String(config.requesterId) : null,
+      profileId: config.requesterProfileId
+        ? String(config.requesterProfileId)
+        : (config.hostProfileId ? String(config.hostProfileId) : null),
+      name: config.requesterName ? String(config.requesterName) : null,
+    },
+    movementHz: AUTHORITY_INTEGRATION_HZ,
+    snapshotHz,
+    profile: scaleProfile,
+    clientProfile: CLIENT_PERF_PROFILES[scaleProfile.clientPerfProfile],
+    maxPlayers: Number.isFinite(Number(config.maxPlayers))
+      ? Number(config.maxPlayers)
+      : DEFAULT_MAX_PLAYERS,
+  });
   // Attach seed + rng to the live session. rng stored non-enumerably so
   // it doesn't leak into JSON snapshots sent to clients.
   runtime.session.seed = seed;
@@ -1647,12 +1596,8 @@ function startSession(config = {}) {
     .catch((err) => {
       console.error('[echoes] hydrate failed:', err?.message || err);
     });
-  runtime.tick = 0;
-  runtime.simTime = 0;
-  runtime.idCounters = Object.create(null);
-  runtime.emptySince = null;
-  runtime.terminalSince = null;
-  runtime.terminalShutdownAt = null;
+  const runState = createRunState();
+  Object.assign(runtime, runState.clock);
   // The Conductor is one match-scoped authority built from the run seed. Its
   // portal geometry comes from the same map-scale registry as the session.
   runtime.portalPlacement = getPortalPlacementPolicy(runtime.session.mapId);
@@ -1662,62 +1607,33 @@ function startSession(config = {}) {
     runtime.session.mapId,
   );
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
-  runtime.portalSchedule = runtime.inhibitorSchedule;
-  runtime.portalClock = {
-    openedWindowIds: new Set(),
-    closedWindowIds: new Set(),
-    finalOpen: false,
-    finalClosed: false,
-  };
+  runtime.portalClock = runState.portalClock;
   const inh = INHIBITOR_CONFIG;
   const phaseZero = runtime.inhibitorSchedule.eventFronts.find((event) => event.id === "inhibitor:phase-0");
-  runtime.inhibitor = {
-    form: 0, wx: 0, wy: 0, vx: 0, vy: 0,
-    phase: 0,
-    waveId: phaseZero?.id || "inhibitor:phase-0",
-    scheduledTime: phaseZero?.time || 0,
-    waveBudget: phaseZero?.metadata?.budget ?? inh.phaseWaveBudgets[0],
-    intensity: 0, radius: inh.glitchRadius,
-    localTime: 0, swarmTrackTimer: 0,
-    swarmTargetX: 0, swarmTargetY: 0,
-    silenceTimer: 0,
-    finalPortalSpawned: false,
-    finalPortalExpired: false,
-    formTimes: [null, null, null, null],
-    lastSignalWX: 0,
-    lastSignalWY: 0,
-    lastSignalAge: 0,
-    swarmSearchTimer: 0,
-    swarmSearchAngle: runtime.session.rng.rawStream('inhibitorInit')() * Math.PI * 2,
-    gravityBonus: 0,
-  };
+  runtime.inhibitor = createInhibitorState({
+    phaseZero,
+    config: inh,
+    searchAngle: runtime.session.rng.rawStream('inhibitorInit')() * Math.PI * 2,
+  });
   runtime.players.clear();
   runtime.playerAuthorities.clear();
   runtime.joinClaims.clear();
   runtime.eventJournal.startRun(runtime.session.runId);
   runtime.snapshotRing.startRun(runtime.session.runId);
-  runtime.recentEvents = [];
-  runtime.nextEventSeq = runtime.eventJournal.nextSeq;
-  runtime.emptySince = null;
+  Object.assign(runtime, runState.history);
   runtime.overload = createOverloadController({
     snapshotHz: runtime.session.baseSnapshotHz,
   });
   applyOverloadProfile();
   // Spawn AI players
   spawnAIPlayers(runtime.mapState, runtime.session);
-  runtime.growthTimer = 0;
-  runtime.growthIndex = 0;
+  Object.assign(runtime, runState.growth);
   runtime.collapseEpochSchedule = createCollapseEpochSchedule({ matchDurationSeconds: runtime.session.runDurationSeconds });
   runtime.collapseEpochState = createCollapseEpochState(runtime.collapseEpochSchedule);
   runtime.conductor.scheduleCollapseEpochs(runtime.collapseEpochSchedule);
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
   runtime.portalSchedule = runtime.inhibitorSchedule;
-  runtime._wreckWaveIndex = 0;
-  runtime._wreckWaveRepeatTimer = 0;
-  runtime._wreckRepeatWaveCount = 0;
-  runtime.waveRings = [];
-  runtime.coarseField = null;
-  runtime.authorityFieldPacket = null;
+  Object.assign(runtime, runState.world);
   rebuildAuthoritativeField();
   telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
@@ -1915,7 +1831,7 @@ function getPublicSession() {
 }
 
 function snapshotBody({ force = false } = {}) {
-  const lastEventSeq = runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1);
+  const lastEventSeq = runtime.eventJournal.lastSeq;
   const latest = runtime.snapshotRing.latest({ runId: runtime.session.runId || "idle" });
   if (!force && latest.status === "hit" && latest.snapshot?.tick === runtime.tick &&
       latest.snapshot?.lastEventSeq === lastEventSeq &&

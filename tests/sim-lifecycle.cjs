@@ -5,6 +5,16 @@
  * explicitly pinned with keep-alive mode.
  */
 const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers.cjs");
+const {
+  createIdleSessionState,
+  createRunningSessionState,
+  createInhibitorState,
+  createRunState,
+} = require("../scripts/sim/session-state.cjs");
+const {
+  getSessionProfile,
+  CLIENT_PERF_PROFILES,
+} = require("../scripts/content/session-profiles.cjs");
 
 const AUTO_PORT = 8796;
 const KEEPALIVE_PORT = 8797;
@@ -88,6 +98,55 @@ async function waitForHealth(port, predicate, timeoutMs = 5000) {
 
 async function run() {
   const runner = new TestRunner("SimLifecycle");
+
+  await runner.run("Session factories preserve authority fields and fresh run state", () => {
+    const idle = createIdleSessionState({
+      movementHz: 15,
+      snapshotHz: 10,
+      worldScale: 320,
+      maxPlayers: 4,
+    });
+    assert(idle.status === "idle" && idle.baseTickHz === 15 && idle.tickHz === 15,
+      "Expected idle authority rate to populate both public rate fields");
+
+    const profile = getSessionProfile("deep-field", 1000);
+    const running = createRunningSessionState({
+      sessionId: "session-1",
+      runId: "run-1",
+      mapState: { id: "deep-field", name: "Deep Field", worldScale: 1000, anomalyCatalog: ["well"] },
+      runDurationSeconds: 900,
+      host: { clientId: "host", profileId: "profile", name: "Pilot" },
+      movementHz: 15,
+      snapshotHz: 5,
+      profile,
+      clientProfile: CLIENT_PERF_PROFILES[profile.clientPerfProfile],
+      maxPlayers: 6,
+    });
+    assert(running.baseTickHz === 15 && running.tickHz === 15 && running.snapshotHz === 5,
+      "Expected running session to preserve independent movement and snapshot rates");
+    assert(running.simScaleProfile === profile.profileId
+      && running.localFluidResolution === CLIENT_PERF_PROFILES[profile.clientPerfProfile].fluidResolution,
+      "Expected server and client profiles to populate their owned fields");
+
+    const firstRun = createRunState();
+    const secondRun = createRunState();
+    assert(firstRun.clock.idCounters !== secondRun.clock.idCounters,
+      "Expected fresh null-prototype counters for each run");
+    assert(Object.getPrototypeOf(firstRun.clock.idCounters) === null,
+      "Expected run counters to remain safe dictionary objects");
+    assert(firstRun.portalClock.openedWindowIds !== secondRun.portalClock.openedWindowIds
+      && firstRun.world.waveRings !== secondRun.world.waveRings,
+      "Expected fresh mutable run containers");
+
+    const inhibitor = createInhibitorState({
+      phaseZero: { id: "inhibitor:phase-0", time: 12, metadata: { budget: 7 } },
+      config: { phaseWaveBudgets: [3], glitchRadius: 0.25 },
+      searchAngle: 1.5,
+    });
+    assert(inhibitor.scheduledTime === 12 && inhibitor.waveBudget === 7
+      && inhibitor.radius === 0.25 && inhibitor.swarmSearchAngle === 1.5,
+      "Expected inhibitor schedule, tuning, and RNG angle to remain explicit inputs");
+  });
 
   await runner.run("Empty sim auto-stops after the idle grace window", async () => {
     await startSimServer(AUTO_PORT, { idleShutdownMs: 1500 });
