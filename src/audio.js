@@ -14,7 +14,7 @@
 
 import { CONFIG } from './config.js';
 import { worldToScreen, worldDistance } from './coords.js';
-import { cueForAuthoritativeEvent, EventVoiceBudget } from './audio-events.js';
+import { EventVoiceBudget } from './audio-events.js';
 import { AudioMixer } from './audio/mixer.js';
 import { movementAudioLevels, resolveMovementAudioState } from './audio/movement-state.js';
 import { cueSpec } from './audio/cue-spec.js';
@@ -35,7 +35,6 @@ export class AudioEngine {
     this._lastDistortionAmount = -1; // cache to avoid per-frame allocation
     this._eventBudget = new EventVoiceBudget(CONFIG.audio?.maxEventVoices ?? 16);
     this._mixer = new AudioMixer({ caps: CONFIG.audio?.voiceCaps });
-    this._portalProximityActive = false;
     this._controlAccumulator = 0;
     this._movementState = 'idle';
     this._movementLastUpdate = -Infinity;
@@ -160,7 +159,6 @@ export class AudioEngine {
     this._trace.reset(this._variationSeed, this.ctx?.currentTime ?? 0);
     this._duckRequests.clear();
     this._mixer.reset();
-    this._portalProximityActive = false;
     this._controlAccumulator = 0;
     this._movementState = 'idle';
     this._movementLastUpdate = -Infinity;
@@ -341,14 +339,11 @@ export class AudioEngine {
       case 'scavengerBump':     this._playScavengerBump(now, vol, pan, bus); break;
       case 'inhibitorGlitch':   this._playInhibitorGlitch(now, vol, bus); break;
       case 'pulse':             this._playPulse(now, vol, pan, bus); break;
-      case 'portalDeath':       this._playPortalDeath(now, vol, pan, bus); break;
       case 'extract':           this._playExtract(now, vol, bus); break;
       case 'death':             this._playDeath(now, bus); break;
-      case 'scavengerExtract':  this._playScavengerExtract(now, vol * 0.4, pan, bus); break;
       case 'shieldActivate':    this._playShieldActivate(now, vol, bus); break;
       case 'shieldAbsorb':      this._playShieldAbsorb(now, vol, bus); break;
       case 'breachFlare':       this._playBreachFlare(now, vol, bus); break;
-      case 'wellProximity':     this._playWellRumble(now, vol, bus); break;
       case 'hullWarning':       this._playHullWarning(now, vol, bus); break;
       case 'fuelWarning':       this._playWarning(now, vol, 118, bus); break;
       case 'signalWarning':     this._playWarning(now, vol, 164, bus); break;
@@ -357,7 +352,6 @@ export class AudioEngine {
       case 'results':           this._playResults(now, vol, bus); break;
       case 'starConsumed':      this._playStarConsumed(now, vol, pan, bus); break;
       case 'scavDeath':         this._playDebrisClatter(now, vol, pan, bus); break;
-      case 'wreckConsumed':     this._playCrunch(now, vol, pan, bus); break;
       case 'inhibitorWake':     this._playInhibitorWake(now, vol, bus); break;
       case 'inhibitorVessel':   this._playInhibitorVessel(now, vol, bus); break;
       case 'inhibitorDrain':    this._playErrorBuzz(now, vol * 0.6, bus); break;
@@ -373,43 +367,9 @@ export class AudioEngine {
       case 'upgrade':           this._playUpgrade(now, vol * 0.5, bus); break;
       case 'cantAfford':        this._playErrorBuzz(now, vol * 0.3, bus); break;
       case 'launch':            this._playLaunchSpool(now, vol * 0.5, bus); break;
-      case 'itemReveal':        this._playItemPlink(now, vol * 0.25, bus); break;
       default:                  return false;
     }
     return true;
-  }
-
-  /** Translate one sim event into one local cue. Returns false when filtered. */
-  playAuthoritativeEvent(event, context = {}) {
-    const mapped = cueForAuthoritativeEvent(event, context);
-    if (!mapped) return false;
-    const payload = mapped.payload || {};
-    return this.playEvent(
-      mapped.cue,
-      payload.wx,
-      payload.wy,
-      context.camX,
-      context.camY,
-      context.canvasW,
-      context.canvasH
-    );
-  }
-
-  /** Edge-triggered local proximity cue until the sim publishes proximity. */
-  setPortalProximity(active, context = {}) {
-    const next = Boolean(active);
-    if (next === this._portalProximityActive) return false;
-    this._portalProximityActive = next;
-    if (!next) return false;
-    return this.playEvent(
-      'portalProximity',
-      context.wx,
-      context.wy,
-      context.camX,
-      context.camY,
-      context.canvasW,
-      context.canvasH
-    );
   }
 
   // ---- Init helpers ----
@@ -634,27 +594,6 @@ export class AudioEngine {
       try { gain.disconnect(); panner.disconnect(); } catch (e) {}
     }, 5000);
     return { gain, panner, _cleanup: cleanup, bus, persistent };
-  }
-
-  /**
-   * Wire a source (oscillator or buffer) through optional filters to a voice,
-   * with automatic disconnect on end. Prevents audio graph memory leaks.
-   */
-  _wireAndPlay(source, voice, startTime, stopTime, filters = []) {
-    let node = source;
-    for (const f of filters) { node.connect(f); node = f; }
-    node.connect(voice.gain);
-    source.start(startTime);
-    source.stop(stopTime);
-    source.onended = () => {
-      try {
-        source.disconnect();
-        for (const f of filters) f.disconnect();
-        voice.gain.disconnect();
-        voice.panner.disconnect();
-        clearTimeout(voice._cleanup);
-      } catch (e) {} // ignore if already disconnected
-    };
   }
 
   _createNoise(duration) {
@@ -928,17 +867,6 @@ export class AudioEngine {
     this.master.gain.linearRampToValueAtTime(0, now + 1.5);
   }
 
-  _playScavengerExtract(now, vol, pan, bus = 'world') {
-    const noise = this._createNoise(0.1);
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'highpass'; filter.frequency.value = 1000;
-    const voice = this._createVoice(pan, bus);
-    noise.connect(filter); filter.connect(voice.gain);
-    voice.gain.gain.setValueAtTime(vol, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-    noise.start(now); noise.stop(now + 0.12);
-  }
-
   // ==== NEW GAMEPLAY SOUNDS ====
 
   _playShieldActivate(now, vol, bus = 'world') {
@@ -992,18 +920,6 @@ export class AudioEngine {
     noise.start(now); noise.stop(now + 0.45);
   }
 
-  _playWellRumble(now, vol, bus = 'world') {
-    // Very low sine throb
-    const osc = this.ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.value = 25;
-    const voice = this._createVoice(0, bus);
-    osc.connect(voice.gain);
-    voice.gain.gain.setValueAtTime(vol * 0.15, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-    osc.start(now); osc.stop(now + 0.45);
-  }
-
   _playHullWarning(now, vol, bus = 'world') {
     // The shared low, falling red-semitone warning gesture—not the legacy alarm.
     this._playWarning(now, vol, 146, bus);
@@ -1044,18 +960,6 @@ export class AudioEngine {
       voice.gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
       noise.start(t); noise.stop(t + 0.06);
     }
-  }
-
-  _playCrunch(now, vol, pan, bus = 'world') {
-    // Low noise crunch
-    const noise = this._createNoise(0.15);
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass'; filter.frequency.value = 400; filter.Q.value = 1;
-    const voice = this._createVoice(pan, bus);
-    noise.connect(filter); filter.connect(voice.gain);
-    voice.gain.gain.setValueAtTime(vol * 0.3, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-    noise.start(now); noise.stop(now + 0.15);
   }
 
   _playInhibitorWake(now, vol, bus = 'world') {
@@ -1210,14 +1114,4 @@ export class AudioEngine {
     osc.start(now); osc.stop(now + 0.75);
   }
 
-  _playItemPlink(now, vol, bus = 'world') {
-    // Tiny high ping
-    const osc = this._createSquare(0.125);
-    osc.frequency.value = 2400 + seededUnit(this._variationSeed, this._variationIndex++) * 400;
-    const voice = this._createVoice(0, bus);
-    osc.connect(voice.gain);
-    voice.gain.gain.setValueAtTime(vol, now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-    osc.start(now); osc.stop(now + 0.1);
-  }
 }

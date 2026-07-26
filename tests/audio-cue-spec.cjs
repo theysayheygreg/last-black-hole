@@ -1,4 +1,5 @@
 const assert = require('assert');
+const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -22,6 +23,17 @@ async function run() {
   assert.strictEqual(cueSpec('scavDeath').maxVoices, 4);
   assert.strictEqual(cueSpec('upgrade').maxVoices, 4);
   assert.strictEqual(cueSpec('missing'), null);
+
+  const engineSource = fs.readFileSync(path.join(ROOT, 'src', 'audio.js'), 'utf8');
+  const routedCues = [...engineSource.matchAll(/case '([^']+)'/g)].map((match) => match[1]).sort();
+  assert.deepStrictEqual(routedCues, Object.keys(CUE_SPECS).sort(), 'every declared cue has exactly one engine route');
+  for (const deadName of [
+    'playAuthoritativeEvent', 'setPortalProximity', '_portalProximityActive', '_wireAndPlay',
+    '_playScavengerExtract', '_playWellRumble', '_playCrunch', '_playItemPlink',
+  ]) {
+    assert(!engineSource.includes(deadName), `${deadName} stays deleted`);
+  }
+  assert(/case 'portalFinal':\s+this\._playPortalDeath\(/.test(engineSource), 'portalFinal keeps its live terminal cue');
   console.log('AudioCueSpec: 1 passed, 0 failed');
 }
 run().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
