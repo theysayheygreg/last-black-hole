@@ -84,11 +84,17 @@ async function slingshotEdgeAcks(page) {
 
 async function tapAcknowledgedSlingshotEdge(page, label) {
   const before = await slingshotEdgeAcks(page);
-  await tapGamepadButton(page, 3, 0);
-  await waitFor(page, (count) => {
-    const acks = window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || [];
-    return acks.length === count + 1;
-  }, { timeout: 5000, label: `${label} edge acknowledgement` }, before.length);
+  await setGamepadButton(page, 3, true);
+  await stepGameFrames(page, 1, 0.001);
+  try {
+    await waitFor(page, (count) => {
+      const acks = window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || [];
+      return acks.length === count + 1;
+    }, { timeout: 5000, label: `${label} edge acknowledgement` }, before.length);
+  } finally {
+    await setGamepadButton(page, 3, false);
+    await stepGameFrames(page, 1, 0.001);
+  }
   const after = await slingshotEdgeAcks(page);
   const ack = after[after.length - 1];
   assert(ack.inputSeq > 0 && ack.commandSeq > 0, `${label} edge acknowledgement lacked input sequence diagnostics`);
@@ -188,7 +194,7 @@ async function waitForSettledMetaReport(page, timeout = 12000) {
     const motion = window.__TEST_API?.getUiMotionState?.();
     return window.__TEST_API?.getGamePhase?.() === "meta"
       && motion?.phase === "meta"
-      && Number(motion?.timer || 0) >= 0.9;
+      && motion?.salvageReport?.ready === true;
   }, { timeout });
 }
 
@@ -351,7 +357,46 @@ async function steerTo(page, clientId, target, options = {}) {
       }
       last = { wx: player.wx, wy: player.wy, vx: player.vx, vy: player.vy, dist, speed, fuelRatio, recharging };
 
-      if (dist <= radius && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
+      if (options.portalId
+        && player.portalInteraction?.portalId === options.portalId
+        && player.portalInteraction.ready === true) {
+        return { start, end: last, closest, target: { ...target }, player, snapshot };
+      }
+
+      const aim = player.slingshot?.aim;
+      if (options.slingshotAnchorId && aim?.anchorId === options.slingshotAnchorId) {
+        const radialX = wrappedDelta(aim.anchorWX, player.wx, ws);
+        const radialY = wrappedDelta(aim.anchorWY, player.wy, ws);
+        const radialMagnitude = Math.hypot(radialX, radialY) || 1;
+        let tangentX = -radialY / radialMagnitude;
+        let tangentY = radialX / radialMagnitude;
+        if ((player.vx || 0) * tangentX + (player.vy || 0) * tangentY < 0) {
+          tangentX = -tangentX;
+          tangentY = -tangentY;
+        }
+        // An input acknowledgement only reserves an edge in the authority
+        // queue. It does not reserve this sampled affordance for the next
+        // movement tick, so approach on public readiness margins rather than
+        // treating the outer capture boundary as a deterministic command
+        // point.
+        const insideReadyRange = !Number.isFinite(options.slingshotReadyRangeRatio)
+          || aim.distance <= aim.anchorRange * options.slingshotReadyRangeRatio;
+        const aboveReadySpeed = !Number.isFinite(options.slingshotReadyTangentialSpeed)
+          || aim.tangentialSpeed >= options.slingshotReadyTangentialSpeed;
+        if (aim.engageEligible === true && insideReadyRange && aboveReadySpeed) {
+          return { start, end: last, closest, target: { ...target }, aim };
+        }
+        await setGamepadDrive(page, tangentX, tangentY, {
+          thrust: fuelRatio > 0.01 ? 1 : 0,
+        });
+        await sleep(70);
+        continue;
+      }
+
+      if (!options.portalId
+        && !options.slingshotAnchorId
+        && dist <= radius
+        && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
         return { start, end: last, closest, target: { ...target } };
       }
 
@@ -416,7 +461,7 @@ async function rechargeForManeuver(page, clientId, minimumRatio = 0.42, timeout 
 }
 
 async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
-  let snapshot = await getSnapshot();
+  const snapshot = await getSnapshot();
   const player = localPlayer(snapshot, clientId);
   const anchor = snapshot.world?.wells?.[SHALLOWS_ROUTE.slingshotWellIndex];
   assert(player && anchor, "Expected the authored Shallows slingshot anchor");
@@ -426,30 +471,25 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   let awayMag = Math.hypot(awayX, awayY);
   if (awayMag < 1e-4) { awayX = 1; awayY = 0; awayMag = 1; }
   const ringPoint = {
-    id: `${anchor.id || "well-1"}-inner-current`,
-    wx: wrap(anchor.wx + awayX / awayMag * 0.22, ws),
-    wy: wrap(anchor.wy + awayY / awayMag * 0.22, ws),
+    id: `${anchor.id || "well-1"}-outer-current`,
+    wx: wrap(anchor.wx + awayX / awayMag * 0.36, ws),
+    wy: wrap(anchor.wy + awayY / awayMag * 0.36, ws),
   };
   const approach = await steerTo(page, clientId, ringPoint, {
-    // The playable current is a band, not a precision-docking point. This
-    // tolerance stays outside the kill radius and inside engagement range.
-    radius: 0.12,
     maxCruiseSpeed: 0.31,
-    arrivalSpeed: 0.30,
-    // A slingshot approach should preserve orbital momentum; stopping at the
-    // outer-current waypoint would test docking, not route execution.
-    allowFlyby: true,
+    slingshotAnchorId: anchor.id,
+    // The 0.45 capture edge and 0.05 engage gate are public authority
+    // telemetry. Keep a real player-sized margin for the edge's next tick;
+    // this is not a private timer or a repeated command.
+    slingshotReadyRangeRatio: 0.85,
+    slingshotReadyTangentialSpeed: 0.10,
   });
+  assert(approach.aim?.anchorType === "well" && approach.aim?.engageEligible === true,
+    `Authored route well was not engage-eligible: ${JSON.stringify(approach.aim)}`);
+  assert(approach.aim.distance <= approach.aim.anchorRange * 0.85 && approach.aim.tangentialSpeed >= 0.10,
+    `Authored route well did not retain the published command margin: ${JSON.stringify(approach.aim)}`);
 
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
-  snapshot = await getSnapshot();
-  const atRing = localPlayer(snapshot, clientId);
-  const radialX = wrappedDelta(anchor.wx, atRing.wx, ws);
-  const radialY = wrappedDelta(anchor.wy, atRing.wy, ws);
-  const radialMag = Math.hypot(radialX, radialY) || 1;
-  const tangent = { x: -radialY / radialMag, y: radialX / radialMag };
-  await setGamepadDrive(page, tangent.x, tangent.y, { thrust: 1 });
-  await sleep(140);
   const engageAck = await tapAcknowledgedSlingshotEdge(page, "engage");
   let routeEvents = await waitForSlingshotEvent(clientId, baselineSeq, "player.slingshotEngaged");
   assert(routeEvents.length === 1 && routeEvents[0].type === "player.slingshotEngaged",
@@ -549,18 +589,12 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
   const portalApproach = {
-    radius: Math.max(0.012, (Number(initialPortal.radius) || 0.06) * 0.25),
     maxCruiseSpeed: 0.27,
-    arrivalSpeed: 0.08,
+    portalId: initialPortal.id,
     timeout: 70000,
   };
-  const waitForPortalReady = (label) => waitForPlayer(
-    clientId,
-    (player) => player.portalInteraction?.portalId === initialPortal.id && player.portalInteraction?.ready === true,
-    { timeout: 7000, label },
-  );
   const travel = await steerTo(page, clientId, initialPortal, portalApproach);
-  const ready = await waitForPortalReady(`portal ${initialPortal.id} evidence-ready state`);
+  const ready = { player: travel.player, snapshot: travel.snapshot };
   assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
   screenshots.push(await capturePage(page, outputDir, "08-portal-zone-awaiting-confirm"));
 
@@ -568,7 +602,6 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   // to carry the ship out. Reacquire normal ready state before the real input
   // instead of widening the production residence/abort contract for the test.
   await steerTo(page, clientId, initialPortal, portalApproach);
-  await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready state`);
   // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
   await tapGamepadButton(page, 0, 100);
   const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
@@ -595,8 +628,7 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
   const well = (initial.world?.wells || [])
     .filter((entry) => entry.alive !== false && !entry.consumedByInhibitor)
     .sort((left, right) =>
-      (Number(right.killRadius) || 0) - (Number(left.killRadius) || 0)
-      || wrappedDistance(player, left, worldScale) - wrappedDistance(player, right, worldScale)
+      wrappedDistance(player, left, worldScale) - wrappedDistance(player, right, worldScale)
     )[0];
   assert(well, "Expected a visible well for natural death proof");
   const initialDX = wrappedDelta(player.wx, well.wx, worldScale);
@@ -607,7 +639,7 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
     y: initialDY / initialDistance,
   };
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
-  const nearOffset = Math.max(0.34, (Number(well.killRadius) || 0.04) * 6);
+  const nearOffset = Math.max(0.5, (Number(well.killRadius) || 0.04) * 8);
   const nearPoint = {
     id: `${well.id}-near-side`,
     wx: wrap(well.wx - approachDirection.x * nearOffset, worldScale),
@@ -615,35 +647,33 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
   };
   await steerTo(page, clientId, nearPoint, {
     radius: 0.08,
-    maxCruiseSpeed: 0.38,
-    allowFlyby: true,
+    maxCruiseSpeed: 0.28,
+    arrivalSpeed: 0.18,
     timeout: 60000,
   });
   screenshots.push(await capturePage(page, outputDir, "16-well-contact-approach"));
-  await tapGamepadButton(page, 4, 80);
-  await waitForPlayer(clientId, (entry) => entry.abilityState?.burnActive === true, {
-    timeout: 5000,
-    label: 'Breacher burn activation',
-  });
-
-  let dead = null;
-  let lastInterceptError = null;
-  for (let attempt = 0; attempt < 3 && !dead?.died; attempt++) {
-    try {
-      dead = await steerTo(page, clientId, { ...well, id: `${well.id}-center` }, {
-        acceptDeath: true,
-        radius: 0.005,
-        maxCruiseSpeed: 0.65,
-        allowFlyby: true,
-        timeout: 22000,
-      });
-    } catch (error) {
-      lastInterceptError = error;
-    }
+  await setGamepadButton(page, 4, true);
+  await stepGameFrames(page, 1, 0.001);
+  try {
+    await waitForPlayer(clientId, (entry) => entry.abilityState?.burnActive === true, {
+      timeout: 5000,
+      label: 'Breacher burn activation',
+    });
+  } finally {
+    await setGamepadButton(page, 4, false);
+    await stepGameFrames(page, 1, 0.001);
   }
+
+  const dead = await steerTo(page, clientId, { ...well, id: `${well.id}-center` }, {
+    acceptDeath: true,
+    radius: 0.005,
+    maxCruiseSpeed: 0.65,
+    allowFlyby: true,
+    timeout: 22000,
+  });
   assert(
     dead?.died && dead.player?.status === "dead",
-    `Expected natural well death while crossing ${well.id}; ${lastInterceptError?.message || "no terminal contact"}`,
+    `Expected natural well death while crossing ${well.id}`,
   );
   const deathEvent = (await getEvents(baselineSeq)).find((event) =>
     event.type === "player.died" && event.payload?.clientId === clientId
@@ -674,7 +704,6 @@ async function proveHomeAndSecondRun(page, firstRun, outputDir, screenshots) {
   await waitForPhase(page, "meta", 10000);
   await waitForSettledMetaReport(page, 10000);
   screenshots.push(await capturePage(page, outputDir, "10-salvage-report"));
-  await sleep(1400);
   await tapGamepadButton(page, 0, 220);
   await waitForPhase(page, "home", 10000);
 
