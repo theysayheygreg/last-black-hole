@@ -128,6 +128,10 @@ function commandFor(suite, variant) {
   };
 }
 
+function consumesBrowser(suite) {
+  return suite.browser || suite.browserProcess;
+}
+
 function labelFor(entry) {
   return entry.suite.browser
     ? `${entry.suite.name} (${entry.variant.label})`
@@ -145,8 +149,9 @@ function printPlan(entries) {
     const suffix = entry.suite.browser ? ` [${entry.variant.label}: ${entry.variant.target}]` : "";
     const slow = entry.suite.slow ? " slow" : "";
     const visual = entry.suite.visual ? " visual" : "";
+    const browserProcess = entry.suite.browserProcess ? " browser-process" : "";
     const group = entry.suite.isolationGroup ? ` isolated:${entry.suite.isolationGroup}` : "";
-    console.log(`- ${entry.suite.name}${suffix}${slow}${visual}${group}`);
+    console.log(`- ${entry.suite.name}${suffix}${slow}${visual}${browserProcess}${group}`);
   }
   console.log("");
 }
@@ -266,7 +271,7 @@ async function runEntry(entry) {
   return {
     name: entry.suite.name,
     renderer: entry.suite.browser ? entry.variant.label : "node",
-    browser: entry.suite.browser,
+    browser: consumesBrowser(entry.suite),
     passed: last.passed,
     status: last.status,
     attempts,
@@ -296,21 +301,23 @@ async function runScheduled(entries) {
 
   function canStart(entry) {
     if (active.size >= totalWorkers) return false;
-    if (entry.suite.browser && browserActive >= browserWorkers) return false;
+    if (consumesBrowser(entry.suite) && browserActive >= browserWorkers) return false;
     return !entry.suite.isolationGroup || !activeGroups.has(entry.suite.isolationGroup);
   }
 
   function start(entry) {
-    console.log(`START ${labelFor(entry)}`);
-    if (entry.suite.browser) browserActive++;
+    if (consumesBrowser(entry.suite)) browserActive++;
     if (entry.suite.isolationGroup) activeGroups.add(entry.suite.isolationGroup);
+    console.log(
+      `START ${labelFor(entry)} [active=${active.size + 1}/${totalWorkers} browser=${browserActive}/${browserWorkers}]`,
+    );
     const promise = runEntry(entry).then((result) => ({ entry, result }));
     active.set(entry.index, promise);
   }
 
   function finish({ entry, result }) {
     active.delete(entry.index);
-    if (entry.suite.browser) browserActive--;
+    if (consumesBrowser(entry.suite)) browserActive--;
     if (entry.suite.isolationGroup) activeGroups.delete(entry.suite.isolationGroup);
     results[entry.index] = result;
     while (results[nextToPrint]) {

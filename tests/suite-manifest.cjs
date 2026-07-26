@@ -470,6 +470,7 @@ const SUITES = [
     file: "hud-deck.cjs",
     lanes: ["core", "visual", "playtest", "full"],
     browser: false,
+    browserProcess: true,
   },
   {
     name: "Smoke",
@@ -621,6 +622,8 @@ const FIXED_SERVICE_SUITES = new Set([
   "InfraSmoke",
   "TelemetrySmoke",
   "RemoteAuthority",
+  "Controller",
+  "KeyboardMouse",
 ]);
 
 for (const suite of SUITES) {
