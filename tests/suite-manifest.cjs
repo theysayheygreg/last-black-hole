@@ -352,6 +352,8 @@ const SUITES = [
     file: "authority-budget.cjs",
     lanes: ["authority", "sim-structure", "full"],
     browser: false,
+    // The 15 Hz wall-clock probe needs an otherwise idle host, not a retry.
+    hostExclusive: "timing",
   },
   {
     name: "AuthorityDeadlineLoop",
@@ -364,6 +366,8 @@ const SUITES = [
     file: "authority-cadence.cjs",
     lanes: ["authority", "sim-structure", "full"],
     browser: false,
+    // Each 5/15/25 Hz sample measures delivery rather than runner contention.
+    hostExclusive: "timing",
   },
   {
     name: "ProtocolJournal",
@@ -582,6 +586,8 @@ const SUITES = [
     file: "agent-play-eval.cjs",
     lanes: ["agent-eval", "full"],
     browser: true,
+    // Reserve all Chrome slots for the fresh, real-input journey.
+    browserExclusive: true,
     slow: true,
     timeout: 240000,
   },
@@ -590,6 +596,8 @@ const SUITES = [
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
     browser: true,
+    // Fixture capture is CPU/GPU-bound; do not contend with another browser.
+    browserExclusive: true,
     visual: true,
     timeout: 240000,
   },

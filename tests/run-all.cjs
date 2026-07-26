@@ -132,6 +132,21 @@ function consumesBrowser(suite) {
   return suite.browser || suite.browserProcess;
 }
 
+function browserWeightFor(suite) {
+  if (suite.browserExclusive) return browserWorkers;
+  return suite.browserWeight ?? (consumesBrowser(suite) ? 1 : 0);
+}
+
+function resourceLabel(suite) {
+  const resources = [];
+  const browserWeight = browserWeightFor(suite);
+  if (browserWeight) {
+    resources.push(suite.browserExclusive ? `browser:exclusive(${browserWeight})` : `browser:${browserWeight}`);
+  }
+  if (suite.hostExclusive) resources.push(`host-exclusive:${suite.hostExclusive}`);
+  return resources.join(" ");
+}
+
 function labelFor(entry) {
   return entry.suite.browser
     ? `${entry.suite.name} (${entry.variant.label})`
@@ -151,9 +166,31 @@ function printPlan(entries) {
     const visual = entry.suite.visual ? " visual" : "";
     const browserProcess = entry.suite.browserProcess ? " browser-process" : "";
     const group = entry.suite.isolationGroup ? ` isolated:${entry.suite.isolationGroup}` : "";
-    console.log(`- ${entry.suite.name}${suffix}${slow}${visual}${browserProcess}${group}`);
+    const resources = resourceLabel(entry.suite);
+    const resourceNote = resources ? ` resources:${resources}` : "";
+    console.log(`- ${entry.suite.name}${suffix}${slow}${visual}${browserProcess}${group}${resourceNote}`);
   }
   console.log("");
+}
+
+function validateResources(entries) {
+  for (const entry of entries) {
+    const browserWeight = browserWeightFor(entry.suite);
+    if (!Number.isInteger(browserWeight) || browserWeight < 0) {
+      throw new Error(`${entry.suite.name} has an invalid browserWeight: ${entry.suite.browserWeight}`);
+    }
+    if (entry.suite.browserExclusive && !consumesBrowser(entry.suite)) {
+      throw new Error(`${entry.suite.name} reserves exclusive browser capacity without a browser process`);
+    }
+    if (browserWeight > 0 && !consumesBrowser(entry.suite)) {
+      throw new Error(`${entry.suite.name} reserves browser capacity without a browser process`);
+    }
+    if (browserWeight > browserWorkers) {
+      throw new Error(
+        `${entry.suite.name} requires ${browserWeight} browser workers; configured limit is ${browserWorkers}`,
+      );
+    }
+  }
 }
 
 function freePort() {
@@ -295,21 +332,27 @@ async function runScheduled(entries) {
   const pending = [...entries];
   const active = new Map();
   const activeGroups = new Set();
+  const activeHostExclusive = new Set();
   const results = new Array(entries.length);
   let browserActive = 0;
   let nextToPrint = 0;
 
   function canStart(entry) {
     if (active.size >= totalWorkers) return false;
-    if (consumesBrowser(entry.suite) && browserActive >= browserWorkers) return false;
+    const browserWeight = browserWeightFor(entry.suite);
+    if (browserActive + browserWeight > browserWorkers) return false;
+    if (entry.suite.hostExclusive) return active.size === 0;
+    if (activeHostExclusive.size > 0) return false;
     return !entry.suite.isolationGroup || !activeGroups.has(entry.suite.isolationGroup);
   }
 
   function start(entry) {
-    if (consumesBrowser(entry.suite)) browserActive++;
+    browserActive += browserWeightFor(entry.suite);
     if (entry.suite.isolationGroup) activeGroups.add(entry.suite.isolationGroup);
+    if (entry.suite.hostExclusive) activeHostExclusive.add(entry.suite.hostExclusive);
+    const host = entry.suite.hostExclusive ? ` host-exclusive=${entry.suite.hostExclusive}` : "";
     console.log(
-      `START ${labelFor(entry)} [active=${active.size + 1}/${totalWorkers} browser=${browserActive}/${browserWorkers}]`,
+      `START ${labelFor(entry)} [active=${active.size + 1}/${totalWorkers} browser=${browserActive}/${browserWorkers}${host}]`,
     );
     const promise = runEntry(entry).then((result) => ({ entry, result }));
     active.set(entry.index, promise);
@@ -317,8 +360,9 @@ async function runScheduled(entries) {
 
   function finish({ entry, result }) {
     active.delete(entry.index);
-    if (consumesBrowser(entry.suite)) browserActive--;
+    browserActive -= browserWeightFor(entry.suite);
     if (entry.suite.isolationGroup) activeGroups.delete(entry.suite.isolationGroup);
+    if (entry.suite.hostExclusive) activeHostExclusive.delete(entry.suite.hostExclusive);
     results[entry.index] = result;
     while (results[nextToPrint]) {
       printResult(entries[nextToPrint], results[nextToPrint]);
@@ -328,7 +372,11 @@ async function runScheduled(entries) {
 
   while (pending.length > 0 || active.size > 0) {
     let launched = false;
+    // Do not launch work past a pending host-exclusive probe. Let active work
+    // drain, sample on an idle host, then restore normal parallel scheduling.
     for (let index = 0; index < pending.length && active.size < totalWorkers;) {
+      const barrierIndex = pending.findIndex((entry) => entry.suite.hostExclusive);
+      if (barrierIndex !== -1 && index > barrierIndex) break;
       const entry = pending[index];
       if (!canStart(entry)) {
         index++;
@@ -353,6 +401,8 @@ async function main() {
   const entries = suites
     .flatMap((suite) => variantsForSuite(suite).map((variant) => ({ suite, variant })))
     .map((entry, index) => ({ ...entry, index }));
+
+  validateResources(entries);
 
   if (options.list) {
     printPlan(entries);
@@ -387,6 +437,14 @@ async function main() {
   console.log(`Browser launches: ${launches.browser}`);
   console.log(`Service starts:   static=${launches.static} sim=${launches.sim} control=${launches.control}`);
   console.log(`Workers:          total=${totalWorkers} browser=${browserWorkers}`);
+  const exclusiveBrowserSuites = entries
+    .filter((entry) => entry.suite.browserExclusive)
+    .map((entry) => entry.suite.name);
+  const hostExclusiveSuites = entries
+    .filter((entry) => entry.suite.hostExclusive)
+    .map((entry) => `${entry.suite.name}:${entry.suite.hostExclusive}`);
+  console.log(`Resources:        browser-exclusive=${exclusiveBrowserSuites.join(",") || "none"}`);
+  console.log(`Host exclusive:   ${hostExclusiveSuites.join(",") || "none"}`);
   console.log(`Artifacts:        ${path.relative(ROOT, artifactRoot)}`);
 
   const allPassed = results.every((result) => result.passed);
