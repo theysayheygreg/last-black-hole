@@ -54,7 +54,7 @@ async function moveHomeTab(page, tabName) {
 async function bootstrapCleanRemotePage(page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "domcontentloaded" });
-  await sleep(2000);
+  await waitFor(page, () => typeof window.__TEST_API?.createTestProfile === "function", { timeout: 12000 });
 }
 
 async function enterRemoteRun(page) {
@@ -244,6 +244,28 @@ async function postLeave(body) {
   return result;
 }
 
+async function leaveDirectClient(clientId) {
+  if (!directAuthorities.has(clientId)) return;
+  try {
+    const result = await postLeave({ clientId });
+    if (!result.ok) console.warn(`Direct client cleanup failed for ${clientId}: ${JSON.stringify(result)}`);
+  } catch (err) {
+    console.warn(`Direct client cleanup failed for ${clientId}: ${err.message}`);
+  } finally {
+    directAuthorities.delete(clientId);
+  }
+}
+
+async function withDirectClient(joinRequest, test) {
+  const joined = await postJoin(joinRequest);
+  assert(joined.ok === true, `Expected ${joinRequest.clientId} to join, got ${JSON.stringify(joined)}`);
+  try {
+    return await test(joined);
+  } finally {
+    await leaveDirectClient(joinRequest.clientId);
+  }
+}
+
 async function postDebugScavengerState(body) {
   const response = await fetch(`${SIM_URL}/debug/scavenger-state`, {
     method: "POST",
@@ -333,6 +355,23 @@ function chooseSafePoint(snapshot, index = 0) {
   return ranked[index % ranked.length] || { wx: ws * 0.5, wy: ws * 0.5 };
 }
 
+async function parkBrowserPlayer(targetPage, pointIndex = 0) {
+  const net = await targetPage.evaluate(() => window.__TEST_API.getNetworkState());
+  const snapshot = await getSnapshot();
+  assert(snapshot.session?.status === "running", `Expected a running session while parking ${net.clientId}`);
+  const point = chooseSafePoint(snapshot, pointIndex);
+  const parked = await postDebugPlayerState({
+    clientId: net.clientId,
+    wx: point.wx,
+    wy: point.wy,
+    vx: 0,
+    vy: 0,
+    status: "alive",
+  });
+  assert(parked.ok === true, `Expected debug fixture to keep browser player ${net.clientId} alive`);
+  return net;
+}
+
 async function run() {
   console.log(`\n=== REMOTE AUTHORITY TESTS (${htmlFile}) ===\n`);
 
@@ -385,6 +424,7 @@ async function run() {
       assert(!("pressureFrac" in (snapshot.inhibitor || {})), "Remote snapshot must not expose Inhibitor pressureFrac");
       assert(!("threshold" in (snapshot.inhibitor || {})), "Remote snapshot must not expose Inhibitor threshold");
       assert(Array.isArray(snapshot.inhibitor?.schedule?.severityWaves), "Expected scheduled Inhibitor severity waves");
+      await parkBrowserPlayer(page, 7);
     });
 
     await runner.run("Remote debug can force and reset authoritative inhibitor state", async () => {
@@ -414,188 +454,204 @@ async function run() {
     });
 
     await runner.run("Remote portal extraction is a server consequence", async () => {
+      await parkBrowserPlayer(page, 7);
       const clientId = "remote-portal-authority-test";
-      const joined = await postJoin({ clientId, name: "Portal Authority Test" });
-      assert(joined.ok === true, `Expected direct portal test client to join, got ${JSON.stringify(joined)}`);
-
-      const snapshot = await getSnapshot();
-      const point = chooseSafePoint(snapshot, 0);
-      const moved = await postDebugPlayerState({
-        clientId,
-        wx: point.wx,
-        wy: point.wy,
-        vx: 0,
-        vy: 0,
-        status: "alive",
-      });
-      assert(moved.ok === true, "Expected debug player placement before portal extraction");
-
-      const baselineEvents = await getEvents(0);
-      const baselineSeq = baselineEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
       const portalId = "portal-authority-test";
-      const portal = await postDebugPortalState({
-        id: portalId,
-        wx: point.wx,
-        wy: point.wy,
-        type: "standard",
-        alive: true,
-        blockedByInhibitor: false,
-        lifespan: 30,
-        opacity: 1,
-      });
-      assert(portal.ok === true, `Expected debug portal placement, got ${JSON.stringify(portal)}`);
+      await withDirectClient({ clientId, name: "Portal Authority Test" }, async () => {
+        try {
+          const snapshot = await getSnapshot();
+          const point = chooseSafePoint(snapshot, 0);
+          const moved = await postDebugPlayerState({
+            clientId,
+            wx: point.wx,
+            wy: point.wy,
+            vx: 0,
+            vy: 0,
+            status: "alive",
+          });
+          assert(moved.ok === true,
+            `Expected debug player placement before portal extraction, got ${JSON.stringify(moved)}`);
 
-      const { player: readyPlayer } = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => remotePlayer.status === "alive" && remotePlayer.portalInteraction?.portalId === portalId,
-        { timeout: 8000 }
-      );
-      assert(readyPlayer.status === "alive", "Expected portal zone to wait for explicit confirmation");
-      const confirm = await postInput({
-        clientId,
-        seq: 1,
-        moveX: 0,
-        moveY: 0,
-        extractConfirm: true,
+          const baselineEvents = await getEvents(0);
+          const baselineSeq = baselineEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
+          const portal = await postDebugPortalState({
+            id: portalId,
+            wx: point.wx,
+            wy: point.wy,
+            type: "standard",
+            alive: true,
+            blockedByInhibitor: false,
+            lifespan: 30,
+            opacity: 1,
+          });
+          assert(portal.ok === true, `Expected debug portal placement, got ${JSON.stringify(portal)}`);
+
+          const { player: readyPlayer } = await waitForSnapshotPlayer(
+            clientId,
+            (remotePlayer) => remotePlayer.status === "alive" &&
+              remotePlayer.portalInteraction?.portalId === portalId &&
+              remotePlayer.portalInteraction.ready === true,
+            { timeout: 8000 }
+          );
+          assert(readyPlayer.status === "alive", "Expected portal residence to wait for explicit confirmation");
+          const confirm = await postInput({
+            clientId,
+            seq: 1,
+            moveX: 0,
+            moveY: 0,
+            extractConfirm: true,
+          });
+          assert(confirm.ok === true, `Expected extraction confirmation input, got ${JSON.stringify(confirm)}`);
+          const { player } = await waitForSnapshotPlayer(
+            clientId,
+            (remotePlayer) => remotePlayer.status === "escaped",
+            { timeout: 8000 }
+          );
+          assert(player.status === "escaped", `Expected player to escape, got ${player.status}`);
+          const events = await waitForEvents(
+            (allEvents) => allEvents.some((event) =>
+              event.seq > baselineSeq &&
+              event.type === "player.escaped" &&
+              event.payload?.clientId === clientId &&
+              event.payload?.portalId === portalId
+            ),
+            { timeout: 5000 }
+          );
+          assert(events.some((event) => event.seq > baselineSeq && event.type === "player.escaped" && event.payload?.portalId === portalId),
+            "Expected authoritative escaped event for the debug portal");
+        } finally {
+          await postDebugPortalState({ id: portalId, alive: false, blockedByInhibitor: false });
+        }
       });
-      assert(confirm.ok === true, `Expected extraction confirmation input, got ${JSON.stringify(confirm)}`);
-      const { player } = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => remotePlayer.status === "escaped",
-        { timeout: 8000 }
-      );
-      assert(player.status === "escaped", `Expected player to escape, got ${player.status}`);
-      const events = await waitForEvents(
-        (allEvents) => allEvents.some((event) =>
-          event.seq > baselineSeq &&
-          event.type === "player.escaped" &&
-          event.payload?.clientId === clientId &&
-          event.payload?.portalId === portalId
-        ),
-        { timeout: 5000 }
-      );
-      assert(events.some((event) => event.seq > baselineSeq && event.type === "player.escaped" && event.payload?.portalId === portalId),
-        "Expected authoritative escaped event for the debug portal");
-      await postLeave({ clientId });
     });
 
     await runner.run("Remote star or planetoid push is server-authored", async () => {
+      await parkBrowserPlayer(page, 6);
       const clientId = "remote-push-authority-test";
-      const joined = await postJoin({ clientId, name: "Push Authority Test" });
-      assert(joined.ok === true, `Expected direct push test client to join, got ${JSON.stringify(joined)}`);
+      await withDirectClient({ clientId, name: "Push Authority Test" }, async () => {
+        const snapshot = await getSnapshot();
+        const ws = snapshot.session?.worldScale || 5;
+        const planetoid = snapshot.world?.planetoids?.find((entry) => entry.alive !== false);
+        const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
+        const source = planetoid || star;
+        assert(source, "Expected an authoritative planetoid or star for push test");
+        const offset = planetoid ? 0.04 : 0.16;
+        const placed = await postDebugPlayerState({
+          clientId,
+          wx: ((source.wx + offset) % ws + ws) % ws,
+          wy: source.wy,
+          vx: 0,
+          vy: 0,
+          status: "alive",
+        });
+        assert(placed.ok === true, "Expected debug player placement before push test");
 
-      const snapshot = await getSnapshot();
-      const ws = snapshot.session?.worldScale || 5;
-      const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
-      const planetoid = snapshot.world?.planetoids?.find((entry) => entry.alive !== false);
-      const source = star || planetoid;
-      assert(source, "Expected an authoritative star or planetoid for push test");
-      const offset = star ? 0.16 : 0.04;
-      const placed = await postDebugPlayerState({
-        clientId,
-        wx: ((source.wx + offset) % ws + ws) % ws,
-        wy: source.wy,
-        vx: 0,
-        vy: 0,
-        status: "alive",
+        const { player } = await waitForSnapshotPlayer(
+          clientId,
+          (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.005,
+          { timeout: 8000 }
+        );
+        assert(Math.hypot(player.vx, player.vy) > 0.005,
+          `Expected server-authored push velocity, got vx=${player.vx} vy=${player.vy}`);
       });
-      assert(placed.ok === true, "Expected debug player placement before push test");
-
-      const { player } = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.005,
-        { timeout: 8000 }
-      );
-      assert(Math.hypot(player.vx, player.vy) > 0.005,
-        `Expected server-authored push velocity, got vx=${player.vx} vy=${player.vy}`);
-      await postLeave({ clientId });
     });
 
     await runner.run("Remote scavenger contact bumps the player", async () => {
+      await parkBrowserPlayer(page, 5);
       const clientId = "remote-scavenger-bump-test";
-      const joined = await postJoin({ clientId, name: "Scavenger Bump Test" });
-      assert(joined.ok === true, `Expected direct scavenger bump test client to join, got ${JSON.stringify(joined)}`);
+      await withDirectClient({ clientId, name: "Scavenger Bump Test" }, async () => {
+        const snapshot = await getSnapshot();
+        const scavenger = snapshot.world?.scavengers?.find((entry) => entry.alive !== false);
+        assert(scavenger?.id, "Expected an authoritative scavenger for contact test");
+        try {
+          const point = chooseSafePoint(snapshot, 1);
+          const playerPlaced = await postDebugPlayerState({
+            clientId,
+            wx: point.wx,
+            wy: point.wy,
+            vx: 0,
+            vy: 0,
+            status: "alive",
+          });
+          assert(playerPlaced.ok === true, "Expected debug player placement before scavenger bump");
+          const scavPlaced = await postDebugScavengerState({
+            scavengerId: scavenger.id,
+            wx: point.wx + 0.02,
+            wy: point.wy,
+            vx: 0,
+            vy: 0,
+            state: "drift",
+            alive: true,
+          });
+          assert(scavPlaced.ok === true, "Expected debug scavenger placement before bump");
 
-      const snapshot = await getSnapshot();
-      const scavenger = snapshot.world?.scavengers?.find((entry) => entry.alive !== false);
-      assert(scavenger?.id, "Expected an authoritative scavenger for contact test");
-      const point = chooseSafePoint(snapshot, 1);
-      const playerPlaced = await postDebugPlayerState({
-        clientId,
-        wx: point.wx,
-        wy: point.wy,
-        vx: 0,
-        vy: 0,
-        status: "alive",
+          const { player } = await waitForSnapshotPlayer(
+            clientId,
+            (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.05,
+            { timeout: 8000 }
+          );
+          assert(Math.hypot(player.vx, player.vy) > 0.05,
+            `Expected scavenger contact impulse, got vx=${player.vx} vy=${player.vy}`);
+        } finally {
+          await postDebugScavengerState({
+            scavengerId: scavenger.id,
+            wx: scavenger.wx,
+            wy: scavenger.wy,
+            vx: scavenger.vx,
+            vy: scavenger.vy,
+            state: scavenger.state,
+            alive: scavenger.alive !== false,
+          });
+        }
       });
-      assert(playerPlaced.ok === true, "Expected debug player placement before scavenger bump");
-      const scavPlaced = await postDebugScavengerState({
-        scavengerId: scavenger.id,
-        wx: point.wx + 0.02,
-        wy: point.wy,
-        vx: 0,
-        vy: 0,
-        state: "drift",
-        alive: true,
-      });
-      assert(scavPlaced.ok === true, "Expected debug scavenger placement before bump");
-
-      const { player } = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.05,
-        { timeout: 8000 }
-      );
-      assert(Math.hypot(player.vx, player.vy) > 0.05,
-        `Expected scavenger contact impulse, got vx=${player.vx} vy=${player.vy}`);
-      await postLeave({ clientId });
     });
 
     await runner.run("Remote signal follows delivered thrust, not empty-tank intent", async () => {
+      await parkBrowserPlayer(page, 4);
       const clientId = "remote-signal-output-test";
-      const joined = await postJoin({ clientId, name: "Signal Output Test" });
-      assert(joined.ok === true, `Expected direct signal test client to join, got ${JSON.stringify(joined)}`);
+      await withDirectClient({ clientId, name: "Signal Output Test" }, async () => {
+        const snapshot = await getSnapshot();
+        const point = chooseSafePoint(snapshot, 2);
+        const baselineSignal = 0.35;
+        const placed = await postDebugPlayerState({
+          clientId,
+          wx: point.wx,
+          wy: point.wy,
+          vx: 0,
+          vy: 0,
+          deltaV: 0,
+          signalLevel: baselineSignal,
+          timeSinceThrust: 0,
+          status: "alive",
+        });
+        assert(placed.ok === true, "Expected debug player placement before signal output test");
+        const beforeTick = placed.snapshot?.tick || snapshot.tick || 0;
 
-      const snapshot = await getSnapshot();
-      const point = chooseSafePoint(snapshot, 2);
-      const baselineSignal = 0.35;
-      const placed = await postDebugPlayerState({
-        clientId,
-        wx: point.wx,
-        wy: point.wy,
-        vx: 0,
-        vy: 0,
-        deltaV: 0,
-        signalLevel: baselineSignal,
-        timeSinceThrust: 0,
-        status: "alive",
+        await postInput({
+          clientId,
+          seq: Date.now() + 99,
+          moveX: 1,
+          moveY: 0,
+          thrust: 1,
+          brake: 0,
+          consumeSlot: null,
+          timestamp: Date.now(),
+        });
+
+        const { player, snapshot: after } = await waitForSnapshotPlayer(
+          clientId,
+          (remotePlayer, currentSnapshot) =>
+            currentSnapshot.tick >= beforeTick + 4 &&
+            remotePlayer.signal?.level <= baselineSignal + 0.02,
+          { timeout: 8000 }
+        );
+        assert(player.signal.level <= baselineSignal + 0.02,
+          `Expected empty-tank thrust intent not to create thrust signal by tick ${after.tick}, got ${player.signal.level}`);
       });
-      assert(placed.ok === true, "Expected debug player placement before signal output test");
-      const beforeTick = placed.snapshot?.tick || snapshot.tick || 0;
-
-      await postInput({
-        clientId,
-        seq: Date.now() + 99,
-        moveX: 1,
-        moveY: 0,
-        thrust: 1,
-        brake: 0,
-        consumeSlot: null,
-        timestamp: Date.now(),
-      });
-
-      const { player, snapshot: after } = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer, currentSnapshot) =>
-          currentSnapshot.tick >= beforeTick + 4 &&
-          remotePlayer.signal?.level <= baselineSignal + 0.02,
-        { timeout: 8000 }
-      );
-      assert(player.signal.level <= baselineSignal + 0.02,
-        `Expected empty-tank thrust intent not to create thrust signal by tick ${after.tick}, got ${player.signal.level}`);
-      await postLeave({ clientId });
     });
 
     await runner.run("Remote snapshots advance and move the ship under authoritative input", async () => {
+      await parkBrowserPlayer(page, 3);
       const before = await page.evaluate(() => ({
         net: window.__TEST_API.getNetworkState(),
         pos: window.__TEST_API.getShipPos(),
@@ -634,8 +690,9 @@ async function run() {
     });
 
     await runner.run("Remote delta-v gates brake, fuel cells, and speed cap", async () => {
+      await parkBrowserPlayer(page, 7);
       const clientId = "remote-delta-v-authority-test";
-      const joined = await postJoin({
+      await withDirectClient({
         clientId,
         name: "Delta-V Authority Test",
         consumables: [null, {
@@ -649,84 +706,84 @@ async function run() {
           amount: 35,
           charges: 1,
         }],
-      });
-      assert(joined.ok === true, "Expected dedicated delta-v client to join");
-      let result = await postDebugPlayerState({
-        clientId,
-        wx: 1.5,
-        wy: 1.5,
-        vx: 0,
-        vy: 0,
-        deltaV: 20,
-        timeSinceThrust: 999,
-        status: "alive",
-      });
-      assert(result.ok === true, "Expected debug fuel reset to succeed");
+      }, async () => {
+        let result = await postDebugPlayerState({
+          clientId,
+          wx: 1.5,
+          wy: 1.5,
+          vx: 0,
+          vy: 0,
+          deltaV: 20,
+          timeSinceThrust: 999,
+          status: "alive",
+        });
+        assert(result.ok === true, "Expected debug fuel reset to succeed");
 
-      await postInput({
-        clientId,
-        seq: Date.now() + 10,
-        moveX: 1,
-        moveY: 0,
-        thrust: 0,
-        brake: 1,
-        consumeSlot: null,
-        timestamp: Date.now(),
-      });
-      let observed = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.001 && remotePlayer.deltaV < 20,
-        { timeout: 5000 }
-      );
-      assert(Math.hypot(observed.player.vx, observed.player.vy) > 0.001,
-        `Expected brake input to produce authoritative motion, got vx=${observed.player.vx} vy=${observed.player.vy}`);
-      assert(observed.player.deltaV < 20, `Expected brake to spend delta-v, got ${observed.player.deltaV}`);
+        await postInput({
+          clientId,
+          seq: Date.now() + 10,
+          moveX: 1,
+          moveY: 0,
+          thrust: 0,
+          brake: 1,
+          consumeSlot: null,
+          timestamp: Date.now(),
+        });
+        let observed = await waitForSnapshotPlayer(
+          clientId,
+          (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.001 && remotePlayer.deltaV < 20,
+          { timeout: 5000 }
+        );
+        assert(Math.hypot(observed.player.vx, observed.player.vy) > 0.001,
+          `Expected brake input to produce authoritative motion, got vx=${observed.player.vx} vy=${observed.player.vy}`);
+        assert(observed.player.deltaV < 20, `Expected brake to spend delta-v, got ${observed.player.deltaV}`);
 
-      result = await postDebugPlayerState({
-        clientId,
-        vx: 0,
-        vy: 0,
-        deltaV: 0,
-        timeSinceThrust: 0,
-        status: "alive",
-      });
-      assert(result.ok === true, "Expected debug empty tank to succeed");
-      await postInput({
-        clientId,
-        seq: Date.now() + 20,
-        moveX: 1,
-        moveY: 0,
-        thrust: 1,
-        brake: 0,
-        consumeSlot: 1,
-        timestamp: Date.now(),
-      });
-      observed = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => remotePlayer.consumables?.[1] === null && remotePlayer.deltaV > 20,
-        { timeout: 5000 }
-      );
-      assert(observed.player.consumables[1] === null, "Expected fuel cell to be consumed authoritatively");
-      assert(observed.player.deltaV > 20, `Expected fuel cell to refill delta-v, got ${observed.player.deltaV}`);
+        result = await postDebugPlayerState({
+          clientId,
+          vx: 0,
+          vy: 0,
+          deltaV: 0,
+          timeSinceThrust: 0,
+          status: "alive",
+        });
+        assert(result.ok === true, "Expected debug empty tank to succeed");
+        await postInput({
+          clientId,
+          seq: Date.now() + 20,
+          moveX: 1,
+          moveY: 0,
+          thrust: 1,
+          brake: 0,
+          consumeSlot: 1,
+          timestamp: Date.now(),
+        });
+        observed = await waitForSnapshotPlayer(
+          clientId,
+          (remotePlayer) => remotePlayer.consumables?.[1] === null && remotePlayer.deltaV > 20,
+          { timeout: 5000 }
+        );
+        assert(observed.player.consumables[1] === null, "Expected fuel cell to be consumed authoritatively");
+        assert(observed.player.deltaV > 20, `Expected fuel cell to refill delta-v, got ${observed.player.deltaV}`);
 
-      result = await postDebugPlayerState({
-        clientId,
-        vx: 20,
-        vy: 0,
-        status: "alive",
+        result = await postDebugPlayerState({
+          clientId,
+          vx: 20,
+          vy: 0,
+          status: "alive",
+        });
+        assert(result.ok === true, "Expected debug high velocity to succeed");
+        observed = await waitForSnapshotPlayer(
+          clientId,
+          (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) <= 8.01,
+          { timeout: 5000 }
+        );
+        assert(Math.hypot(observed.player.vx, observed.player.vy) <= 8.01,
+          `Expected server speed cap near 8 wu/s, got ${Math.hypot(observed.player.vx, observed.player.vy)}`);
       });
-      assert(result.ok === true, "Expected debug high velocity to succeed");
-      observed = await waitForSnapshotPlayer(
-        clientId,
-        (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) <= 8.01,
-        { timeout: 5000 }
-      );
-      assert(Math.hypot(observed.player.vx, observed.player.vy) <= 8.01,
-        `Expected server speed cap near 8 wu/s, got ${Math.hypot(observed.player.vx, observed.player.vy)}`);
-      await postLeave({ clientId });
     });
 
     await runner.run("Remote slingshot is resolved by the authoritative sim", async () => {
+      await parkBrowserPlayer(page, 6);
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       const snapshot = await getSnapshot();
       const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
@@ -853,6 +910,7 @@ async function run() {
     });
 
     await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {
+      await parkBrowserPlayer(page, 5);
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       const moved = await postDebugPlayerState({
         clientId: net.clientId,
@@ -889,8 +947,9 @@ async function run() {
     });
 
     await runner.run("Remote inventory actions mutate authoritative cargo and loadout", async () => {
+      await parkBrowserPlayer(page, 4);
       const clientId = "remote-inventory-authority-test";
-      const joined = await postJoin({
+      await withDirectClient({
         clientId,
         name: "Inventory Authority Test",
         equipped: [{
@@ -902,77 +961,77 @@ async function run() {
           value: 450,
           effect: "reduceWellPull",
         }],
+      }, async () => {
+        const resetPlayer = await postDebugPlayerState({
+          clientId,
+          wx: 1.5,
+          wy: 1.5,
+          vx: 0,
+          vy: 0,
+          status: "alive",
+        });
+        assert(resetPlayer.ok === true, "Expected debug reset to safe alive state before inventory mutation");
+
+        let result = await postInventoryAction({
+          clientId,
+          action: "unequip",
+          equipSlot: 0,
+        });
+        assert(result.ok === true, "Expected unequip action to succeed");
+
+        let snapshotState = {
+          snapshot: result.snapshot,
+          player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
+        };
+        assert(snapshotState.player?.cargo?.some((item) => item?.name === "Pull Dampener"), "Expected unequipped artifact in cargo");
+
+        const cargoSlot = snapshotState.player.cargo.findIndex((item) => item?.name === "Pull Dampener");
+        result = await postInventoryAction({
+          clientId,
+          action: "equipCargo",
+          cargoSlot,
+          equipSlot: 1,
+        });
+        assert(result.ok === true, "Expected equipCargo action to succeed");
+
+        snapshotState = {
+          snapshot: result.snapshot,
+          player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
+        };
+        assert(snapshotState.player?.equipped?.[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
+
+        result = await postInventoryAction({
+          clientId,
+          action: "unequip",
+          equipSlot: 1,
+        });
+        assert(result.ok === true, "Expected second unequip action to succeed");
+
+        snapshotState = {
+          snapshot: result.snapshot,
+          player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
+        };
+        const dropSlot = snapshotState.player.cargo.findIndex(Boolean);
+        assert(dropSlot >= 0, "Expected an occupied cargo slot before remote drop");
+        result = await postInventoryAction({
+          clientId,
+          action: "dropCargo",
+          cargoSlot: dropSlot,
+        });
+        assert(result.ok === true, "Expected dropCargo action to succeed");
+        const authoritativeDropped = result.snapshot.world.wrecks.find((wreck) => typeof wreck.name === "string" && wreck.name.startsWith("dropped:"));
+        assert(authoritativeDropped, "Expected authoritative snapshot to contain dropped wreck");
+
+        const dropSnapshot = await getSnapshot();
+        assert(
+          dropSnapshot.world?.wrecks?.some((wreck) => wreck.name === authoritativeDropped.name),
+          "Expected dropped wreck to remain in authoritative world snapshot"
+        );
       });
-      assert(joined.ok === true, "Expected dedicated inventory client to join");
-      const resetPlayer = await postDebugPlayerState({
-        clientId,
-        wx: 1.5,
-        wy: 1.5,
-        vx: 0,
-        vy: 0,
-        status: "alive",
-      });
-      assert(resetPlayer.ok === true, "Expected debug reset to safe alive state before inventory mutation");
-
-      let result = await postInventoryAction({
-        clientId,
-        action: "unequip",
-        equipSlot: 0,
-      });
-      assert(result.ok === true, "Expected unequip action to succeed");
-
-      let snapshotState = {
-        snapshot: result.snapshot,
-        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
-      };
-      assert(snapshotState.player?.cargo?.some((item) => item?.name === "Pull Dampener"), "Expected unequipped artifact in cargo");
-
-      const cargoSlot = snapshotState.player.cargo.findIndex((item) => item?.name === "Pull Dampener");
-      result = await postInventoryAction({
-        clientId,
-        action: "equipCargo",
-        cargoSlot,
-        equipSlot: 1,
-      });
-      assert(result.ok === true, "Expected equipCargo action to succeed");
-
-      snapshotState = {
-        snapshot: result.snapshot,
-        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
-      };
-      assert(snapshotState.player?.equipped?.[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
-
-      result = await postInventoryAction({
-        clientId,
-        action: "unequip",
-        equipSlot: 1,
-      });
-      assert(result.ok === true, "Expected second unequip action to succeed");
-
-      snapshotState = {
-        snapshot: result.snapshot,
-        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
-      };
-      const dropSlot = snapshotState.player.cargo.findIndex(Boolean);
-      assert(dropSlot >= 0, "Expected an occupied cargo slot before remote drop");
-      result = await postInventoryAction({
-        clientId,
-        action: "dropCargo",
-        cargoSlot: dropSlot,
-      });
-      assert(result.ok === true, "Expected dropCargo action to succeed");
-      const authoritativeDropped = result.snapshot.world.wrecks.find((wreck) => typeof wreck.name === "string" && wreck.name.startsWith("dropped:"));
-      assert(authoritativeDropped, "Expected authoritative snapshot to contain dropped wreck");
-
-      const dropSnapshot = await getSnapshot();
-      assert(
-        dropSnapshot.world?.wrecks?.some((wreck) => wreck.name === authoritativeDropped.name),
-        "Expected dropped wreck to remain in authoritative world snapshot"
-      );
-      await postLeave({ clientId });
     });
 
     await runner.run("Remote authoritative hazards push the player without local fallback", async () => {
+      await parkBrowserPlayer(page, 3);
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       const result = await postDebugPlayerState({
         clientId: net.clientId,
@@ -1006,6 +1065,7 @@ async function run() {
     });
 
     await runner.run("Remote scavenger death consequences stay authoritative", async () => {
+      await parkBrowserPlayer(page, 7);
       const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
       assert(scavengers.length > 0, "Expected at least one scavenger for remote death test");
       const target = scavengers[0];
@@ -1045,6 +1105,7 @@ async function run() {
     });
 
     await runner.run("Second client joins existing authoritative session", async () => {
+      await parkBrowserPlayer(page, 6);
       const joinResponse = await postJoin({
         clientId: "remote-test-second-client",
         name: "Second Client",
@@ -1133,12 +1194,10 @@ async function run() {
 
     await runner.run("Human joins cannot select internal prototype hulls", async () => {
       const clientId = "internal-hull-authority-test";
-      const joined = await postJoin({ clientId, name: "Roster Test", hullType: "resonant" });
-      assert(joined.ok === true, `Expected roster test client to join, got ${JSON.stringify(joined)}`);
-      assert(joined.player?.hullType === "drifter",
-        `Expected internal hull request to normalize to Drifter, got ${joined.player?.hullType}`);
-      const left = await postLeave({ clientId });
-      assert(left.ok === true, "Expected roster test client to leave cleanly");
+      await withDirectClient({ clientId, name: "Roster Test", hullType: "resonant" }, async (joined) => {
+        assert(joined.player?.hullType === "drifter",
+          `Expected internal hull request to normalize to Drifter, got ${joined.player?.hullType}`);
+      });
     });
 
     await runner.run("Host leaves and remaining player is promoted", async () => {
