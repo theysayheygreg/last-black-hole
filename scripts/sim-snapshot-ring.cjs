@@ -1,5 +1,5 @@
 const { PROTOCOL_VERSION } = require("./sim-protocol.cjs");
-const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
+const { assertRuntimeJsonBudget } = require("./sim/serialization-budget.cjs");
 
 const DEFAULT_SNAPSHOT_RING_CAPACITY = 32;
 const DEFAULT_BODY_SCHEMA_VERSION = 1;
@@ -120,10 +120,8 @@ class SimSnapshotRing {
     };
 
     if (Number.isFinite(Number(maxBytes))) {
-      assertSerializedJsonBudget(stored, maxBytes, {
+      assertRuntimeJsonBudget(stored, maxBytes, {
         label: budgetLabel,
-        pretty: true,
-        trailingNewline: true,
       });
     }
 

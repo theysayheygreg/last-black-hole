@@ -134,6 +134,7 @@ const {
 } = require("./sim/slingshot-contract.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
+const { serializeRuntimeJson } = require("./sim/serialization-budget.cjs");
 const {
   createCollapseEpochSchedule,
   createCollapseEpochState,
@@ -761,7 +762,7 @@ function readJson(req) {
 }
 
 function sendJson(res, statusCode, body) {
-  const payload = `${JSON.stringify(body, null, 2)}\n`;
+  const payload = serializeRuntimeJson(body);
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");

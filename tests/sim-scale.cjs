@@ -8,7 +8,10 @@ const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers
 const { SESSION_PROFILES } = require("../scripts/content/session-profiles.cjs");
 const { MOVEMENT } = require("../scripts/content/movement.cjs");
 const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
-const { serializedJsonBytes } = require("../scripts/sim/serialization-budget.cjs");
+const {
+  serializeRuntimeJson,
+  serializedRuntimeJsonBytes,
+} = require("../scripts/sim/serialization-budget.cjs");
 
 const SIM_PORT = 8789;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
@@ -38,7 +41,13 @@ async function getJson(path, options) {
   const response = await fetch(`${SIM_URL}${path}`, options);
   const text = await response.text();
   const body = JSON.parse(text);
-  return { status: response.status, body, bytes: Buffer.byteLength(text) };
+  return {
+    status: response.status,
+    body,
+    bytes: Buffer.byteLength(text),
+    text,
+    contentType: response.headers.get("content-type"),
+  };
 }
 
 async function restartFreshSim() {
@@ -200,8 +209,14 @@ async function run() {
           `Expected repeated snapshot large tier, got ${snapshot.body.session?.simScaleProfile}`);
         assertLegacyRateShape(snapshot.body.session, { includeBaseKeys: true });
         assertLegacyDiagnosticShape(snapshot.body.session, snapshot.body.world, { includeBaseKeys: true });
-        const serializedBytes = serializedJsonBytes(snapshot.body, { pretty: true, trailingNewline: true });
+        const serializedBytes = serializedRuntimeJsonBytes(snapshot.body);
         observedBytes.push(serializedBytes);
+        assert(snapshot.text === serializeRuntimeJson(snapshot.body),
+          "Deep Field snapshot wire text drifted from the shared runtime serializer");
+        assert(snapshot.bytes === serializedBytes,
+          `Deep Field snapshot byte count drifted: ${snapshot.bytes}/${serializedBytes}`);
+        assert(snapshot.contentType === "application/json; charset=utf-8",
+          `Deep Field snapshot content type changed: ${snapshot.contentType}`);
         assert(serializedBytes <= LARGE_PROFILE.snapshotBudgetBytes,
           `Deep Field serialized snapshot exceeds large tier: ${serializedBytes}/${LARGE_PROFILE.snapshotBudgetBytes}`);
         assert((snapshot.body.world?.stars || []).every((star) => typeof star.type === "string"),

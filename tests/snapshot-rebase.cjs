@@ -1,8 +1,31 @@
 const { TestRunner, assert } = require("./helpers.cjs");
 const { createSimSnapshotRing } = require("../scripts/sim-snapshot-ring.cjs");
+const {
+  assertRuntimeJsonBudget,
+  serializedRuntimeJsonBytes,
+  serializeRuntimeJson,
+} = require("../scripts/sim/serialization-budget.cjs");
 
 async function run() {
   const runner = new TestRunner("SnapshotRebase");
+
+  await runner.run("Runtime JSON budget measures the exact compact wire payload", async () => {
+    const payload = { type: "snapshot", values: [1, 2], nested: { active: true } };
+    const wire = serializeRuntimeJson(payload);
+    assert(wire === JSON.stringify(payload), "Runtime JSON must preserve native key order and values");
+    assert(!wire.includes("\n"), "Runtime JSON transport must not add formatting bytes");
+    assert(serializedRuntimeJsonBytes(payload) === Buffer.byteLength(wire),
+      "Runtime JSON byte receipt must match its exact wire text");
+    assert(assertRuntimeJsonBudget(payload, Buffer.byteLength(wire), { label: "Exact wire proof" }) === Buffer.byteLength(wire),
+      "Exact runtime budget must admit its wire payload");
+    let rejected = false;
+    try {
+      assertRuntimeJsonBudget(payload, Buffer.byteLength(wire) - 1, { label: "Exact wire proof" });
+    } catch (error) {
+      rejected = /exceeding the \d+-byte budget/.test(error.message);
+    }
+    assert(rejected, "Runtime budget must reject the next smaller wire limit");
+  });
 
   await runner.run("Snapshots assign monotonic ids and preserve baseline metadata", async () => {
     const ring = createSimSnapshotRing({ capacity: 4, runId: "run-snap" });
