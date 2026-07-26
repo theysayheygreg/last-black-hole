@@ -6,6 +6,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { performance } = require("perf_hooks");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
+const { createAuthorityDeadlineLoop } = require("./sim/authority-deadline-loop.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
 const { getMapDurationSeconds, getPortalPlacementPolicy } = require("./content/map-scales.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
@@ -1351,7 +1352,7 @@ const runtime = {
   shutdownReason: null,
 };
 
-let tickHandle = null;
+let tickLoop = null;
 let currentLoopTickHz = DEFAULT_TICK_HZ;
 let terminalShutdownHandle = null;
 
@@ -6681,8 +6682,8 @@ function getLoopTickHz() {
 }
 
 function stopTickLoop() {
-  if (tickHandle) clearInterval(tickHandle);
-  tickHandle = null;
+  tickLoop?.stop();
+  tickLoop = null;
   currentLoopTickHz = 0;
   runtime.loopTickHz = 0;
 }
@@ -6693,11 +6694,12 @@ function restartTickLoop() {
     stopTickLoop();
     return;
   }
-  if (tickHandle && currentLoopTickHz === nextTickHz) return;
-  if (tickHandle) clearInterval(tickHandle);
+  if (tickLoop && currentLoopTickHz === nextTickHz) return;
+  stopTickLoop();
   currentLoopTickHz = nextTickHz;
   runtime.loopTickHz = nextTickHz;
-  tickHandle = setInterval(tickSim, Math.max(1, Math.round(1000 / nextTickHz)));
+  tickLoop = createAuthorityDeadlineLoop({ tick: tickSim });
+  tickLoop.start(nextTickHz);
 }
 
 function writeFiles() {
@@ -6765,6 +6767,7 @@ const server = http.createServer(async (req, res) => {
           uptimeSec: Number(process.uptime().toFixed(3)),
           memory: process.memoryUsage(),
         },
+        scheduler: tickLoop?.stats() || null,
         idleState,
         shutdownReason: runtime.shutdownReason,
         bench: BENCH_GATE.enabled
@@ -7332,7 +7335,7 @@ server.on("error", (err) => {
 });
 
 function shutdown() {
-  if (tickHandle) clearInterval(tickHandle);
+  stopTickLoop();
   clearTerminalShutdown();
   if (controlPlaneHeartbeat) clearInterval(controlPlaneHeartbeat);
   Promise.race([

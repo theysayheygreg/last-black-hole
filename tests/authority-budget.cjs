@@ -16,8 +16,14 @@ async function getJson(path) {
   const started = performance.now();
   const response = await fetch(`${SIM_URL}${path}`);
   const text = await response.text();
-  const elapsedMs = performance.now() - started;
-  return { status: response.status, body: JSON.parse(text), bytes: Buffer.byteLength(text), elapsedMs };
+  const capturedAtMs = performance.now();
+  return {
+    status: response.status,
+    body: JSON.parse(text),
+    bytes: Buffer.byteLength(text),
+    elapsedMs: capturedAtMs - started,
+    capturedAtMs,
+  };
 }
 
 async function postJson(path, payload) {
@@ -57,13 +63,13 @@ async function run() {
       await sleep(1000);
       const baseline = await getJson("/health");
       const tickStart = baseline.body.tick;
-      const wallStart = performance.now();
+      const wallStart = baseline.capturedAtMs;
       const heapStart = baseline.body.process.memory.heapUsed;
       const queryUsageStart = baseline.body.ballpark?.queryUsage || {};
       const latencies = [];
       const snapshotBytes = [];
       const rebuildTimes = [];
-      let lastHealth = baseline.body;
+      let lastHealth = baseline;
 
       for (let index = 0; index < SAMPLE_COUNT; index++) {
         const snapshot = await getJson("/snapshot");
@@ -72,30 +78,32 @@ async function run() {
         latencies.push(snapshot.elapsedMs);
         snapshotBytes.push(snapshot.bytes);
         rebuildTimes.push(Number(health.body.ballpark?.lastRebuildMs) || 0);
-        lastHealth = health.body;
+        lastHealth = health;
         await sleep(SAMPLE_INTERVAL_MS);
       }
 
-      const elapsedSec = (performance.now() - wallStart) / 1000;
-      const observedTickHz = (lastHealth.tick - tickStart) / elapsedSec;
-      const targetTickHz = Number(lastHealth.session.tickHz) || 1;
-      const heapGrowth = lastHealth.process.memory.heapUsed - heapStart;
+      // Compare ticks and wall time at the same health sample. Measuring after
+      // the final intentional sleep made the old receipt understate cadence.
+      const elapsedSec = (lastHealth.capturedAtMs - wallStart) / 1000;
+      const observedTickHz = (lastHealth.body.tick - tickStart) / elapsedSec;
+      const targetTickHz = Number(lastHealth.body.session.tickHz) || 1;
+      const heapGrowth = lastHealth.body.process.memory.heapUsed - heapStart;
       const p95Latency = percentile(latencies, 0.95);
       const p95SnapshotBytes = percentile(snapshotBytes, 0.95);
       const p95RebuildMs = percentile(rebuildTimes, 0.95);
-      const estimatedSnapshotBytesPerSec = p95SnapshotBytes * (Number(lastHealth.session.snapshotHz) || 1);
-      const queryUsageEnd = lastHealth.ballpark?.queryUsage || {};
-      const tickCount = lastHealth.tick - tickStart;
+      const estimatedSnapshotBytesPerSec = p95SnapshotBytes * (Number(lastHealth.body.session.snapshotHz) || 1);
+      const queryUsageEnd = lastHealth.body.ballpark?.queryUsage || {};
+      const tickCount = lastHealth.body.tick - tickStart;
       const circleQueries = (queryUsageEnd.queryCircleCount || 0) - (queryUsageStart.queryCircleCount || 0);
       const queryCandidates = (queryUsageEnd.candidateCount || 0) - (queryUsageStart.candidateCount || 0);
       const duplicateCandidates = (
         (queryUsageEnd.duplicateCandidates || 0) - (queryUsageStart.duplicateCandidates || 0)
       );
 
-      assert(observedTickHz >= targetTickHz * 0.65,
-        `Observed ${observedTickHz.toFixed(2)} Hz below 65% of ${targetTickHz} Hz target`);
-      assert(observedTickHz <= targetTickHz * 1.35,
-        `Observed ${observedTickHz.toFixed(2)} Hz above expected bounded cadence ${targetTickHz} Hz`);
+      assert(observedTickHz >= targetTickHz * 0.99,
+        `Observed ${observedTickHz.toFixed(2)} Hz below the 1% ${targetTickHz} Hz wall-clock tolerance`);
+      assert(observedTickHz <= targetTickHz * 1.01,
+        `Observed ${observedTickHz.toFixed(2)} Hz above the 1% ${targetTickHz} Hz wall-clock tolerance`);
       assert(p95Latency < 150, `Snapshot p95 ${p95Latency.toFixed(1)}ms exceeds local 150ms budget`);
       assert(p95SnapshotBytes < 1_000_000,
         `Snapshot p95 ${(p95SnapshotBytes / 1024).toFixed(1)}KiB exceeds 1MB budget`);
@@ -104,9 +112,9 @@ async function run() {
       assert(heapGrowth < 32 * 1024 * 1024,
         `Heap grew ${(heapGrowth / 1024 / 1024).toFixed(1)}MiB during the short soak`);
       assert(p95RebuildMs < 12, `Ballpark sync p95 ${p95RebuildMs.toFixed(2)}ms exceeds 12ms budget`);
-      assert(lastHealth.eventJournal.retainedCount <= lastHealth.eventJournal.capacity,
+      assert(lastHealth.body.eventJournal.retainedCount <= lastHealth.body.eventJournal.capacity,
         "Event journal exceeded bounded retention");
-      assert(lastHealth.snapshotRing.retainedCount <= lastHealth.snapshotRing.capacity,
+      assert(lastHealth.body.snapshotRing.retainedCount <= lastHealth.body.snapshotRing.capacity,
         "Snapshot ring exceeded bounded retention");
 
       console.log(JSON.stringify({
