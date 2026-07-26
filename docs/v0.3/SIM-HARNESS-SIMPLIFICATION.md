@@ -7,6 +7,11 @@
 >
 > `BASELINE_SHA=20184fae84b559abf27717c046811673040d987a`
 
+All runtime and gate receipts attach to tested source `ffbcc0ba`. Documentation
+receipt `cd0fc28d` is a docs-only child of that source; later docs-only
+fix-forward descendants do not change the tested source or add package, Deck,
+RC, promotion, or taste claims.
+
 This ledger owns the v0.3-only movement-clock normalization, harness throughput
 work, and behavior-preserving clarity refactors. The older `6a98e396` checkpoint
 is superseded. No v0.2, `main`, or v0.4 commits may enter this branch.
@@ -294,16 +299,16 @@ making lifecycle, projection, presentation, and script ownership explicit.
 
 | Owner | Responsibility |
 | --- | --- |
-| `scripts/sim/http-lifecycle.cjs` | Authority HTTP server creation, request completion, and shutdown lifecycle. |
+| `scripts/sim/http-lifecycle.cjs` | Authority HTTP server creation, JSON request/response handling, CORS, and outer route errors; runtime shutdown remains in the coordinator. |
 | `scripts/sim/public-snapshot.cjs` | Public snapshot projection and compact transport-safe rows. |
-| `scripts/sim/session-state.cjs` | Session and player state factories; `scripts/sim-runtime.cjs` retains tick order and gameplay authority. |
-| `src/sim/remote-session-state.js` | Remote session start, pause, result, reconnect, and release transitions. |
+| `scripts/sim/session-state.cjs` | Idle/running session, inhibitor, and per-run state factories; `scripts/sim-runtime.cjs` retains tick order and gameplay authority. |
+| `src/sim/remote-session-state.js` | Remote-session reset boundaries plus pending-action queues and acknowledgement settlement; pause reconciliation remains separate. |
 | `src/sim/remote-snapshot-presentation.js` | Accepted authoritative snapshot projection into client presentation state. |
 | `src/presentation/scene-source.js` | Renderer-neutral scene-source construction from local or remote presentation truth. |
 | `src/render/shaders/fluid.glsl.js` | Fluid shader source only; `src/fluid.js` retains WebGL lifecycle and uniforms. |
 | `src/render-three/world-scene-presentation.js` | Three world-entity and environment presentation lifecycle; the renderer shell retains backend orchestration. |
 | `src/ui/hud-presentation.js` | Pure HUD selectors and presentation formatting behind the existing HUD facade. |
-| `src/ui/hud-inventory.js` | Inventory state, actions, and panel rendering behind the existing HUD facade. |
+| `src/ui/hud-inventory.js` | HUD inventory cursor, action projection, and panel rendering; authoritative cargo state remains outside the HUD. |
 | `src/audio/cue-synthesis.js` | Transient cue recipes and held portal voice synthesis; `AudioEngine` retains graph and continuous-voice lifecycle. |
 | `scripts/deploy/cli.cjs` | Shared deployment argument parsing without changing entrypoint flags. |
 | `scripts/service-supervisor.cjs` | Direct control/sim/static service start, stop, status, PID-registry, and signal cleanup used by the three thin wrappers. |

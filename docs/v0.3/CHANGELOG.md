@@ -2,31 +2,43 @@
 
 ## 2026-07-26
 
-- **Human-clarity checkpoint:** `19bb70b6` splits authority HTTP/snapshot/session
-  state, remote session/snapshot/scene projection, fluid shaders, Three world
-  presentation, HUD presentation/inventory, audio cue synthesis, deployment
-  CLI parsing, and service supervision into named owners while preserving the
-  existing facades and runtime contracts. Canonical ESM content now feeds the
-  synchronous CommonJS adapters. The rejected service-lock experiment was
-  deleted; direct start/stop/status/PID cleanup remains the contract.
-- **Interim evidence:** whole production nonblank LoC moved
+- **Human-clarity completion:** tested source `ffbcc0ba` completes the named
+  authority, client, renderer/UI, content, deployment, and service owners.
+  Core passed 87/87 in 45.36 s and the single full candidate run passed
+  119/119 in 432.91 s, both with zero retries. Final 5/15/25 cadence delivered
+  14.981/14.998/14.996 Hz with no skipped deadlines; the Deep Field budget
+  sample delivered 14.99/15 Hz, closing the earlier measured delivery
+  residual. Production moved 50,173→50,069 nonblank lines while tests moved
+  23,954→24,549. The fresh AgentPlay journey and product-loop contracts passed.
+  This is source evidence only: no package, Deck, RC, promotion, or Greg-taste
+  claim is implied.
+- **Historical human-clarity checkpoint:** `19bb70b6` split authority
+  HTTP/snapshot/session state, remote session/snapshot/scene projection, fluid
+  shaders, Three world presentation, HUD presentation/inventory, audio cue
+  synthesis, deployment CLI parsing, and service supervision into named owners
+  while preserving the existing facades and runtime contracts. Canonical ESM
+  content now feeds the synchronous CommonJS adapters. The rejected
+  service-lock experiment was deleted; direct start/stop/status/PID cleanup
+  remains the contract.
+- **Historical interim evidence:** whole production nonblank LoC moved
   50,173→50,095 while tests moved 23,954→24,600. Three no-retry core runs
-  passed 87/87 in 48.67 s, 45.20 s, and 49.11 s. Final exact-head full,
-  movement journey, product-loop smoke, Deep Field delivery, and LoC receipts
-  remain pending.
+  passed 87/87 in 48.67 s, 45.20 s, and 49.11 s. At that checkpoint the final
+  full, journey, product-loop, Deep Field, and LoC receipts were still pending;
+  the completion entry above supersedes that interim status.
 - **Unified authority clock:** `src/content/movement.data.json` now owns the
   one 15 Hz gameplay integration rate for Shallows, Expanse, and Deep Field.
   Map-specific movement profiles and overload time dilation are removed;
   rendering, snapshot, transport, visual, and content schedules remain
   separate. This is the approved `BASELINE_SHA` movement-rate change, not a
   movement retune.
-- **Measured Deep Field delivery:** relevance work reduces 24 to 12 queries per
-  tick, 194,970 to 49,242 candidates, and 203,532 to 51,072 duplicates. The
-  runtime now sends the same JSON values/shapes/status/type without formatting
-  whitespace, cutting Deep snapshot payloads to roughly 204–213 KiB. The
-  gameplay contract is fixed at 15 Hz, but a measured roughly 13.9/15 Hz
-  sustained-delivery result remains open for final-host recheck and, only if
-  still red, one additional profiled hot-path slice.
+- **Initial measured Deep Field delivery:** relevance work reduced 24 to 12
+  queries per tick, 194,970 to 49,242 candidates, and 203,532 to 51,072
+  duplicates. The runtime now sends the same JSON values/shapes/status/type
+  without formatting whitespace, cutting Deep snapshot payloads to roughly
+  204–213 KiB. The gameplay contract remained fixed at 15 Hz. The then-open
+  roughly 13.9/15 Hz delivery result is historical; the final-host completion
+  entry above closes it without restoring map profiles or chasing GC-sensitive
+  heap movement.
 - **Authority cadence:** the runtime uses monotonic fractional deadlines,
   allowing one fixed-dt jitter recovery and counting/dropping stale deadlines
   after a long stall. `/health.scheduler` adds delivery diagnostics; normal
