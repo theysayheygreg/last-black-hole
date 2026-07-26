@@ -85,11 +85,13 @@ async function run() {
   });
 
   await runner.run('Renderer owns temporal sampling and removes product wave-ring submission', async () => {
-    const renderer = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const backend = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const renderer = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
     assert(renderer.includes('TemporalVisibilityContract'), 'Renderer must own the temporal contract');
     assert(renderer.includes('this.temporalVisibility.beginFrame') && renderer.includes('this.temporalVisibility.endFrame'),
       'Temporal sampling must use the existing renderer update path');
-    assert(renderer.includes('this.temporalVisibility.reset({ phase: frame.phase, runId: frame.runId })'),
+    assert(renderer.includes('this.reset({ phase: frame.phase, runId: frame.runId })')
+      && renderer.includes('this.temporalVisibility.reset({ phase, runId })'),
       'Temporal history must reset at phase/run boundaries');
     assert(renderer.includes('this.entityAssets.getMaterial(assetId).clone()')
       && renderer.includes('pooledEntitySprite')
@@ -107,7 +109,8 @@ async function run() {
     const waveRings = fs.readFileSync(path.join(ROOT, 'src/wave-rings.js'), 'utf8');
     assert(!main.includes('waveRings.render(') && !waveRings.includes('render(ctx, camX, camY'),
       'Canvas world mode must not retain generic wave-ring rendering');
-    assert(renderer.includes("const diagnosticView = this.getViewMode() === 'scene';"),
+    assert(backend.includes("const diagnosticView = this.getViewMode() === 'scene';")
+      && renderer.includes('if (diagnosticView)'),
       'Well primitives must remain behind the explicit raw-scene diagnostic gate');
     assert(main.includes('localAbilityState = null;')
       && main.includes("if (gamePhase === 'playing' && localAbilityState)"),

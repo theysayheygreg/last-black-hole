@@ -59,74 +59,81 @@ async function run() {
   const visualStyle = await importModule('src/render-three/visual-style.js');
   const { createWorldProjection } = await importModule('src/render-three/world-projection.js');
   const { ThreeRendererBackend } = await importModule('src/render-three/three-renderer.js');
+  const { WorldScenePresentation } = await importModule('src/render-three/world-scene-presentation.js');
   const { TemporalVisibilityContract } = await importModule('src/render-three/entities/temporal-visibility.js');
   const THREE = await importModule('node_modules/three/build/three.module.js');
 
   await runner.run('Pooled renderer reuses meshes while isolating opacity and disposing sprite materials', async () => {
     const sharedMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1 });
     sharedMaterial.userData = { baseOpacity: 1 };
-    const backend = Object.create(ThreeRendererBackend.prototype);
+    const presentation = Object.create(WorldScenePresentation.prototype);
     const activeGroup = new THREE.Group();
     activeGroup.name = 'active-entity-layer';
-    backend.entityGroup = new THREE.Group();
-    backend.semanticGroup = new THREE.Group();
-    backend.entityGeometries = { spriteCard: new THREE.PlaneGeometry(1, 1) };
-    backend.entityMeshPool = [];
-    backend.semanticMeshPool = [];
-    backend.linePool = [];
-    backend.entityMeshCursor = 0;
-    backend.semanticMeshCursor = 0;
-    backend.lineCursor = 0;
-    backend.entityBackingGroup = new THREE.Group();
-    backend.entitySpriteMaterials = new Set();
-    backend.temporalVisibility = new TemporalVisibilityContract();
-    backend.entityAssets = {
+    presentation.entityGroup = new THREE.Group();
+    presentation.semanticGroup = new THREE.Group();
+    presentation.entityGeometries = { spriteCard: new THREE.PlaneGeometry(1, 1) };
+    presentation.entityMeshPool = [];
+    presentation.semanticMeshPool = [];
+    presentation.linePool = [];
+    presentation.entityMeshCursor = 0;
+    presentation.semanticMeshCursor = 0;
+    presentation.lineCursor = 0;
+    presentation.entityBackingGroup = new THREE.Group();
+    presentation.entitySpriteMaterials = new Set();
+    presentation.temporalVisibility = new TemporalVisibilityContract();
+    presentation.entityAssets = {
       getMaterial() { return sharedMaterial; },
       dispose() { this.disposed = true; },
     };
-    backend.currentProjection = createWorldProjection({ x: 0, y: 0, worldScale: 3, view: 3 }, 1);
-    backend.lastSceneState = { cameraX: 0, cameraY: 0, worldScale: 3, cameraView: 3 };
-    backend._addContrastBacking = () => {};
+    presentation.currentProjection = createWorldProjection({ x: 0, y: 0, worldScale: 3, view: 3 }, 1);
+    presentation.lastSceneState = { cameraX: 0, cameraY: 0, worldScale: 3, cameraView: 3 };
+    presentation._addContrastBacking = () => {};
 
-    backend._beginDynamicScene();
-    const first = backend._addSpriteEntity(activeGroup, 'shipDrifter', 0, 0, 0.04, 0, 0.13,
-      backend.lastSceneState, 'player', { id: 'ship-a', opacity: 0.25 }, 'player');
-    const second = backend._addSpriteEntity(activeGroup, 'shipDrifter', 0.1, 0, 0.04, 0, 0.13,
-      backend.lastSceneState, 'player', { id: 'ship-b', opacity: 0.85 }, 'player');
+    presentation._beginDynamicScene();
+    const first = presentation._addSpriteEntity(activeGroup, 'shipDrifter', 0, 0, 0.04, 0, 0.13,
+      presentation.lastSceneState, 'player', { id: 'ship-a', opacity: 0.25 }, 'player');
+    const second = presentation._addSpriteEntity(activeGroup, 'shipDrifter', 0.1, 0, 0.04, 0, 0.13,
+      presentation.lastSceneState, 'player', { id: 'ship-b', opacity: 0.85 }, 'player');
     assert(first && second && first !== second, 'Expected two pooled meshes for two live sprite identities');
     assert(first.material !== second.material, 'Each pooled mesh must own an opacity material clone');
     first.material.opacity = 0.1;
     assert(second.material.opacity === 0.85, 'Changing one sprite opacity must not change its pooled neighbor');
     assert(sharedMaterial.opacity === 1, 'Shared asset material must remain at its base opacity');
 
-    backend._beginDynamicScene();
-    const reused = backend._addSpriteEntity(activeGroup, 'shipDrifter', 0, 0, 0.04, 0, 0.13,
-      backend.lastSceneState, 'player', { id: 'ship-c', opacity: 0.6 }, 'player');
+    presentation._beginDynamicScene();
+    const reused = presentation._addSpriteEntity(activeGroup, 'shipDrifter', 0, 0, 0.04, 0, 0.13,
+      presentation.lastSceneState, 'player', { id: 'ship-c', opacity: 0.6 }, 'player');
     assert(reused === first && reused.material === first.material,
       'The next frame must reuse the pooled mesh and its per-mesh material clone');
     assert(reused.material.opacity === 0.6 && second.material.opacity === 0.85,
       'Reuse must update only the reused mesh opacity');
 
     let disposedMaterials = 0;
-    for (const material of backend.entitySpriteMaterials) material.addEventListener('dispose', () => { disposedMaterials += 1; });
+    for (const material of presentation.entitySpriteMaterials) material.addEventListener('dispose', () => { disposedMaterials += 1; });
+    presentation.visualFamilies = {};
+    presentation.worldScene = new THREE.Scene();
+    presentation.dispose();
+    assert(disposedMaterials === 2 && presentation.entitySpriteMaterials.size === 0,
+      'World-scene disposal must release every pooled sprite material clone');
+    assert(presentation.entityAssets.disposed, 'World-scene disposal must release the asset store');
+
+    let worldDisposed = false;
     let targetDisposed = false;
     let rendererDisposed = false;
+    const backend = Object.create(ThreeRendererBackend.prototype);
     backend.sourceCanvas = { removeEventListener() {} };
-    backend.visualFamilies = {};
+    backend.worldPresentation = { dispose() { worldDisposed = true; } };
     backend.sceneTarget = { dispose() { targetDisposed = true; } };
     backend.copyMaterial = { dispose() {} };
-    backend.worldScene = new THREE.Scene();
     backend.postScene = new THREE.Scene();
     backend.renderer = { dispose() { rendererDisposed = true; } };
     backend.dispose();
-    assert(disposedMaterials === 2 && backend.entitySpriteMaterials.size === 0,
-      'Renderer disposal must release every pooled sprite material clone');
-    assert(backend.entityAssets.disposed && targetDisposed && rendererDisposed,
-      'Renderer disposal must release the asset store, target, and WebGL renderer');
+    assert(worldDisposed && targetDisposed && rendererDisposed,
+      'Backend disposal must release world presentation, target, and WebGL renderer');
   });
 
   await runner.run('Product sprite seam has one alpha core and no universal vector parts', async () => {
-    const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
     const styleSource = fs.readFileSync(path.join(ROOT, 'src/render-three/visual-style.js'), 'utf8');
     const seam = rendererSource.slice(rendererSource.indexOf('  _addSpriteEntity'), rendererSource.indexOf('  _addLine'));
     assert(!rendererSource.includes('ENTITY_SPRITE_TREATMENTS'), 'Legacy universal sprite treatment table must be removed');
@@ -145,15 +152,57 @@ async function run() {
   });
 
   await runner.run('Well primitives are diagnostic-only and state rings stay family-owned', async () => {
-    const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const backendSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const rendererSource = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
     const portalSource = fs.readFileSync(path.join(ROOT, 'src/render-three/entities/portal-visual-family.js'), 'utf8');
-    assert(rendererSource.includes("const diagnosticView = this.getViewMode() === 'scene';"),
+    assert(backendSource.includes("const diagnosticView = this.getViewMode() === 'scene';")
+      && rendererSource.includes('if (diagnosticView)'),
       'Well diagnostics must have an explicit raw-scene gate');
     assert(portalSource.includes("portal.visualState === 'blocked'")
       && portalSource.includes("portal.visualState === 'final'"),
     'Portal blocked/final state accents must remain family-specific');
     assert(rendererSource.includes('wellDebugPrimitiveCount'),
       'Renderer stats must expose well diagnostic primitive counts');
+  });
+
+  await runner.run('World scene has one direct lifecycle owner and preserves reset and family order', async () => {
+    const backendSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    const sceneSource = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
+    for (const method of ['resize(width, height)', 'update(frame, {', 'reset({ phase, runId }', 'getStats()', 'dispose()']) {
+      assert(sceneSource.includes(method), `World scene owner is missing ${method}`);
+    }
+    assert(!backendSource.includes('this.worldScene') && !backendSource.includes('this.worldCamera')
+      && backendSource.includes('this.worldPresentation.scene')
+      && backendSource.includes('this.worldPresentation.camera'),
+    'Backend must orchestrate the direct world owner without private scene proxies');
+
+    const reset = sceneSource.slice(sceneSource.indexOf('  reset({ phase, runId }'), sceneSource.indexOf('  _buildBackdropLayers'));
+    assert(reset.includes('family.reset()') && reset.includes('temporalVisibility.reset')
+      && !reset.includes('prevCamera') && !reset.includes('motion.set')
+      && !reset.includes('Pool.length') && !reset.includes('vfxManager.reset'),
+    'Phase/run reset must not invent broader motion, pool, or VFX clearing');
+
+    const sync = sceneSource.slice(sceneSource.indexOf('  _syncWorldScene'), sceneSource.indexOf('  _describeWorldLayers'));
+    const familyOrder = ['visualFamilies.portal.update', 'visualFamilies.wreck.update',
+      'visualFamilies.worldSprites.update', 'visualFamilies.player.update'];
+    assert(familyOrder.every((call, index) => sync.indexOf(call) >= 0
+      && (index === 0 || sync.indexOf(call) > sync.indexOf(familyOrder[index - 1]))),
+    'Dynamic families must keep portal → wreck → world sprites → player order');
+
+    const render = backendSource.slice(backendSource.indexOf('  render(frameContext)'), backendSource.indexOf('  setViewMode(mode)'));
+    const frameOrder = ['this.composer.render', 'resolvePresentationFrame', 'this._applyPresentationStyle',
+      'this.worldPresentation.update', 'this.renderer.info.reset', 'this.renderer.render(this.worldPresentation.scene',
+      'this.renderer.render(this.postScene', 'this.worldPresentation.getStats'];
+    assert(frameOrder.every((call, index) => render.indexOf(call) >= 0
+      && (index === 0 || render.indexOf(call) > render.indexOf(frameOrder[index - 1]))),
+    'Backend frame orchestration order must remain composer → presentation → world → post → stats');
+
+    const dispose = sceneSource.slice(sceneSource.indexOf('  dispose()'), sceneSource.indexOf('  _disposeObject(obj)'));
+    const disposalOrder = ['family.dispose()', 'material.dispose()', 'entitySpriteMaterials.clear()',
+      'entityAssets.dispose()', '_disposeObject(this.worldScene)'];
+    assert(disposalOrder.every((call, index) => dispose.indexOf(call) >= 0
+      && (index === 0 || dispose.indexOf(call) > dispose.indexOf(disposalOrder[index - 1]))),
+    'World resources must dispose families → clones → assets → scene without double-freeing clone materials');
   });
 
   await runner.run('Player family prioritizes local ship and submits authored thrust and slingshot grammar', async () => {
