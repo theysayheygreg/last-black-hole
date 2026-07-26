@@ -269,7 +269,9 @@ async function run() {
 
   await runner.run("client no longer owns the coarse-current formula", async () => {
     const fluid = fs.readFileSync(require.resolve("../src/fluid.js"), "utf8");
-    assert(!fluid.includes("FRAG_COARSE_UPDATE") && !fluid.includes("updateCoarseField("),
+    const shaders = fs.readFileSync(require.resolve("../src/render/shaders/fluid.glsl.js"), "utf8");
+    assert(!`${fluid}\n${shaders}`.includes("FRAG_COARSE_UPDATE")
+      && !`${fluid}\n${shaders}`.includes("updateCoarseField("),
       "Legacy client coarse-current formula must stay disabled");
     assert(fluid.includes("forceFromAuthoritativeField()"), "Fluid must force from authority after each step");
     assert(fluid.includes("authorityFloor(field) / FLUID_REF_SCALE"),

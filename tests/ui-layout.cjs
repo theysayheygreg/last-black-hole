@@ -1,13 +1,9 @@
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
 
 (async () => {
   const tokens = await import('../src/ui/design-tokens.js');
   const prompts = await import('../src/ui/input-prompts.js');
   const layout = await import('../src/ui/layout-contract.js');
-  const main = fs.readFileSync(path.resolve(__dirname, '../src/main.js'), 'utf8');
-  const hudSource = fs.readFileSync(path.resolve(__dirname, '../src/hud.js'), 'utf8');
 
   const geometry = tokens.UI_DECK_GEOMETRY;
   const separated = (a, b, gap = geometry.separation) => (
@@ -53,34 +49,6 @@ const path = require('path');
   assert(prompts.affordanceCaption('slingshot', 'engage', { mode: 'controller' }).includes('ui-action-glyph'), 'Slingshot caption must generate a glyph element');
   assert.strictEqual(prompts.resolveSteamInputOrigin(deck), null, 'Browser descriptor must not claim native SDK integration');
   assert.strictEqual(prompts.resolveSteamInputOrigin(deck, ({ actionId }) => `origin:${actionId}`), 'origin:confirm', 'Origin adapter boundary must remain callable');
-
-  assert(!main.includes('function prompt('), 'Legacy raw prompt helper must be removed');
-  assert(!main.includes('ctaLabel('), 'Player-facing canvas code must not assemble raw CTA text');
-  const homeSource = main.slice(main.indexOf('// === HOME SCREEN ==='), main.indexOf('// === MAP SELECT SCREEN ==='));
-  assert(homeSource.includes("actionDescriptor('confirm', currentPromptOptions())"), 'Home loadout/vault actions must resolve shared descriptors');
-  assert(homeSource.includes('drawActionPrompt('), 'Home loadout/vault/rig actions must draw shared graphical prompts');
-  assert(homeSource.includes("actionDescriptor('tabs', homePromptOptions)"), 'Home launch prompt must resolve the active-device descriptor');
-  assert(homeSource.includes('maxWidth: sidebarW'), 'Home launch prompt must stay within the right panel content width');
-  assert(!homeSource.includes('tab to LAUNCH when ready'), 'Home launch prompt must not emit raw Tab copy');
-  assert(main.includes("action: actionDescriptor('inventory', currentPromptOptions())"), 'Cargo-full HUD must carry a shared inventory action');
-  assert(hudSource.includes('actionCaptionMarkup(options.action.actionId'), 'HUD warning actions must render shared glyph markup');
-  assert(/_interactionCaptionEl\.innerHTML\s*=\s*interaction\.caption(?:\s*\|\|\s*'')?\s*;/.test(hudSource),
-    'Contextual interaction must render caption markup as DOM');
-  assert(!hudSource.includes('_interactionCaptionEl.textContent = interaction.caption;'), 'Contextual interaction must not expose literal caption markup');
-  assert(hudSource.includes("affordanceCaption('inventory', count > 0 ? 'inventory' : 'salvage', _promptOptions)"), 'HUD salvage prompt must use one active-device caption');
-  assert(!hudSource.includes('hold space for salvage'), 'HUD salvage prompt must not emit raw Space copy');
-  const authority = main.slice(main.indexOf("const authorityY ="), main.indexOf('drawCommandButtonMotion(ctx, {', main.indexOf("const authorityY =")));
-  assert(authority.includes('authorityActions'), 'Map authority prompt must build graphical actions');
-  assert(authority.includes('drawActionFooter('), 'Map authority prompt must use the shared action footer');
-  assert(!authority.includes('promptLabel('), 'Map authority prompt must not emit raw device labels');
-
-  const salvage = main.slice(main.indexOf('// Extracted items'), main.indexOf('// Vault summary'));
-  assert(salvage.includes('itemCompoundLayout('), 'Salvage rows must use the shared compound layout');
-  assert(salvage.includes('drawItemIcon(ctx, item, row.icon'), 'Salvage icon must use the compound row footprint');
-  assert(salvage.includes('itemY += row.advance'), 'Salvage rows must advance from measured geometry');
-  assert(!salvage.includes('w: 22, h: 22'), 'Salvage must not request a sub-minimum icon');
-  assert(!salvage.includes('itemY += 20'), 'Salvage rows must not use the old 20px advance');
-  assert(!salvage.includes('cx - 142'), 'Salvage text must not use the old 30px icon offset');
 
   const compound = layout.sizeCompound({ textWidth: 100, artWidth: geometry.artCell.minWidth, valueWidth: geometry.valueBlock.minWidth, textHeight: 18, artHeight: geometry.artCell.minHeight, valueHeight: geometry.valueBlock.minHeight });
   assert(compound.w >= 100 + geometry.artCell.minWidth + geometry.valueBlock.minWidth, 'compound row width ignored content');

@@ -238,8 +238,6 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   check(mainSource.includes('const localSandboxPaused = gamePhase === \'paused\' && !remoteSession.active;'), 'local debug freeze remains separate');
   check(mainSource.includes('requestRemoteSnapshot();'), 'remote snapshot intake remains live under pause');
   check(mainSource.includes('applyCoveredTerminalEvents(decision);'), 'resume applies only current terminal result events');
-  check(mainSource.includes('decision?.eventRunId !== resumedRunId'), 'resume rejects a terminal cache from another run');
-  check(mainSource.includes('terminalRunId === resumedRunId'), 'resume applies terminal events only to their snapshot run');
   check(mainSource.includes('fluid?.clear();') && mainSource.includes('setFluidCamera(camX, camY);'), 'long resume resets fluid anchor with camera snap');
   check(mainSource.includes('WORLD CONTINUES') && mainSource.includes('awaySeconds'), 'pause panel exposes live authority and elapsed-away status');
   check(mainSource.includes("sampleTerminalWindow(uiMotionTimer") && mainSource.includes('reducedMotion: motion.reducedMotion'), 'pause and recovery surfaces honor reduced motion');

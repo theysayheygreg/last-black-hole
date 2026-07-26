@@ -725,7 +725,6 @@ const AI_PERSONALITIES = {
   },
 };
 
-const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
 const VULTURE_NAMES = ["Keen Edge", "Rust Claw", "Burnt Lance", "Bitter Claim", "Sharp Debt", "Iron Reap"];
@@ -808,24 +807,9 @@ function inversePowerForce(dist, strength, mass, falloff, maxRange) {
   });
 }
 
-function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
-  if (dist < 0.001 || dist > maxRange) return 0;
-  const safeDist = Math.max(dist, FORCE_MIN_DIST);
-  const baseSpeed = strength * mass / Math.pow(safeDist, falloff);
-  return baseSpeed * (1 - dist / maxRange);
-}
-
 function proximityForce(dist, strength, radius) {
   if (dist < 0.001 || dist > radius) return 0;
   return strength * (1 - dist / radius);
-}
-
-function waveBandForce(distFromSource, ringRadius, halfWidth, pushStrength, amplitude) {
-  const distFromFront = Math.abs(distFromSource - ringRadius);
-  if (distFromFront > halfWidth) return 0;
-  const bandPosition = distFromFront / halfWidth;
-  const profile = Math.cos(bandPosition * Math.PI * 0.5);
-  return pushStrength * amplitude * profile;
 }
 
 function hashUnit(input) {

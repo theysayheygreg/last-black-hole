@@ -229,8 +229,9 @@ async function run() {
   await runner.run('World scene has one direct lifecycle owner and preserves reset and family order', async () => {
     const backendSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
     const sceneSource = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
-    for (const method of ['resize(width, height)', 'update(frame, {', 'reset({ phase, runId }', 'getStats()', 'dispose()']) {
-      assert(sceneSource.includes(method), `World scene owner is missing ${method}`);
+    for (const method of ['resize', 'update', 'reset', 'getStats', 'dispose']) {
+      assert(typeof WorldScenePresentation.prototype[method] === 'function',
+        `World scene owner is missing ${method}`);
     }
     assert(!backendSource.includes('this.worldScene') && !backendSource.includes('this.worldCamera')
       && backendSource.includes('this.worldPresentation.scene')

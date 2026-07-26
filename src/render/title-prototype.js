@@ -180,7 +180,7 @@ const bloomPass = new BloomPass(gl, {
 });
 const tonemapPass = new TonemapPass({ exposure: 1.0 });
 // Color grade now runs near-neutral because the temperature ramp is
-// baked into FRAG_DISPLAY (fluid.js) — radial distance from each well
+// baked into FRAG_DISPLAY (render/shaders/fluid.glsl.js) — radial distance from each well
 // drives the blackbody progression: violet → red → orange → white
 // (hottest ring) → light blue → blue → purple → black. The grade is
 // kept as a light saturation/contrast touch, not the identity driver.

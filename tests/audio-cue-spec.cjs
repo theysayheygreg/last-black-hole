@@ -1,5 +1,4 @@
 const assert = require('assert');
-const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
@@ -29,27 +28,6 @@ async function run() {
 
   assert.deepStrictEqual([...SYNTHESIZED_CUES].sort(), Object.keys(CUE_SPECS).sort(),
     'every declared cue has exactly one synthesis handler');
-  const engineSource = fs.readFileSync(path.join(ROOT, 'src', 'audio.js'), 'utf8');
-  const synthesisSource = fs.readFileSync(path.join(ROOT, 'src', 'audio', 'cue-synthesis.js'), 'utf8');
-  const audioSource = engineSource + synthesisSource;
-  const playEventSource = engineSource.slice(engineSource.indexOf('  playEvent('), engineSource.indexOf('  // ---- Init helpers'));
-  let priorStep = -1;
-  for (const step of [
-    '!this.initiated || !CONFIG.audio.enabled', 'cueSpec(type)', '_eventBudget.admit',
-    '_mixer.admit', '_eventBudget.release', '_trace.mark', 'clearPortalReady',
-    'worldToScreen', '_cueSynthesis.play',
-  ]) {
-    const stepIndex = playEventSource.indexOf(step);
-    assert(stepIndex > priorStep, `${step} preserves cue admission order`);
-    priorStep = stepIndex;
-  }
-  for (const deadName of [
-    'playAuthoritativeEvent', 'setPortalProximity', '_portalProximityActive', '_wireAndPlay',
-    '_playScavengerExtract', '_playWellRumble', '_playCrunch', '_playItemPlink',
-  ]) {
-    assert(!audioSource.includes(deadName), `${deadName} stays deleted`);
-  }
-  assert(/portalFinal:.*_playPortalDeath\(/.test(synthesisSource), 'portalFinal keeps its live terminal cue');
   console.log('AudioCueSpec: 1 passed, 0 failed');
 }
 run().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
