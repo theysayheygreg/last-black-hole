@@ -143,6 +143,7 @@ function resourceLabel(suite) {
   if (browserWeight) {
     resources.push(suite.browserExclusive ? `browser:exclusive(${browserWeight})` : `browser:${browserWeight}`);
   }
+  if (suite.browserPriority) resources.push(`browser-priority:${suite.browserPriority}`);
   if (suite.hostExclusive) resources.push(`host-exclusive:${suite.hostExclusive}`);
   return resources.join(" ");
 }
@@ -181,6 +182,12 @@ function validateResources(entries) {
     }
     if (entry.suite.browserExclusive && !consumesBrowser(entry.suite)) {
       throw new Error(`${entry.suite.name} reserves exclusive browser capacity without a browser process`);
+    }
+    if (entry.suite.browserPriority && !consumesBrowser(entry.suite)) {
+      throw new Error(`${entry.suite.name} declares browser scheduling metadata without a browser process`);
+    }
+    if (entry.suite.browserExclusive && entry.suite.browserPriority) {
+      throw new Error(`${entry.suite.name} cannot be both browser-exclusive and browser-priority`);
     }
     if (browserWeight > 0 && !consumesBrowser(entry.suite)) {
       throw new Error(`${entry.suite.name} reserves browser capacity without a browser process`);
@@ -347,6 +354,8 @@ async function runScheduled(entries) {
     // suites can still use the remaining host capacity while it waits.
     if (browserWeight > 0 && !entry.suite.browserExclusive
       && pending.some((candidate) => candidate.suite.browserExclusive)) return false;
+    if (browserWeight > 0 && !entry.suite.browserExclusive && !entry.suite.browserPriority
+      && pending.some((candidate) => candidate.suite.browserPriority)) return false;
     return !entry.suite.isolationGroup || !activeGroups.has(entry.suite.isolationGroup);
   }
 
@@ -355,8 +364,9 @@ async function runScheduled(entries) {
     if (entry.suite.isolationGroup) activeGroups.add(entry.suite.isolationGroup);
     if (entry.suite.hostExclusive) activeHostExclusive.add(entry.suite.hostExclusive);
     const host = entry.suite.hostExclusive ? ` host-exclusive=${entry.suite.hostExclusive}` : "";
+    const priority = entry.suite.browserPriority ? ` browser-priority=${entry.suite.browserPriority}` : "";
     console.log(
-      `START ${labelFor(entry)} [active=${active.size + 1}/${totalWorkers} browser=${browserActive}/${browserWorkers}${host}]`,
+      `START ${labelFor(entry)} [active=${active.size + 1}/${totalWorkers} browser=${browserActive}/${browserWorkers}${host}${priority}]`,
     );
     const promise = runEntry(entry).then((result) => ({ entry, result }));
     active.set(entry.index, promise);
@@ -394,6 +404,14 @@ async function runScheduled(entries) {
       if (browserExclusiveIndex !== -1 && browserActive === 0 && activeHostExclusive.size === 0
         && active.size < totalWorkers && canStart(pending[browserExclusiveIndex])) {
         const [entry] = pending.splice(browserExclusiveIndex, 1);
+        start(entry);
+        launched = true;
+      }
+
+      const browserPriorityIndex = pending.findIndex((entry) => entry.suite.browserPriority);
+      if (browserPriorityIndex !== -1 && active.size < totalWorkers
+        && canStart(pending[browserPriorityIndex])) {
+        const [entry] = pending.splice(browserPriorityIndex, 1);
         start(entry);
         launched = true;
       }
@@ -463,10 +481,14 @@ async function main() {
   const exclusiveBrowserSuites = entries
     .filter((entry) => entry.suite.browserExclusive)
     .map((entry) => entry.suite.name);
+  const priorityBrowserSuites = entries
+    .filter((entry) => entry.suite.browserPriority)
+    .map((entry) => `${entry.suite.name}:${entry.suite.browserPriority}`);
   const hostExclusiveSuites = entries
     .filter((entry) => entry.suite.hostExclusive)
     .map((entry) => `${entry.suite.name}:${entry.suite.hostExclusive}`);
   console.log(`Resources:        browser-exclusive=${exclusiveBrowserSuites.join(",") || "none"}`);
+  console.log(`Browser priority: ${priorityBrowserSuites.join(",") || "none"}`);
   console.log(`Host exclusive:   ${hostExclusiveSuites.join(",") || "none"}`);
   console.log(`Artifacts:        ${path.relative(ROOT, artifactRoot)}`);
 

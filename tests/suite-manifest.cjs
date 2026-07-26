@@ -446,6 +446,7 @@ const SUITES = [
     file: "ruler-live.cjs",
     lanes: ["authority", "full"],
     browser: true,
+    browserExclusive: true,
     slow: true,
     timeout: 120000,
   },
@@ -472,6 +473,7 @@ const SUITES = [
     file: "slingshot-v2-live.cjs",
     lanes: ["authority", "full"],
     browser: true,
+    browserExclusive: true,
     slow: true,
     timeout: 120000,
   },
@@ -586,8 +588,8 @@ const SUITES = [
     file: "agent-play-eval.cjs",
     lanes: ["agent-eval", "full"],
     browser: true,
-    // Reserve all Chrome slots for the fresh, real-input journey.
-    browserExclusive: true,
+    // Run after renderer capture, then share only with independent browsers.
+    browserPriority: "playable",
     slow: true,
     timeout: 240000,
   },
