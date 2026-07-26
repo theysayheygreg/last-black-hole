@@ -8,7 +8,6 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { MOVEMENT } = require('../scripts/content/movement.cjs');
 const {
   startServer,
   stopServer,
@@ -18,11 +17,6 @@ const {
   withQuery,
   stepGameFrames,
 } = require('./helpers.cjs');
-
-const FIXTURE_STEP_HZ = Number(MOVEMENT?.authority?.integrationHz);
-if (!Number.isFinite(FIXTURE_STEP_HZ) || FIXTURE_STEP_HZ <= 0) {
-  throw new Error('Renderer fixture stepping requires a positive authoritative movement rate');
-}
 
 const htmlFile = process.argv[2] || 'index-a.html';
 const ALL_FIXTURES = [
@@ -65,12 +59,18 @@ const FIXTURES = DEEP_RENDERER_SWEEP
     .filter((fixture) => DEFAULT_FIXTURES.has(fixture.name))
     .map((fixture) => ({ ...fixture, timesMs: [900] }));
 
-// Fixture captures assert settled elapsed-time states, not a rendered 60 Hz path.
-// Advance fixture time at the shared authority cadence; capture/debug frames
-// still render at 60 Hz immediately before each product-facing assertion.
-async function stepForMs(page, ms, dt = 1 / FIXTURE_STEP_HZ) {
-  const frames = Math.max(1, Math.ceil(ms / (dt * 1000)));
-  return stepGameFrames(page, frames, dt);
+// gameLoop clamps larger steps at 1/30; renderer fixture time is independent
+// of the gameplay clock and must still advance by exactly the requested span.
+async function stepForMs(page, ms) {
+  const dt = 1 / 30;
+  const duration = Math.max(0, Number(ms) || 0) / 1000;
+  const frames = Math.floor(duration / dt);
+  const remainder = Math.min(dt, duration - frames * dt);
+  let result = frames > 0 ? await stepGameFrames(page, frames, dt) : null;
+  if (remainder > Number.EPSILON) {
+    result = await stepGameFrames(page, 1, remainder);
+  }
+  return result;
 }
 
 async function takeShot(page, filepath, backend = 'legacy') {
@@ -250,8 +250,7 @@ async function analyzeReferenceReadability(page, fixtureName) {
     addTargets(targets, 'stars', state.stars, 14);
     addTargets(targets, 'wrecks', state.wrecks, 13);
     addTargets(targets, 'portals', state.portals,
-      (portal) => Math.max(18, (portal.radius || 0.08) * (canvas.height / cameraView) * 1.55),
-      { sampleMode: 'ring' });
+      (portal) => Math.max(18, (portal.radius || 0.08) * (canvas.height / cameraView)));
     addTargets(targets, 'planetoids', state.planetoids, 11);
     addTargets(targets, 'ships', state.ship ? [state.ship] : [], 12);
     addTargets(targets, 'ships', state.scavengers, 12);
@@ -363,6 +362,10 @@ async function captureFixture(page, outputDir, fixture) {
     await stepGameFrames(page, 2, 1 / 60);
     const asciiStats = await takeShot(page, asciiPath, backend);
     assertCaptureHasSignal(asciiStats, `${fixture.name} ascii ${t}ms`);
+    if (READABILITY_FIXTURES.has(fixture.name) && t === fixture.timesMs[fixture.timesMs.length - 1]) {
+      readability = await analyzeReferenceReadability(page, fixture.name);
+      assertReferenceReadability(readability, fixture.name);
+    }
 
     const fps = await page.evaluate(() => window.__TEST_API.getFPS());
     captures.push({
@@ -374,13 +377,6 @@ async function captureFixture(page, outputDir, fixture) {
       sceneStats,
       asciiStats,
     });
-  }
-
-  if (READABILITY_FIXTURES.has(fixture.name)) {
-    await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
-    await stepGameFrames(page, 2, 1 / 60);
-    readability = await analyzeReferenceReadability(page, fixture.name);
-    assertReferenceReadability(readability, fixture.name);
   }
 
   const debugPath = path.join(fixtureDir, 'ascii-debug.png');
