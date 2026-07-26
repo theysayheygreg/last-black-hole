@@ -3,24 +3,20 @@ const { ACTIVE_LIFECYCLE_STATES } = require("./body-schema.cjs");
 const { BODY_MASKS, resolveMask } = require("./body-masks.cjs");
 const { handleKey, wrapWorld } = require("./body-registry.cjs");
 const {
+  singleCorrectionDelta: worldDelta,
+  singleCorrectionDistance: worldDistance,
   wrappedDelta,
-  wrappedDistance,
 } = require("./world-geometry.cjs");
 
 function positiveNumber(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-// Queries historically treat invalid coordinates as an empty search.
-function worldDelta(from, to, worldScale) {
+// Class queries normalize coordinates first; invalid coordinates remain an
+// empty search instead of inheriting the strict helper's validation error.
+function queryDelta(from, to, worldScale) {
   return Number.isFinite(from) && Number.isFinite(to)
     ? wrappedDelta(from, to, worldScale)
-    : NaN;
-}
-
-function worldDistance(ax, ay, bx, by, worldScale) {
-  return [ax, ay, bx, by].every(Number.isFinite)
-    ? wrappedDistance(ax, ay, bx, by, worldScale)
     : NaN;
 }
 
@@ -118,8 +114,8 @@ class SpatialIndex {
     const qr = Math.max(0, Number(query.radius) || 0);
     const candidates = this._candidateKeysForBox(qx, qy, qr, qr);
     return this._collectQuery(candidates, query, (record) => {
-      const dx = worldDelta(qx, record.wx, this.worldScale);
-      const dy = worldDelta(qy, record.wy, this.worldScale);
+      const dx = queryDelta(qx, record.wx, this.worldScale);
+      const dy = queryDelta(qy, record.wy, this.worldScale);
       const distance = Math.hypot(dx, dy);
       return distance <= qr + record.radius + 1e-12
         ? { distance, dx, dy }
@@ -137,8 +133,8 @@ class SpatialIndex {
     const hy = Math.max(0, Number(query.halfHeight ?? query.height * 0.5) || 0);
     const candidates = this._candidateKeysForBox(qx, qy, hx, hy);
     return this._collectQuery(candidates, query, (record) => {
-      const dx = worldDelta(qx, record.wx, this.worldScale);
-      const dy = worldDelta(qy, record.wy, this.worldScale);
+      const dx = queryDelta(qx, record.wx, this.worldScale);
+      const dy = queryDelta(qy, record.wy, this.worldScale);
       if (Math.abs(dx) <= hx + record.radius + 1e-12 && Math.abs(dy) <= hy + record.radius + 1e-12) {
         return { distance: Math.hypot(dx, dy), dx, dy };
       }

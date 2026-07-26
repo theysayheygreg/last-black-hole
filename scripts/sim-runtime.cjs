@@ -104,10 +104,10 @@ const {
   wellGravityVector,
 } = require("./sim/well-gravity.cjs");
 const {
+  singleCorrectionDelta: worldDisplacement,
+  singleCorrectionDistance: worldDistance,
   sweptMovingCircleVsCircle,
   wrapPosition: wrapWorldPosition,
-  wrappedDistance: worldDistance,
-  wrappedDelta: worldDisplacement,
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
 const {

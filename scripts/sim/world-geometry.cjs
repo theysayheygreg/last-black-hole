@@ -54,10 +54,20 @@ function wrappedDistanceSquared(ax, ay, bx, by, worldScale) {
 }
 
 function wrappedDistance(ax, ay, bx, by, worldScale) {
-  return Math.hypot(
-    wrappedDelta(ax, bx, worldScale),
-    wrappedDelta(ay, by, worldScale)
-  );
+  return Math.sqrt(wrappedDistanceSquared(ax, ay, bx, by, worldScale));
+}
+
+/** Legacy debug/export math: one correction, without scale validation. */
+function singleCorrectionDelta(from, to, worldScale) {
+  let delta = to - from;
+  const half = worldScale / 2;
+  if (delta > half) delta -= worldScale;
+  if (delta < -half) delta += worldScale;
+  return delta;
+}
+
+function singleCorrectionDistance(ax, ay, bx, by, worldScale) {
+  return Math.hypot(singleCorrectionDelta(ax, bx, worldScale), singleCorrectionDelta(ay, by, worldScale));
 }
 
 function periodicImageRange(point, segmentMin, segmentMax, padding, worldScale) {
@@ -232,6 +242,8 @@ function sweptMovingCircleVsCircle({
 
 module.exports = {
   closestPointOnToroidalSegment,
+  singleCorrectionDelta,
+  singleCorrectionDistance,
   sweptMovingCircleVsCircle,
   wrapPosition,
   wrappedDelta,

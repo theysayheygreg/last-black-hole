@@ -28,6 +28,9 @@ async function run() {
     near(wrappedDelta(0, -25, 10), -5, "multi-wrap negative half-world tie");
     near(wrappedDistanceSquared(9.8, 9.7, 0.2, 0.1, 10), 0.32, "corner seam distance squared");
     near(wrappedDistance(9.8, 9.7, 0.2, 0.1, 10), Math.sqrt(0.32), "corner seam distance");
+    const dx = 4.689938985565809;
+    const dy = 3.8793999032726756;
+    assert(Object.is(wrappedDistance(0, 0, dx, dy, 20), Math.sqrt(dx * dx + dy * dy)), "Expected legacy sqrt receipt");
   });
 
   await runner.run("closest approach handles ordinary and zero-length segments", async () => {
