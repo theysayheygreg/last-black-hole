@@ -62,6 +62,11 @@ async function events(since = 0) {
   return (await response.json()).events || [];
 }
 
+async function playerSlingshotEvents(clientId, since = 0) {
+  return (await events(since)).filter((event) =>
+    event.payload?.clientId === clientId && event.type.startsWith("player.slingshot"));
+}
+
 async function post(route, body) {
   const response = await fetch(`${SIM_URL}${route}`, {
     method: "POST",
@@ -89,6 +94,29 @@ async function pressAcknowledgedSlingshotEdge(page, label) {
   } finally {
     await page.keyboard.up("KeyF");
   }
+  await waitFor(
+    () => page.evaluate(() => {
+      const local = window.__TEST_API?.getInputState?.();
+      const remote = window.__TEST_API?.getNetworkState?.()?.lastRemoteInput;
+      return {
+        localSlingshot: local?.slingshot,
+        remoteSlingshot: remote?.slingshot,
+      };
+    }),
+    (state) => state?.localSlingshot === false && state?.remoteSlingshot === false,
+    `${label} key-up propagation`,
+  );
+  const after = await slingshotEdgeAcks(page);
+  assert.strictEqual(after.length, before.length + 1,
+    `${label} must produce exactly one edge acknowledgement`);
+  const [ack] = after.slice(before.length);
+  assert.strictEqual(ack.requestedEdgeIds.length, 1,
+    `${label} must request exactly one edge ID`);
+  assert.strictEqual(ack.acceptedEdgeIds.length, 1,
+    `${label} must accept exactly one edge ID`);
+  assert.strictEqual(ack.acceptedEdgeIds[0], ack.requestedEdgeIds[0],
+    `${label} must accept the requested edge ID`);
+  return ack;
 }
 
 async function main() {
@@ -165,10 +193,16 @@ async function main() {
     assert(aim.slingshot?.aim?.anchorId === well.id && aim.slingshot?.aim?.engageEligible === true,
       `Capture setup must be authority-engageable: ${JSON.stringify(aim.slingshot?.aim)}`);
     await capture("01-aim-cue");
-    await pressAcknowledgedSlingshotEdge(page, "engage");
+    const engageAck = await pressAcknowledgedSlingshotEdge(page, "engage");
+    const engagedEvents = await waitFor(
+      () => playerSlingshotEvents(network.clientId, eventWatermark),
+      (currentEvents) => currentEvents.length === 1
+        && currentEvents[0].type === "player.slingshotEngaged",
+      "exactly one authoritative engage event",
+    );
+    const engagedEvent = engagedEvents[0];
     const lock = await waitFor(playerFor, (player) => player?.slingshot?.phase === "lock", "lock telegraph");
     await capture("02-lock");
-    await page.keyboard.down("KeyW");
     const arc = await waitFor(
       playerFor,
       (player) => player?.slingshot?.engaged === true
@@ -182,8 +216,25 @@ async function main() {
       "ruler and force ledger evidence",
     );
     await capture("03-owned-arc-ruler-force");
-    await pressAcknowledgedSlingshotEdge(page, "release");
-    await page.keyboard.up("KeyW");
+    const engagedBeforeRelease = await playerFor();
+    assert(engagedBeforeRelease?.slingshot?.engaged === true,
+      `Slingshot auto-released before the requested release: ${JSON.stringify(engagedBeforeRelease?.slingshot)}`);
+    const eventsBeforeRelease = await playerSlingshotEvents(network.clientId, eventWatermark);
+    assert.deepStrictEqual(eventsBeforeRelease.map((event) => event.type), [
+      "player.slingshotEngaged",
+    ], "Expected only the authoritative engage event before release");
+    assert.strictEqual(eventsBeforeRelease[0].seq, engagedEvent.seq,
+      "Engage event changed before the requested release");
+
+    const releaseAck = await pressAcknowledgedSlingshotEdge(page, "release");
+    const releaseEvents = await waitFor(
+      () => playerSlingshotEvents(network.clientId, engagedEvent.seq),
+      (currentEvents) => currentEvents.length === 1
+        && currentEvents[0].type === "player.slingshotReleased"
+        && currentEvents[0].payload?.reason === "release",
+      "exactly one requested release event",
+    );
+    const releasedEvent = releaseEvents[0];
     const released = await waitFor(
       playerFor,
       (player) => player?.slingshot?.engaged === false && player?.slingshot?.telegraph?.releaseGhost,
@@ -191,12 +242,17 @@ async function main() {
     );
     await capture("04-release-ghost");
 
-    const slingshotEvents = (await events(eventWatermark))
-      .filter((event) => event.payload?.clientId === network.clientId && event.type.startsWith("player.slingshot"));
+    const slingshotEvents = await playerSlingshotEvents(network.clientId, eventWatermark);
     assert.deepStrictEqual(slingshotEvents.map((event) => event.type), [
       "player.slingshotEngaged",
       "player.slingshotReleased",
     ], "Expected one authoritative slingshot engage/release sequence");
+    assert.strictEqual(slingshotEvents[0].seq, engagedEvent.seq,
+      "Final event window did not retain the engaged event");
+    assert.strictEqual(slingshotEvents[1].seq, releasedEvent.seq,
+      "Final event window did not retain the released event");
+    assert.strictEqual(slingshotEvents[1].payload?.reason, "release",
+      "Final slingshot release must be player-requested");
 
     const result = {
       outputDir: OUTPUT_DIR,
@@ -209,6 +265,12 @@ async function main() {
         geometry: overlay.geometry,
         reducedMotion: overlay.reducedMotion,
       },
+      edgeAcks: { engage: engageAck, release: releaseAck },
+      events: slingshotEvents.map((event) => ({
+        seq: event.seq,
+        type: event.type,
+        reason: event.payload?.reason || null,
+      })),
       browserErrors: launched.errors,
       captures,
     };
