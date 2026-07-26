@@ -384,9 +384,30 @@ async function run() {
 
   let browser, page;
   let browser2, page2;
+  let promotionClientId = null;
   try {
     ({ browser, page } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanRemotePage(page);
+
+    async function startFreshSimGroup() {
+      if (browser2) {
+        await browser2.close();
+        browser2 = null;
+        page2 = null;
+      }
+      if (browser) await browser.close();
+      browser = null;
+      page = null;
+      directAuthorities.clear();
+      await startSimServer(SIM_PORT);
+    }
+
+    async function startFreshRemoteGroup() {
+      await startFreshSimGroup();
+      ({ browser, page } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
+      await bootstrapCleanRemotePage(page);
+      await enterRemoteRun(page);
+    }
 
     await runner.run("Remote test API path reaches authoritative gameplay", async () => {
       await enterRemoteRun(page);
@@ -430,6 +451,8 @@ async function run() {
       await parkBrowserPlayer(page, 7);
     });
 
+    await startFreshRemoteGroup();
+
     await runner.run("Remote debug can force and reset authoritative inhibitor state", async () => {
       const snapshot = await getSnapshot();
       const ws = snapshot.session?.worldScale || 5;
@@ -456,8 +479,9 @@ async function run() {
       assert(reset.snapshot?.inhibitor?.form === 0, `Expected reset inhibitor form 0, got ${reset.snapshot?.inhibitor?.form}`);
     });
 
+    await startFreshSimGroup();
+
     await runner.run("Remote portal extraction is a server consequence", async () => {
-      await parkBrowserPlayer(page, 7);
       const clientId = "remote-portal-authority-test";
       const portalId = "portal-authority-test";
       await withDirectClient({ clientId, name: "Portal Authority Test" }, async () => {
@@ -528,17 +552,29 @@ async function run() {
       });
     });
 
+    await startFreshSimGroup();
+
     await runner.run("Remote star or planetoid push is server-authored", async () => {
-      await parkBrowserPlayer(page, 6);
       const clientId = "remote-push-authority-test";
       await withDirectClient({ clientId, name: "Push Authority Test" }, async () => {
         const snapshot = await getSnapshot();
         const ws = snapshot.session?.worldScale || 5;
-        const planetoid = snapshot.world?.planetoids?.find((entry) => entry.alive !== false);
-        const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
-        const source = planetoid || star;
-        assert(source, "Expected an authoritative planetoid or star for push test");
-        const offset = planetoid ? 0.04 : 0.16;
+        const wells = snapshot.world?.wells || [];
+        const safeSource = (entries) => (entries || [])
+          .filter((entry) => entry.alive !== false)
+          .map((entry) => ({
+            entry,
+            wellClearance: wells.reduce((best, well) => Math.min(best, Math.hypot(
+              worldWrappedDeltaForTest(entry.wx, well.wx, ws),
+              worldWrappedDeltaForTest(entry.wy, well.wy, ws)
+            )), Infinity),
+          }))
+          .sort((a, b) => b.wellClearance - a.wellClearance)[0]?.entry;
+        const star = safeSource(snapshot.world?.stars);
+        const planetoid = safeSource(snapshot.world?.planetoids);
+        const source = star || planetoid;
+        assert(source, "Expected an authoritative star or planetoid for push test");
+        const offset = star ? 0.24 : 0.04;
         const placed = await postDebugPlayerState({
           clientId,
           wx: ((source.wx + offset) % ws + ws) % ws,
@@ -548,19 +584,24 @@ async function run() {
           status: "alive",
         });
         assert(placed.ok === true, "Expected debug player placement before push test");
+        const placementTick = placed.snapshot?.tick || snapshot.tick || 0;
 
         const { player } = await waitForSnapshotPlayer(
           clientId,
-          (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.005,
+          (remotePlayer, currentSnapshot) =>
+            remotePlayer.status === "alive" &&
+            currentSnapshot.tick > placementTick &&
+            Number(remotePlayer.forceLedger?.vectors?.gravity?.x) > 0.01,
           { timeout: 8000 }
         );
-        assert(Math.hypot(player.vx, player.vy) > 0.005,
-          `Expected server-authored push velocity, got vx=${player.vx} vy=${player.vy}`);
+        assert(player.forceLedger.vectors.gravity.x > 0.01,
+          `Expected outward server-authored body force, got ${JSON.stringify(player.forceLedger.vectors.gravity)}`);
       });
     });
 
+    await startFreshSimGroup();
+
     await runner.run("Remote scavenger contact bumps the player", async () => {
-      await parkBrowserPlayer(page, 5);
       const clientId = "remote-scavenger-bump-test";
       await withDirectClient({ clientId, name: "Scavenger Bump Test" }, async () => {
         const snapshot = await getSnapshot();
@@ -609,8 +650,9 @@ async function run() {
       });
     });
 
+    await startFreshSimGroup();
+
     await runner.run("Remote signal follows delivered thrust, not empty-tank intent", async () => {
-      await parkBrowserPlayer(page, 4);
       const clientId = "remote-signal-output-test";
       await withDirectClient({ clientId, name: "Signal Output Test" }, async () => {
         const snapshot = await getSnapshot();
@@ -653,6 +695,8 @@ async function run() {
       });
     });
 
+    await startFreshRemoteGroup();
+
     await runner.run("Remote snapshots advance and move the ship under authoritative input", async () => {
       await parkBrowserPlayer(page, 3);
       const before = await page.evaluate(() => ({
@@ -692,8 +736,9 @@ async function run() {
       assert(moved > 0.0001, `Expected ship movement under remote authority, got ${moved}`);
     });
 
+    await startFreshSimGroup();
+
     await runner.run("Remote delta-v gates brake, fuel cells, and speed cap", async () => {
-      await parkBrowserPlayer(page, 7);
       const clientId = "remote-delta-v-authority-test";
       await withDirectClient({
         clientId,
@@ -732,7 +777,8 @@ async function run() {
           consumeSlot: null,
           timestamp: Date.now(),
         });
-        let observed = await waitForSnapshotPlayer(
+        let observed = await waitForSnapshotPlayerLabel(
+          "delta-v brake",
           clientId,
           (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.001 && remotePlayer.deltaV < 20,
           { timeout: 5000 }
@@ -760,7 +806,8 @@ async function run() {
           consumeSlot: 1,
           timestamp: Date.now(),
         });
-        observed = await waitForSnapshotPlayer(
+        observed = await waitForSnapshotPlayerLabel(
+          "delta-v fuel cell",
           clientId,
           (remotePlayer) => remotePlayer.consumables?.[1] === null && remotePlayer.deltaV > 20,
           { timeout: 5000 }
@@ -775,7 +822,8 @@ async function run() {
           status: "alive",
         });
         assert(result.ok === true, "Expected debug high velocity to succeed");
-        observed = await waitForSnapshotPlayer(
+        observed = await waitForSnapshotPlayerLabel(
+          "delta-v speed cap",
           clientId,
           (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) <= 8.01,
           { timeout: 5000 }
@@ -784,6 +832,8 @@ async function run() {
           `Expected server speed cap near 8 wu/s, got ${Math.hypot(observed.player.vx, observed.player.vy)}`);
       });
     });
+
+    await startFreshRemoteGroup();
 
     await runner.run("Remote slingshot is resolved by the authoritative sim", async () => {
       await parkBrowserPlayer(page, 6);
@@ -812,19 +862,14 @@ async function run() {
         resetSlingshot: true,
       });
       assert(reset.ok === true, "Expected debug slingshot reset to succeed");
-      await waitForSnapshotPlayerLabel(
-        "slingshot fixture reset",
-        net.clientId,
-        (remotePlayer, remoteSnapshot) => {
-          const scale = remoteSnapshot.session?.worldScale || ws;
-          return remotePlayer.status === "alive" &&
-            remotePlayer.slingshot?.engaged === false &&
-            worldWrappedDeltaForTest(remotePlayer.wx, startX, scale) < 0.03 &&
-            worldWrappedDeltaForTest(remotePlayer.wy, startY, scale) < 0.03 &&
-            Math.abs(remotePlayer.vy + 1.2) < 0.2;
-        },
-        { timeout: 5000 }
-      );
+      const resetPlayer = reset.snapshot?.players?.find((entry) => entry.clientId === net.clientId);
+      assert(resetPlayer?.status === "alive", "Expected slingshot fixture player to be alive");
+      assert(resetPlayer.slingshot?.engaged === false, "Expected slingshot fixture to reset the engaged state");
+      assert(worldWrappedDeltaForTest(resetPlayer.wx, startX, ws) < 0.03 &&
+        worldWrappedDeltaForTest(resetPlayer.wy, startY, ws) < 0.03,
+      "Expected slingshot fixture placement in the authoritative debug response");
+      assert(Math.abs(resetPlayer.vy + 1.2) < 0.2,
+        `Expected slingshot fixture tangential velocity, got ${resetPlayer.vy}`);
 
       const engageSeq = Date.now() + 100;
       await sendBrowserInput(page, {
@@ -949,8 +994,9 @@ async function run() {
       // the authoritative contract this suite needs to guard.
     });
 
+    await startFreshSimGroup();
+
     await runner.run("Remote inventory actions mutate authoritative cargo and loadout", async () => {
-      await parkBrowserPlayer(page, 4);
       const clientId = "remote-inventory-authority-test";
       await withDirectClient({
         clientId,
@@ -1033,6 +1079,18 @@ async function run() {
       });
     });
 
+    await startFreshSimGroup();
+
+    await runner.run("Human joins cannot select internal prototype hulls", async () => {
+      const clientId = "internal-hull-authority-test";
+      await withDirectClient({ clientId, name: "Roster Test", hullType: "resonant" }, async (joined) => {
+        assert(joined.player?.hullType === "drifter",
+          `Expected internal hull request to normalize to Drifter, got ${joined.player?.hullType}`);
+      });
+    });
+
+    await startFreshRemoteGroup();
+
     await runner.run("Remote authoritative hazards push the player without local fallback", async () => {
       await parkBrowserPlayer(page, 3);
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
@@ -1107,25 +1165,29 @@ async function run() {
       );
     });
 
+    await startFreshRemoteGroup();
+
     await runner.run("Second client joins existing authoritative session", async () => {
       await parkBrowserPlayer(page, 6);
-      const joinResponse = await postJoin({
+      await withDirectClient({
         clientId: "remote-test-second-client",
         name: "Second Client",
+      }, async () => {
+        const snapshot = await getSnapshot();
+        assert(snapshot.players.length >= 2, `Expected at least 2 remote players, got ${snapshot.players.length}`);
+        assert(snapshot.session.mapId === "shallows", `Expected shared session on shallows, got ${snapshot.session.mapId}`);
+        await waitFor(page, () => window.__TEST_API.getRemotePlayers().length >= 1, { timeout: 5000 });
+
+        const deniedReset = await postSessionReset({ requesterId: "remote-test-second-client" });
+        assert(deniedReset.status === 403, `Expected non-host reset denial, got ${deniedReset.status}`);
       });
-
-      assert(joinResponse.ok === true, "Expected direct second join to succeed");
-
-      const snapshot = await getSnapshot();
-      assert(snapshot.players.length >= 2, `Expected at least 2 remote players, got ${snapshot.players.length}`);
-      assert(snapshot.session.mapId === "shallows", `Expected shared session on shallows, got ${snapshot.session.mapId}`);
-
-      await waitFor(page, () => window.__TEST_API.getRemotePlayers().length >= 1, { timeout: 5000 });
     });
+
+    await startFreshRemoteGroup();
 
     await runner.run("Remote browser joins live authoritative run instead of resetting to its selected map", async () => {
       ({ browser: browser2, page: page2 } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
-      await bootstrapCleanRemotePage(page2);
+      await waitFor(page2, () => typeof window.__TEST_API?.createTestProfile === "function", { timeout: 12000 });
 
       await page2.evaluate(() => window.__TEST_API.createTestProfile("Second Browser"));
       const started = await page2.evaluate(() => window.__TEST_API.startRemoteGameNow(2));
@@ -1138,16 +1200,10 @@ async function run() {
 
       const net = await page2.evaluate(() => window.__TEST_API.getNetworkState());
       assert(net.remoteMapId === "shallows", `Expected second browser to join live shallows run, got ${net.remoteMapId}`);
+      promotionClientId = net.clientId;
 
       const snapshot = await getSnapshot();
       assert(snapshot.session.mapId === "shallows", `Expected live authoritative map to stay on shallows, got ${snapshot.session.mapId}`);
-
-      const deniedReset = await postSessionReset({ requesterId: "remote-test-second-client" });
-      assert(deniedReset.status === 403, `Expected non-host reset denial, got ${deniedReset.status}`);
-
-      await browser2.close();
-      browser2 = null;
-      page2 = null;
     });
 
     await runner.run("Remote death writes back authoritative profile state", async () => {
@@ -1195,14 +1251,6 @@ async function run() {
       assert(health.session.status === "running", "Expected session to keep running while another human remains active");
     });
 
-    await runner.run("Human joins cannot select internal prototype hulls", async () => {
-      const clientId = "internal-hull-authority-test";
-      await withDirectClient({ clientId, name: "Roster Test", hullType: "resonant" }, async (joined) => {
-        assert(joined.player?.hullType === "drifter",
-          `Expected internal hull request to normalize to Drifter, got ${joined.player?.hullType}`);
-      });
-    });
-
     await runner.run("Host leaves and remaining player is promoted", async () => {
       const hostNet = await page.evaluate(() => window.__TEST_API.getNetworkState());
       await waitForPhase(page, "dead", 8000);
@@ -1221,7 +1269,7 @@ async function run() {
 
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(
-        health.session.hostClientId === "remote-test-second-client",
+        health.session.hostClientId === promotionClientId,
         `Expected remaining client to be promoted host, got ${health.session.hostClientId}`
       );
     });
