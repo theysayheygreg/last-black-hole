@@ -591,6 +591,42 @@ const SUITES = [
   },
 ];
 
+// These suites still author fixed sim/control ports internally. They remain
+// mutually exclusive while ordinary Node and isolated browser suites overlap.
+const FIXED_SERVICE_SUITES = new Set([
+  "W2A3ShippingTrio",
+  "MapRelativeSchedule",
+  "RouteBriefing",
+  "AuthoritativeItemShape",
+  "ProtocolV2Authority",
+  "BallparkMirror",
+  "BallparkQueries",
+  "BallparkPickup",
+  "BallparkExtraction",
+  "ControlPlane",
+  "PlayerBrain",
+  "SimWellGrace",
+  "SimInputTimeout",
+  "SlingshotEdgeQueue",
+  "SweptAuthority",
+  "SimLifecycle",
+  "SimScale",
+  "SimBoundedGrowth",
+  "AuthorityBudget",
+  "ProtocolRuntime",
+  "Inhibitor",
+  "RulerLive",
+  "SlingshotV2",
+  "SlingshotV2Live",
+  "InfraSmoke",
+  "TelemetrySmoke",
+  "RemoteAuthority",
+]);
+
+for (const suite of SUITES) {
+  if (FIXED_SERVICE_SUITES.has(suite.name)) suite.isolationGroup = "fixed-services";
+}
+
 const LANES = [
   "fast",
   "core",

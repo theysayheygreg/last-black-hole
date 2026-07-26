@@ -3,12 +3,25 @@ const path = require("path");
 const fs = require("fs");
 const { launchBrowser } = require("./browser-driver.cjs");
 
-const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
+function envPath(name, fallback) {
+  const value = process.env[name];
+  return value ? path.resolve(value) : fallback;
+}
+
+function envPort(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 && value < 65536 ? value : fallback;
+}
+
+const ROOT = path.resolve(__dirname, "..");
+const SCREENSHOT_DIR = envPath("LBH_TEST_ARTIFACT_ROOT", path.join(__dirname, "screenshots"));
 if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
-const PORT = 8719; // dedicated transient harness port; separate from dev server on 8080
-const ROOT = path.resolve(__dirname, "..");
-const TMP = path.join(ROOT, "tmp");
+const PORT = envPort("LBH_TEST_STATIC_PORT", 8719);
+const TMP = envPath("LBH_TEST_TMP_ROOT", path.join(ROOT, "tmp"));
+// The service wrapper CLIs still own pid/meta/log files under repo tmp.
+// Their manifest isolation lock prevents collisions; session data stays per child.
+const SERVICE_TMP = path.join(ROOT, "tmp");
 const PID_FILE = path.join(TMP, "harness-server.pid");
 const META_FILE = path.join(TMP, "harness-server.json");
 const LOG_FILE = path.join(TMP, "harness-server.log");
@@ -21,6 +34,13 @@ let serverProcess = null;
 const startedSimPorts = new Set();
 const startedControlPorts = new Set();
 let cleanupRegistered = false;
+
+function recordLaunch(kind) {
+  const metricsFile = process.env.LBH_TEST_METRICS_FILE;
+  if (!metricsFile) return;
+  fs.mkdirSync(path.dirname(metricsFile), { recursive: true });
+  fs.appendFileSync(metricsFile, `${kind}\n`, "utf8");
+}
 
 function hasProtocol(target) {
   return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(String(target));
@@ -116,9 +136,9 @@ function killStaleHarnessServerSync() {
 
 function simFilesForPort(port) {
   return {
-    pid: path.join(TMP, `sim-server-${port}.pid`),
-    meta: path.join(TMP, `sim-server-${port}.json`),
-    log: path.join(TMP, `sim-server-${port}.log`),
+    pid: path.join(SERVICE_TMP, `sim-server-${port}.pid`),
+    meta: path.join(SERVICE_TMP, `sim-server-${port}.json`),
+    log: path.join(SERVICE_TMP, `sim-server-${port}.log`),
     registry: path.join(TMP, `session-registry-${port}.json`),
   };
 }
@@ -181,6 +201,7 @@ async function startServer() {
     fs.rmSync(LOG_FILE, { force: true });
     fs.writeFileSync(LOG_FILE, "", "utf8");
 
+    recordLaunch("static");
     serverProcess = spawn(process.execPath, [
       SERVER_SCRIPT,
       "--host", "127.0.0.1",
@@ -261,6 +282,7 @@ function stopServer() {
  */
 async function launchGame(htmlFile = "index.html") {
   const target = toHarnessUrl(htmlFile);
+  recordLaunch("browser");
   const browser = await launchBrowser();
   const page = await browser.newPage();
 
@@ -353,6 +375,7 @@ async function startSimServer(port = 8788, options = {}) {
   const defaultEnv = {
     LBH_SESSION_REGISTRY_FILE: path.join(TMP, `session-registry-${port}.json`),
   };
+  recordLaunch("sim");
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, args, {
       cwd: ROOT,
@@ -411,11 +434,13 @@ async function startControlPlane(port = 8791, options = {}) {
   registerProcessCleanup();
   try { await stopControlPlane(port); } catch {}
   fs.mkdirSync(TMP, { recursive: true });
+  try { fs.rmSync(path.join(SERVICE_TMP, `control-plane-${port}.log`), { force: true }); } catch {}
   const args = [CONTROL_PLANE_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
   const defaultEnv = {
     LBH_CONTROL_PLANE_FILE: path.join(TMP, `control-plane-store-${port}.json`),
     LBH_SESSION_REGISTRY_FILE: path.join(TMP, `session-registry-${port}.json`),
   };
+  recordLaunch("control");
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, args, {
       cwd: ROOT,
@@ -557,11 +582,11 @@ function harnessLogFile() {
 }
 
 function simLogFile(port = 8788) {
-  return path.join(TMP, `sim-server-${port}.log`);
+  return path.join(SERVICE_TMP, `sim-server-${port}.log`);
 }
 
 function controlPlaneLogFile(port = 8791) {
-  return path.join(TMP, `control-plane-${port}.log`);
+  return path.join(SERVICE_TMP, `control-plane-${port}.log`);
 }
 
 function readLogLines(filePath) {

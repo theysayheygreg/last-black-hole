@@ -23,6 +23,7 @@ const {
   controlPlaneLogFile,
   waitForLogEvent,
   withQuery,
+  toHarnessUrl,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -102,7 +103,7 @@ async function run() {
         waitForLogEvent(simLog, (event) => event.event === "runtime.started" && event.component === "sim"),
       ]);
 
-      assert(devStarted.url === "http://127.0.0.1:8719/", `Unexpected harness runtime url: ${devStarted.url}`);
+      assert(devStarted.url === toHarnessUrl("/"), `Unexpected harness runtime url: ${devStarted.url}`);
       assert(controlStarted.url === CONTROL_URL + "/", `Unexpected control-plane url: ${controlStarted.url}`);
       assert(simStarted.url === SIM_URL + "/", `Unexpected sim url: ${simStarted.url}`);
     });

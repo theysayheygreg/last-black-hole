@@ -15,6 +15,7 @@ const {
   assert,
   dispatchKey,
   waitFor,
+  toHarnessUrl,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -57,7 +58,7 @@ async function bootstrapCleanPage(page) {
   } catch {
     const target = String(htmlFile).startsWith("http")
       ? htmlFile
-      : `http://localhost:8719/${String(htmlFile).replace(/^\//, "")}`;
+      : toHarnessUrl(htmlFile);
     await page.goto(target, { waitUntil: "domcontentloaded", timeout: 10000 });
     await page.evaluate(() => localStorage.clear());
   }
