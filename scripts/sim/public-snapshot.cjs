@@ -1,0 +1,219 @@
+const { PROTOCOL_VERSION, filterEventsForPlayer } = require("../sim-protocol.cjs");
+const { getLegacySessionCompatibility } = require("./session-compatibility.cjs");
+
+/**
+ * Public authority projection only. This module selects the stable wire shape
+ * and owns no snapshot retention. Injected gameplay fact callbacks retain
+ * their existing domain side effects, so their call order is intentional.
+ */
+function projectPublicSession(session, mapState, waveRings) {
+  return {
+    ...session,
+    ...getLegacySessionCompatibility({
+      worldScale: session.worldScale,
+      mapState,
+      waveRings,
+      includeBaseKeys: true,
+    }),
+  };
+}
+
+function projectAbilityState(state) {
+  if (!state) return null;
+  return {
+    hullType: state.hullType,
+    // Drifter
+    flowLockActive: state.flowLockActive,
+    flowLockCooldown: state.flowLockCooldown,
+    eddyBrakeCooldown: state.eddyBrakeCooldown,
+    // Breacher
+    burnActive: state.burnActive,
+    burnFuel: state.burnFuel,
+    momentumShieldActive: state.momentumShieldActive,
+    // Resonant
+    eddies: state.eddies,
+    tapAnchor: state.tapAnchor,
+    tapCooldown: state.tapCooldown,
+    frequencyShiftCooldown: state.frequencyShiftCooldown,
+    nextPulseInverted: state.nextPulseInverted,
+    // Shroud
+    ghostTrailActive: state.ghostTrailActive,
+    wakeCloakCooldown: state.wakeCloakCooldown,
+    decoyCharges: state.decoyCharges,
+    decoyCooldown: state.decoyCooldown,
+    decoys: state.decoys,
+    // Hauler
+    salvageLockCharges: state.salvageLockCharges,
+    tractorCooldown: state.tractorCooldown,
+    tractorChannelTimer: state.tractorChannelTimer,
+  };
+}
+
+function projectPlayer(player, facts) {
+  const coyote = player.slingshot ? facts.slingshotCoyoteTelemetry(player.slingshot) : null;
+  const slingshot = player.slingshot ? {
+    phase: player.slingshot.phase || "idle",
+    engaged: Boolean(player.slingshot.engaged),
+    anchorId: player.slingshot.anchorId ?? null,
+    anchorType: player.slingshot.anchorType ?? null,
+    anchorWX: player.slingshot.anchorWX ?? null,
+    anchorWY: player.slingshot.anchorWY ?? null,
+    anchorRange: player.slingshot.anchorRange ?? 0,
+    energy: player.slingshot.energy || 0,
+    chainCount: player.slingshot.chainCount || 0,
+    engageRadius: player.slingshot.engageRadius || 0,
+    orbitDir: player.slingshot.orbitDir || 0,
+    bendDegrees: player.slingshot.bendDegrees || 0,
+    arcRadians: player.slingshot.arcRadians || 0,
+    aim: player.slingshot.aimAnchorKey ? {
+      anchorId: player.slingshot.aimAnchorId,
+      anchorType: player.slingshot.aimAnchorType,
+      anchorWX: player.slingshot.aimAnchorWX,
+      anchorWY: player.slingshot.aimAnchorWY,
+      anchorRange: player.slingshot.aimAnchorRange,
+      distance: player.slingshot.aimDistance,
+      tangentialSpeed: player.slingshot.aimTangentialSpeed || 0,
+      engageEligible: player.slingshot.engageEligible === true,
+      coyoteActive: Boolean(player.slingshot.coyoteActive),
+      coyoteRemainingMs: coyote.transportRemainingMs,
+      canonicalCoyoteRemainingMs: coyote.canonicalRemainingMs,
+      effectiveCoyoteDurationMs: coyote.effectiveDurationMs,
+      transportCoyoteRemainingMs: coyote.transportRemainingMs,
+    } : null,
+    // Keep this after the outer aim fields: telegraph projection refreshes
+    // eligibility before the ruler facts below consume it.
+    telegraph: facts.buildSlingshotTelegraph(player),
+  } : null;
+
+  return {
+    clientId: player.clientId,
+    profileId: player.profileId || null,
+    name: player.name,
+    isAI: Boolean(player.isAI),
+    personality: player.personality || null,
+    hullType: player.hullType || "drifter",
+    rigLevels: player.rigLevels || [0, 0, 0],
+    abilityState: projectAbilityState(player.abilityState),
+    status: player.status,
+    wx: player.wx,
+    wy: player.wy,
+    vx: player.vx,
+    vy: player.vy,
+    slingshot,
+    deltaV: player.deltaV,
+    deltaVMax: player.deltaVMax,
+    deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
+    deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
+    deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
+    forceLedger: player.forceLedger || null,
+    ruler: facts.buildPlayerRulerFacts(player),
+    lastInputSeq: player.lastInput.seq,
+    lastInputBrake: player.lastInput.brake || 0,
+    pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges)
+      ? player.lastInput.slingshotEdges.length
+      : 0,
+    cargo: player.cargo,
+    cargoCount: player.cargo.filter(Boolean).length,
+    equipped: player.equipped,
+    consumables: player.consumables,
+    activeEffects: player.activeEffects,
+    effectState: player.effectState,
+    portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
+    signal: player.signal,
+    controlDebuff: player.controlDebuff || 0,
+  };
+}
+
+function projectWorld({
+  mapState,
+  portalSchedule,
+  waveRings,
+  collapseEpochState,
+  collapseEpochSchedule,
+  getAuthoritativeField,
+}) {
+  return {
+    anomalyCatalog: mapState.anomalyCatalog,
+    wells: mapState.wells,
+    stars: mapState.stars,
+    wrecks: mapState.wrecks,
+    planetoids: mapState.planetoids,
+    portals: mapState.portals,
+    portalSchedule,
+    nextPortalWindowIndex: mapState.nextPortalWindowIndex,
+    nextPortalWaveIndex: mapState.nextPortalWaveIndex,
+    scavengers: mapState.scavengers,
+    fauna: mapState.fauna,
+    sentries: mapState.sentries,
+    waveRings: waveRings.map((ring) => ({
+      id: ring.id,
+      sourceWX: ring.sourceWX,
+      sourceWY: ring.sourceWY,
+      radius: ring.radius,
+      amplitude: ring.amplitude,
+      initialAmplitude: ring.initialAmplitude,
+      sourceWellId: ring.sourceWellId ?? null,
+      alive: ring.alive !== false,
+    })),
+    collapseEpoch: collapseEpochState ? {
+      epochId: collapseEpochState.epochId,
+      epochIndex: collapseEpochState.epochIndex,
+      scheduledTime: collapseEpochState.scheduledTime,
+      transitionCount: collapseEpochState.transitionCount,
+      parameterVector: { ...collapseEpochState.parameterVector },
+    } : null,
+    collapseEpochSchedule,
+    authoritativeField: getAuthoritativeField(),
+  };
+}
+
+function projectInhibitor(inhibitor, schedule) {
+  return {
+    form: inhibitor.form,
+    phase: inhibitor.phase,
+    waveId: inhibitor.waveId,
+    scheduledTime: inhibitor.scheduledTime,
+    waveBudget: inhibitor.waveBudget,
+    wx: inhibitor.wx,
+    wy: inhibitor.wy,
+    intensity: inhibitor.intensity,
+    radius: inhibitor.radius,
+    localTime: inhibitor.localTime,
+    formTimes: Array.isArray(inhibitor.formTimes)
+      ? inhibitor.formTimes.slice(0, 4)
+      : [null, null, null, null],
+    schedule,
+    targetWX: inhibitor.swarmTargetX,
+    targetWY: inhibitor.swarmTargetY,
+    lastSignalWX: inhibitor.lastSignalWX,
+    lastSignalWY: inhibitor.lastSignalWY,
+    finalPortalSpawned: Boolean(inhibitor.finalPortalSpawned),
+    finalPortalExpired: Boolean(inhibitor.finalPortalExpired),
+    gravityBonus: inhibitor.gravityBonus || 0,
+  };
+}
+
+function buildPublicSnapshot(state, facts) {
+  return {
+    type: "snapshot",
+    protocolVersion: PROTOCOL_VERSION,
+    session: state.session,
+    tick: state.clock.tick,
+    simTime: state.clock.simTime,
+    serverTime: state.clock.serverTime,
+    lastEventSeq: state.clock.lastEventSeq,
+    bench: state.bench,
+    players: Array.from(state.players).map((player) => projectPlayer(player, facts)),
+    world: projectWorld(state.world),
+    inhibitor: projectInhibitor(state.inhibitor, state.world.portalSchedule),
+    portalSchedule: state.world.portalSchedule,
+    // Baselines are shared and cacheable. Player-local events are recovered
+    // through the authenticated event stream instead.
+    recentEvents: filterEventsForPlayer(state.recentEvents.slice(-32), null),
+  };
+}
+
+module.exports = {
+  buildPublicSnapshot,
+  projectPublicSession,
+};

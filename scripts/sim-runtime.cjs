@@ -51,6 +51,10 @@ const {
 } = require("./content/session-profiles.cjs");
 const { MOVEMENT } = require("./content/movement.cjs");
 const { getLegacySessionCompatibility } = require("./sim/session-compatibility.cjs");
+const {
+  buildPublicSnapshot,
+  projectPublicSession,
+} = require("./sim/public-snapshot.cjs");
 const { simUnitsToMeters } = require("./content/units.cjs");
 const {
   selectAnomalyCast,
@@ -1907,182 +1911,7 @@ function getAuthorityFieldPacket() {
 }
 
 function getPublicSession() {
-  return {
-    ...runtime.session,
-    ...getLegacySessionCompatibility({
-      worldScale: runtime.session.worldScale,
-      mapState: runtime.mapState,
-      waveRings: runtime.waveRings,
-      includeBaseKeys: true,
-    }),
-  };
-}
-
-function buildSnapshotBody() {
-  return {
-    type: "snapshot",
-    protocolVersion: PROTOCOL_VERSION,
-    session: getPublicSession(),
-    tick: runtime.tick,
-    simTime: runtime.simTime,
-    serverTime: Date.now(),
-    lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
-    bench: benchAuthority ? benchAuthority.snapshot() : null,
-    players: Array.from(runtime.players.values()).map((player) => {
-      const coyote = player.slingshot ? slingshotCoyoteTelemetry(player.slingshot) : null;
-      return ({
-      clientId: player.clientId,
-      profileId: player.profileId || null,
-      name: player.name,
-      isAI: Boolean(player.isAI),
-      personality: player.personality || null,
-      hullType: player.hullType || 'drifter',
-      rigLevels: player.rigLevels || [0, 0, 0],
-      abilityState: player.abilityState ? {
-        hullType: player.abilityState.hullType,
-        // Drifter
-        flowLockActive: player.abilityState.flowLockActive,
-        flowLockCooldown: player.abilityState.flowLockCooldown,
-        eddyBrakeCooldown: player.abilityState.eddyBrakeCooldown,
-        // Breacher
-        burnActive: player.abilityState.burnActive,
-        burnFuel: player.abilityState.burnFuel,
-        momentumShieldActive: player.abilityState.momentumShieldActive,
-        // Resonant
-        eddies: player.abilityState.eddies,
-        tapAnchor: player.abilityState.tapAnchor,
-        tapCooldown: player.abilityState.tapCooldown,
-        frequencyShiftCooldown: player.abilityState.frequencyShiftCooldown,
-        nextPulseInverted: player.abilityState.nextPulseInverted,
-        // Shroud
-        ghostTrailActive: player.abilityState.ghostTrailActive,
-        wakeCloakCooldown: player.abilityState.wakeCloakCooldown,
-        decoyCharges: player.abilityState.decoyCharges,
-        decoyCooldown: player.abilityState.decoyCooldown,
-        decoys: player.abilityState.decoys,
-        // Hauler
-        salvageLockCharges: player.abilityState.salvageLockCharges,
-        tractorCooldown: player.abilityState.tractorCooldown,
-        tractorChannelTimer: player.abilityState.tractorChannelTimer,
-      } : null,
-      status: player.status,
-      wx: player.wx,
-      wy: player.wy,
-      vx: player.vx,
-      vy: player.vy,
-      slingshot: player.slingshot ? {
-        phase: player.slingshot.phase || "idle",
-        engaged: Boolean(player.slingshot.engaged),
-        anchorId: player.slingshot.anchorId ?? null,
-        anchorType: player.slingshot.anchorType ?? null,
-        anchorWX: player.slingshot.anchorWX ?? null,
-        anchorWY: player.slingshot.anchorWY ?? null,
-        anchorRange: player.slingshot.anchorRange ?? 0,
-        energy: player.slingshot.energy || 0,
-        chainCount: player.slingshot.chainCount || 0,
-        engageRadius: player.slingshot.engageRadius || 0,
-        orbitDir: player.slingshot.orbitDir || 0,
-        bendDegrees: player.slingshot.bendDegrees || 0,
-        arcRadians: player.slingshot.arcRadians || 0,
-        aim: player.slingshot.aimAnchorKey ? {
-          anchorId: player.slingshot.aimAnchorId,
-          anchorType: player.slingshot.aimAnchorType,
-          anchorWX: player.slingshot.aimAnchorWX,
-          anchorWY: player.slingshot.aimAnchorWY,
-          anchorRange: player.slingshot.aimAnchorRange,
-          distance: player.slingshot.aimDistance,
-          tangentialSpeed: player.slingshot.aimTangentialSpeed || 0,
-          engageEligible: player.slingshot.engageEligible === true,
-          coyoteActive: Boolean(player.slingshot.coyoteActive),
-          coyoteRemainingMs: coyote.transportRemainingMs,
-          canonicalCoyoteRemainingMs: coyote.canonicalRemainingMs,
-          effectiveCoyoteDurationMs: coyote.effectiveDurationMs,
-          transportCoyoteRemainingMs: coyote.transportRemainingMs,
-        } : null,
-        telegraph: buildSlingshotTelegraph(player),
-      } : null,
-      deltaV: player.deltaV,
-      deltaVMax: player.deltaVMax,
-      deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
-      deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
-      deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
-      forceLedger: player.forceLedger || null,
-      ruler: buildPlayerRulerFacts(player),
-      lastInputSeq: player.lastInput.seq,
-      lastInputBrake: player.lastInput.brake || 0,
-      pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
-      cargo: player.cargo,
-      cargoCount: getCargoCount(player),
-      equipped: player.equipped,
-      consumables: player.consumables,
-      activeEffects: player.activeEffects,
-      effectState: player.effectState,
-      portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
-      signal: player.signal,
-      controlDebuff: player.controlDebuff || 0,
-    });
-    }),
-    world: {
-      anomalyCatalog: runtime.mapState.anomalyCatalog,
-      wells: runtime.mapState.wells,
-      stars: runtime.mapState.stars,
-      wrecks: runtime.mapState.wrecks,
-      planetoids: runtime.mapState.planetoids,
-      portals: runtime.mapState.portals,
-      portalSchedule: runtime.portalSchedule,
-      nextPortalWindowIndex: runtime.mapState.nextPortalWindowIndex,
-      nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
-      scavengers: runtime.mapState.scavengers,
-      fauna: runtime.mapState.fauna,
-      sentries: runtime.mapState.sentries,
-      waveRings: runtime.waveRings.map((ring) => ({
-        id: ring.id,
-        sourceWX: ring.sourceWX,
-        sourceWY: ring.sourceWY,
-        radius: ring.radius,
-        amplitude: ring.amplitude,
-        initialAmplitude: ring.initialAmplitude,
-        sourceWellId: ring.sourceWellId ?? null,
-        alive: ring.alive !== false,
-      })),
-      collapseEpoch: runtime.collapseEpochState ? {
-        epochId: runtime.collapseEpochState.epochId,
-        epochIndex: runtime.collapseEpochState.epochIndex,
-        scheduledTime: runtime.collapseEpochState.scheduledTime,
-        transitionCount: runtime.collapseEpochState.transitionCount,
-        parameterVector: { ...runtime.collapseEpochState.parameterVector },
-      } : null,
-      collapseEpochSchedule: runtime.collapseEpochSchedule,
-      authoritativeField: getAuthorityFieldPacket(),
-    },
-    inhibitor: {
-      form: runtime.inhibitor.form,
-      phase: runtime.inhibitor.phase,
-      waveId: runtime.inhibitor.waveId,
-      scheduledTime: runtime.inhibitor.scheduledTime,
-      waveBudget: runtime.inhibitor.waveBudget,
-      wx: runtime.inhibitor.wx,
-      wy: runtime.inhibitor.wy,
-      intensity: runtime.inhibitor.intensity,
-      radius: runtime.inhibitor.radius,
-      localTime: runtime.inhibitor.localTime,
-      formTimes: Array.isArray(runtime.inhibitor.formTimes)
-        ? runtime.inhibitor.formTimes.slice(0, 4)
-        : [null, null, null, null],
-      schedule: runtime.inhibitorSchedule,
-      targetWX: runtime.inhibitor.swarmTargetX,
-      targetWY: runtime.inhibitor.swarmTargetY,
-      lastSignalWX: runtime.inhibitor.lastSignalWX,
-      lastSignalWY: runtime.inhibitor.lastSignalWY,
-      finalPortalSpawned: Boolean(runtime.inhibitor.finalPortalSpawned),
-      finalPortalExpired: Boolean(runtime.inhibitor.finalPortalExpired),
-      gravityBonus: runtime.inhibitor.gravityBonus || 0,
-    },
-    portalSchedule: runtime.portalSchedule,
-    // Snapshot baselines are shared and cacheable. Player-local events are
-    // recovered through the authenticated event stream instead.
-    recentEvents: filterEventsForPlayer(runtime.recentEvents.slice(-32), null),
-  };
+  return projectPublicSession(runtime.session, runtime.mapState, runtime.waveRings);
 }
 
 function snapshotBody({ force = false } = {}) {
@@ -2093,7 +1922,33 @@ function snapshotBody({ force = false } = {}) {
       latest.snapshot?.session?.status === runtime.session.status) {
     return latest.snapshot;
   }
-  return runtime.snapshotRing.append(buildSnapshotBody(), {
+  const session = getPublicSession();
+  const body = buildPublicSnapshot({
+    session,
+    clock: {
+      tick: runtime.tick,
+      simTime: runtime.simTime,
+      serverTime: Date.now(),
+      lastEventSeq,
+    },
+    bench: benchAuthority ? benchAuthority.snapshot() : null,
+    players: runtime.players.values(),
+    world: {
+      mapState: runtime.mapState,
+      portalSchedule: runtime.portalSchedule,
+      waveRings: runtime.waveRings,
+      collapseEpochState: runtime.collapseEpochState,
+      collapseEpochSchedule: runtime.collapseEpochSchedule,
+      getAuthoritativeField: getAuthorityFieldPacket,
+    },
+    inhibitor: runtime.inhibitor,
+    recentEvents: runtime.recentEvents,
+  }, {
+    slingshotCoyoteTelemetry,
+    buildSlingshotTelegraph,
+    buildPlayerRulerFacts,
+  });
+  return runtime.snapshotRing.append(body, {
     bodySchemaVersion: BODY_SCHEMA_VERSION,
     snapshotSchemaVersion: 2,
     lastEventSeq,
