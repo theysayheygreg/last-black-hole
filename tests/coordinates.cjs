@@ -18,6 +18,7 @@ const {
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
+const expectedBackend = new URL(htmlFile, "http://lbh.test").searchParams.get("renderer") || "three";
 
 async function run() {
   console.log(`\n=== COORDINATE TESTS (${htmlFile}) ===\n`);
@@ -146,11 +147,17 @@ async function run() {
           wells: window.__TEST_API.getWells(),
           camera: window.__TEST_API.getThreeSceneState()?.camera || null,
         }));
-        assert(rendered.backend === "three", `Expected Three renderer, got ${rendered.backend}`);
+        assert(rendered.backend === expectedBackend,
+          `Expected ${expectedBackend} renderer, got ${rendered.backend}`);
         assert(rendered.camera, "Expected renderer camera contract");
 
         const coords = await import("../src/coords.js");
+        const { createWorldProjection } = await import("../src/render-three/world-projection.js");
         coords.setWorldScale(rendered.camera.worldScale);
+        const aspect = rendered.camera.canvasWidth / rendered.camera.canvasHeight;
+        const threeProjection = rendered.backend === "three"
+          ? createWorldProjection(rendered.camera, aspect)
+          : null;
         for (const well of rendered.wells) {
           const [x, y] = coords.worldToScreen(
             well.wx,
@@ -162,6 +169,13 @@ async function run() {
           );
           assert(Math.abs(well.x - x) < 1e-6 && Math.abs(well.y - y) < 1e-6,
             `${well.name} renderer position (${well.x}, ${well.y}) diverged from coordinate authority (${x}, ${y})`);
+          if (threeProjection) {
+            const scene = threeProjection.project(well.wx, well.wy);
+            const sceneX = ((scene.x / aspect) + 1) * rendered.camera.canvasWidth / 2;
+            const sceneY = (1 - scene.y) * rendered.camera.canvasHeight / 2;
+            assert(Math.abs(sceneX - x) < 1e-6 && Math.abs(sceneY - y) < 1e-6,
+              `${well.name} Three scene projection (${sceneX}, ${sceneY}) diverged from shared pixels (${x}, ${y})`);
+          }
         }
         coords.setWorldScale(3);
       }
