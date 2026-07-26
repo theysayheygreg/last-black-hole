@@ -67,11 +67,6 @@ const deathResult = {
   seed: 99,
 };
 
-async function stepForMs(page, ms, dt = 1 / 60) {
-  const frames = Math.max(1, Math.ceil(ms / (dt * 1000)));
-  return stepGameFrames(page, frames, dt);
-}
-
 async function setUiDebugQuiet(page, { reducedMotion = false } = {}) {
   await page.evaluate((reduce) => {
     window.__TEST_API?.setOverlayVisible?.(true);
@@ -191,7 +186,12 @@ async function captureSurface(page, outputDir, surface) {
   });
   await surface.setup(page);
   await setUiDebugQuiet(page, { reducedMotion: surface.reducedMotion === true });
-  await stepForMs(page, surface.warmMs ?? 900);
+
+  // Fixtures author the target state directly. One frame synchronizes a new
+  // phase, then the motion clock is pinned before two frames paint that state.
+  await stepGameFrames(page, 1);
+  await page.evaluate((time) => window.__TEST_API?.setUiMotionTime?.(time), surface.motionTime ?? 1.2);
+  await stepGameFrames(page, 2);
 
   if (surface.expectPhase) {
     const phase = await page.evaluate(() => window.__TEST_API?.getGamePhase?.() || null);
@@ -255,25 +255,21 @@ async function run() {
     {
       name: 'title',
       expectPhase: 'title',
-      warmMs: 1500,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.4 })),
     },
     {
       name: 'title-left',
       expectPhase: 'title',
-      warmMs: 1500,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.4, layout: 'left' })),
     },
     {
       name: 'title-right',
       expectPhase: 'title',
-      warmMs: 1500,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.4, layout: 'right' })),
     },
     {
       name: 'title-opposite-left',
       expectPhase: 'title',
-      warmMs: 1500,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
         titleTimer: 1.4,
         layout: 'opposite-left',
@@ -282,13 +278,11 @@ async function run() {
     {
       name: 'title-attract',
       expectPhase: 'title',
-      warmMs: 300,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.8, loopTime: 8.1 })),
     },
     {
       name: 'title-glitch',
       expectPhase: 'title',
-      warmMs: 300,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
         titleTimer: 1.8,
         layout: 'opposite-left',
@@ -298,7 +292,6 @@ async function run() {
     {
       name: 'title-reduced-motion',
       expectPhase: 'title',
-      warmMs: 180,
       reducedMotion: true,
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
         titleTimer: 1.4,
@@ -335,23 +328,17 @@ async function run() {
     {
       name: 'home-transition-entering',
       expectPhase: 'home',
-      warmMs: 1,
-      setup: async (p) => {
-        await p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 }));
-        await p.evaluate(() => window.__TEST_API.setUiMotionTime(0.08));
-      },
+      motionTime: 0.08,
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 })),
       regions: [{ name: 'home-transition-panel', x: 0.05, y: 0.16, width: 0.90, height: 0.70 }],
     },
     {
       name: 'home-transition-reduced-motion',
       expectPhase: 'home',
-      warmMs: 1,
+      motionTime: 0.08,
       reducedMotion: true,
       expectSettled: true,
-      setup: async (p) => {
-        await p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 }));
-        await p.evaluate(() => window.__TEST_API.setUiMotionTime(0.08));
-      },
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 })),
       regions: [{ name: 'home-transition-panel', x: 0.05, y: 0.16, width: 0.90, height: 0.70 }],
     },
     {
@@ -374,7 +361,6 @@ async function run() {
     {
       name: 'playing-hud',
       expectPhase: 'playing',
-      warmMs: 1700,
       setup: async (p) => {
         await p.evaluate(() => window.__TEST_API.showUiFixture('playing-hud', { mapIndex: 0, seed: 424242 }));
         await waitFor(p, () => window.__TEST_API.getGamePhase() === 'playing', { timeout: 6000 });
@@ -396,7 +382,6 @@ async function run() {
       name: 'playing-hud-1280x720',
       viewport: { width: 1280, height: 720 },
       expectPhase: 'playing',
-      warmMs: 1700,
       setup: async (p) => {
         await p.evaluate(() => window.__TEST_API.showUiFixture('playing-hud', { mapIndex: 2, seed: 424242 }));
         await waitFor(p, () => window.__TEST_API.getGamePhase() === 'playing', { timeout: 6000 });
