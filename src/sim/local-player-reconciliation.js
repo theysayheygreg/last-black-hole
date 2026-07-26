@@ -8,8 +8,9 @@ import { UNIT_SCALE } from '../content/units.js';
 // This is a presentation bridge, not a second authority. The client predicts
 // only its own input and uses the last authoritative force sample as a short
 // lived hint while the next snapshot is in flight. It selects the newest
-// unacknowledged command rather than replaying a queue, and it never predicts
-// client fluid flow; those remain server-owned.
+// unacknowledged command rather than replaying a queue. The authority ledger
+// supplies the current's already-accounted acceleration; the client never
+// samples or recreates the server field.
 export const LOCAL_PLAYER_RECONCILIATION = Object.freeze({
   positionCorrectionHalfLifeSeconds: 0.09,
   velocityCorrectionHalfLifeSeconds: 0.12,
@@ -36,12 +37,13 @@ function phaseKey(player = {}) {
 }
 
 function forceAcceleration(forceLedger) {
+  const coupling = forceLedger?.vectors?.coupling || {};
   const gravity = forceLedger?.vectors?.gravity || {};
   const wave = forceLedger?.vectors?.wave || {};
   const scale = UNIT_SCALE.metersPerSimUnit;
   return {
-    x: (finite(gravity.x) + finite(wave.x)) / scale,
-    y: (finite(gravity.y) + finite(wave.y)) / scale,
+    x: (finite(coupling.x) + finite(gravity.x) + finite(wave.x)) / scale,
+    y: (finite(coupling.y) + finite(gravity.y) + finite(wave.y)) / scale,
   };
 }
 
@@ -188,7 +190,18 @@ export function rebaseLocalPlayerReconciliation(state, player, {
   const hardReset = boundary
     || distance > LOCAL_PLAYER_RECONCILIATION.hardSnapDistanceWorld
     || velocityDistance > LOCAL_PLAYER_RECONCILIATION.hardSnapVelocityDeltaWorld;
-  const base = hardReset ? predictionFromAuthority(authority) : state;
+  // Keep local input prediction, but never let a stale tank or burn profile
+  // survive a server snapshot. The next local step starts from this truth.
+  const base = hardReset ? predictionFromAuthority(authority) : {
+    ...state,
+    deltaV: authority.deltaV,
+    deltaVMax: authority.deltaVMax,
+    deltaVRegen: authority.deltaVRegen,
+    deltaVRegenBoost: authority.deltaVRegenBoost,
+    deltaVBurnEff: authority.deltaVBurnEff,
+    deltaVBurnRate: authority.deltaVBurnRate,
+    timeSinceThrust: authority.timeSinceThrust,
+  };
   const pendingInputCount = pendingInputs === undefined
     ? (state.pendingInputCount || 0)
     : (Array.isArray(pendingInputs) ? pendingInputs.length : 0);

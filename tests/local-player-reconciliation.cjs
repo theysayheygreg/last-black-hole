@@ -135,16 +135,43 @@ async function run() {
     assert(state.vx < 0.5, `Expected brake to reduce velocity, got ${state.vx}`);
   });
 
-  await runner.run('gravity and wave hints bend presentation between snapshots', async () => {
+  await runner.run('coupling, gravity, and wave ledger hints bend presentation between snapshots', async () => {
     let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
     state = rebase(state, player({ forceLedger: {
       vectors: {
-        gravity: { x: UNIT_SCALE.metersPerSimUnit, y: 0 },
+        coupling: { x: UNIT_SCALE.metersPerSimUnit, y: 0 },
+        gravity: { x: 0, y: 0 },
         wave: { x: 0, y: 0 },
       },
     } })).state;
     state = advance(state, { moveX: 0, moveY: 0, thrust: 0, brake: 0 }, 100).state;
-    assert(state.vx > 0, `Expected authority gravity hint to bend velocity, got ${state.vx}`);
+    assert(state.vx > 0, `Expected authority force hint to bend velocity, got ${state.vx}`);
+  });
+
+  await runner.run('ordinary snapshot rebases refresh authoritative fuel state', async () => {
+    let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
+    state = rebase(state, player()).state;
+    state = advance(state, { moveX: 1, moveY: 0, thrust: 1, brake: 0 }, 16).state;
+    assert(state.deltaV < 80, `Expected local prediction to spend fuel, got ${state.deltaV}`);
+
+    const refreshed = rebase(state, player({
+      wx: state.wx + 0.1,
+      deltaV: 61,
+      deltaVMax: 120,
+      deltaVRegen: 2.5,
+      deltaVRegenBoost: 9,
+      deltaVBurnEff: 1.25,
+      deltaVBurnRate: 14,
+      timeSinceThrust: 0.4,
+    }), { now: 40 });
+    assert(refreshed.hardReset === false, 'Expected ordinary fuel snapshot to blend');
+    assert(refreshed.state.deltaV === 61, 'Expected authoritative fuel value');
+    assert(refreshed.state.deltaVMax === 120, 'Expected authoritative fuel capacity');
+    assert(refreshed.state.deltaVRegen === 2.5, 'Expected authoritative regen rate');
+    assert(refreshed.state.deltaVRegenBoost === 9, 'Expected authoritative regen boost');
+    assert(refreshed.state.deltaVBurnEff === 1.25, 'Expected authoritative burn efficiency');
+    assert(refreshed.state.deltaVBurnRate === 14, 'Expected authoritative burn rate');
+    assert(refreshed.state.timeSinceThrust === 0.4, 'Expected authoritative regen timer');
   });
 
   await runner.run('ordinary corrections do not teleport', async () => {
