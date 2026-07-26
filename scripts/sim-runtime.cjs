@@ -4128,7 +4128,14 @@ function buildRelevanceView() {
 
     const mirror = runtime.ballparkMirror;
     if (!mirror) throw new Error("Ballpark is required for authoritative relevance queries");
-    const { bodies, stats } = collectRelevantBodies(mirror, alivePlayers, {
+    const selectsWholeCategory = (
+      radius >= runtime.session.worldScale
+      && perPlayerLimit >= entities.length
+    );
+    // A full-world, unlimited query returns the same category from every
+    // player origin. The first alive player preserves the old result order.
+    const queryOrigins = selectsWholeCategory ? [alivePlayers[0]] : alivePlayers;
+    const { bodies, stats } = collectRelevantBodies(mirror, queryOrigins, {
       category,
       radius,
       perOriginLimit: clampBudgetCount(perPlayerLimit, entities.length || 1),

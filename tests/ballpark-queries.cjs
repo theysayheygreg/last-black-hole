@@ -157,6 +157,29 @@ async function run() {
     assert(mirror.stats().queryUsage.queryCircleCount === 1, "Expected mirror query usage to record helper query");
   });
 
+  await runner.run("One stable origin preserves full-world relevance order", async () => {
+    const runtime = fakeQueryRuntime();
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(runtime, { reason: "full-world-query-test" });
+    const origins = [{ wx: 2, wy: 2 }, { wx: 3.8, wy: 0.2 }, { wx: 0.1, wy: 3.9 }];
+    const options = {
+      category: "wreck",
+      radius: runtime.session.worldScale,
+      perOriginLimit: runtime.mapState.wrecks.length,
+      query: { interactionMask: BODY_MASKS.PICKUP },
+    };
+
+    const repeated = collectRelevantBodies(mirror, origins, options);
+    const stable = collectRelevantBodies(mirror, [origins[0]], options);
+    assert(
+      JSON.stringify(nearestSourceIds(stable)) === JSON.stringify(nearestSourceIds(repeated)),
+      `Expected stable full-world order ${nearestSourceIds(repeated)}, got ${nearestSourceIds(stable)}`,
+    );
+    assert(repeated.stats.queryCount === origins.length,
+      `Expected repeated query count ${origins.length}, got ${repeated.stats.queryCount}`);
+    assert(stable.stats.queryCount === 1, `Expected one stable-origin query, got ${stable.stats.queryCount}`);
+  });
+
   await runner.run("Collects nearest available bodies with lifecycle filtering", async () => {
     const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
     mirror.rebuildFromRuntime(fakeQueryRuntime(), { reason: "nearest-test" });
@@ -366,8 +389,21 @@ async function run() {
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
 
+      const secondJoin = await getJson("/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          runId: start.body.session.runId,
+          clientId: "ballpark-query-test-second",
+          name: "Ballpark Query Test Second",
+        }),
+      });
+      assert(secondJoin.status === 200 && secondJoin.body.ok === true,
+        `Expected second join success, got ${secondJoin.status}`);
+
       const health = await waitForHealth((body) => (
-        body.ballparkRelevance?.mode === "ballpark"
+        body.idleState?.humanPlayerCount === 2
+        && body.ballparkRelevance?.mode === "ballpark"
         && body.ballpark?.queryUsage?.queryCircleCount > 0
       ));
       const snapshot = await getJson("/snapshot");
@@ -378,6 +414,15 @@ async function run() {
         `Expected star relevance to use Ballpark, got ${JSON.stringify(health.ballparkRelevance.categories.star)}`);
       assert(health.ballparkRelevance.categories.wreck?.mode === "ballpark",
         `Expected wreck relevance to use Ballpark, got ${JSON.stringify(health.ballparkRelevance.categories.wreck)}`);
+      for (const [category, stats] of Object.entries(health.ballparkRelevance.categories)) {
+        if (stats.mode !== "ballpark") continue;
+        assert(stats.queryCount === 1,
+          `Expected one full-world ${category} query per authority tick, got ${JSON.stringify(stats)}`);
+        assert(stats.originCount === 1,
+          `Expected stable authority origin for ${category}, got ${JSON.stringify(stats)}`);
+        assert(stats.materializedCount === stats.selectedCount,
+          `Expected every selected ${category} body to materialize, got ${JSON.stringify(stats)}`);
+      }
     } finally {
       await stopSimServer(SIM_PORT).catch(() => null);
     }

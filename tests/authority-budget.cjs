@@ -59,6 +59,7 @@ async function run() {
       const tickStart = baseline.body.tick;
       const wallStart = performance.now();
       const heapStart = baseline.body.process.memory.heapUsed;
+      const queryUsageStart = baseline.body.ballpark?.queryUsage || {};
       const latencies = [];
       const snapshotBytes = [];
       const rebuildTimes = [];
@@ -83,6 +84,13 @@ async function run() {
       const p95SnapshotBytes = percentile(snapshotBytes, 0.95);
       const p95RebuildMs = percentile(rebuildTimes, 0.95);
       const estimatedSnapshotBytesPerSec = p95SnapshotBytes * (Number(lastHealth.session.snapshotHz) || 1);
+      const queryUsageEnd = lastHealth.ballpark?.queryUsage || {};
+      const tickCount = lastHealth.tick - tickStart;
+      const circleQueries = (queryUsageEnd.queryCircleCount || 0) - (queryUsageStart.queryCircleCount || 0);
+      const queryCandidates = (queryUsageEnd.candidateCount || 0) - (queryUsageStart.candidateCount || 0);
+      const duplicateCandidates = (
+        (queryUsageEnd.duplicateCandidates || 0) - (queryUsageStart.duplicateCandidates || 0)
+      );
 
       assert(observedTickHz >= targetTickHz * 0.65,
         `Observed ${observedTickHz.toFixed(2)} Hz below 65% of ${targetTickHz} Hz target`);
@@ -109,6 +117,11 @@ async function run() {
         estimatedSnapshotMBps: Number((estimatedSnapshotBytesPerSec / 1_000_000).toFixed(2)),
         heapGrowthMiB: Number((heapGrowth / 1024 / 1024).toFixed(2)),
         p95BallparkSyncMs: Number(p95RebuildMs.toFixed(3)),
+        authorityTicks: tickCount,
+        ballparkCircleQueries: circleQueries,
+        ballparkQueriesPerTick: Number((circleQueries / Math.max(1, tickCount)).toFixed(2)),
+        ballparkCandidates: queryCandidates,
+        ballparkDuplicateCandidates: duplicateCandidates,
       }, null, 2));
     } finally {
       await stopSimServer(SIM_PORT).catch(() => null);
