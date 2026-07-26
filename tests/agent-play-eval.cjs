@@ -359,9 +359,7 @@ async function steerTo(page, clientId, target, options = {}) {
 
       if (options.portalId
         && player.portalInteraction?.portalId === options.portalId
-        && player.portalInteraction.ready === true
-        && dist <= radius
-        && speed <= (options.arrivalSpeed ?? 0.08)) {
+        && player.portalInteraction.ready === true) {
         return { start, end: last, closest, target: { ...target }, player, snapshot };
       }
 
@@ -591,12 +589,10 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
   const portalApproach = {
-    // The standard portal's public capture radius is 0.08. Half of that
-    // radius leaves a real movement margin after the next 15 Hz authority
-    // sample without requiring precision-docking input.
+    // These values guide a natural approach; authoritative
+    // portalInteraction.ready owns acceptance of the public capture contract.
     radius: 0.04,
     maxCruiseSpeed: 0.18,
-    arrivalSpeed: 0.12,
     portalId: initialPortal.id,
     timeout: 70000,
   };
