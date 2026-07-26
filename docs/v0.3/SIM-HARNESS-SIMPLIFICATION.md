@@ -1,6 +1,7 @@
 # v0.3 Simulation, Harness, and Human-Clarity Simplification
 
-> Status: active v0.3 program ledger. Updated 2026-07-25.
+> Status: final source/harness receipt pending one exact-head full-lane result.
+> Updated 2026-07-26 on `codex/v0.3-sim-harness-simplification`.
 >
 > Branch: `codex/v0.3-sim-harness-simplification`
 >
@@ -85,8 +86,10 @@ Production and test LoC are measured separately after every milestone.
 
 ## Baseline behavior manifest
 
-The compatibility boundary is product behavior, not the pre-normalization
-15/12/10 map-rate profile. Existing representative proof owns these outcomes:
+The compatibility boundary is product behavior by elapsed wall time. The
+approved movement-rate change replaces the old per-map rates with one 15 Hz
+authority clock; it is not a physics retune. Existing representative proof
+owns these outcomes:
 
 | Boundary | Baseline proof |
 | --- | --- |
@@ -191,3 +194,93 @@ restoring caps or lowering the authority rate.
 
 Nonblank JS-family lines at this milestone are 49,986 production (`-232` from
 the pinned baseline) and 22,493 tests (`-74`).
+
+## Integrated source and harness receipt
+
+The current source checkpoint is `c558ae5756205dff2d2e341a0e69c71c5ecf484f`
+on `codex/v0.3-sim-harness-simplification`. It remains a v0.3-only descendant
+of `BASELINE_SHA`; no package, Deck, promotion, or public-release claim is made
+for this checkpoint.
+
+### Movement and Deep Field
+
+- `src/content/movement.data.json` is the sole authority-rate source:
+  `MOVEMENT.authority.integrationHz = 15`. Map data has no gameplay-rate
+  field; rendering, snapshot publication, transport, visual LOD, and content
+  budgets remain separately named schedules.
+- All map tiers use the same fixed authority dt for player/AI movement, flow,
+  gravity, contact, fuel, slingshot, and time-based consequences. The
+  compatibility boundary is the authority/product outcome, not private helper
+  ordering.
+- The measured relevance pass reduced Deep Field from 24 to 12 queries/tick,
+  candidates from 194,970 to 49,242, and duplicate candidates from 203,532 to
+  51,072. It preserves Ballpark as the authority query owner.
+- Runtime JSON is now compact at both snapshot admission and HTTP delivery.
+  This intentionally removes whitespace/newlines only: JSON values, shapes,
+  status codes, and content type are unchanged. Deep Field snapshot payloads
+  fell from roughly 335 KiB to 204–213 KiB; stringify time was about 52% lower.
+- The authority loop uses monotonic fractional deadlines rather than a rounded
+  interval. It permits one fixed-dt jitter recovery, then drops stale deadlines
+  after a long stall rather than bursting gameplay. `/health.scheduler` adds
+  only `tickHz`, `intervalMs`, `catchUpTicks`, and `skippedDeadlines`; normal
+  host acceptance requires zero skipped deadlines. Heap delta is diagnostic
+  because GC is host-sensitive; bounded snapshot/ring gates remain enforced.
+
+The current 5/15/25 ten-second cadence receipt is:
+
+| Map | Delivered Hz | Snapshot p95 | Ballpark p95 | Queries/tick | Catch-up / skipped |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Shallows | 14.975 | 7.556 ms | 0.667 ms | 12 | 0 / 0 |
+| Expanse | 14.999 | 17.594 ms | 0.605 ms | 12 | 0 / 0 |
+| Deep Field | 14.989 | 26.130 ms | 0.745 ms | 12 | 0 / 0 |
+
+The authority receipt also passed 57/57 in 195.47 s (197.36 s summed suite
+time; 12 browser, 3 static, 66 sim, 3 control launches). Its Deep Field sample
+delivered 15.000 Hz, 17.36 ms snapshot p95, 212.76 KiB payload p95, 0.722 ms
+Ballpark p95, 12 queries/tick, two ordinary catch-ups, zero skipped deadlines,
+and +1.56 MiB diagnostic heap change. This closes the former 13.9/15 rounded
+timer artifact without restoring profiles; it is not a claim that pathological
+host stalls cannot be observed through `skippedDeadlines`.
+
+### Harness and behavior evidence
+
+The manifest now registers 121 current contracts: fast 60, core 87, authority
+57, sim-structure 45, full 119, bench 6, and audio-tools 1. The runner permits
+four workers total and two browser workers, gives every isolated shard unique
+ports/profiles/temp/artifact roots, serializes fixed services, buffers ordered
+receipts, records launches/timings/retries, and terminates child process groups.
+
+| Comparable path | Baseline | Current | Result |
+| --- | ---: | ---: | --- |
+| Fast warm | 13.04 s, 46 pass | 10.20 s, 60 pass | 1.278x; more coverage |
+| Ordinary core | 93.62 s, 65 red | 45.72 s, 87 pass | 2.047x; meets the <=50% target |
+| Authority | 126.53 s, 47 red | 195.47 s, 57 pass | slower: fresh isolation and cadence proof added |
+| Sim structure | 32.55 s, 35 pass | 93.81 s, 45 pass | slower: 5/15/25 cadence proof added |
+| Candidate full | 1,028.63 s, 95 red | FINAL_FULL_RECEIPT | exact-head result pending; do not infer a speedup |
+
+`test:bench -- --no-retries` is 6/6 green in 0.45 s. `test:audio-tools` is
+intentionally outside candidate/full and remains red in 0.57 s only because
+the optional local audio toolkit cannot import Python `numpy`; it is not a
+product gate. The bench endpoint likewise remains behind its explicit bench
+gate, not normal authority behavior.
+
+Focused behavior evidence remains representative rather than exhaustive:
+current renderer fixtures are green; UIVisual is 18/18 in 12.21 s (from
+466.65 s); Smoke passes in fast/core; and the independent no-retry natural
+AgentPlay journey passed in 164.77 s with 18 captures, normal authority/input,
+slingshot, extraction, profile/Chronicle continuity, second run, and natural
+death recovery. The slingshot live proof now observes the authority event
+boundary instead of racing a transient presentation state.
+
+Meaningful vertical commits centralize the movement clock, toroidal geometry,
+authoritative JSON serialization, deadline scheduling, runner isolation, and
+current-contract fixtures. Current nonblank JS-family lines are 50,173
+production (`-45` from baseline) and 23,543 tests (`+976`); production and
+tests remain reported separately. The test increase is deliberate current
+contract and fresh-process coverage, not hidden runner deletion.
+
+Remaining acceptance work is limited to replacing `FINAL_FULL_RECEIPT` with
+one exact-head no-retry full receipt, then deciding whether any direct
+full-lane regression needs fix-forward. Package and Deck gates are historical
+evidence only until Primary explicitly selects an RC. Greg still owns feel,
+visual/audio taste, physical Deck acceptance, and promotion.

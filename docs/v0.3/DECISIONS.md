@@ -1,6 +1,6 @@
 # v0.3 Decisions
 
-> Document revision: v0.3. Updated 2026-07-25. This file records accepted
+> Document revision: v0.3. Updated 2026-07-26. This file records accepted
 > implementation decisions for the current source line. Remaining Greg-owned
 > decisions stay in `OPEN-DECISIONS.md`.
 
@@ -32,6 +32,27 @@ uses the shared 15 Hz source and the existing finite 100 delta-v tank:
 
 This is the approved movement-rate delta from `BASELINE_SHA`
 `20184fae84b559abf27717c046811673040d987a`; it is not a physics retune.
+
+## Authority Deadline Delivery And Compact Runtime JSON
+
+Decision: authority delivery uses monotonic fractional deadlines at the shared
+15 Hz source. A normal late timer may receive one fixed-dt recovery step; after
+a longer stall, stale deadlines are counted and dropped rather than producing a
+physics burst. This preserves the fixed dt/order during ordinary delivery and
+makes exceptional host stalls inspectable instead of silently simulating time
+in a burst.
+
+`/health.scheduler` is intentionally additive diagnostic surface only:
+`tickHz`, `intervalMs`, `catchUpTicks`, and `skippedDeadlines`. A normal-host
+cadence acceptance sample requires `skippedDeadlines = 0`. It does not create a
+new protocol dependency or gameplay knob.
+
+Snapshot admission and HTTP responses use the same compact JSON serializer.
+The deliberate wire change removes indentation and trailing newline only;
+JSON values, shapes, status codes, and content type remain compatible. Byte
+budgets now measure the exact delivered representation. Heap movement remains
+diagnostic because host GC is variable; bounded snapshot-ring and serialized
+payload gates remain the enforceable limits.
 
 ## W2-A4 Authoritative Map Scale
 

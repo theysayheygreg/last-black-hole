@@ -1,24 +1,23 @@
 # v0.3 Roadmap: Ballpark Authority
 
-> Document revision: v0.3. Updated 2026-07-25 from live branch and harness
+> Document revision: v0.3. Updated 2026-07-26 from the simulation/harness
 > evidence. Earlier mirror-scaffold plans are retained as history in the review
 > documents they came from, not as current implementation claims.
 
 ## Status
 
-**Integration branch:** `codex/v0.3-ballpark-roadmap`
+**Current integration branch:** `codex/v0.3-sim-harness-simplification`
 
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** consolidated v0.3.1 source candidate through the map-relative
-schedule merge `dca8beac`. Accepted W1/W2, 5/15/25 map authority, Map Select,
-Deck UI, pause/resume, entity visuals, config, measurement, design versioning,
-Orrery blocker fixes, locked units, retired per-player time dilation, and the
-ratified normal-input slingshot path are integrated. Focused merged-surface
-checks are green. The newer source has not yet replaced the deployed
-`0.3.1.2b93b077` package; browser, visual, package, platform, and physical Deck
-evidence remain RC work. Promotion into `main` remains closed until Greg's
+**Current state:** `codex/v0.3-sim-harness-simplification` at the current
+source checkpoint is a v0.3-only refactor descendant of
+`20184fae84b559abf27717c046811673040d987a`. It centralizes the gameplay clock,
+Deep Field relevance/transport work, deadline delivery, runner isolation, and
+current-contract fixtures. No package, Deck, or promotion claim is attached to
+this source checkpoint; earlier hash-specific package and Deck receipts remain
+historical evidence only. Promotion into `main` remains closed until Greg's
 explicit version call; movement feel and visual taste remain Greg's final calls.
 
 The v0.3.1 map-relative schedule migration is source-complete: map-scale
@@ -28,14 +27,14 @@ surfaces consume the selected duration. The focused contract preserves the
 600-second Expanse anchor, with epoch 3 intentionally at 75%. This locked
 baseline is ready for playtest; later multiplier balance remains tunable.
 
-Goal D now adds the product-rate movement contract: route probes use the
-selected `15/12/10 Hz` authority profiles, canonical drag/fluid coupling, and
-one finite delta-v tank rather than treating the 60 Hz diagnostic baseline as
-the product. Slingshot transport allowance is fixed wall time across those
-profiles, and portal/exfil placement resolves from one map-center fractional
-policy. Deep Field's long finite-fuel route is recorded as a playtest/content
-risk, not hidden tuning. Ballpark remains the spatial/materialized-payload
-layer; the local/offline seeded-sea presentation split is backlog work.
+The product-rate movement contract now uses one 15 Hz authority integration
+clock from `src/content/movement.data.json` for all 5/15/25 maps, canonical
+drag/fluid coupling, and one finite delta-v tank. The old 15/12/10 profiles are
+superseded. Slingshot transport allowance remains wall-time based; portal/exfil
+placement remains one map-center fractional policy. Deep Field route generosity
+is a playtest/content risk, not hidden tuning. Ballpark remains the
+spatial/materialized-payload layer; the local/offline seeded-sea presentation
+split is backlog work.
 
 The second movement-completion tranche closes three remaining player-facing
 seams without retuning the game: F/Y reports why an in-range slingshot cannot
@@ -196,16 +195,17 @@ explicit presentation contracts.
 - Deep Field has explicit tick, snapshot latency/size, transport, heap-growth,
   and Ballpark-sync budgets.
 
-Latest authority evidence on 2026-07-14:
+Latest source authority evidence on 2026-07-26 (not package/Deck evidence):
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 7.65 / 8 Hz |
-| snapshot p95 latency | 5.32 ms |
-| snapshot p95 size | 107.88 KiB |
-| estimated snapshot transport | 0.33 MB/s |
-| heap growth | 1.12 MiB |
-| Ballpark sync p95 | 1.142 ms |
+| authority tick | 15.000 / 15 Hz (Deep Field sample) |
+| snapshot p95 latency | 17.36 ms |
+| snapshot p95 size | 212.76 KiB |
+| heap change | +1.56 MiB diagnostic |
+| Ballpark sync p95 | 0.722 ms |
+| relevance queries | 12 / tick |
+| deadline delivery | 2 catch-ups / 0 skipped |
 
 ## Playable Evidence
 
@@ -241,11 +241,10 @@ history, but it did not recur in this RC pass.
 
 These are evidence gates, not missing architecture:
 
-- [x] Build the final hash-named artifact from the clean committed RC tree.
-- [x] Boot the embedded control plane, sim, and packaged Three client from that
-  exact artifact.
-- [x] Run the complete no-retry automated candidate lane after the final
-  source changes.
+- [ ] Replace the pending exact-head full-lane receipt in the simulation/harness
+  ledger; do not infer it from an earlier package candidate.
+- [ ] If Primary selects an RC, build a hash-named artifact and rerun package
+  proof from that exact committed source.
 - [ ] If the physical Deck is online, deploy and verify Gaming Mode launch,
   Steam Input, 1280x800 readability, suspend/resume, and log paths.
 - [ ] Greg reviews movement feel, route pleasure, visual hierarchy, and final

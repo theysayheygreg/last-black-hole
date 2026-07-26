@@ -1,5 +1,28 @@
 # v0.3 Changelog
 
+## 2026-07-26
+
+- **Unified authority clock:** `src/content/movement.data.json` now owns the
+  one 15 Hz gameplay integration rate for Shallows, Expanse, and Deep Field.
+  Map-specific movement profiles and overload time dilation are removed;
+  rendering, snapshot, transport, visual, and content schedules remain
+  separate. This is the approved `BASELINE_SHA` movement-rate change, not a
+  movement retune.
+- **Measured Deep Field delivery:** relevance work reduces 24 to 12 queries per
+  tick, 194,970 to 49,242 candidates, and 203,532 to 51,072 duplicates. The
+  runtime now sends the same JSON values/shapes/status/type without formatting
+  whitespace, cutting Deep snapshot payloads to roughly 204–213 KiB.
+- **Authority cadence:** the runtime uses monotonic fractional deadlines,
+  allowing one fixed-dt jitter recovery and counting/dropping stale deadlines
+  after a long stall. `/health.scheduler` adds delivery diagnostics; normal
+  host acceptance requires zero skipped deadlines.
+- **Current harness:** the manifest has 121 registered contracts and the runner
+  uses up to four workers (two browser workers) with isolated resources,
+  ordered timing/launch receipts, and child-process cleanup. The ordinary core
+  gate is 87/87 in 45.72 s versus the 93.62 s baseline (2.047x). The exact-head
+  full-lane receipt remains pending in the program ledger; no package, Deck,
+  or promotion claim is implied.
+
 ## 2026-07-25
 
 - **Movement completion tranche 2:** normal slingshot input now explains the
@@ -8,9 +31,9 @@
   fluid-coupling vector and refreshes authoritative fuel parameters on every
   snapshot rebase, reducing current-driven correction and stale depletion
   behavior without adding a second sim or changing movement tuning.
-- **Goal D map-rate movement contract:** route proof now uses the canonical
-  Shallows/Expanse/Deep Field authority rates of `15/12/10 Hz`, finite fuel,
-  and the shared drag/fluid movement step. The prior 60 Hz route remains a
+- **Goal D map-rate movement contract (superseded):** this entry recorded the
+  then-current 15/12/10 Hz profiles. The 2026-07-26 unified 15 Hz authority
+  clock supersedes those product-rate values; the 60 Hz route remains a
   diagnostic baseline rather than product closure.
 - **Wall-time slingshot transport:** the canonical `50ms` gameplay coyote is
   preserved while the internal four-tick prompt transport allowance is stored

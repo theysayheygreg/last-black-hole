@@ -1,34 +1,34 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-17. This is branch acceptance
+> Document revision: v0.3. Updated 2026-07-26. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
 
-**The v0.3.1 source candidate, exact package, Deck deployment, and bounded
-Gamescope runtime smoke are green. Physical Gaming Mode Library launch, Steam
-Input, and Greg's final review remain.**
+**Current source acceptance is limited to the v0.3 simulation/harness checkpoint
+at `c558ae5756205dff2d2e341a0e69c71c5ecf484f`. The exact-head no-retry full
+receipt is pending. No new package, Deck, RC, or promotion claim exists.**
 
-`codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
-protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
-agent-eval work, plus the v0.3 generated visual kit and UI motion system.
-`main` remains the v0.2 public/demo line.
+`codex/v0.3-sim-harness-simplification` contains the current unified 15 Hz
+authority clock, measured Deep Field relevance/transport work, deadline
+delivery, runner isolation, and current-contract proof. It is based on
+`BASELINE_SHA=20184fae84b559abf27717c046811673040d987a`; `main` remains the
+v0.2 public/demo line.
 
-The previously deployed `0.3.1.2b93b077` artifact remains valid evidence for
-that older hash, but Greg marked it needs-fix. Source `dd9e5149` adds the
-Orrery blocker fixes, locked units, retired time dilation, ratified normal-input
-slingshot path, and map-relative schedule. Its matching package is installed on
-the Deck and checksum-verified.
+The earlier `0.3.1.2b93b077` and `dd9e5149` package/Deck receipts below remain
+valid only for their exact historical hashes. They do not certify the current
+source checkpoint.
 
-Orrery's review exposed a client ownership bug during extraction: after the
-phase changed, local `SimCore` could advance server-owned snapshot entities.
-Remote authority now remains presentation-only through results and transitions
-until the session is explicitly released. Fresh authority, controller, Three
-renderer, fast, and package gates pass with that fix.
+Current source proof: fast is 60/60 in 10.20 s; core is 87/87 in 45.72 s;
+authority is 57/57 in 195.47 s; and the shared 5/15/25 cadence receipt delivers
+14.975/14.999/14.989 Hz with zero skipped deadlines. Deep Field uses 12
+Ballpark relevance queries/tick. A fresh natural AgentPlay journey passed
+no-retry in 164.77 s with 18 captures. The full candidate receipt is still
+`FINAL_FULL_RECEIPT` in the program ledger.
 
-## Current Evidence
+## Historical Package And Deck Evidence
 
-Latest package evidence, superseded as the current RC by newer source:
+This section is retained for the older package hashes only:
 
 - Source `2b93b07781d3f123ff818826884f8fe1a4067e39` includes the accepted
   v0.3.1 fuel recovery, Deck snapshot/star repair, Deck UI, and Map Select
@@ -69,7 +69,7 @@ Current focused source evidence after that package:
   `3/3`, and bounded Deep Field `1/1` pass for the 480/600/720-second schedule;
 - deployment identity and physical Deck behavior are not yet claimed.
 
-Current package evidence:
+Further historical package evidence:
 
 - source/build: `dd9e5149` / `0.3.1.dd9e5149`;
 - `release:internal`, `release:status`, and `test:package` passed for all five
@@ -95,9 +95,9 @@ Current package evidence:
   coredump. Remote `steam -applaunch 3696252517` returned `AppError_9`, so this
   does not check the physical Non-Steam Library launch box below.
 
-Latest completed evidence from the clean 2026-07-14 RC pass:
+Historical completed evidence from the clean 2026-07-14 RC pass:
 
-- `npm run test:full -- --no-retries` passed after the UI visual harness budget
+- historical `npm run test:full -- --no-retries` passed after the UI visual harness budget
   was updated for its sixteen settled animation/layout captures.
 - The full lane includes static, authority, sim-structure, Three, UI, visual,
   playtest, and agent-eval coverage.
@@ -140,13 +140,16 @@ node scripts/build-health.cjs status
 
 Requirements:
 
-- branch is `codex/v0.3-ballpark-roadmap`;
+- branch is the selected, clean v0.3 candidate (the current source checkpoint
+  is `codex/v0.3-sim-harness-simplification` until an RC is explicitly chosen);
 - only known untracked historical screenshot directories may remain;
 - no suite relies on a persistent browser/sim unless persistence is the thing
   being tested;
 - no player-facing test uses sim debug mutation as journey proof;
 - renderer checks target Three;
-- timing retries are reported rather than silently converted into passes.
+- timing retries are reported rather than silently converted into passes;
+- scheduler cadence samples at the shared 15 Hz require zero skipped deadlines;
+  compact JSON preserves values, shapes, status codes, and content type.
 
 ## Architecture Gate
 

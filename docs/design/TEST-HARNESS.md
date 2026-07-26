@@ -1,6 +1,6 @@
 # Test Harness
 
-> Document revision: v0.3. Updated 2026-07-14. The Three renderer and authoritative sim are the
+> Document revision: v0.3. Updated 2026-07-26. The Three renderer and authoritative sim are the
 > release validation targets. The original headless-only plan in
 > `AGENT-TESTING.md` is historical context.
 
@@ -25,6 +25,14 @@ limits are defined in `docs/project/LBH-ORCHESTRATION-CONTRACT.md`.
 Fast data invariants, browser boot checks, authority-process checks, renderer
 fixtures, and real playtest flows stay in separate lanes so one stale browser
 or slow menu transition does not make unrelated feature work look broken.
+
+The current manifest registers 121 contracts: 60 fast, 87 core, 57 authority,
+45 sim-structure, 119 full, 6 bench, and 1 optional audio-tools contract. The
+ordinary comparable checkpoint is `npm test -- --no-retries`: 87/87 in 45.72 s
+against the 93.62 s baseline (2.047x). That is the throughput claim. The full
+candidate receipt is separately recorded in
+`docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`; never substitute a renamed lane for
+it.
 
 For "where does the local build stand?", start with
 `docs/project/BUILD-STATUS.md`, then check `node scripts/build-health.cjs
@@ -106,6 +114,14 @@ Sim `/health` includes `process.pid`, `process.uptimeSec`, and
 `process.memory` so long-run probes can watch process age and memory growth
 instead of inferring leaks from control feel alone.
 
+Authority health also includes the additive `scheduler` delivery diagnostic:
+shared `tickHz`, fractional `intervalMs`, `catchUpTicks`, and
+`skippedDeadlines`. Normal 15 Hz host samples require zero skipped deadlines.
+One catch-up may absorb ordinary timer jitter; a long stall deliberately drops
+stale deadlines rather than running a gameplay burst. Heap change is
+diagnostic because GC is host-sensitive; snapshot/ring byte bounds remain
+enforced gates.
+
 Remote client state also exposes protocol timing through
 `window.__TEST_API.getNetworkState().networkMetrics`. Use
 `lastInputAckRttMs`, `lastInputToSnapshotMs`, `lastSnapshotLagMs`,
@@ -182,6 +198,8 @@ not drift; they cannot prove the ship feels good.
 | `npm run test:agent-eval` | Natural Shallows product journey plus 1280x800 visual/readability evidence before Greg reviews feel and taste. |
 | `npm run test:agent-eval:visible` | The same agent journey in a visible, CDP-controlled Chrome window for attended review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
+| `npm run test:bench` | Explicit bench-authority probes only; this endpoint is not part of normal authority behavior. |
+| `npm run test:audio-tools` | Optional local audio-toolkit check. A missing Python `numpy` dependency is recorded, not converted into a product-gate failure. |
 
 ## Forge Pass Alignment
 
@@ -210,6 +228,14 @@ node tests/run-all.cjs --lane=browser --renderer=three
 node tests/run-all.cjs --suite=Smoke,Renderer --renderer=both
 node tests/run-all.cjs --list --lane=full
 ```
+
+The runner may use at most four workers total and two browser workers
+(`LBH_TEST_WORKERS` and `LBH_TEST_BROWSER_WORKERS` can lower those caps). An
+isolation group gets unique port, browser profile, temporary root, and artifact
+root; fixed services serialize. Buffered output is emitted in manifest order,
+and the final receipt records per-suite duration, retries, process/browser
+launches, and cleanup. Do not share mutable sim/browser state merely to obtain
+a faster number.
 
 Renderer values:
 
@@ -268,6 +294,8 @@ local readability matters more than making every pixel bright.
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
 | `agent-eval` | fresh no-debug Shallows journey, second-run continuity, screenshots, and a narrative report | exhaustive authority coverage or subjective art approval |
+| `bench` | explicit isolated bench-authority probes | ordinary authority/product proof |
+| `audio-tools` | optional local audio-toolchain availability | candidate/product gate |
 | `full` | all committed automated suites | Codex app browser/manual review |
 
 ## Three.js Applicability

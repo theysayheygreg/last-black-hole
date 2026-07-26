@@ -39,12 +39,12 @@ facts.
 
 ### Product-Rate Route Contract
 
-Resolved for the Goal D source pass. Route measurements use the selected
-authority profile (`15/12/10 Hz`) with canonical drag/fluid coupling and one
-finite delta-v tank. The 60 Hz route remains a diagnostic baseline only. The
-Deep Field measurement leaves a narrow final fuel margin; whether that route
-feels generous enough is a Greg playtest question, not a reason to alter the
-movement constants in this slice.
+Resolved for the simulation/harness source pass. Every authored map integrates
+at `MOVEMENT.authority.integrationHz = 15` with canonical drag/fluid coupling
+and one finite delta-v tank. The old per-map 15/12/10 profile is superseded;
+the 60 Hz route remains diagnostic only. Deep Field route generosity remains a
+Greg playtest/content question, not a reason to alter movement constants or
+restore lower-fidelity physics.
 
 ### Extraction
 

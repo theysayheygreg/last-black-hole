@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.3. Updated 2026-07-17. This file answers “what can I
+> Document revision: v0.3. Updated 2026-07-26. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -8,7 +8,7 @@
 | Line | Branch | Meaning |
 |---|---|---|
 | Current public/demo | `main` | v0.2 build line for weekend demos, small fixes, and existing Deck deploys |
-| Next candidate | `codex/v0.3-ballpark-roadmap` | v0.3 authority/Ballpark/product candidate; do not merge backward until Greg promotes it |
+| Current v0.3 source checkpoint | `codex/v0.3-sim-harness-simplification` | v0.3 authority/Ballpark/product source refactor; do not merge backward until Greg promotes it |
 
 When someone asks “what is the build status,” name the branch and evidence.
 Git activity alone is not a playability verdict, and an old build-health ledger
@@ -16,14 +16,16 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
-**Source status:** focused-contract green after the 2026-07-17 blocker pass.
-The v0.3 line now includes the Orrery source fixes, packaged local-authority
-Solo path, locked physical units, retired per-player time dilation, ratified
-normal-input slingshot path, and map-relative 480/600/720-second schedule. The
-new source has completed package, Deck deployment, and a bounded wrapper boot.
-Physical Gaming Mode and feel acceptance remain open.
+**Source status:** `codex/v0.3-sim-harness-simplification` is the current
+v0.3 source-only checkpoint, based on behavioral baseline
+`20184fae84b559abf27717c046811673040d987a`. It has one 15 Hz authoritative
+movement clock across Shallows, Expanse, and Deep Field, plus measured
+relevance, compact transport, deadline-delivery, and harness work. This is not
+a newly packaged or deployed RC. The exact-head full-lane result is pending in
+`docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md` as `FINAL_FULL_RECEIPT`.
 
-**Package status:** green for source `dd9e5149`, build `0.3.1.dd9e5149`.
+**Historical package status:** green for source `dd9e5149`, build
+`0.3.1.dd9e5149`.
 `release:internal` built all five targets, `release:status` found the matching
 hash directory, and `test:package` booted the staged and extracted control
 plane, sim, and Three client under `lbh-local-v2`. The playtest ZIP SHA-256 is
@@ -31,7 +33,7 @@ plane, sim, and Three client under `lbh-local-v2`. The playtest ZIP SHA-256 is
 Linux `app.asar` is
 `561cf3d4c6fb0784ce4c5ba19d1f3e07d0c48afb397b4107b1be3881178c12ef`.
 
-**Physical Steam Deck status:** build `0.3.1.dd9e5149` is installed and
+**Historical physical Steam Deck status:** build `0.3.1.dd9e5149` is installed and
 checksum-verified at `/home/deck/Games/last-singularity-v03`. Gaming Mode key
 `19` is `Last Singularity v0.3.1 Preview`, app id `3696252517`. A bounded
 Gamescope-session wrapper smoke reached healthy embedded authority and Three
@@ -41,7 +43,8 @@ controller, readability, suspend/resume, feel, and audio acceptance remain
 pending.
 
 **Human status:** Greg approved the v0.3.1 slingshot and schedule baselines;
-final movement feel, visual taste, audio, and updated Deck acceptance remain.
+final movement feel, visual taste, audio, physical Deck acceptance, and any
+future RC/promotion remain open.
 
 ### What Is Implemented
 
@@ -78,36 +81,33 @@ final movement feel, visual taste, audio, and updated Deck acceptance remain.
 
 ### Current Automated Evidence
 
-Completed on 2026-07-14:
+Current source evidence, at the stated branch/checkpoint rather than an RC:
 
-- `npm run test:full -- --no-retries`: pass, covering static, authority,
-  sim-structure, browser play, agent-eval, renderer, and UI visual suites.
-- `npm run test:agent-eval`: pass from a fresh sim and disposable browser,
-  without using its timing retry.
-- `npm run test:package`: staged closure plus hash artifact authority/client
-  boot pass.
-- focused HUD, audio, presentation, lifecycle, protocol, route, world geometry,
-  Ballpark, bounded-growth, and Deep Field budget suites: pass.
-- focused UI motion: pass; latest UI visual lane: 18/18 checks with named
-  contrast regions, transition states, reduced motion, and dual-size captures.
-- focused Three lifecycle: 9/9 checks, including visible-budget selection,
-  explicit zero budgets, generated-asset classification, and clean disposal.
-- AgentPlayEval's focused slingshot journey passed on its first attempt with
-  exactly one acknowledged engage edge and one acknowledged release edge.
-- production renderer and performance lanes: pass with zero asset-load errors;
-  Deep Field remained near 60 fps and below the catastrophic draw-call and
-  pooled-mesh ceilings.
+- `npm run test:fast -- --no-retries`: 60/60 in 10.20 s; `npm test --
+  --no-retries`: 87/87 in 45.72 s (2.047x faster than the 93.62 s baseline).
+- `npm run test:authority -- --no-retries`: 57/57 in 195.47 s. It is slower
+  than the red 47-suite baseline because it now proves fresh authority groups
+  and a ten-second 5/15/25 cadence receipt.
+- current UIVisual is 18/18 in 12.21 s; current renderer fixtures are green;
+  Smoke passes in fast/core; the independent natural AgentPlay journey passed
+  no-retry in 164.77 s with 18 captures.
+- `npm run test:bench -- --no-retries`: 6/6 in 0.45 s. Bench authority is
+  explicitly gated and not normal product behavior. `test:audio-tools` remains
+  an optional local-tooling red because Python `numpy` is absent.
+- The full candidate lane has not yet been rerun at this exact source
+  checkpoint. Do not treat earlier full/package evidence as proof for it.
 
 Latest Deep Field measurement:
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 7.65 / 8 Hz |
-| snapshot p95 latency | 5.32 ms |
-| snapshot p95 size | 107.88 KiB |
-| estimated transport | 0.33 MB/s |
-| heap growth | 1.12 MiB |
-| Ballpark sync p95 | 1.142 ms |
+| authority tick | 15.000 / 15 Hz (Deep Field sample) |
+| snapshot p95 latency | 17.36 ms |
+| snapshot p95 size | 212.76 KiB |
+| relevance queries | 12 / tick |
+| heap change | +1.56 MiB diagnostic |
+| Ballpark sync p95 | 0.722 ms |
+| scheduler delivery | 2 catch-ups / 0 skipped |
 
 ### Natural Playable Evidence
 
@@ -142,7 +142,7 @@ The tracked review contract is
 `docs/v0.3/evidence/visual-review-manifest.md`. Timestamped renderer, UI, and
 agent-eval captures are intentionally ignored worker-local evidence and must be
 regenerated for a new acceptance claim. Historical promo media may remain in
-iCloud, but it is not repository evidence for the current RC hash.
+iCloud, but it is not repository evidence for the current source checkpoint.
 
 ### What Still Must Happen
 
