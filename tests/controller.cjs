@@ -13,11 +13,10 @@ const {
   assert,
   waitFor,
   withQuery,
-  stepGameFrames,
 } = require('./helpers.cjs');
 
 const htmlFile = process.argv[2] || 'index-a.html';
-const SIM_PORT = 8789;
+const SIM_PORT = Number(process.env.LBH_CONTROLLER_SIM_PORT || (9900 + process.pid % 500));
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -72,7 +71,11 @@ async function waitForLabeled(page, label, predicate, options = {}, ...args) {
 async function bootstrapCleanPage(page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await sleep(2000);
+  await waitFor(page, () => {
+    return Boolean(window.__TEST_API?.getGamePhase) &&
+      window.__TEST_API.getGamePhase() === 'title';
+  }, { timeout: 5000 });
+  await sleep(600);
 }
 
 async function installVirtualGamepad(page) {
@@ -160,20 +163,6 @@ async function holdGamepad(page, { axes = null, buttons = [] } = {}, holdMs = 50
   await sleep(160);
 }
 
-async function enterLocalRunWithGamepad(page) {
-  await waitForPhase(page, 'title');
-  await tapGamepadButton(page, 0); // confirm -> profileSelect
-  await waitForPhase(page, 'profileSelect');
-  await tapGamepadButton(page, 0); // create/select
-  await tapGamepadButton(page, 0); // confirm generated name if needed
-  await waitForPhase(page, 'home');
-  await moveHomeTabWithGamepad(page, 'LAUNCH');
-  await tapGamepadButton(page, 0); // open map select
-  await waitForPhase(page, 'mapSelect');
-  await tapGamepadButton(page, 0); // launch first map
-  await waitForPhase(page, 'playing', 12000);
-}
-
 async function enterMapSelectWithGamepad(page) {
   await waitForPhase(page, 'title');
   await tapGamepadButton(page, 0); // confirm -> profileSelect
@@ -223,7 +212,6 @@ async function run() {
   const runner = new TestRunner('Controller');
   await startServer();
 
-  let localShot = null;
   let remoteShot = null;
 
   try {
@@ -241,50 +229,42 @@ async function run() {
       });
     });
 
-    await runner.run('Synthetic gamepad reaches gameplay and moves locally', async () => {
-      await withFreshGame(htmlFile, async ({ page }) => {
-        await bootstrapCleanPage(page);
-        await installVirtualGamepad(page);
-        await enterLocalRunWithGamepad(page);
-        const before = await page.evaluate(() => window.__TEST_API.getShipPos());
-        await setGamepadAxes(page, [1, 0, 0, 0, 0, 0]);
-        await setGamepadButton(page, 7, true, 1);
-        await stepGameFrames(page, 8, 1 / 60);
-        await waitForLabeled(page, 'local gamepad thrust input', () => {
-          const input = window.__TEST_API.getInputState();
-          return input && input.lastInputSource === 'gamepad' && input.thrustIntensity > 0.9;
-        }, { timeout: 3000 });
-        await stepGameFrames(page, 54, 1 / 60);
-        const propulsion = await page.evaluate(() => window.__TEST_API.getThreeSceneState()?.ship || null);
-        assert(propulsion?.thrusting === true && propulsion?.braking === false,
-          `Three scene must publish delivered thrust state: ${JSON.stringify(propulsion)}`);
-        await setGamepadButton(page, 7, false, 0);
-        await setGamepadAxes(page, [0, 0, 0, 0, 0, 0]);
-        await stepGameFrames(page, 12, 1 / 60);
-        const coastPropulsion = await page.evaluate(() => window.__TEST_API.getThreeSceneState()?.ship || null);
-        assert(coastPropulsion?.thrusting === false && coastPropulsion?.braking === false,
-          `Three scene must clear delivered propulsion after release: ${JSON.stringify(coastPropulsion)}`);
-        const after = await page.evaluate(() => ({
-          pos: window.__TEST_API.getShipPos(),
-          inventory: window.__TEST_API.getInventory(),
-        }));
-        const moved = Math.hypot(after.pos.x - before.x, after.pos.y - before.y);
-        assert(moved > 0.005, `Expected local controller movement, got ${moved}`);
-
-        await tapGamepadButton(page, 17); // inventory open
-        await waitForLabeled(page, 'local inventory open', () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
-        await tapGamepadButton(page, 1); // back/close
-        await waitForLabeled(page, 'local inventory close', () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
-        localShot = await screenshot(page, 'controller-local');
-      });
-    });
-
-    await runner.run('Synthetic gamepad drives remote gameplay input, brake, inventory, and ability', async () => {
+    await runner.run('Synthetic gamepad drives authoritative movement, brake, inventory, and ability', async () => {
       await withFreshSimServer(SIM_PORT, async () => {
         await withFreshGame(withQuery(htmlFile, { simServer: SIM_URL }), async ({ page: pageRemote }) => {
           await bootstrapCleanPage(pageRemote);
           await installVirtualGamepad(pageRemote);
           await enterRemoteRunWithGamepad(pageRemote, { hullType: 'breacher' });
+
+          const movementNet = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());
+          const movementBefore = await getSnapshot();
+          const movementPlayer = movementBefore.players?.find(
+            (entry) => entry.clientId === movementNet.clientId,
+          );
+          assert(movementPlayer, 'Expected controller player in authoritative snapshot');
+          await setGamepadAxes(pageRemote, [1, 0, 0, 0, 0, 0]);
+          await setGamepadButton(pageRemote, 7, true, 1);
+          await waitForLabeled(pageRemote, 'remote gamepad thrust packet', () => {
+            const input = window.__TEST_API.getNetworkState().lastRemoteInput;
+            return input && input.thrust > 0.9 && Math.hypot(input.moveX, input.moveY) > 0.9;
+          }, { timeout: 3000 });
+          const movedByAuthority = await waitForSnapshotPlayer(
+            movementNet.clientId,
+            (remotePlayer, snapshot) => {
+              const moved = Math.hypot(
+                remotePlayer.wx - movementPlayer.wx,
+                remotePlayer.wy - movementPlayer.wy,
+              );
+              return snapshot.tick > movementBefore.tick &&
+                moved > 0.0001 &&
+                remotePlayer.deltaV < movementPlayer.deltaV;
+            },
+            { timeout: 5000, interval: 100 },
+          );
+          await setGamepadButton(pageRemote, 7, false, 0);
+          await setGamepadAxes(pageRemote, [0, 0, 0, 0, -1, -1]);
+          assert(movedByAuthority.player.deltaV < movementPlayer.deltaV,
+            'Expected authoritative thrust to move the ship and consume delta-v');
 
           await tapGamepadButton(pageRemote, 17); // inventory open
           await waitForLabeled(pageRemote, 'remote inventory open', () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
@@ -366,8 +346,7 @@ async function run() {
       });
     });
 
-    console.log(`\n  Local screenshot: ${localShot}`);
-    console.log(`  Remote screenshot: ${remoteShot}`);
+    console.log(`\n  Remote screenshot: ${remoteShot}`);
   } finally {
     stopServer();
   }

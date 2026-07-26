@@ -16,9 +16,14 @@ const {
   dispatchKey,
   waitFor,
   toHarnessUrl,
+  startSimServer,
+  stopSimServer,
+  withQuery,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
+const SIM_PORT = Number(process.env.LBH_META_FLOW_SIM_PORT || (9400 + process.pid % 500));
+const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -52,13 +57,13 @@ async function moveHomeTab(page, tabName) {
 }
 
 async function bootstrapCleanPage(page) {
-  await startServer();
   try {
     await page.evaluate(() => localStorage.clear());
   } catch {
-    const target = String(htmlFile).startsWith("http")
-      ? htmlFile
-      : toHarnessUrl(htmlFile);
+    const authorityTarget = withQuery(htmlFile, { simServer: SIM_URL });
+    const target = String(authorityTarget).startsWith("http")
+      ? authorityTarget
+      : toHarnessUrl(authorityTarget);
     await page.goto(target, { waitUntil: "domcontentloaded", timeout: 10000 });
     await page.evaluate(() => localStorage.clear());
   }
@@ -119,11 +124,12 @@ async function run() {
 
   const runner = new TestRunner("MetaFlow");
   await startServer();
+  await startSimServer(SIM_PORT, { keepAlive: true });
 
   let browser, page;
 
   try {
-    ({ browser, page } = await launchGame(htmlFile));
+    ({ browser, page } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanPage(page);
 
     await runner.run("Real profile flow reaches home screen", async () => {
@@ -178,14 +184,20 @@ async function run() {
         `Expected delete modal prompt, got ${deletePrompt}`);
     });
 
-    await runner.run("Real launch flow reaches gameplay from home", async () => {
+    await runner.run("Real launch flow reaches authority-backed gameplay from home", async () => {
       await bootstrapCleanPage(page);
       await runRealEntryFlow(page);
 
       const phase = await page.evaluate(() => window.__TEST_API.getGamePhase());
       assert(phase === "playing", `Expected playing phase, got ${phase}`);
-      const pos = await page.evaluate(() => window.__TEST_API.getShipPos());
+      const state = await page.evaluate(() => ({
+        pos: window.__TEST_API.getShipPos(),
+        network: window.__TEST_API.getNetworkState(),
+      }));
+      const { pos, network } = state;
       assert(typeof pos.x === "number" && typeof pos.y === "number", "Ship position unavailable after real launch flow");
+      assert(network.simEnabled && network.remoteAuthorityActive && Number.isFinite(network.remoteTick),
+        `Expected live authority after launch, got ${JSON.stringify(network)}`);
     });
 
     await runner.run("Home rig tab exposes tracks and buys an upgrade through menu input", async () => {
@@ -343,6 +355,7 @@ async function run() {
     console.log(`\n  Screenshot: ${filepath}`);
   } finally {
     if (browser) await browser.close();
+    await stopSimServer(SIM_PORT).catch(() => null);
     stopServer();
   }
 
