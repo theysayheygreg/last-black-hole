@@ -47,7 +47,7 @@ function assert(condition, message) {
 // ---- Load source files as text (for shader inspection) ----
 
 const SRC = path.resolve(__dirname, '..', 'src');
-const fluidSrc = fs.readFileSync(path.join(SRC, 'fluid.js'), 'utf8');
+const fluidShaderSrc = fs.readFileSync(path.join(SRC, 'render', 'shaders', 'fluid.glsl.js'), 'utf8');
 const configSrc = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
 const asciiShaderSrc = fs.readFileSync(path.join(SRC, 'render', 'shaders', 'ascii.glsl.js'), 'utf8');
 const mainSrc = fs.readFileSync(path.join(SRC, 'main.js'), 'utf8');
@@ -205,12 +205,12 @@ const DORMANT_SIGNATURE_CONFIG_OVERRIDES = new Set([
 
 // ---- GLSL limits ----
 
-const DISPLAY_WELL_LIMIT = findGLSLArraySize(fluidSrc, 'u_wellPositions');
+const DISPLAY_WELL_LIMIT = findGLSLArraySize(fluidShaderSrc, 'u_wellPositions');
 // There are two u_wellPositions declarations (display + dissipation) — find both
 const allLimits = [];
 const re = /uniform\s+vec2\s+u_wellPositions\[(\d+)\]/g;
 let m;
-while ((m = re.exec(fluidSrc)) !== null) {
+while ((m = re.exec(fluidShaderSrc)) !== null) {
   allLimits.push(parseInt(m[1]));
 }
 
