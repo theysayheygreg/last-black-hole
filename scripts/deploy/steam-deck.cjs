@@ -3,25 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { argValue, hasFlag } = require('./cli.cjs');
 const { currentBuildVersion } = require('../version.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const PRODUCT_NAME = 'Last Singularity';
 const DESKTOP_ENTRY_NAME = 'last-singularity.desktop';
 const BUILD_VERSION = currentBuildVersion();
-
-function argValue(name, fallback) {
-  const prefix = `${name}=`;
-  const found = process.argv.slice(2).find((arg) => arg.startsWith(prefix));
-  if (found) return found.slice(prefix.length);
-  const index = process.argv.indexOf(name);
-  if (index >= 0 && process.argv[index + 1]) return process.argv[index + 1];
-  return fallback;
-}
-
-function hasFlag(name) {
-  return process.argv.includes(name);
-}
 
 function run(command, args, options = {}) {
   console.log(`$ ${[command, ...args].join(' ')}`);

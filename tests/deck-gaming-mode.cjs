@@ -1,6 +1,7 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const { argValue, hasFlag } = require("../scripts/deploy/cli.cjs");
 const {
   parseShortcutsVdf,
   writeShortcutsVdf,
@@ -14,6 +15,27 @@ function shortcutCount(root) {
 }
 
 function run() {
+  const argv = (...args) => ["node", "deploy.cjs", ...args];
+  assert.strictEqual(argValue("--host", "fallback", argv()), "fallback");
+  assert.strictEqual(argValue("--host", "fallback", argv("--host", "deck")), "deck");
+  assert.strictEqual(argValue("--host", "fallback", argv("--host")), "fallback");
+  assert.strictEqual(argValue("--host", "fallback", argv("--host", "")), "fallback");
+  assert.strictEqual(argValue("--host", "fallback", argv("--host", "--dry-run")), "--dry-run");
+  assert.strictEqual(argValue("--host", "fallback", argv("--host=inline")), "inline");
+  assert.strictEqual(argValue("--host", "fallback", argv("--host=")), "");
+  assert.strictEqual(
+    argValue("--host", "fallback", argv("--host", "spaced", "--host=inline")),
+    "inline",
+    "Inline values must retain precedence over spaced values"
+  );
+  assert.strictEqual(
+    argValue("--host", "fallback", argv("--host=first", "--host=second")),
+    "first",
+    "The first inline value must retain precedence"
+  );
+  assert.strictEqual(hasFlag("--dry-run", argv("--dry-run")), true);
+  assert.strictEqual(hasFlag("--dry-run", argv("--dry-run=true")), false);
+
   const scriptSource = fs.readFileSync(path.join(__dirname, "..", "scripts", "deploy", "deck-gaming-mode.cjs"), "utf8");
   assert(scriptSource.includes("--all-users"), "Deck Gaming Mode installer must expose an all-users shortcut write");
   assert(scriptSource.includes("LBH_DECK_ALL_STEAM_USERS"), "Deck Gaming Mode installer must support all-users via env var");
