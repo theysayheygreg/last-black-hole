@@ -11,6 +11,7 @@ const net = require("net");
 const os = require("os");
 const path = require("path");
 const { stageDesktopAuthorityRuntime } = require("../scripts/build.cjs");
+const { _createLifecycleLock } = require("../scripts/service-supervisor.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const DECK_DEPLOY_SCRIPT = path.join(ROOT, "scripts", "deploy", "steam-deck.cjs");
@@ -21,6 +22,156 @@ function assert(condition, message) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+async function within(promise, label, timeout = 3000) {
+  return Promise.race([
+    promise,
+    sleep(timeout).then(() => { throw new Error(`Timed out: ${label}`); }),
+  ]);
+}
+
+async function proveAtomicLifecycleLock() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-service-lock-"));
+  const lockFile = path.join(tempRoot, "service.lock");
+  try {
+    const prepared = deferred();
+    const publish = deferred();
+    const contended = deferred();
+    let secondClaim = null;
+    const first = _createLifecycleLock(lockFile, {
+      hooks: {
+        afterClaimPrepared() {
+          prepared.resolve();
+          return publish.promise;
+        },
+        onContention({ observed }) {
+          if (observed?.token === secondClaim?.token) contended.resolve();
+        },
+      },
+    });
+    const second = _createLifecycleLock(lockFile);
+    const firstAcquire = first.acquire();
+    await within(prepared.promise, "first claim preparation");
+    secondClaim = await within(second.acquire(), "second atomic claim");
+    publish.resolve();
+    await within(contended.promise, "first claimant observing the winner");
+    assert(JSON.parse(fs.readFileSync(lockFile, "utf8")).token === secondClaim.token,
+      "A delayed publisher must not replace the atomically published winner");
+    await second.release(secondClaim);
+    const firstClaim = await within(firstAcquire, "first claimant retry");
+    await first.release(firstClaim);
+
+    const dead = _createLifecycleLock(lockFile, { pid: 99999999, isAlive: () => false });
+    const deadClaim = await dead.acquire();
+    const stalePaused = deferred();
+    const resumeStale = deferred();
+    const replacementSeen = deferred();
+    let staleHookUsed = false;
+    let replacementClaim = null;
+    const recovering = _createLifecycleLock(lockFile, {
+      hooks: {
+        beforeStaleRecheck() {
+          if (staleHookUsed) return;
+          staleHookUsed = true;
+          stalePaused.resolve();
+          return resumeStale.promise;
+        },
+        onContention({ observed }) {
+          if (observed?.token === replacementClaim?.token) replacementSeen.resolve();
+        },
+      },
+    });
+    const recoveringAcquire = recovering.acquire();
+    await within(stalePaused.promise, "stale-owner recheck");
+    await dead.release(deadClaim);
+    const replacement = _createLifecycleLock(lockFile);
+    replacementClaim = await replacement.acquire();
+    resumeStale.resolve();
+    await within(replacementSeen.promise, "replacement owner preservation");
+    assert(JSON.parse(fs.readFileSync(lockFile, "utf8")).token === replacementClaim.token,
+      "A stale takeover must not unlink a replacement claim");
+    await replacement.release(replacementClaim);
+    const recoveredClaim = await within(recoveringAcquire, "dead-owner recovery");
+    await recovering.release(recoveredClaim);
+
+    const releasePaused = deferred();
+    const resumeRelease = deferred();
+    const releasing = _createLifecycleLock(lockFile, {
+      hooks: {
+        beforeReleaseRecheck() {
+          releasePaused.resolve();
+          return resumeRelease.promise;
+        },
+      },
+    });
+    const releasingClaim = await releasing.acquire();
+    const releaseResult = releasing.release(releasingClaim);
+    await within(releasePaused.promise, "release ownership recheck");
+    fs.rmSync(lockFile);
+    const finalOwner = _createLifecycleLock(lockFile);
+    const finalClaim = await finalOwner.acquire();
+    resumeRelease.resolve();
+    assert(await releaseResult === false, "A superseded owner must not release the replacement lock");
+    assert(JSON.parse(fs.readFileSync(lockFile, "utf8")).token === finalClaim.token,
+      "Release must preserve a replacement claim");
+    await finalOwner.release(finalClaim);
+
+    assert(fs.readdirSync(tempRoot).length === 0, "Lifecycle lock must leave no claim or temp files");
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
+function runServiceWrapper(args) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(ROOT, "scripts", "control-plane-server.cjs"), ...args], {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { output += chunk; });
+    child.once("exit", (code) => resolve({ code, output }));
+  });
+}
+
+async function proveConcurrentWrapperStarts() {
+  const port = await getOpenPort();
+  const pidFile = path.join(ROOT, "tmp", `control-plane-${port}.pid`);
+  const metaFile = path.join(ROOT, "tmp", `control-plane-${port}.json`);
+  const lockFile = `${pidFile}.lock`;
+  try {
+    const starts = await Promise.all([
+      runServiceWrapper(["start", "--port", String(port)]),
+      runServiceWrapper(["start", "--port", String(port)]),
+    ]);
+    assert(starts.every(({ code }) => code === 0), `Concurrent starts failed: ${JSON.stringify(starts)}`);
+    const pid = Number(fs.readFileSync(pidFile, "utf8").trim());
+    const meta = JSON.parse(fs.readFileSync(metaFile, "utf8"));
+    assert(meta.pid === pid && meta.port === port, "Losing start must not erase the winner pid/meta");
+    assert(starts.filter(({ output }) => output.startsWith("LBH control plane running at ")).length === 1,
+      `Expected exactly one managed spawn: ${JSON.stringify(starts)}`);
+    assert(starts.filter(({ output }) => output.startsWith("LBH control plane already running at ")).length === 1,
+      `Expected the contender to observe the winner: ${JSON.stringify(starts)}`);
+    const stops = await Promise.all([
+      runServiceWrapper(["stop", "--port", String(port)]),
+      runServiceWrapper(["stop", "--port", String(port)]),
+    ]);
+    assert(stops.every(({ code }) => code === 0), `Concurrent stops failed: ${JSON.stringify(stops)}`);
+    assert(!fs.existsSync(pidFile) && !fs.existsSync(metaFile) && !fs.existsSync(lockFile),
+      "Concurrent lifecycle must clean pid, meta, and lock files");
+    assert(!fs.readdirSync(path.dirname(pidFile)).some((name) => name.startsWith(`${path.basename(lockFile)}.`)),
+      "Concurrent lifecycle must not leave claim temp files");
+  } finally {
+    await runServiceWrapper(["stop", "--port", String(port)]);
+  }
 }
 
 function getOpenPort() {
@@ -156,6 +307,8 @@ async function proveStagedAuthorityBoot() {
 }
 
 async function run() {
+  await proveAtomicLifecycleLock();
+  await proveConcurrentWrapperStarts();
   await proveStagedAuthorityBoot();
 
   const deckDeploy = fs.readFileSync(DECK_DEPLOY_SCRIPT, "utf8");
