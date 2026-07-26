@@ -1,19 +1,28 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { TestRunner, assert } = require("./helpers.cjs");
+const serverBalance = require("../scripts/content/balance.cjs");
 const {
   BALANCE,
   wreckAgeValueMultiplier,
   survivalBonusEm,
   runEmEarned,
-} = require("../scripts/content/balance.cjs");
+} = serverBalance;
 const { HULL_DEFINITIONS } = require("../scripts/content/hulls.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
 async function run() {
   const runner = new TestRunner("Balance");
+
+  await runner.run("CJS adapter exposes the canonical balance module", async () => {
+    const clientBalance = await import(pathToFileURL(path.join(ROOT, "src", "content", "balance.js")).href);
+    for (const name of Object.keys(serverBalance)) {
+      assert(serverBalance[name] === clientBalance[name], `${name} is not the canonical ESM export`);
+    }
+  });
 
   await runner.run("Client and server BALANCE pull from the same JSON source", async () => {
     // Both src/content/balance.js (ESM) and scripts/content/balance.cjs (CJS)

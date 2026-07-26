@@ -14,6 +14,15 @@ async function loadSignatureModule() {
 async function run() {
   const runner = new TestRunner("Signatures");
   const signatures = await loadSignatureModule();
+  const canonicalManifest = await import(
+    pathToFileURL(path.join(ROOT, "src", "content", "signatures.js")).href
+  );
+
+  await runner.run("CJS adapter exposes the canonical signature module", async () => {
+    for (const name of Object.keys(serverManifest)) {
+      assert(serverManifest[name] === canonicalManifest[name], `${name} is not the canonical ESM export`);
+    }
+  });
 
   await runner.run("rollSignature uses canonical map-id pools and stable ids", async () => {
     const first3 = signatures.rollSignature("shallows", () => 0);

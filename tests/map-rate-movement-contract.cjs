@@ -1,11 +1,12 @@
 const assert = require("assert");
 const path = require("path");
 const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
+const serverScales = require("../scripts/content/map-scales.cjs");
 const {
   AUTHORED_MAP_CONTRACT,
   getMapScaleDefinition,
   getPortalPlacementPolicy,
-} = require("../scripts/content/map-scales.cjs");
+} = serverScales;
 const { getSessionProfile } = require("../scripts/content/session-profiles.cjs");
 const { MOVEMENT } = require("../scripts/content/movement.cjs");
 const { stepPlayerMovementCore } = require("../scripts/sim/player-movement-step.cjs");
@@ -99,7 +100,10 @@ function measureProductRoute(mapId) {
 
 async function run() {
   const travel = AUTHORED_MAP_CONTRACT.travel;
-  const clientScales = await import(`file://${path.resolve(__dirname, "../src/content/map-scales.js")}?goalD=portal-policy`);
+  const clientScales = await import(`file://${path.resolve(__dirname, "../src/content/map-scales.js")}`);
+  for (const name of Object.keys(serverScales)) {
+    assert.strictEqual(serverScales[name], clientScales[name], `${name} is not the canonical ESM export`);
+  }
   assert.strictEqual(travel.baseline.integrationHz, 60, "60 Hz must remain a diagnostic baseline");
   assert.strictEqual(MOVEMENT.authority.integrationHz, 15, "15 Hz is the sole authority movement rate");
   assert(!("rateHzByMap" in travel.productRate), "Route metadata must not select a map movement rate");
