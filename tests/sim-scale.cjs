@@ -15,6 +15,24 @@ const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const SMALL_PROFILE = SESSION_PROFILES.small;
 const MEDIUM_PROFILE = SESSION_PROFILES.medium;
 const LARGE_PROFILE = SESSION_PROFILES.large;
+const LEGACY_RATE_KEYS = [
+  "worldTickHz",
+  "portalTickHz",
+  "growthTickHz",
+  "scavengerTickHz",
+  "waveTickHz",
+  "fieldTickHz",
+];
+const LEGACY_DIAGNOSTIC_COUNTS = {
+  maxRelevantStarsPerPlayer: "stars",
+  maxRelevantPlanetoidsPerPlayer: "planetoids",
+  maxRelevantWrecksPerPlayer: "wrecks",
+  maxRelevantScavengersPerPlayer: "scavengers",
+  maxWellInfluencesPerPlayer: "wells",
+  maxWaveInfluencesPerPlayer: "waveRings",
+  maxPickupChecksPerPlayer: "wrecks",
+  maxPortalChecksPerPlayer: "portals",
+};
 
 async function getJson(path, options) {
   const response = await fetch(`${SIM_URL}${path}`, options);
@@ -40,13 +58,51 @@ function torusDistance(ax, ay, bx, by, worldScale) {
   return Math.hypot(torusDelta(ax, bx, worldScale), torusDelta(ay, by, worldScale));
 }
 
+function count(collection, key) {
+  return Array.isArray(collection?.[key]) ? collection[key].length : 0;
+}
+
+function assertLegacyRateShape(session, { includeBaseKeys = false } = {}) {
+  for (const key of LEGACY_RATE_KEYS) {
+    assert(session[key] === MOVEMENT.authority.integrationHz,
+      `${key} must expose canonical ${MOVEMENT.authority.integrationHz} Hz`);
+    if (includeBaseKeys) {
+      const baseKey = `base${key[0].toUpperCase()}${key.slice(1)}`;
+      assert(session[baseKey] === MOVEMENT.authority.integrationHz,
+        `${baseKey} must expose canonical ${MOVEMENT.authority.integrationHz} Hz`);
+    }
+  }
+}
+
+function assertLegacyDiagnosticShape(session, world, { includeBaseKeys = false } = {}) {
+  for (const key of ["entityRelevanceRadius", "scavengerRelevanceRadius"]) {
+    assert(session[key] === session.worldScale,
+      `${key} must describe the full authority world, got ${session[key]}`);
+    if (includeBaseKeys) {
+      const baseKey = `base${key[0].toUpperCase()}${key.slice(1)}`;
+      assert(session[baseKey] === session.worldScale,
+        `${baseKey} must describe the full authority world, got ${session[baseKey]}`);
+    }
+  }
+  for (const [key, sourceKey] of Object.entries(LEGACY_DIAGNOSTIC_COUNTS)) {
+    const expected = count(world, sourceKey);
+    assert(Number.isFinite(session[key]) && session[key] === expected,
+      `${key} must report all current ${sourceKey}, got ${session[key]}/${expected}`);
+    if (includeBaseKeys) {
+      const baseKey = `base${key[0].toUpperCase()}${key.slice(1)}`;
+      assert(Number.isFinite(session[baseKey]) && session[baseKey] === expected,
+        `${baseKey} must report all current ${sourceKey}, got ${session[baseKey]}/${expected}`);
+    }
+  }
+}
+
 async function run() {
   const runner = new TestRunner("SimScale");
   const authoritativeMaps = loadPlayableMaps();
 
   await startSimServer(SIM_PORT);
   try {
-    await runner.run("Maps endpoint advertises one authority clock and distinct map budgets", async () => {
+    await runner.run("Maps endpoint preserves legacy diagnostics at one authority clock", async () => {
       const { status, body } = await getJson("/maps");
       assert(status === 200, `Expected /maps 200, got ${status}`);
       const maps = body.maps || [];
@@ -74,6 +130,11 @@ async function run() {
         && expanse.tickHz === MOVEMENT.authority.integrationHz
         && deepField.tickHz === MOVEMENT.authority.integrationHz,
       "Every map must advertise the shared authority clock");
+      for (const advertised of maps) {
+        const source = authoritativeMaps[advertised.id];
+        assertLegacyRateShape(advertised);
+        assertLegacyDiagnosticShape(advertised, source);
+      }
       assert(shallows.snapshotHz > deepField.snapshotHz, "Expected shallows snapshotHz > deep-field");
       assert(shallows.useCoarseField === false, "Expected shallows direct-force path");
       assert(expanse.useCoarseField === true, "Expected expanse coarse-field path");
@@ -85,7 +146,7 @@ async function run() {
       assert(shallows.maxScavengers < deepField.maxScavengers, "Expected deep-field to allow more scavengers than shallows");
     });
 
-    await runner.run("Starting deep-field session applies the large-map server profile", async () => {
+    await runner.run("Deep Field snapshot preserves legacy session diagnostics", async () => {
       await restartFreshSim();
       const { status, body } = await getJson("/session/start", {
         method: "POST",
@@ -137,6 +198,8 @@ async function run() {
           `Expected repeated snapshot map identity deep-field, got ${snapshot.body.session?.mapId}`);
         assert(snapshot.body.session?.simScaleProfile === "large",
           `Expected repeated snapshot large tier, got ${snapshot.body.session?.simScaleProfile}`);
+        assertLegacyRateShape(snapshot.body.session, { includeBaseKeys: true });
+        assertLegacyDiagnosticShape(snapshot.body.session, snapshot.body.world, { includeBaseKeys: true });
         const serializedBytes = serializedJsonBytes(snapshot.body, { pretty: true, trailingNewline: true });
         observedBytes.push(serializedBytes);
         assert(serializedBytes <= LARGE_PROFILE.snapshotBudgetBytes,

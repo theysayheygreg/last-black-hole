@@ -50,6 +50,7 @@ const {
   CLIENT_PERF_PROFILES,
 } = require("./content/session-profiles.cjs");
 const { MOVEMENT } = require("./content/movement.cjs");
+const { getLegacySessionCompatibility } = require("./sim/session-compatibility.cjs");
 const { simUnitsToMeters } = require("./content/units.cjs");
 const {
   selectAnomalyCast,
@@ -1944,11 +1945,23 @@ function getAuthorityFieldPacket() {
   return payload;
 }
 
+function getPublicSession() {
+  return {
+    ...runtime.session,
+    ...getLegacySessionCompatibility({
+      worldScale: runtime.session.worldScale,
+      mapState: runtime.mapState,
+      waveRings: runtime.waveRings,
+      includeBaseKeys: true,
+    }),
+  };
+}
+
 function buildSnapshotBody() {
   return {
     type: "snapshot",
     protocolVersion: PROTOCOL_VERSION,
-    session: { ...runtime.session },
+    session: getPublicSession(),
     tick: runtime.tick,
     simTime: runtime.simTime,
     serverTime: Date.now(),
@@ -6749,7 +6762,7 @@ const server = http.createServer(async (req, res) => {
         protocolVersion: PROTOCOL_VERSION,
         simInstanceId: SIM_INSTANCE_ID,
         controlPlaneUrl: CONTROL_PLANE_URL || null,
-        session: runtime.session,
+        session: getPublicSession(),
         tick: runtime.tick,
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
@@ -6879,6 +6892,10 @@ const server = http.createServer(async (req, res) => {
             clientPerfProfile: profile.clientPerfProfile,
             tickHz: AUTHORITY_INTEGRATION_HZ,
             snapshotHz: profile.snapshotHz,
+            ...getLegacySessionCompatibility({
+              worldScale: map.worldScale,
+              mapState: map,
+            }),
             useCoarseField: profile.useCoarseField,
             flowFieldCellSize: profile.flowFieldCellSize,
             fieldFlowScale: profile.fieldFlowScale,
@@ -6962,7 +6979,7 @@ const server = http.createServer(async (req, res) => {
       }
       startSession(body);
       const joinTicket = issueJoinClaim(body.requesterId || body.playerId);
-      sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
+      sendJson(res, 200, { ok: true, session: getPublicSession(), joinTicket });
       return;
     }
 
@@ -6985,7 +7002,7 @@ const server = http.createServer(async (req, res) => {
         requesterName,
       });
       const joinTicket = issueJoinClaim(requesterId);
-      sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
+      sendJson(res, 200, { ok: true, session: getPublicSession(), joinTicket });
       return;
     }
 
@@ -7168,14 +7185,14 @@ const server = http.createServer(async (req, res) => {
       promoteHostIfNeeded();
       persistSessionRegistry();
       refreshBallparkMirror("player-left");
-      sendJson(res, 200, { ok: true, session: runtime.session, playerCount: runtime.players.size });
+      sendJson(res, 200, { ok: true, session: getPublicSession(), playerCount: runtime.players.size });
       return;
     }
 
     if (req.method === "POST" && req.url === "/input") {
       const body = await readJson(req);
       if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
+        sendJson(res, 409, { ok: false, error: "No active session", session: getPublicSession() });
         return;
       }
       const message = normalizeInputMessage(body);
@@ -7232,7 +7249,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/inventory/action") {
       const body = await readJson(req);
       if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
+        sendJson(res, 409, { ok: false, error: "No active session", session: getPublicSession() });
         return;
       }
       const message = normalizeInventoryAction(body);
