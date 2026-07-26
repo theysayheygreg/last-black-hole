@@ -8,6 +8,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { MOVEMENT } = require('../scripts/content/movement.cjs');
 const {
   startServer,
   stopServer,
@@ -17,6 +18,11 @@ const {
   withQuery,
   stepGameFrames,
 } = require('./helpers.cjs');
+
+const FIXTURE_STEP_HZ = Number(MOVEMENT?.authority?.integrationHz);
+if (!Number.isFinite(FIXTURE_STEP_HZ) || FIXTURE_STEP_HZ <= 0) {
+  throw new Error('Renderer fixture stepping requires a positive authoritative movement rate');
+}
 
 const htmlFile = process.argv[2] || 'index-a.html';
 const ALL_FIXTURES = [
@@ -59,7 +65,10 @@ const FIXTURES = DEEP_RENDERER_SWEEP
     .filter((fixture) => DEFAULT_FIXTURES.has(fixture.name))
     .map((fixture) => ({ ...fixture, timesMs: [900] }));
 
-async function stepForMs(page, ms, dt = 1 / 60) {
+// Fixture captures assert settled elapsed-time states, not a rendered 60 Hz path.
+// Advance fixture time at the shared authority cadence; capture/debug frames
+// still render at 60 Hz immediately before each product-facing assertion.
+async function stepForMs(page, ms, dt = 1 / FIXTURE_STEP_HZ) {
   const frames = Math.max(1, Math.ceil(ms / (dt * 1000)));
   return stepGameFrames(page, frames, dt);
 }
@@ -346,12 +355,12 @@ async function captureFixture(page, outputDir, fixture) {
     // The scene view bypasses ASCII quantization, so it is a shader-input
     // diagnostic rather than an art target or representative capture.
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'scene' });
-    await stepGameFrames(page, 2);
+    await stepGameFrames(page, 2, 1 / 60);
     const sceneStats = await takeShot(page, scenePath, backend);
     assertCaptureHasSignal(sceneStats, `${fixture.name} debug scene ${t}ms`);
 
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
-    await stepGameFrames(page, 2);
+    await stepGameFrames(page, 2, 1 / 60);
     const asciiStats = await takeShot(page, asciiPath, backend);
     assertCaptureHasSignal(asciiStats, `${fixture.name} ascii ${t}ms`);
 
@@ -369,14 +378,14 @@ async function captureFixture(page, outputDir, fixture) {
 
   if (READABILITY_FIXTURES.has(fixture.name)) {
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
-    await stepGameFrames(page, 2);
+    await stepGameFrames(page, 2, 1 / 60);
     readability = await analyzeReferenceReadability(page, fixture.name);
     assertReferenceReadability(readability, fixture.name);
   }
 
   const debugPath = path.join(fixtureDir, 'ascii-debug.png');
   await setRenderDebug(page, { overlayVisible: true, showWellRadii: true, rendererView: 'ascii' });
-  await stepGameFrames(page, 4);
+  await stepGameFrames(page, 4, 1 / 60);
   const debugStats = await takeShot(page, debugPath, backend);
   assertCaptureHasSignal(debugStats, `${fixture.name} debug`);
 
