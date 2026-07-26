@@ -1,5 +1,6 @@
 const path = require('path');
 const { pathToFileURL } = require('url');
+const nodeAssert = require('assert');
 const { TestRunner, assert } = require('./helpers.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -11,8 +12,164 @@ async function importModule(relativePath) {
 async function run() {
   const runner = new TestRunner('PresentationFrame');
   const presentation = await importModule('src/presentation/presentation-frame.js');
+  const sceneSource = await importModule('src/presentation/scene-source.js');
   const style = await importModule('src/presentation/presentation-style.js');
   const materials = await importModule('src/render-three/material-registry.js');
+
+  await runner.run('Local scene facts preserve grouped defaults and family filtering', async () => {
+    const source = sceneSource.createPresentationSceneSource({
+      phase: 'playing',
+      isTitleBackdrop: true,
+      localPlayer: {
+        ship: {
+          wx: 1, wy: 2, vx: 0.3, vy: -0.2, facing: 0.4,
+          slingshotPhase: '', slingshotEngaged: false, slingshotTelegraph: { lock: true },
+        },
+        hullType: 'breacher',
+        localDeltaVRatio: 0,
+        deliveredThrust: 0.5,
+        deliveredBrake: 0.01,
+      },
+      world: {
+        wells: [{ name: 'gravity', wx: 1, wy: 2, mass: 0, killRadius: 0 }],
+        stars: [{ id: 'live', wx: 2, wy: 3, mass: 0 }, { id: 'dead', alive: false }],
+        remotePlayers: [{ clientId: 'gone', wx: 4, wy: 5, status: 'dead' }],
+        fauna: [{ id: 'ghost-fauna', wx: 6, wy: 7, alive: false }],
+      },
+      slingshot: {
+        localAffordance: { anchor: { wx: 8, wy: 9, range: 0.2, type: 'well' } },
+      },
+      semanticFieldSample: { hazard: 0.2, surf: 0, x: 0.3, y: -0.4 },
+      defaults: { wellKillRadius: 0.05, portalCaptureRadius: 0.1 },
+    });
+
+    nodeAssert.deepStrictEqual({
+      phase: source.phase,
+      isTitleBackdrop: source.isTitleBackdrop,
+      ship: source.ship,
+      wells: source.wells,
+      stars: source.stars,
+      remotePlayers: source.remotePlayers,
+      fauna: source.fauna,
+      slingshot: source.slingshot,
+      semanticField: source.semanticField,
+    }, {
+      phase: 'playing',
+      isTitleBackdrop: true,
+      ship: {
+        wx: 1, wy: 2, vx: 0.3, vy: -0.2, facing: 0.4,
+        hullType: 'breacher', deltaVRatio: 0, forceLedger: null, ruler: null,
+        slingshotEngaged: false, thrusting: true, braking: false,
+      },
+      wells: [{
+        id: 'gravity', catalogId: 'base-well', behaviorId: 'base-well',
+        wx: 1, wy: 2, mass: 1, killRadius: 0.05, ringOuter: 0.125,
+      }],
+      stars: [{ id: 'live', wx: 2, wy: 3, mass: 1, type: 'mainSequence' }],
+      remotePlayers: [{
+        id: 'gone', wx: 4, wy: 5, vx: 0, vy: 0, status: 'dead', hullType: 'drifter',
+      }],
+      fauna: [{ id: 'ghost-fauna', wx: 6, wy: 7, size: 2, kind: 'fauna' }],
+      slingshot: {
+        phase: 'idle',
+        affordance: { wx: 8, wy: 9, range: 0.2, type: 'well' },
+        engaged: null,
+        telegraph: { lock: true },
+      },
+      semanticField: {
+        shipSample: {
+          hazard: 0.2, surf: 0, signalShadow: 0, current: { x: 0.3, y: -0.4 },
+        },
+      },
+    });
+    assert(source.wrecks.length === 0 && source.portals.length === 0 && source.sentries.length === 0,
+      'Absent families must remain empty arrays');
+  });
+
+  await runner.run('Remote authority facts win without changing source rows', async () => {
+    const forceLedger = { tick: 9 };
+    const ruler = { selectedWellId: 'well-a' };
+    const authority = {
+      phase: 'lock',
+      aim: { anchorWX: 3, anchorWY: 4, anchorRange: 0.25, anchorType: 'star' },
+      engaged: true,
+      anchorWX: 5,
+      anchorWY: 6,
+      anchorRange: 0.3,
+      anchorType: 'well',
+      energy: 0,
+      chainCount: 0,
+      telegraph: { ownedArc: true },
+    };
+    const portal = {
+      id: 'portal-a', wx: 7, wy: 8, opacity: 0, captureRadius: 0,
+      blockedByInhibitor: true, finalInhibitor: true, warning: true, critical: false,
+    };
+    const source = sceneSource.createPresentationSceneSource({
+      phase: 'paused',
+      localPlayer: {
+        ship: {
+          wx: 1, wy: 2, vx: 0, vy: 0, facing: 0,
+          slingshotPhase: 'arc', slingshotEngaged: true,
+          slingshotAnchor: { wx: 10, wy: 11, range: 0.4, type: 'local' },
+        },
+        hullType: 'drifter',
+        authorityDeltaVRatio: 0,
+        localDeltaVRatio: 0.8,
+        forceLedger,
+        ruler,
+        deliveredThrust: 1,
+        deliveredBrake: 1,
+      },
+      world: {
+        portals: [portal],
+        wrecks: [{ id: 'dead', alive: false }, { id: 'vault', wx: 9, wy: 10, type: 'vault' }],
+        collapseEpoch: { id: 'collapse-a' },
+        collapseEpochSchedule: [{ id: 'epoch-a' }],
+      },
+      slingshot: {
+        authority,
+        localAffordance: { anchor: { wx: 12, wy: 13, range: 0.5, type: 'local' } },
+      },
+      defaults: { portalCaptureRadius: 0.12 },
+    });
+
+    nodeAssert.deepStrictEqual({
+      ship: source.ship,
+      portals: source.portals,
+      wrecks: source.wrecks,
+      collapseEpoch: source.collapseEpoch,
+      collapseEpochSchedule: source.collapseEpochSchedule,
+      slingshot: source.slingshot,
+    }, {
+      ship: {
+        wx: 1, wy: 2, vx: 0, vy: 0, facing: 0,
+        hullType: 'drifter', deltaVRatio: 0, forceLedger, ruler,
+        slingshotEngaged: true, thrusting: false, braking: false,
+      },
+      portals: [{
+        id: 'portal-a', wx: 7, wy: 8, type: 'standard', opacity: 0, radius: 0.12,
+        blockedByInhibitor: true, finalInhibitor: true, warning: true, critical: false,
+      }],
+      wrecks: [{
+        id: 'vault', wx: 9, wy: 10, size: 'medium', tier: 1, type: 'vault',
+        vx: 0, vy: 0, lootCount: 0, pickupCooldown: 0, isEcho: false,
+        looted: false, valuable: true, valueTier: null, visualState: null,
+      }],
+      collapseEpoch: { id: 'collapse-a' },
+      collapseEpochSchedule: [{ id: 'epoch-a' }],
+      slingshot: {
+        phase: 'lock',
+        affordance: { wx: 3, wy: 4, range: 0.25, type: 'star' },
+        engaged: { wx: 5, wy: 6, range: 0.3, type: 'well', energy: 0, chainCount: 0 },
+        telegraph: { ownedArc: true },
+      },
+    });
+    nodeAssert.deepStrictEqual(portal, {
+      id: 'portal-a', wx: 7, wy: 8, opacity: 0, captureRadius: 0,
+      blockedByInhibitor: true, finalInhibitor: true, warning: true, critical: false,
+    }, 'Pure scene construction must not mutate runtime facts');
+  });
 
   await runner.run('Legacy renderer input becomes a sanitized renderer-neutral frame', async () => {
     const raw = {

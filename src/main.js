@@ -24,6 +24,7 @@ import { Composer } from './render/composer.js';
 import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
 import { createPresentationFrame } from './presentation/presentation-frame.js';
+import { createPresentationSceneSource } from './presentation/scene-source.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { GainPass } from './render/passes/gain-pass.js';
 import { AccretionPass } from './render/passes/accretion-pass.js';
@@ -1162,7 +1163,7 @@ function init() {
       getRendererBackend: () => rendererBackend?.name || 'legacy',
       getRendererBackendStats: () => rendererBackend?.getPerfStats?.() || null,
       getThreeSceneStateForTest: () => ({
-        ...collectThreeSceneState(),
+        ...collectPresentationSceneSource(),
         camera: {
           camX,
           camY,
@@ -3616,7 +3617,7 @@ function getHullSlingshotMods() {
   };
 }
 
-function collectThreeSceneState() {
+function collectPresentationSceneSource() {
   const authorityPlayer = remoteSession.active
     ? remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)
     : null;
@@ -3626,178 +3627,63 @@ function collectThreeSceneState() {
   const deliveredBrake = remoteSession.active
     ? (authorityPlayer?.deliveredBrake ?? 0)
     : (ship?.lastDeliveredBrakeIntensity ?? 0);
-  const propulsionActive = gamePhase === 'playing';
   const authoritySlingshot = authorityPlayer?.slingshot || null;
   const slingshotAffordance = gamePhase === 'playing' && !remoteSession.active && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
   const fieldSample = flowField?.sample?.(ship.wx, ship.wy) || null;
-  const isTitleBackdrop = isTitleBackdropActive();
+  const runElapsedTime = simState.runElapsedTime;
 
-  return {
+  return createPresentationSceneSource({
     phase: gamePhase,
-    isTitleBackdrop,
-    ship: ship ? {
-      wx: ship.wx,
-      wy: ship.wy,
-      vx: ship.vx,
-      vy: ship.vy,
-      facing: ship.facing,
+    isTitleBackdrop: isTitleBackdropActive(),
+    localPlayer: {
+      ship,
       hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
-      deltaVRatio: authorityPlayer?.deltaVRatio ?? ship.getDeltaVRatio?.() ?? 1,
+      authorityDeltaVRatio: authorityPlayer?.deltaVRatio,
+      localDeltaVRatio: ship?.getDeltaVRatio?.(),
       forceLedger: authorityPlayer?.forceLedger || null,
       ruler: authorityPlayer?.ruler || null,
-      slingshotEngaged: Boolean(ship.slingshotEngaged),
-      // Render propulsion from delivered control, not raw input intent, so
-      // authority rejection and local fuel gates cannot produce false wakes.
-      thrusting: propulsionActive && Number(deliveredThrust) > 0.01,
-      braking: propulsionActive && Number(deliveredBrake) > 0.01,
-    } : null,
-    wells: (wellSystem?.wells || []).map((well, index) => ({
-      id: well.id || well.name || `well-${index}`,
-      catalogId: well.catalogId || 'base-well',
-      behaviorId: well.behaviorId || 'base-well',
-      wx: well.wx,
-      wy: well.wy,
-      mass: well.mass || 1,
-      killRadius: well.killRadius || CONFIG.wells.killRadius,
-      ringOuter: (well.killRadius || CONFIG.wells.killRadius) * 2.5,
-    })),
-    stars: (starSystem?.stars || []).filter((star) => star.alive !== false).map((star, index) => ({
-      id: star.id || `star-${index}`,
-      wx: star.wx,
-      wy: star.wy,
-      mass: star.mass || 1,
-      type: star.type || 'mainSequence',
-    })),
-    wrecks: (wreckSystem?.wrecks || []).filter((wreck) => wreck.alive !== false).map((wreck, index) => ({
-      id: wreck.id || wreck.name || `wreck-${index}`,
-      wx: wreck.wx,
-      wy: wreck.wy,
-      size: wreck.size || 'medium',
-      tier: wreck.tier || 1,
-      type: wreck.type || 'derelict',
-      vx: wreck.vx || 0,
-      vy: wreck.vy || 0,
-      lootCount: Array.isArray(wreck.loot) ? wreck.loot.length : (wreck.lootCount || 0),
-      pickupCooldown: Math.max(0, wreck.pickupCooldown || 0),
-      isEcho: wreck.type === 'echo' || wreck.isEcho === true,
-      looted: Boolean(wreck.looted),
-      valuable: wreck.valuable === true || wreck.type === 'vault',
-      valueTier: wreck.valueTier || null,
-      visualState: wreck.visualState || null,
-    })),
-    portals: (portalSystem?.portals || []).filter((portal) => portal.alive !== false).map((portal, index) => ({
-      id: portal.id || `portal-${index}`,
-      wx: portal.wx,
-      wy: portal.wy,
-      type: portal.type || 'standard',
-      opacity: portal.opacity ?? 1,
-      radius: portal.getCaptureRadius?.() || CONFIG.portals.captureRadius,
-      blockedByInhibitor: portal.blockedByInhibitor === true,
-      finalInhibitor: portal.finalInhibitor === true,
-      warning: portal.isWarning?.(simState.runElapsedTime) === true,
-      critical: portal.isCritical?.(simState.runElapsedTime) === true,
-    })),
-    planetoids: (planetoidSystem?.planetoids || []).filter((p) => p.alive !== false).map((p, index) => ({
-      id: p.id || `planetoid-${index}`,
-      wx: p.wx,
-      wy: p.wy,
-      vx: p.vx || 0,
-      vy: p.vy || 0,
-      pathType: p.pathType || 'orbit',
-    })),
-    waveRings: (waveRings?.rings || []).map((ring, index) => ({
-      id: ring.id || `wave-${index}`,
-      sourceWX: ring.sourceWX,
-      sourceWY: ring.sourceWY,
-      radius: ring.radius,
-      amplitude: ring.amplitude,
-      initialAmplitude: ring.initialAmplitude || Math.max(1e-4, ring.amplitude || 1),
-    })),
-    scavengers: (scavengerSystem?.scavengers || []).filter((scav) => scav.alive !== false).map((scav, index) => ({
-      id: scav.id || `scav-${index}`,
-      wx: scav.wx,
-      wy: scav.wy,
-      vx: scav.vx || 0,
-      vy: scav.vy || 0,
-      facing: scav.facing || 0,
-      archetype: scav.archetype || scav.personality || 'scavenger',
-      state: scav.state || 'patrol',
-    })),
-    remotePlayers: (remoteSession.players || []).map((player) => ({
-      id: player.clientId,
-      wx: player.wx,
-      wy: player.wy,
-      vx: player.vx || 0,
-      vy: player.vy || 0,
-      status: player.status || 'alive',
-      hullType: player.hullType || 'drifter',
-    })),
-    shipCandidates: (fixtureShipCandidates || []).map((candidate) => ({
-      id: candidate.id,
-      wx: candidate.wx,
-      wy: candidate.wy,
-      vx: candidate.vx || 0,
-      vy: candidate.vy || 0,
-      facing: candidate.facing || 0,
-      variant: candidate.variant || 'sprite-card',
-      radius: candidate.radius || 0.040,
-    })),
-    fauna: (remoteFauna || []).map((f, index) => ({
-      id: f.id || `fauna-${index}`,
-      wx: f.wx,
-      wy: f.wy,
-      size: f.size || 2,
-      kind: f.kind || 'fauna',
-    })),
-    sentries: (remoteSentries || []).map((s, index) => ({
-      id: s.id || `sentry-${index}`,
-      wx: s.wx,
-      wy: s.wy,
-      state: s.state || 'patrol',
-    })),
-    collapseEpoch: remoteSession.snapshot?.world?.collapseEpoch || null,
-    collapseEpochSchedule: remoteSession.snapshot?.world?.collapseEpochSchedule || [],
+      deliveredThrust,
+      deliveredBrake,
+    },
+    world: {
+      wells: wellSystem?.wells || [],
+      stars: starSystem?.stars || [],
+      wrecks: wreckSystem?.wrecks || [],
+      portals: (portalSystem?.portals || []).filter((portal) => portal.alive !== false).map((portal) => ({
+        id: portal.id,
+        wx: portal.wx,
+        wy: portal.wy,
+        type: portal.type,
+        opacity: portal.opacity,
+        alive: portal.alive,
+        captureRadius: portal.getCaptureRadius?.(),
+        blockedByInhibitor: portal.blockedByInhibitor,
+        finalInhibitor: portal.finalInhibitor,
+        warning: portal.isWarning?.(runElapsedTime) === true,
+        critical: portal.isCritical?.(runElapsedTime) === true,
+      })),
+      planetoids: planetoidSystem?.planetoids || [],
+      waveRings: waveRings?.rings || [],
+      scavengers: scavengerSystem?.scavengers || [],
+      remotePlayers: remoteSession.players || [],
+      shipCandidates: fixtureShipCandidates || [],
+      fauna: remoteFauna || [],
+      sentries: remoteSentries || [],
+      collapseEpoch: remoteSession.snapshot?.world?.collapseEpoch,
+      collapseEpochSchedule: remoteSession.snapshot?.world?.collapseEpochSchedule,
+    },
     slingshot: {
-      phase: authoritySlingshot?.phase || ship.slingshotPhase || (ship.slingshotEngaged ? 'arc' : 'idle'),
-      affordance: authoritySlingshot?.aim ? {
-        wx: authoritySlingshot.aim.anchorWX,
-        wy: authoritySlingshot.aim.anchorWY,
-        range: authoritySlingshot.aim.anchorRange,
-        type: authoritySlingshot.aim.anchorType,
-      } : slingshotAffordance ? {
-        wx: slingshotAffordance.anchor.wx,
-        wy: slingshotAffordance.anchor.wy,
-        range: slingshotAffordance.anchor.range,
-        type: slingshotAffordance.anchor.type,
-      } : null,
-      engaged: authoritySlingshot?.engaged ? {
-        wx: authoritySlingshot.anchorWX,
-        wy: authoritySlingshot.anchorWY,
-        range: authoritySlingshot.anchorRange,
-        type: authoritySlingshot.anchorType,
-        energy: authoritySlingshot.energy || 0,
-        chainCount: authoritySlingshot.chainCount || 0,
-      } : ship.slingshotEngaged && ship.slingshotAnchor ? {
-        wx: ship.slingshotAnchor.wx,
-        wy: ship.slingshotAnchor.wy,
-        range: ship.slingshotAnchor.range,
-        type: ship.slingshotAnchor.type,
-        energy: ship.slingshotEnergy || 0,
-        chainCount: ship.slingshotChainCount || 0,
-      } : null,
-      telegraph: authoritySlingshot?.telegraph || ship.slingshotTelegraph || null,
+      authority: authoritySlingshot,
+      localAffordance: slingshotAffordance,
     },
-    semanticField: {
-      shipSample: fieldSample ? {
-        hazard: fieldSample.hazard || 0,
-        surf: fieldSample.surf || 0,
-        signalShadow: fieldSample.signalShadow || 0,
-        current: fieldSample.current || { x: fieldSample.x || 0, y: fieldSample.y || 0 },
-      } : null,
+    semanticFieldSample: fieldSample,
+    defaults: {
+      wellKillRadius: CONFIG.wells.killRadius,
+      portalCaptureRadius: CONFIG.portals.captureRadius,
     },
-  };
+  });
 }
 
 function collectFrameVfxEvents(ctx, w, h) {
@@ -4771,7 +4657,7 @@ function gameLoop(now) {
     phase: gamePhase,
     runId: remoteSession.snapshot?.session?.runId || null,
     frameId: remoteSession.snapshot?.snapshotId || Math.floor(totalTime * 60),
-    scene: collectThreeSceneState(),
+    scene: collectPresentationSceneSource(),
     events: vfxEvents,
     vfxConfig: CONFIG.vfx,
   }, { qualityTier: rendererBackend?.renderQuality });
