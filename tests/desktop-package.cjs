@@ -97,6 +97,8 @@ async function proveStagedAuthorityBoot() {
 
   const nestedModule = path.join(serverDir, "sim", "body-masks.cjs");
   assert(fs.existsSync(nestedModule), "Desktop stage must include nested sim runtime modules");
+  assert(fs.existsSync(path.join(serverDir, "service-supervisor.cjs")),
+    "Desktop stage must include the service wrapper require closure");
 
   const controlPort = await getOpenPort();
   let simPort = await getOpenPort();
