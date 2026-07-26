@@ -8,6 +8,9 @@ const ROOT = path.resolve(__dirname, '..');
 
 async function run() {
   const hud = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'hud-presentation.js')).href);
+  const facade = await import(pathToFileURL(path.join(ROOT, 'src', 'hud.js')).href);
+  assert.strictEqual(facade.getSlingshotInteractionState, hud.getSlingshotInteractionState,
+    'HUD facade must preserve getSlingshotInteractionState');
   const misaligned = hud.getSlingshotInteractionState({
     aim: { type: 'well', tangentialSpeed: 0.02, engageEligible: false },
     engaged: false,

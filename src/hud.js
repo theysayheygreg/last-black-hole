@@ -27,7 +27,13 @@ import {
   getSlingshotInteractionState,
 } from './ui/hud-presentation.js';
 
-export * from './ui/hud-presentation.js';
+export {
+  getAbilityPresentationState,
+  getHullPresentationState,
+  getInteractionPresentationState,
+  getRouteObjectiveState,
+  getSlingshotInteractionState,
+};
 
 let _hudEl;
 let _collapseTimerEl, _collapseEventEl;

@@ -28,8 +28,14 @@ async function run() {
   assert.deepStrictEqual([...bindings.GAMEPAD_ACTION_BUTTONS.slingshot], [3]);
   assert.strictEqual(prompts.promptLabel('delete', { deck: true }), 'Y');
   assert.strictEqual(prompts.promptLabel('slingshot', { deck: true }), 'Y');
-  assert.strictEqual(facade.getAbilityPresentationState, hud.getAbilityPresentationState,
-    'HUD facade must preserve presentation exports');
+  for (const name of [
+    'getAbilityPresentationState',
+    'getHullPresentationState',
+    'getInteractionPresentationState',
+    'getRouteObjectiveState',
+  ]) {
+    assert.strictEqual(facade[name], hud[name], `HUD facade must preserve ${name}`);
+  }
   assert.strictEqual(hud.fmtTime(65.9), '1:05');
   assert.strictEqual(hud.fmtSeconds(0.1), '1s');
   const burn = hud.getAbilityPresentationState({ hullType: 'breacher', burnFuel: 12 });
