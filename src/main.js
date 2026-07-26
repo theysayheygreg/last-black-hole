@@ -13,7 +13,7 @@ import { CONFIG } from './config.js';
 import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
-import { StarSystem, normalizeStarPresentation } from './stars.js';
+import { StarSystem } from './stars.js';
 // loot.js removed — loot anchors replaced with stars + asteroid clusters (see FLAVOR-PASS.md)
 import { WaveRingSystem } from './wave-rings.js';
 import { WreckSystem } from './wrecks.js';
@@ -42,7 +42,7 @@ import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibit
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
          getSlingshotInteractionState } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
-import { ScavengerSystem, normalizeScavengerPresentation } from './scavengers.js';
+import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
 import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
@@ -68,6 +68,13 @@ import {
   createLocalPlayerReconciliationState,
   rebaseLocalPlayerReconciliation,
 } from './sim/local-player-reconciliation.js';
+import {
+  acceptedRemoteEvents,
+  classifyRemoteSnapshot,
+  projectRemoteSnapshot,
+  projectRemoteWorldPatch,
+  snapshotRunId,
+} from './sim/remote-snapshot-presentation.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
 import {
   beginRemoteSession,
@@ -1786,13 +1793,12 @@ function syncRemoteNetworkPerfStats() {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
-  const previousRunId = remoteSession.snapshot?.runId || remoteSession.snapshot?.session?.runId || null;
-  const incomingRunId = snapshot.runId || snapshot.session?.runId || null;
-  if (previousRunId && incomingRunId && incomingRunId !== previousRunId) {
+  const classification = classifyRemoteSnapshot(remoteSession.snapshot, snapshot);
+  if (classification.runChanged) {
     // A rematch can adopt a new run without returning through Map Select.
     // Reset presentation audio at that authority boundary so held voices and
     // ducking from the old run cannot leak into the new one.
-    audioRouter?.reset(incomingRunId);
+    audioRouter?.reset(classification.incomingRunId);
     audioRouter?.setPhase('loading');
   }
   const covered = gamePhase === 'paused';
@@ -1805,55 +1811,42 @@ function applyRemoteSnapshot(snapshot) {
   // clear, not permission to replay the previous remote ability indefinitely.
   localAbilityState = null;
   syncRemoteNetworkPerfStats();
-  const duplicateSnapshot = remoteSession.snapshot &&
-    snapshot.tick === remoteSession.snapshot.tick &&
-    snapshot.simTime === remoteSession.snapshot.simTime;
+  const duplicateSnapshot = classification.duplicate;
   // First snapshot received — transition from loading to playing
   if (gamePhase === 'loading') {
     gamePhase = 'playing';
     audioRouter?.setPhase('gameplay');
     showHUD();
   }
-  const authoritativeMapId = snapshot.session?.mapId;
+  const projected = projectRemoteSnapshot(snapshot, {
+    clientId: simClient?.clientId,
+    previousHealth: remoteSession.health,
+    elapsedTime: simState.runElapsedTime,
+  });
+  const authoritativeMapId = projected.mapId;
   if (authoritativeMapId) {
     const authoritativeEntry = PLAYABLE_MAPS.find((entry) => entry.id === authoritativeMapId);
     if (!authoritativeEntry) {
       throw new Error(`Remote snapshot has unknown map id: ${authoritativeMapId}`);
     }
-    const authoritativeWorldScale = Number(snapshot.session?.worldScale);
+    const authoritativeWorldScale = projected.worldScale;
     if (Number.isFinite(authoritativeWorldScale)
       && authoritativeWorldScale !== authoritativeEntry.map.worldScale) {
       throw new Error(`Remote snapshot map scale mismatch: ${authoritativeMapId} is ${authoritativeEntry.map.worldScale}, got ${authoritativeWorldScale}`);
     }
     remoteSession.mapId = authoritativeEntry.id;
-    setResolvedClientRunDuration(authoritativeMapId, snapshot.session?.runDurationSeconds);
+    setResolvedClientRunDuration(authoritativeMapId, projected.runDurationSeconds);
   }
   remoteSession.snapshot = snapshot;
-  if (snapshot.session?.cosmicSignature) {
-    currentSignature = { ...snapshot.session.cosmicSignature };
+  if (projected.cosmicSignature) {
+    currentSignature = projected.cosmicSignature;
   }
-  remoteSession.health = {
-    ok: true,
-    session: snapshot.session ?? null,
-    playerCount: Array.isArray(snapshot.players) ? snapshot.players.length : 0,
-    idleState: {
-      ...(remoteSession.health?.idleState || {}),
-      humanPlayerCount: Array.isArray(snapshot.players)
-        ? snapshot.players.filter((player) => !player.isAI).length
-        : 0,
-    },
-    tick: snapshot.tick ?? null,
-    simTime: snapshot.simTime ?? null,
-  };
-  simState.runElapsedTime = snapshot.simTime ?? simState.runElapsedTime;
-  syncRemoteWorldState(snapshot.world);
-  remoteSession.players = Array.isArray(snapshot.players)
-    ? snapshot.players
-        .filter((player) => player.clientId !== simClient?.clientId)
-        .map((player) => ({ ...player }))
-    : [];
+  remoteSession.health = projected.health;
+  simState.runElapsedTime = projected.elapsedTime;
+  syncRemoteWorldState(projected.world);
+  remoteSession.players = projected.remotePlayers;
 
-  const localPlayer = snapshot.players?.find((player) => player.clientId === simClient?.clientId);
+  const localPlayer = projected.localPlayer;
   if (!localPlayer) return;
 
   if (!duplicateSnapshot) {
@@ -1873,8 +1866,8 @@ function applyRemoteSnapshot(snapshot) {
     signalZone = localPlayer.signal.zone ?? 'ghost';
   }
   localAbilityState = localPlayer.abilityState || null;
-  if (snapshot.inhibitor) {
-    inhibitorState = { ...snapshot.inhibitor };
+  if (projected.inhibitor) {
+    inhibitorState = projected.inhibitor;
   }
 
   if (!covered && inputManager?.facing != null) {
@@ -1882,10 +1875,9 @@ function applyRemoteSnapshot(snapshot) {
   }
 
   if (covered) {
-    const runId = snapshot.runId || snapshot.session?.runId || null;
     pauseResumeState = observePauseEvents(pauseResumeState, simClient?.consumeEvents?.() || [], {
       clientId: simClient?.clientId,
-      runId,
+      runId: snapshotRunId(snapshot),
     });
   }
 
@@ -1893,10 +1885,6 @@ function applyRemoteSnapshot(snapshot) {
     const liveEvents = simClient?.consumeEvents?.() || [];
     if (liveEvents.length > 0) {
       applyRemoteEvents(liveEvents);
-    } else if (!snapshot.snapshotId && Array.isArray(snapshot.recentEvents)) {
-      // Compatibility path for older local authority builds without event-window
-      // recovery. v0.3 snapshots carry snapshotId and use SimClient events.
-      applyRemoteEvents(snapshot.recentEvents);
     }
   }
 
@@ -2326,8 +2314,9 @@ function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
 }
 
 function applyRemoteEvents(events) {
-  for (const event of events) {
-    if (!event || event.seq <= remoteSession.lastEventSeq) continue;
+  for (const event of acceptedRemoteEvents(events, remoteSession.lastEventSeq)) {
+    // Advance immediately before presentation side effects. If a handler fails,
+    // later events must remain recoverable from the authority event window.
     remoteSession.lastEventSeq = event.seq;
     const payload = event.payload || {};
     const isLocal = payload.clientId && payload.clientId === simClient?.clientId;
@@ -2356,10 +2345,6 @@ function applyRemoteEvents(events) {
       case 'player.shieldAbsorbed':
         if (isLocal) {
           showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
-        }
-        break;
-      case 'player.died':
-        if (isLocal) {
         }
         break;
       case 'run.result':
@@ -2476,25 +2461,21 @@ function applyRemoteInventoryAction(action) {
 }
 
 function syncRemoteWorldState(world) {
-  if (!world) return;
+  const patch = projectRemoteWorldPatch(world, {
+    stars: starSystem.stars,
+    scavengers: scavengerSystem.scavengers,
+  });
+  if (!patch) return;
 
-  remoteSession.authoritativeField = world.authoritativeField || null;
+  remoteSession.authoritativeField = patch.authoritativeField;
 
-  if (Array.isArray(world.waveRings)) {
-    waveRings.rings = world.waveRings.map((remote) => ({
-      sourceWX: remote.sourceWX,
-      sourceWY: remote.sourceWY,
-      radius: remote.radius ?? 0,
-      amplitude: remote.amplitude ?? 0,
-      initialAmplitude: remote.initialAmplitude ?? remote.amplitude ?? 0,
-      alive: remote.alive !== false,
-      id: remote.id || null,
-    }));
+  if (Array.isArray(patch.waveRings)) {
+    waveRings.rings = patch.waveRings;
   }
 
-  if (Array.isArray(world.wells)) {
-    for (let i = 0; i < Math.min(world.wells.length, wellSystem.wells.length); i++) {
-      const remote = world.wells[i];
+  if (Array.isArray(patch.wells)) {
+    for (let i = 0; i < Math.min(patch.wells.length, wellSystem.wells.length); i++) {
+      const remote = patch.wells[i];
       const local = wellSystem.wells[i];
       local.wx = remote.wx;
       local.wy = remote.wy;
@@ -2507,77 +2488,16 @@ function syncRemoteWorldState(world) {
     }
   }
 
-  if (Array.isArray(world.stars)) {
-    const previousStars = new Map(starSystem.stars.map((star) => [star.id, star]));
-    starSystem.stars = world.stars.map((remote, index) => {
-      const prev = previousStars.get(remote.id) || starSystem.stars[index] || {};
-      return normalizeStarPresentation(remote, prev);
-    });
+  if (Array.isArray(patch.stars)) starSystem.stars = patch.stars;
+  if (Array.isArray(patch.wrecks)) wreckSystem.wrecks = patch.wrecks;
+  if (Array.isArray(patch.planetoids)) planetoidSystem.planetoids = patch.planetoids;
+  if (Array.isArray(patch.portals)) {
+    portalSystem.portals = patch.portals;
+    portalSystem._nextWaveIndex = patch.nextPortalWaveIndex ?? portalSystem._nextWaveIndex;
   }
-
-  if (Array.isArray(world.wrecks)) {
-    wreckSystem.wrecks = world.wrecks.map((remote) => ({
-      ...remote,
-      alive: remote.alive !== false,
-      looted: Boolean(remote.looted),
-      pickupCooldown: remote.pickupCooldown ?? 0,
-      loot: Array.isArray(remote.loot) ? remote.loot.map((item) => item ? { ...item } : null) : [],
-    }));
-  }
-
-  if (Array.isArray(world.planetoids)) {
-    planetoidSystem.planetoids = world.planetoids.map((remote) => ({
-      ...remote,
-      alive: remote.alive !== false,
-    }));
-  }
-
-  if (Array.isArray(world.portals)) {
-    portalSystem.portals = world.portals.map((remote) => ({
-      id: remote.id,
-      wx: remote.wx,
-      wy: remote.wy,
-      type: remote.type ?? 'standard',
-      wave: remote.wave ?? 0,
-      spawnTime: remote.spawnTime ?? 0,
-      lifespan: remote.lifespan ?? 90,
-      alive: remote.alive !== false,
-      blockedByInhibitor: remote.blockedByInhibitor === true,
-      finalInhibitor: remote.finalInhibitor === true,
-      opacity: remote.opacity ?? 1,
-      timeLeft(runTime) {
-        return Math.max(0, (this.spawnTime + this.lifespan) - runTime);
-      },
-      isWarning(runTime) {
-        return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 15;
-      },
-      isCritical(runTime) {
-        return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 5;
-      },
-      getCaptureRadius() {
-        const base = CONFIG.portals.captureRadius;
-        if (this.type === 'unstable') return base * 0.5;
-        if (this.type === 'rift') return base * 1.8;
-        return base;
-      },
-    }));
-    portalSystem._nextWaveIndex = world.nextPortalWaveIndex ?? portalSystem._nextWaveIndex;
-  }
-
-  if (Array.isArray(world.scavengers)) {
-    const previousScavengers = new Map(scavengerSystem.scavengers.map((scavenger) => [scavenger.id, scavenger]));
-    scavengerSystem.scavengers = world.scavengers.map((remote, index) => {
-      const previous = previousScavengers.get(remote.id) || scavengerSystem.scavengers[index] || {};
-      return normalizeScavengerPresentation(remote, previous);
-    });
-  }
-
-  if (Array.isArray(world.fauna)) {
-    remoteFauna = world.fauna.filter(f => f.alive !== false);
-  }
-  if (Array.isArray(world.sentries)) {
-    remoteSentries = world.sentries.filter(s => s.alive !== false);
-  }
+  if (Array.isArray(patch.scavengers)) scavengerSystem.scavengers = patch.scavengers;
+  if (Array.isArray(patch.fauna)) remoteFauna = patch.fauna;
+  if (Array.isArray(patch.sentries)) remoteSentries = patch.sentries;
 }
 
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
@@ -4852,10 +4772,7 @@ function gameLoop(now) {
     runId: remoteSession.snapshot?.session?.runId || null,
     frameId: remoteSession.snapshot?.snapshotId || Math.floor(totalTime * 60),
     scene: collectThreeSceneState(),
-    events: [
-      ...(remoteSession.snapshot?.recentEvents || []),
-      ...vfxEvents,
-    ],
+    events: vfxEvents,
     vfxConfig: CONFIG.vfx,
   }, { qualityTier: rendererBackend?.renderQuality });
   const composerStart = performance.now();

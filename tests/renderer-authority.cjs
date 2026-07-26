@@ -18,6 +18,13 @@ async function run() {
   } = await import("../src/authoritative-field.mjs");
   const { normalizeStarPresentation } = await import("../src/stars.js");
   const { ScavengerSystem, normalizeScavengerPresentation } = await import("../src/scavengers.js");
+  const {
+    acceptedRemoteEvents,
+    classifyRemoteSnapshot,
+    projectRemoteSnapshot,
+    projectRemoteWorldPatch,
+    snapshotRunId,
+  } = await import("../src/sim/remote-snapshot-presentation.js");
 
   await runner.run("remote star rows retain a valid presentation contract", async () => {
     const first = normalizeStarPresentation({
@@ -40,9 +47,11 @@ async function run() {
     assert(repeated.typeDef?.sizeMult === 1.8, "Repeated compact rows must remain render-compatible");
     assert(optionalDataAbsent.typeDef?.sizeMult === 1, "Missing type data must use a valid default type");
     assert(Array.isArray(optionalDataAbsent.asteroids), "Missing optional asteroid data must stay safe to render");
-    const main = fs.readFileSync(require.resolve("../src/main.js"), "utf8");
-    assert(main.includes("normalizeStarPresentation(remote, prev)"),
-      "Remote world sync must normalize compact star rows before presentation");
+    const projected = projectRemoteWorldPatch({
+      stars: [{ id: "star-1", type: "redGiant", mass: 1.4, alive: true }],
+    }, { stars: [first] });
+    assert(projected.stars[0].typeDef?.sizeMult === 1.8,
+      "Remote world projection must normalize compact star rows before presentation");
   });
 
   await runner.run("remote scavenger rows retain a safe death presentation contract", async () => {
@@ -97,6 +106,71 @@ async function run() {
     assert(!error, `Partial accepted scavenger row must not fatal: ${error?.message || "unknown error"}`);
     assert(partial.alive && partial.state === "dying",
       "Partial row must retain authoritative lifecycle state while optional presentation data is absent");
+  });
+
+  await runner.run("remote snapshots project protocol rows without presentation side effects", async () => {
+    const incoming = {
+      session: { runId: "run-b", mapId: "deep-field", worldScale: 3, cosmicSignature: { id: "sig-1" } },
+      tick: 4,
+      simTime: 2,
+      players: [
+        { clientId: "local", isAI: false },
+        { clientId: "remote", isAI: false },
+      ],
+      inhibitor: { form: 2 },
+      world: { authoritativeField: { columns: 2 } },
+    };
+    const classification = classifyRemoteSnapshot({ runId: "run-a", tick: 4, simTime: 2 }, incoming);
+    assert(snapshotRunId(incoming) === "run-b", "Nested session run ID must remain supported");
+    assert(classification.runChanged && classification.duplicate,
+      "Run changes and duplicate presentation timestamps must remain independent");
+    const projected = projectRemoteSnapshot(incoming, {
+      clientId: "local",
+      previousHealth: { idleState: { state: "active" } },
+      elapsedTime: 1,
+    });
+    assert(projected.localPlayer === incoming.players[0], "The local authority row must retain its identity");
+    assert(projected.remotePlayers.length === 1 && projected.remotePlayers[0] !== incoming.players[1],
+      "Remote presentation rows must be shallow copies");
+    assert(projected.health.idleState.state === "active"
+      && projected.health.idleState.humanPlayerCount === 2,
+    "Health projection must preserve connection state and count human pilots");
+    assert(projected.cosmicSignature !== incoming.session.cosmicSignature
+      && projected.inhibitor !== incoming.inhibitor,
+    "Mutable signature and inhibitor rows must be copied");
+  });
+
+  await runner.run("remote event acceptance preserves authority order and cursor semantics", async () => {
+    const accepted = acceptedRemoteEvents([
+      null,
+      { seq: 4, type: "player.pulse" },
+      { seq: 3, type: "run.result" },
+      { seq: 5, type: "inhibitor.wake" },
+    ], 3);
+    assert(accepted.length === 2 && accepted[0].seq === 4 && accepted[1].seq === 5,
+      "Only forward events in authority order may reach presentation");
+    assert(acceptedRemoteEvents([{ seq: 5 }, { seq: 6 }], 6).length === 0,
+      "Recovered event windows must not replay the accepted cursor");
+  });
+
+  await runner.run("remote world projection retains renderer-safe entity contracts", async () => {
+    const well = { id: "well-1", wx: 0.1, wy: 0.1 };
+    const lootItem = { id: "scrap" };
+    const patch = projectRemoteWorldPatch({
+      waveRings: [{ sourceWX: 1, sourceWY: 2, amplitude: 0.4 }],
+      wells: [well],
+      wrecks: [{ id: "wreck-1", loot: [lootItem] }],
+      portals: [{ id: "portal-1", type: "unstable", spawnTime: 0, lifespan: 10 }],
+      fauna: [{ id: "alive" }, { id: "dead", alive: false }],
+      nextPortalWaveIndex: 7,
+    });
+    assert(patch.wells[0] === well, "Well rows must remain available for stable-object mutation");
+    assert(patch.waveRings[0].initialAmplitude === 0.4,
+      "Wave rows must restore renderer defaults");
+    assert(patch.wrecks[0].loot[0] !== lootItem,
+      "Wreck loot projection must retain independent item rows");
+    assert(patch.fauna.length === 1 && patch.portals[0].timeLeft(4) === 6,
+      "Dead transient rows must be removed and portals must retain their presentation interface");
   });
 
   await runner.run("authority texture registration keeps the shared Y contract", async () => {
