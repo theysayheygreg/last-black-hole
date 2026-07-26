@@ -1,6 +1,7 @@
 # v0.3 Simulation, Harness, and Human-Clarity Simplification
 
-> Status: source/harness acceptance complete at source `3b2cb022`.
+> Status: human-clarity refactor checkpoint at source `19bb70b6`; final
+> exact-head acceptance is pending.
 > Updated 2026-07-26 on `codex/v0.3-sim-harness-simplification`.
 >
 > Branch: `codex/v0.3-sim-harness-simplification`
@@ -195,12 +196,13 @@ restoring caps or lowering the authority rate.
 Nonblank JS-family lines at this milestone are 49,986 production (`-232` from
 the pinned baseline) and 22,493 tests (`-74`).
 
-## Integrated source and harness receipt
+## Accepted movement and harness receipt
 
-The accepted source checkpoint is `3b2cb0227414f8567e12a821c64d3190b82e1f42`
-on `codex/v0.3-sim-harness-simplification`. It remains a v0.3-only descendant
-of `BASELINE_SHA`; no package, Deck, promotion, or public-release claim is made
-for this checkpoint.
+The frozen movement/harness checkpoint is
+`3b2cb0227414f8567e12a821c64d3190b82e1f42`. The current clarity-refactor
+checkpoint is `19bb70b6d29acd15af74bf8a23f763a23f559888`. Both remain v0.3-only
+descendants of `BASELINE_SHA`; no package, Deck, promotion, or public-release
+claim is made for either checkpoint.
 
 ### Movement and Deep Field
 
@@ -226,7 +228,7 @@ for this checkpoint.
   host acceptance requires zero skipped deadlines. Heap delta is diagnostic
   because GC is host-sensitive; bounded snapshot/ring gates remain enforced.
 
-The current 5/15/25 ten-second cadence receipt is:
+The accepted 5/15/25 ten-second cadence receipt at `3b2cb022` is:
 
 | Map | Delivered Hz | Snapshot p95 | Ballpark p95 | Queries/tick | Catch-up / skipped |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -234,22 +236,28 @@ The current 5/15/25 ten-second cadence receipt is:
 | Expanse | 14.995 | 18.493 ms | 0.774 ms | 12 | 0 / 0 |
 | Deep Field | 14.988 | 22.760 ms | 0.788 ms | 12 | 1 / 0 |
 
-The authority receipt also passed 57/57 in 195.47 s (197.36 s summed suite
+That authority receipt also passed 57/57 in 195.47 s (197.36 s summed suite
 time; 12 browser, 3 static, 66 sim, 3 control launches). Its Deep Field sample
 delivered 15.000 Hz, 17.36 ms snapshot p95, 212.76 KiB payload p95, 0.722 ms
 Ballpark p95, 12 queries/tick, two ordinary catch-ups, zero skipped deadlines,
-and +1.56 MiB diagnostic heap change. This closes the former 13.9/15 rounded
-timer artifact without restoring profiles; it is not a claim that pathological
-host stalls cannot be observed through `skippedDeadlines`.
+and +1.56 MiB diagnostic heap change.
 
-The terminal full-lane Deep Field budget sample also delivered 14.99/15 Hz,
+The `3b2cb022` full-lane Deep Field budget sample also delivered 14.99/15 Hz,
 26.06 ms snapshot p95, 212.76 KiB payload p95, 0.735 ms Ballpark p95, 12
 queries/tick, and zero catch-ups or skipped deadlines. Heap moved +52.8 MiB in
 that host-sensitive sample and remains diagnostic.
 
+These bounded samples prove the one-rate contract and deadline accounting, but
+they do not close sustained Deep Field delivery. A separate measured run
+delivered about 13.9 of the required 15 Hz. Keep the shared gameplay rate fixed
+at 15 Hz, do not restore map profiles, and do not chase the GC-sensitive heap
+assertion. Final acceptance must remeasure Deep Field under the final
+runner/host conditions and route one additional profiled hot-path slice only
+if it still misses the wall-clock target.
+
 ### Harness and behavior evidence
 
-The manifest now registers 121 current contracts: fast 60, core 87, authority
+At `3b2cb022`, the manifest registered 121 current contracts: fast 60, core 87, authority
 57, sim-structure 45, full 119, bench 6, and audio-tools 1. The runner permits
 four workers total and two browser workers, gives every isolated shard unique
 ports/profiles/temp/artifact roots, serializes fixed services, buffers ordered
@@ -279,16 +287,82 @@ slingshot proof records the complete selected-well event stream: two visual
 capture legs end in validated range-breaks, and a third leg proves the explicit
 requested release without discarding any authority event.
 
-Meaningful vertical commits centralize the movement clock, toroidal geometry,
-authoritative JSON serialization, deadline scheduling, runner isolation, and
-current-contract fixtures. Current nonblank JS-family lines are 50,173
-production (`-45` from baseline) and 23,954 tests (`+1,387`); production and
-tests remain reported separately. The test increase is deliberate current
-contract and fresh-process coverage, not hidden runner deletion.
+Meaningful vertical commits through `3b2cb022` centralize the movement clock,
+toroidal geometry, authoritative JSON serialization, deadline scheduling,
+runner isolation, and current-contract fixtures. At that checkpoint, nonblank
+JS-family lines were 50,173 production (`-45` from baseline) and 23,954 tests
+(`+1,387`); production and tests remain reported separately.
 
-The exact-head candidate run passed 119/119 with zero retries in 442.18 s
+The `3b2cb022` candidate run passed 119/119 with zero retries in 442.18 s
 (442.39 s external wall, 619.60 s summed suite time), using 34 browser
 launches, 18 static starts, 71 sim starts, and 3 control starts. Package and
 Deck gates are historical evidence only until Primary explicitly selects an
 RC. Greg still owns feel, visual/audio taste, physical Deck acceptance, and
 promotion.
+
+## Human-clarity refactor checkpoint
+
+Source `19bb70b6d29acd15af74bf8a23f763a23f559888` is the integrated clarity
+checkpoint. The refactor keeps public facades and runtime behavior stable while
+making lifecycle, projection, presentation, and script ownership explicit.
+
+| Owner | Responsibility |
+| --- | --- |
+| `scripts/sim/http-lifecycle.cjs` | Authority HTTP server creation, request completion, and shutdown lifecycle. |
+| `scripts/sim/public-snapshot.cjs` | Public snapshot projection and compact transport-safe rows. |
+| `scripts/sim/session-state.cjs` | Session and player state factories; `scripts/sim-runtime.cjs` retains tick order and gameplay authority. |
+| `src/sim/remote-session-state.js` | Remote session start, pause, result, reconnect, and release transitions. |
+| `src/sim/remote-snapshot-presentation.js` | Accepted authoritative snapshot projection into client presentation state. |
+| `src/presentation/scene-source.js` | Renderer-neutral scene-source construction from local or remote presentation truth. |
+| `src/render/shaders/fluid.glsl.js` | Fluid shader source only; `src/fluid.js` retains WebGL lifecycle and uniforms. |
+| `src/render-three/world-scene-presentation.js` | Three world-entity and environment presentation lifecycle; the renderer shell retains backend orchestration. |
+| `src/ui/hud-presentation.js` | Pure HUD selectors and presentation formatting behind the existing HUD facade. |
+| `src/ui/hud-inventory.js` | Inventory state, actions, and panel rendering behind the existing HUD facade. |
+| `src/audio/cue-synthesis.js` | Transient cue recipes and held portal voice synthesis; `AudioEngine` retains graph and continuous-voice lifecycle. |
+| `scripts/deploy/cli.cjs` | Shared deployment argument parsing without changing entrypoint flags. |
+| `scripts/service-supervisor.cjs` | Direct control/sim/static service start, stop, status, PID-registry, and signal cleanup used by the three thin wrappers. |
+
+The milestone commits are deliberately narrow:
+
+| Commits | Milestone | Focused evidence |
+| --- | --- | --- |
+| `5994c8e5`–`71afd028` | Authority HTTP, public snapshot, session factories, and player tick composition | authority lifecycle, snapshot, shipping-trio, and sim-lifecycle contracts |
+| `d4373fee`–`24112096` | Remote session, snapshot, and scene-source ownership | pause/reconcile, input feedback, renderer authority, and presentation-frame contracts |
+| `f7479f0a`–`94731070` | Fluid shader, HUD, audio, and Three world-presentation owners | validation, HUD/slingshot, cue/RC recovery, and Three lifecycle/temporal contracts |
+| `b066cfa0` | Canonical ESM content reused by synchronous CommonJS adapters | balance, map-rate/movement, and signature identity contracts |
+| `a5b6477c` | Shared deployment CLI parsing | Deck gaming-mode argument contract |
+| `93671bb9`, `19bb70b6` | Shared direct service supervision | desktop package, control-plane, and sim-lifecycle contracts |
+
+The intermediate `a6e584bf` service-lock experiment was rejected. `19bb70b6`
+deletes the lock/claim hooks and their tests, restores the established direct
+lifecycle semantics, and leaves no new dependency or lock-file contract.
+
+Major-owner size is reported as physical/nonblank lines, comparing the accepted
+`3b2cb022` checkpoint with `19bb70b6`. Extracted modules are included with
+their former owner:
+
+| Vertical | Before | Current |
+| --- | ---: | ---: |
+| Authority runtime + extracted owners | 7,377 / 6,899 | 7,558 / 7,060 |
+| Client main + remote/presentation owners | 6,896 / 6,426 | 7,061 / 6,575 |
+| Fluid runtime + shader source | 1,245 / 1,118 | 1,251 / 1,126 |
+| Three renderer + world presentation | 1,027 / 961 | 1,058 / 985 |
+| HUD facade + presentation/inventory | 1,069 / 975 | 1,066 / 972 |
+| Audio engine + cue synthesis | 1,223 / 1,124 | 1,236 / 1,134 |
+| Service wrappers + supervisor | 674 / 588 | 350 / 316 |
+| Deployment entrypoints + CLI parser | 1,391 / 1,221 | 1,345 / 1,183 |
+
+Across the whole JS-family tree, production moves from 50,173 to 50,095
+nonblank lines and tests from 23,954 to 24,600. The production reduction is
+real but secondary to explicit ownership; test growth is focused
+behavior-preservation evidence.
+
+Three no-retry core runs at `19bb70b6` passed 87/87 in 48.67 s, 45.20 s, and
+49.11 s with zero retries. They preserve the accepted ordinary-path coverage,
+but this checkpoint does not yet claim a new terminal full-lane receipt.
+
+Final acceptance still requires an exact-head 119-suite/full run, the fresh
+natural movement journey and basic product-loop smoke, the final Deep Field
+delivery recheck, and a final LoC receipt after any resulting fix-forward
+slice. The frozen `3b2cb022` full and journey evidence above remains historical
+support, not exact-head certification of `19bb70b6`.

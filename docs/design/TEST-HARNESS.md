@@ -26,14 +26,19 @@ Fast data invariants, browser boot checks, authority-process checks, renderer
 fixtures, and real playtest flows stay in separate lanes so one stale browser
 or slow menu transition does not make unrelated feature work look broken.
 
-The current manifest registers 121 contracts: 60 fast, 87 core, 57 authority,
+The manifest registers 121 contracts: 60 fast, 87 core, 57 authority,
 45 sim-structure, 119 full, 6 bench, and 1 optional audio-tools contract. The
-ordinary comparable checkpoint is `npm test -- --no-retries`: 87/87 in 45.72 s
-against the 93.62 s baseline (2.047x). That is the throughput claim. The full
-candidate path is also green at 119/119 in 442.18 s against the 1,028.63 s
-baseline (2.326x). Both receipts are recorded in
-`docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`; never substitute a renamed lane for
-either comparison.
+accepted `3b2cb022` ordinary comparable checkpoint is
+`npm test -- --no-retries`: 87/87 in 45.72 s against the 93.62 s baseline
+(2.047x). Its full candidate path passed 119/119 in 442.18 s against the
+1,028.63 s baseline (2.326x). Those remain the frozen throughput receipts;
+never substitute a renamed lane for either comparison.
+
+At clarity-refactor checkpoint `19bb70b6`, three no-retry core runs passed
+87/87 in 48.67 s, 45.20 s, and 49.11 s with zero retries. The current
+119-suite/full run, fresh movement journey, product-loop smoke, Deep Field
+delivery recheck, and final LoC receipt are still pending. The complete receipt
+and ownership map live in `docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`.
 
 For "where does the local build stand?", start with
 `docs/project/BUILD-STATUS.md`, then check `node scripts/build-health.cjs

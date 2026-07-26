@@ -5,10 +5,11 @@
 
 ## Current Verdict
 
-**Current source acceptance is the v0.3 simulation/harness checkpoint at
-`3b2cb0227414f8567e12a821c64d3190b82e1f42`. Its exact-head no-retry full
-lane passed 119/119 in 442.18 s. No new package, Deck, RC, or promotion claim
-exists.**
+**Current source is the interim clarity-refactor checkpoint
+`19bb70b6d29acd15af74bf8a23f763a23f559888`. Three no-retry core runs passed
+87/87 in 48.67 s, 45.20 s, and 49.11 s. Final exact-head full, journey,
+Deep Field delivery, and LoC receipts are pending; no new package, Deck, RC, or
+promotion claim exists.**
 
 `codex/v0.3-sim-harness-simplification` contains the current unified 15 Hz
 authority clock, measured Deep Field relevance/transport work, deadline
@@ -16,16 +17,17 @@ delivery, runner isolation, and current-contract proof. It is based on
 `BASELINE_SHA=20184fae84b559abf27717c046811673040d987a`; `main` remains the
 v0.2 public/demo line.
 
+The accepted movement/harness checkpoint `3b2cb022` passed 119/119 in 442.18 s
+with zero retries and remains frozen supporting evidence. Its bounded
+5/15/25 samples prove the shared 15 Hz gameplay contract, not final sustained
+Deep Field delivery: a measured run remains at about 13.9/15 Hz. Remeasure on
+the final runner/host and optimize one profiled hot path only if it still
+misses. Do not restore map profiles or promote the GC-sensitive heap delta into
+a gate.
+
 The earlier `0.3.1.2b93b077` and `dd9e5149` package/Deck receipts below remain
 valid only for their exact historical hashes. They do not certify the current
 source checkpoint.
-
-Current source proof: fast is 60/60 in 10.20 s; core is 87/87 in 45.72 s;
-authority is 57/57 in 195.47 s; and the terminal full lane is 119/119 in
-442.18 s, 2.326x faster than its 1,028.63 s baseline. Its shared 5/15/25
-cadence receipt delivered 14.983/14.995/14.988 Hz with zero skipped deadlines.
-Deep Field uses 12 Ballpark relevance queries/tick. AgentPlayEval passed both
-fresh natural journeys in 123.32 s with 18 captures.
 
 ## Historical Package And Deck Evidence
 
@@ -105,10 +107,8 @@ Historical completed evidence from the clean 2026-07-14 RC pass:
 - Deep Field stayed inside the explicit tick, latency, snapshot, transport,
   heap, and Ballpark-sync budgets recorded in `ROADMAP.md`.
 - `npm run test:agent-eval` passed from a fresh sim and disposable browser.
-- Passing playable report:
-  `tests/screenshots/agent-play-eval-2026-07-14T191436848Z/summary.md`.
-- The report contains eighteen 1280x800 frames across extraction/continuity and
-  death/recovery journeys.
+- The intentionally untracked worker-local report contained eighteen 1280x800
+  frames across extraction/continuity and death/recovery journeys.
 - AgentPlayEval completed both natural journeys without a retry in the final
   full lane.
 - Package closure tests stage authority, extract and boot the real Linux
@@ -153,6 +153,9 @@ Requirements:
 - timing retries are reported rather than silently converted into passes;
 - scheduler cadence samples at the shared 15 Hz require zero skipped deadlines;
   compact JSON preserves values, shapes, status codes, and content type.
+- final acceptance records the exact-head 119-suite/full lane, a fresh natural
+  movement journey, a basic product-loop smoke, the Deep Field recheck, and
+  final production/test LoC.
 
 ## Architecture Gate
 
@@ -226,11 +229,11 @@ npm run release:status
 npm run test:package
 ```
 
-- [ ] If Primary selects `3b2cb022` as an RC, build its hash-named package.
+- [ ] If Primary selects a final source as an RC, build its hash-named package.
 - [ ] Report and verify that exact source's `app.asar` and playtest ZIP through
   `release:status` and `test:package`.
 
-Historical package evidence, not certification of `3b2cb022`:
+Historical package evidence, not certification of the current source:
 
 - [x] Build `0.3.1.dd9e5149` passed the historical multi-target package gate.
 - [x] Its `app.asar` and playtest ZIP checksums are reported above and were

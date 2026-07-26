@@ -20,10 +20,11 @@ does not erase newer committed work.
 v0.3 source-only checkpoint, based on behavioral baseline
 `20184fae84b559abf27717c046811673040d987a`. It has one 15 Hz authoritative
 movement clock across Shallows, Expanse, and Deep Field, plus measured
-relevance, compact transport, deadline-delivery, and harness work. This is not
-a newly packaged or deployed RC. Source checkpoint
-`3b2cb0227414f8567e12a821c64d3190b82e1f42` passed the exact-head no-retry
-full lane 119/119 in 442.18 s.
+relevance, compact transport, deadline-delivery, harness work, and explicit
+authority/client/presentation/script owners. Current source is
+`19bb70b6d29acd15af74bf8a23f763a23f559888`; three no-retry core runs passed
+87/87 in 48.67 s, 45.20 s, and 49.11 s. This is not a newly packaged or
+deployed RC, and its final full/journey/performance acceptance is pending.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
@@ -82,14 +83,15 @@ future RC/promotion remain open.
 
 ### Current Automated Evidence
 
-Current source evidence, at the stated branch/checkpoint rather than an RC:
+Accepted movement/harness evidence at `3b2cb022`, not current exact-head or RC
+evidence:
 
 - `npm run test:fast -- --no-retries`: 60/60 in 10.20 s; `npm test --
   --no-retries`: 87/87 in 45.72 s (2.047x faster than the 93.62 s baseline).
 - `npm run test:authority -- --no-retries`: 57/57 in 195.47 s. It is slower
   than the red 47-suite baseline because it now proves fresh authority groups
   and a ten-second 5/15/25 cadence receipt.
-- current UIVisual is 18/18 in 12.21 s; the final full lane passed Renderer in
+- that UIVisual run was 18/18 in 12.21 s; the full lane passed Renderer in
   86.16 s, FluidWindow in 10.18 s, and SlingshotV2Live in 8.04 s. Smoke passes
   in fast/core; AgentPlayEval passed both natural journeys in 123.32 s with 18
   captures.
@@ -101,7 +103,7 @@ Current source evidence, at the stated branch/checkpoint rather than an RC:
   This is 2.326x faster than the 1,028.63 s baseline and keeps the full
   candidate coverage.
 
-Latest Deep Field measurement:
+Accepted `3b2cb022` Deep Field measurement:
 
 | Measure | Observed |
 |---|---:|
@@ -113,14 +115,19 @@ Latest Deep Field measurement:
 | Ballpark sync p95 | 0.735 ms |
 | scheduler delivery | 0 catch-ups / 0 skipped |
 
+Those bounded samples prove the shared 15 Hz contract, but a separate measured
+Deep Field run delivered about 13.9/15 Hz. Final acceptance must remeasure on
+the final runner/host and route one profiled hot-path slice only if the miss
+persists. Map-rate profiles stay removed; GC-sensitive heap change stays
+diagnostic.
+
+Current `19bb70b6` evidence is three zero-retry core passes at 48.67 s, 45.20 s,
+and 49.11 s. Its 119-suite/full run and final LoC receipt remain pending.
+
 ### Natural Playable Evidence
 
-Latest complete passing report:
-
-`tests/screenshots/agent-play-eval-2026-07-26T183542962Z/summary.md`
-
-It contains eighteen 1280x800 screenshots and proves two fresh protocol-v2
-Shallows journeys through:
+The accepted `3b2cb022` receipt records eighteen 1280x800 screenshots from two
+fresh protocol-v2 Shallows journeys through:
 
 1. title, profile, Home, and route briefing;
 2. authoritative launch and intentional controller movement;
@@ -136,9 +143,8 @@ Shallows journeys through:
 
 The agent journey does not call sim debug mutation endpoints.
 
-Latest no-retry slingshot evidence:
-
-`tests/screenshots/agent-play-eval-2026-07-10T224511366Z/summary.md`
+A fresh natural movement journey and basic product-loop smoke are still
+required for final acceptance of `19bb70b6` or any later fix-forward source.
 
 ### Visual Review Evidence
 

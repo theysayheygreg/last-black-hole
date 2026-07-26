@@ -11,14 +11,16 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** `codex/v0.3-sim-harness-simplification` at the current
-source checkpoint is a v0.3-only refactor descendant of
-`20184fae84b559abf27717c046811673040d987a`. It centralizes the gameplay clock,
-Deep Field relevance/transport work, deadline delivery, runner isolation, and
-current-contract fixtures. No package, Deck, or promotion claim is attached to
-this source checkpoint; earlier hash-specific package and Deck receipts remain
-historical evidence only. Promotion into `main` remains closed until Greg's
-explicit version call; movement feel and visual taste remain Greg's final calls.
+**Current state:** source `19bb70b6d29acd15af74bf8a23f763a23f559888`
+is the current v0.3-only clarity-refactor checkpoint over behavioral baseline
+`20184fae84b559abf27717c046811673040d987a`. It retains the accepted gameplay
+clock, Deep Field relevance/transport work, deadline delivery, runner
+isolation, and current-contract fixtures, then separates authority, client,
+renderer, HUD, audio, content-adapter, deployment, and service-lifecycle
+ownership. The responsibility and commit map is in
+`docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`. No package, Deck, full-gate, or
+promotion claim is attached to this checkpoint; earlier hash-specific receipts
+remain historical evidence only.
 
 The v0.3.1 map-relative schedule migration is source-complete: map-scale
 content owns the 480/600/720-second durations, the match Conductor resolves
@@ -65,7 +67,7 @@ the then-green candidate:
 Historical focused receipts passed on 2026-07-14: Three entity lifecycle 9/9, movement
 audio 10/10, swept authority 5/5, input timeout 1/1, movement golden 5/5, and
 meta flow 8/8. Broader candidate lanes were asynchronous at that checkpoint;
-the current terminal receipt is recorded below.
+the later accepted `3b2cb022` receipt is recorded below.
 
 v0.3 converts the successful game-jam stack into a small production-shaped
 game architecture without replacing the custom physics or ASCII-fluid visual
@@ -195,7 +197,8 @@ explicit presentation contracts.
 - Deep Field has explicit tick, snapshot latency/size, transport, heap-growth,
   and Ballpark-sync budgets.
 
-Latest source authority evidence on 2026-07-26 (not package/Deck evidence):
+Accepted bounded authority evidence at `3b2cb022` on 2026-07-26 (not current
+exact-head, package, or Deck evidence):
 
 | Measure | Observed |
 |---|---:|
@@ -207,6 +210,12 @@ Latest source authority evidence on 2026-07-26 (not package/Deck evidence):
 | relevance queries | 12 / tick |
 | deadline delivery | 0 catch-ups / 0 skipped |
 
+The shared gameplay contract remains fixed at 15 Hz, but measured sustained
+Deep Field delivery of about 13.9/15 Hz is still a performance residual.
+Remeasure at the final runner/host checkpoint; if it still misses, profile and
+optimize one additional hot-path slice without restoring map-rate profiles.
+Heap delta remains GC-sensitive diagnostic data, not the target of that slice.
+
 ## Playable Evidence
 
 The natural agent journey starts a fresh sim and disposable browser at
@@ -214,11 +223,8 @@ The natural agent journey starts a fresh sim and disposable browser at
 controller input, and world contact. It does not mutate player, portal, wreck,
 or Inhibitor debug state.
 
-Latest passing report from the terminal exact-source no-retry pass:
-
-`tests/screenshots/agent-play-eval-2026-07-26T183542962Z/summary.md`
-
-It proves:
+The earlier `3b2cb022` no-retry pass produced an intentionally untracked
+worker-local report with eighteen captures. Its recorded receipt proves:
 
 - title, profile, Home, route briefing, and authoritative launch;
 - intentional movement and a well slingshot engage/release;
@@ -233,16 +239,21 @@ It proves:
   including generated entity sprites and a populated icon-bearing salvage
   report.
 
-The complete lane passed without retries after the visual integration and
-harness-timeout correction. Earlier timing variability remains useful tuning
-history, but it did not recur in this exact-source acceptance pass.
+That complete lane passed without retries after the visual integration and
+harness-timeout correction. It is supporting evidence, not a current
+`19bb70b6` journey receipt.
 
 ## Remaining Release Gates
 
-These are evidence gates, not missing architecture:
+These are current exact-head evidence gates, not missing architecture:
 
-- [x] Record the exact-head full-lane receipt in the simulation/harness ledger:
-  119/119 in 442.18 s at source `3b2cb022`, with no retries.
+- [x] Preserve the accepted movement/harness receipt: 119/119 in 442.18 s at
+  source `3b2cb022`, with no retries.
+- [ ] Run the 119-suite/full lane at the final exact source.
+- [ ] Run one fresh natural movement journey and one basic product-loop smoke.
+- [ ] Remeasure Deep Field under the final runner/host conditions and route
+  one measured hot-path slice only if delivery remains below 15 Hz.
+- [ ] Record final production/test LoC after any resulting fix-forward work.
 - [ ] If Primary selects an RC, build a hash-named artifact and rerun package
   proof from that exact committed source.
 - [ ] If the physical Deck is online, deploy and verify Gaming Mode launch,

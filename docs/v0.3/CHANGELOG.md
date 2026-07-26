@@ -2,6 +2,18 @@
 
 ## 2026-07-26
 
+- **Human-clarity checkpoint:** `19bb70b6` splits authority HTTP/snapshot/session
+  state, remote session/snapshot/scene projection, fluid shaders, Three world
+  presentation, HUD presentation/inventory, audio cue synthesis, deployment
+  CLI parsing, and service supervision into named owners while preserving the
+  existing facades and runtime contracts. Canonical ESM content now feeds the
+  synchronous CommonJS adapters. The rejected service-lock experiment was
+  deleted; direct start/stop/status/PID cleanup remains the contract.
+- **Interim evidence:** whole production nonblank LoC moved
+  50,173→50,095 while tests moved 23,954→24,600. Three no-retry core runs
+  passed 87/87 in 48.67 s, 45.20 s, and 49.11 s. Final exact-head full,
+  movement journey, product-loop smoke, Deep Field delivery, and LoC receipts
+  remain pending.
 - **Unified authority clock:** `src/content/movement.data.json` now owns the
   one 15 Hz gameplay integration rate for Shallows, Expanse, and Deep Field.
   Map-specific movement profiles and overload time dilation are removed;
@@ -11,16 +23,20 @@
 - **Measured Deep Field delivery:** relevance work reduces 24 to 12 queries per
   tick, 194,970 to 49,242 candidates, and 203,532 to 51,072 duplicates. The
   runtime now sends the same JSON values/shapes/status/type without formatting
-  whitespace, cutting Deep snapshot payloads to roughly 204–213 KiB.
+  whitespace, cutting Deep snapshot payloads to roughly 204–213 KiB. The
+  gameplay contract is fixed at 15 Hz, but a measured roughly 13.9/15 Hz
+  sustained-delivery result remains open for final-host recheck and, only if
+  still red, one additional profiled hot-path slice.
 - **Authority cadence:** the runtime uses monotonic fractional deadlines,
   allowing one fixed-dt jitter recovery and counting/dropping stale deadlines
   after a long stall. `/health.scheduler` adds delivery diagnostics; normal
   host acceptance requires zero skipped deadlines.
-- **Current harness:** the manifest has 121 registered contracts and the runner
+- **Accepted harness at `3b2cb022`:** the manifest has 121 registered contracts and the runner
   uses up to four workers (two browser workers) with isolated resources,
   ordered timing/launch receipts, and child-process cleanup. The ordinary core
-  gate is 87/87 in 45.72 s versus the 93.62 s baseline (2.047x). The exact-head
-  full lane is 119/119 in 442.18 s versus 1,028.63 s (2.326x), with no retries.
+  gate was 87/87 in 45.72 s versus the 93.62 s baseline (2.047x). Its
+  exact-head full lane was 119/119 in 442.18 s versus 1,028.63 s (2.326x),
+  with no retries.
   Host timing probes and the four stateful browser journeys have explicit
   exclusive resources; renderer fixture stepping uses exact elapsed client
   chunks, and live slingshot evidence records every range-break and requested
