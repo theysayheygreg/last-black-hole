@@ -44,10 +44,9 @@ const READABILITY_FIXTURES = new Set(['visualReference']);
 const READABILITY_FAMILY_MINIMUMS = {
   stars: { targets: 4, readable: 4 },
   wrecks: { targets: 3, readable: 2 },
-  // The rift aperture is intentionally dark. Its sampled center is not a
-  // stable brightness target, but the board must retain both portals and one
-  // clearly readable route anchor.
-  portals: { targets: 2, readable: 1, perTargetPixels: false },
+  // The rift aperture is intentionally dark; keep the stable standard route
+  // anchor as the portal family's deterministic pixel proof.
+  portals: { targets: 2, readable: 1, pixelTargetType: 'standard' },
   ships: { targets: 4, readable: 4 },
   fauna: { targets: 2, readable: 2 },
   sentries: { targets: 2, readable: 2 },
@@ -118,7 +117,16 @@ function assertReferenceReadability(report, fixtureName) {
       `${fixtureName} expected at least ${required.targets} ${family} targets, got ${summary.count}`);
     assert(summary.readable >= required.readable,
       `${fixtureName} ${family} readability too low: ${summary.readable}/${summary.count} readable.${weakest}`);
-    if (required.perTargetPixels !== false) {
+    if (required.pixelTargetType) {
+      const target = report.samples?.find((sample) => (
+        sample.family === family && sample.type === required.pixelTargetType
+      ));
+      assert(target, `${fixtureName} missing ${required.pixelTargetType} ${family} pixel target`);
+      assert(target.contrast >= 18,
+        `${fixtureName} ${required.pixelTargetType} ${family} contrast too low: ${target.contrast.toFixed(1)}`);
+      assert(target.peak >= 42,
+        `${fixtureName} ${required.pixelTargetType} ${family} peak too low: ${target.peak.toFixed(1)}`);
+    } else {
       assert(summary.minContrast >= 18,
         `${fixtureName} ${family} contrast floor too low: ${summary.minContrast.toFixed(1)}.${weakest}`);
       assert(summary.minPeak >= 42,
@@ -219,6 +227,7 @@ async function analyzeReferenceReadability(page, fixtureName) {
         targets.push({
           family,
           id: item.id || item.type || item.kind || family,
+          type: item.type || null,
           wx: item.wx,
           wy: item.wy,
           screen: worldToScreen(item.wx, item.wy),
