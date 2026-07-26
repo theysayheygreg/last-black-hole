@@ -6264,54 +6264,7 @@ function tickInhibitor(dt) {
   updateInhibitorPortalBlocks(inh, ws);
 }
 
-function tickSim() {
-  if (runtime.session.status !== "running") return;
-  if (benchAuthority) {
-    const dt = 1 / AUTHORITY_INTEGRATION_HZ;
-    runtime.emptySince = null;
-    runtime.tick += 1;
-    runtime.simTime = Number((runtime.simTime + dt).toFixed(9));
-    benchAuthority.tick(dt);
-    return;
-  }
-  if (getHumanPlayerCount() === 0) {
-    runtime.emptySince = runtime.emptySince || Date.now();
-    if (!runtime.keepAlive && runtime.idleShutdownMs > 0 && Date.now() - runtime.emptySince >= runtime.idleShutdownMs) {
-      shutdownForIdle();
-    }
-    return;
-  }
-  if (maybeEndTerminalSession()) return;
-  runtime.emptySince = null;
-  const tickStart = performance.now();
-  // Every authority-owned system advances together. Snapshot cadence and
-  // relevance budgets may vary by map; simulation dt may not.
-  const dt = 1 / AUTHORITY_INTEGRATION_HZ;
-  runtime.tick += 1;
-  runtime.simTime += dt;
-  tickCollapseEpochs();
-  const relevance = buildRelevanceView();
-
-  tickWells(dt);
-  tickStars(dt, relevance.stars);
-  tickWrecks(dt, relevance.wrecks);
-  tickPlanetoids(dt, relevance.planetoids);
-  tickGrowth(dt);
-  tickPortals(dt);
-  if (maybeEnforceMatchLifetime()) return;
-  tickWreckWaves(dt);
-  tickScavengers(dt, relevance.scavengers);
-  tickWaveRings(dt);
-  runtime.session.seededSea = advanceSeededSea(runtime.session.seededSea, dt);
-  runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
-  rebuildAuthoritativeField();
-  tickAIPlayers(dt);
-  tickSentries(dt);
-  tickFauna(dt);
-  tickInhibitor(dt);
-  maybeCollapseRun();
-  if (runtime.session.status !== "running") return;
-
+function tickAuthorityPlayers(dt, relevance) {
   const forceLedgers = new Map();
   for (const player of runtime.players.values()) {
     if (player.status === "alive") forceLedgers.set(player, beginForceLedger(player, dt, runtime.tick));
@@ -6396,6 +6349,57 @@ function tickSim() {
   for (const [player, ledger] of forceLedgers) {
     player.forceLedger = finalizeForceLedger(ledger, player);
   }
+}
+
+function tickSim() {
+  if (runtime.session.status !== "running") return;
+  if (benchAuthority) {
+    const dt = 1 / AUTHORITY_INTEGRATION_HZ;
+    runtime.emptySince = null;
+    runtime.tick += 1;
+    runtime.simTime = Number((runtime.simTime + dt).toFixed(9));
+    benchAuthority.tick(dt);
+    return;
+  }
+  if (getHumanPlayerCount() === 0) {
+    runtime.emptySince = runtime.emptySince || Date.now();
+    if (!runtime.keepAlive && runtime.idleShutdownMs > 0 && Date.now() - runtime.emptySince >= runtime.idleShutdownMs) {
+      shutdownForIdle();
+    }
+    return;
+  }
+  if (maybeEndTerminalSession()) return;
+  runtime.emptySince = null;
+  const tickStart = performance.now();
+  // Every authority-owned system advances together. Snapshot cadence and
+  // relevance budgets may vary by map; simulation dt may not.
+  const dt = 1 / AUTHORITY_INTEGRATION_HZ;
+  runtime.tick += 1;
+  runtime.simTime += dt;
+  tickCollapseEpochs();
+  const relevance = buildRelevanceView();
+
+  tickWells(dt);
+  tickStars(dt, relevance.stars);
+  tickWrecks(dt, relevance.wrecks);
+  tickPlanetoids(dt, relevance.planetoids);
+  tickGrowth(dt);
+  tickPortals(dt);
+  if (maybeEnforceMatchLifetime()) return;
+  tickWreckWaves(dt);
+  tickScavengers(dt, relevance.scavengers);
+  tickWaveRings(dt);
+  runtime.session.seededSea = advanceSeededSea(runtime.session.seededSea, dt);
+  runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);
+  rebuildAuthoritativeField();
+  tickAIPlayers(dt);
+  tickSentries(dt);
+  tickFauna(dt);
+  tickInhibitor(dt);
+  maybeCollapseRun();
+  if (runtime.session.status !== "running") return;
+
+  tickAuthorityPlayers(dt, relevance);
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
 
