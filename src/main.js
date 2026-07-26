@@ -70,6 +70,21 @@ import {
 } from './sim/local-player-reconciliation.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
 import {
+  beginRemoteSession,
+  captureRemotePendingActions,
+  clearRemotePendingActions,
+  createRemoteSessionState,
+  queueRemoteConsumeSlot,
+  queueRemoteExtractConfirm,
+  queueRemotePulse,
+  queueRemoteSlingshotEdge,
+  resetRemoteAfterLeave,
+  resetRemoteAfterLaunchFailure,
+  resetRemoteForLocalGame,
+  resetRemoteForRestart,
+  settleRemoteInputAcknowledgement,
+} from './sim/remote-session-state.js';
+import {
   PAUSE_LONG_AWAY_THRESHOLD_MS,
   authoritativePausePhase,
   createPauseResumeState,
@@ -304,28 +319,9 @@ let camY = 1.5;
 
 // Map state
 let currentMap = DEFAULT_PLAYABLE_MAP;
-let remoteAuthorityActive = false;
-let remoteMapId = null;
-let remoteSnapshot = null;
-let remoteAuthoritativeField = null;
-let remotePlayers = [];
+const remoteSession = createRemoteSessionState();
 let fixtureShipCandidates = [];
-let remoteLastAckSeq = 0;
-let remoteLastEventSeq = 0;
-let remoteInputRequestInFlight = false;
-let remoteSnapshotRequestInFlight = false;
-let remoteInventoryRequestInFlight = false;
-let remoteSessionHealth = null;
-let remoteSessionRequestInFlight = false;
-let remoteSessionLastFetchedAt = 0;
-let remotePendingPulse = false;
-let remotePendingExtractConfirm = false;
-let remotePendingConsumeSlot = null;
-let remotePendingSlingshotEdges = [];
-let remoteNextSlingshotEdgeId = 1;
-let remoteShipPresentation = null;
 let pauseResumeState = createPauseResumeState();
-let remotePauseNeutralizationInFlight = false;
 let startingMasses = [];
 let mapSelectIndex = 0;
 
@@ -810,19 +806,6 @@ function getConfiguredSimServerUrl() {
   return localStorage.getItem('lbh.simServerUrl') || '';
 }
 
-function resetRemoteLaunchState() {
-  remoteAuthorityActive = false;
-  remoteMapId = null;
-  remoteSnapshot = null;
-  remoteAuthoritativeField = null;
-  remotePlayers = [];
-  remoteSessionHealth = null;
-  remotePendingExtractConfirm = false;
-  remotePendingSlingshotEdges = [];
-  remoteNextSlingshotEdgeId = 1;
-  remoteShipPresentation = null;
-}
-
 function authorityLaunchWarning(error) {
   const detail = String(error?.message || 'local authority unavailable')
     .split(/\r?\n/, 1)[0]
@@ -1267,13 +1250,13 @@ function init() {
       currentSignature,
       profileManager,
       simClient,
-      get remoteAuthorityActive() { return remoteAuthorityActive; },
-      get remoteMapId() { return remoteMapId; },
-      get remoteSnapshot() { return remoteSnapshot; },
-      get remotePendingSlingshotEdges() { return remotePendingSlingshotEdges; },
-      get remoteSessionHealth() { return remoteSessionHealth; },
+      get remoteAuthorityActive() { return remoteSession.active; },
+      get remoteMapId() { return remoteSession.mapId; },
+      get remoteSnapshot() { return remoteSession.snapshot; },
+      get remotePendingSlingshotEdges() { return remoteSession.pendingSlingshotEdges; },
+      get remoteSessionHealth() { return remoteSession.health; },
       get remoteControlState() { return currentRemoteControlState(); },
-      get remotePlayers() { return remotePlayers; },
+      get remotePlayers() { return remoteSession.players; },
       get inhibitorState() { return inhibitorState; },
       // Render-only fixture hook. Gameplay Inhibitor truth still comes from
       // the authoritative sim snapshot path.
@@ -1305,7 +1288,7 @@ function init() {
     void initBenchUi({
       simClient,
       overlayCanvas,
-      getSnapshot: () => remoteSnapshot,
+      getSnapshot: () => remoteSession.snapshot,
       screenToWorldPoint: (clientX, clientY) => {
         const rect = overlayCanvas.getBoundingClientRect();
         const px = (clientX - rect.left) * overlayCanvas.width / Math.max(1, rect.width);
@@ -1594,7 +1577,7 @@ function getGlitchIntensity() {
 }
 
 function clearPresentationActors() {
-  remotePlayers = [];
+  remoteSession.players = [];
   remoteFauna = [];
   remoteSentries = [];
   fixtureShipCandidates = [];
@@ -1641,7 +1624,7 @@ function loadRendererFixture(name) {
     spawned.vx = scav.vx ?? 0;
     spawned.vy = scav.vy ?? 0;
   }
-  remotePlayers = (fixture.fixtureRemotePlayers || []).map((player, index) => ({
+  remoteSession.players = (fixture.fixtureRemotePlayers || []).map((player, index) => ({
     clientId: player.clientId || `fixture-remote-${index}`,
     wx: player.wx,
     wy: player.wy,
@@ -1699,22 +1682,7 @@ function transitionToTitle() {
 function startGame(map, seed = null) {
   resetPhantomForNewSession();
   pauseResumeState = createPauseResumeState();
-  remotePauseNeutralizationInFlight = false;
-  remoteAuthorityActive = false;
-  remoteMapId = null;
-  remoteSnapshot = null;
-  remoteAuthoritativeField = null;
-  remoteLastAckSeq = 0;
-  remoteLastEventSeq = 0;
-  remoteInputRequestInFlight = false;
-  remoteSnapshotRequestInFlight = false;
-  remoteInventoryRequestInFlight = false;
-  remotePendingPulse = false;
-  remotePendingExtractConfirm = false;
-  remotePendingConsumeSlot = null;
-  remotePendingSlingshotEdges = [];
-  remoteNextSlingshotEdgeId = 1;
-  remoteShipPresentation = null;
+  resetRemoteForLocalGame(remoteSession);
   remoteFauna = [];
   remoteSentries = [];
   fixtureShipCandidates = [];
@@ -1818,7 +1786,7 @@ function syncRemoteNetworkPerfStats() {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
-  const previousRunId = remoteSnapshot?.runId || remoteSnapshot?.session?.runId || null;
+  const previousRunId = remoteSession.snapshot?.runId || remoteSession.snapshot?.session?.runId || null;
   const incomingRunId = snapshot.runId || snapshot.session?.runId || null;
   if (previousRunId && incomingRunId && incomingRunId !== previousRunId) {
     // A rematch can adopt a new run without returning through Map Select.
@@ -1837,9 +1805,9 @@ function applyRemoteSnapshot(snapshot) {
   // clear, not permission to replay the previous remote ability indefinitely.
   localAbilityState = null;
   syncRemoteNetworkPerfStats();
-  const duplicateSnapshot = remoteSnapshot &&
-    snapshot.tick === remoteSnapshot.tick &&
-    snapshot.simTime === remoteSnapshot.simTime;
+  const duplicateSnapshot = remoteSession.snapshot &&
+    snapshot.tick === remoteSession.snapshot.tick &&
+    snapshot.simTime === remoteSession.snapshot.simTime;
   // First snapshot received — transition from loading to playing
   if (gamePhase === 'loading') {
     gamePhase = 'playing';
@@ -1857,19 +1825,19 @@ function applyRemoteSnapshot(snapshot) {
       && authoritativeWorldScale !== authoritativeEntry.map.worldScale) {
       throw new Error(`Remote snapshot map scale mismatch: ${authoritativeMapId} is ${authoritativeEntry.map.worldScale}, got ${authoritativeWorldScale}`);
     }
-    remoteMapId = authoritativeEntry.id;
+    remoteSession.mapId = authoritativeEntry.id;
     setResolvedClientRunDuration(authoritativeMapId, snapshot.session?.runDurationSeconds);
   }
-  remoteSnapshot = snapshot;
+  remoteSession.snapshot = snapshot;
   if (snapshot.session?.cosmicSignature) {
     currentSignature = { ...snapshot.session.cosmicSignature };
   }
-  remoteSessionHealth = {
+  remoteSession.health = {
     ok: true,
     session: snapshot.session ?? null,
     playerCount: Array.isArray(snapshot.players) ? snapshot.players.length : 0,
     idleState: {
-      ...(remoteSessionHealth?.idleState || {}),
+      ...(remoteSession.health?.idleState || {}),
       humanPlayerCount: Array.isArray(snapshot.players)
         ? snapshot.players.filter((player) => !player.isAI).length
         : 0,
@@ -1879,7 +1847,7 @@ function applyRemoteSnapshot(snapshot) {
   };
   simState.runElapsedTime = snapshot.simTime ?? simState.runElapsedTime;
   syncRemoteWorldState(snapshot.world);
-  remotePlayers = Array.isArray(snapshot.players)
+  remoteSession.players = Array.isArray(snapshot.players)
     ? snapshot.players
         .filter((player) => player.clientId !== simClient?.clientId)
         .map((player) => ({ ...player }))
@@ -1959,7 +1927,7 @@ function applyRemoteSnapshot(snapshot) {
 }
 
 function applyRemoteSlingshotState(state) {
-  if (!remoteAuthorityActive || !state) return;
+  if (!remoteSession.active || !state) return;
   ship.slingshotPhase = state.phase || state.telegraph?.phase || 'idle';
   ship.slingshotTelegraph = state.telegraph || null;
   ship.slingshotEngaged = Boolean(state.engaged);
@@ -1978,7 +1946,7 @@ function applyRemoteSlingshotState(state) {
 
 function updateRemoteShipTarget(localPlayer, snapshot) {
   const result = rebaseLocalPlayerReconciliation(
-    remoteShipPresentation || createLocalPlayerReconciliationState({
+    remoteSession.presentation || createLocalPlayerReconciliationState({
       brain: ship,
       worldScale: WORLD_SCALE,
       maxExtrapolationSeconds: REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
@@ -1994,7 +1962,7 @@ function updateRemoteShipTarget(localPlayer, snapshot) {
       acknowledgedSeq: localPlayer.lastInputSeq,
     },
   );
-  remoteShipPresentation = result.state;
+  remoteSession.presentation = result.state;
   if (result.hardReset) {
     ship.teleport(result.state.wx, result.state.wy);
     ship.vx = result.state.vx;
@@ -2003,15 +1971,15 @@ function updateRemoteShipTarget(localPlayer, snapshot) {
 }
 
 function updateRemoteShipPresentation(dt) {
-  if (!remoteAuthorityActive || !remoteShipPresentation) return;
+  if (!remoteSession.active || !remoteSession.presentation) return;
   const now = performance.now();
   const elapsed = Math.min(
     REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
-    Math.max(0, (now - remoteShipPresentation.authority.receivedAt) / 1000),
+    Math.max(0, (now - remoteSession.presentation.authority.receivedAt) / 1000),
   );
   perfStats.remotePresentationAgeMs = elapsed * 1000;
   syncRemoteNetworkPerfStats();
-  const result = advanceLocalPlayerReconciliation(remoteShipPresentation, {
+  const result = advanceLocalPlayerReconciliation(remoteSession.presentation, {
     dt,
     now,
     input: {
@@ -2021,9 +1989,9 @@ function updateRemoteShipPresentation(dt) {
       brake: inputManager.brakeIntensity,
     },
     pendingInputs: simClient?.getPendingInputs?.() || [],
-    acknowledgedSeq: remoteShipPresentation.lastAcknowledgedSeq,
+    acknowledgedSeq: remoteSession.presentation.lastAcknowledgedSeq,
   });
-  remoteShipPresentation = result.state;
+  remoteSession.presentation = result.state;
   if (result.hardReset) ship.teleport(result.state.wx, result.state.wy);
   else {
     ship.wx = result.state.wx;
@@ -2035,20 +2003,20 @@ function updateRemoteShipPresentation(dt) {
 
 function currentRemoteControlState() {
   const selectedEntry = currentMapSelectEntry()?.available ? currentMapSelectEntry() : null;
-  const session = remoteSessionHealth?.session ?? null;
+  const session = remoteSession.health?.session ?? null;
   const hasLiveSession = session?.status === 'running'
-    && Number(remoteSessionHealth?.idleState?.humanPlayerCount || 0) > 0;
+    && Number(remoteSession.health?.idleState?.humanPlayerCount || 0) > 0;
   const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
   const isHost = Boolean(hasLiveSession && simClient?.clientId && session?.hostClientId === simClient.clientId);
   return {
     enabled: Boolean(simClient?.enabled),
-    loading: remoteSessionRequestInFlight,
-    error: remoteSessionHealth?.ok === false ? remoteSessionHealth.error || 'remote health unavailable' : null,
+    loading: remoteSession.healthRequestInFlight,
+    error: remoteSession.health?.ok === false ? remoteSession.health.error || 'remote health unavailable' : null,
     hasLiveSession,
     sessionStatus: session?.status ?? 'idle',
     sessionMapId: liveEntry?.id ?? session?.mapId ?? null,
     sessionMapName: liveEntry?.name ?? session?.mapId ?? null,
-    sessionPlayerCount: remoteSessionHealth?.playerCount ?? 0,
+    sessionPlayerCount: remoteSession.health?.playerCount ?? 0,
     hostClientId: session?.hostClientId ?? null,
     hostName: session?.hostName ?? null,
     isHost,
@@ -2063,13 +2031,13 @@ function currentRemoteControlState() {
 async function refreshRemoteSessionHealth(force = false) {
   if (!simClient?.enabled) return null;
   const now = Date.now();
-  if (remoteSessionRequestInFlight) return remoteSessionHealth;
-  if (!force && remoteSessionHealth && now - remoteSessionLastFetchedAt < 500) return remoteSessionHealth;
-  remoteSessionRequestInFlight = true;
-  remoteSessionLastFetchedAt = now;
+  if (remoteSession.healthRequestInFlight) return remoteSession.health;
+  if (!force && remoteSession.health && now - remoteSession.healthLastFetchedAt < 500) return remoteSession.health;
+  remoteSession.healthRequestInFlight = true;
+  remoteSession.healthLastFetchedAt = now;
   try {
     const health = await simClient.getHealth();
-    remoteSessionHealth = {
+    remoteSession.health = {
       ok: true,
       session: health?.session ?? null,
       playerCount: health?.playerCount ?? 0,
@@ -2078,9 +2046,9 @@ async function refreshRemoteSessionHealth(force = false) {
       simTime: health?.simTime ?? null,
     };
     if (gamePhase === 'paused') pauseResumeState = observePauseConnection(pauseResumeState, true);
-    return remoteSessionHealth;
+    return remoteSession.health;
   } catch (err) {
-    remoteSessionHealth = {
+    remoteSession.health = {
       ok: false,
       error: err.message,
       session: null,
@@ -2090,28 +2058,28 @@ async function refreshRemoteSessionHealth(force = false) {
       simTime: null,
     };
     if (gamePhase === 'paused') pauseResumeState = observePauseConnection(pauseResumeState, false);
-    return remoteSessionHealth;
+    return remoteSession.health;
   } finally {
-    remoteSessionRequestInFlight = false;
+    remoteSession.healthRequestInFlight = false;
   }
 }
 
 function requestRemoteSnapshot() {
-  if (!remoteAuthorityActive || !simClient?.enabled || remoteSnapshotRequestInFlight) return;
-  remoteSnapshotRequestInFlight = true;
+  if (!remoteSession.active || !simClient?.enabled || remoteSession.snapshotRequestInFlight) return;
+  remoteSession.snapshotRequestInFlight = true;
   void simClient.pollSnapshot().then((snapshot) => {
     pauseResumeState = observePauseConnection(pauseResumeState, true);
     applyRemoteSnapshot(snapshot);
   }).catch((err) => {
     console.error('[LBH] remote snapshot failed:', err);
     pauseResumeState = observePauseConnection(pauseResumeState, false);
-    remoteSessionHealth = {
-      ...(remoteSessionHealth || {}),
+    remoteSession.health = {
+      ...(remoteSession.health || {}),
       ok: false,
       error: err.message,
     };
   }).finally(() => {
-    remoteSnapshotRequestInFlight = false;
+    remoteSession.snapshotRequestInFlight = false;
   });
 }
 
@@ -2188,7 +2156,7 @@ function renderSentries(ctx, camX, camY, canvasW, canvasH, time) {
 
 function getPhantomRng() {
   if (phantomRng) return phantomRng;
-  const seed = remoteSnapshot?.session?.seed ?? previewSeed ?? 1;
+  const seed = remoteSession.snapshot?.session?.seed ?? previewSeed ?? 1;
   phantomRng = createRNGStreams(seed).rawStream('phantom');
   return phantomRng;
 }
@@ -2302,10 +2270,10 @@ function renderPhantom(ctx, camX, camY, canvasW, canvasH, simTime) {
 }
 
 function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
-  if (!remoteAuthorityActive || remotePlayers.length === 0) return;
+  if (!remoteSession.active || remoteSession.players.length === 0) return;
   ctx.save();
-  for (let index = 0; index < remotePlayers.length; index++) {
-    const player = remotePlayers[index];
+  for (let index = 0; index < remoteSession.players.length; index++) {
+    const player = remoteSession.players[index];
     if (player.status && player.status !== 'alive') continue;
     const [sx, sy] = worldToScreen(player.wx, player.wy, camX, camY, canvasW, canvasH);
     const facing = Math.atan2(player.vy || 0, player.vx || 0);
@@ -2359,8 +2327,8 @@ function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
 
 function applyRemoteEvents(events) {
   for (const event of events) {
-    if (!event || event.seq <= remoteLastEventSeq) continue;
-    remoteLastEventSeq = event.seq;
+    if (!event || event.seq <= remoteSession.lastEventSeq) continue;
+    remoteSession.lastEventSeq = event.seq;
     const payload = event.payload || {};
     const isLocal = payload.clientId && payload.clientId === simClient?.clientId;
     audioRouter?.setClientId(simClient?.clientId);
@@ -2492,8 +2460,8 @@ function applyRemoteEvents(events) {
 }
 
 function applyRemoteInventoryAction(action) {
-  if (!remoteAuthorityActive || !simClient?.enabled || !action || remoteInventoryRequestInFlight) return;
-  remoteInventoryRequestInFlight = true;
+  if (!remoteSession.active || !simClient?.enabled || !action || remoteSession.inventoryRequestInFlight) return;
+  remoteSession.inventoryRequestInFlight = true;
   void simClient.inventoryAction(action)
     .then((response) => {
       if (response?.snapshot) applyRemoteSnapshot(response.snapshot);
@@ -2503,14 +2471,14 @@ function applyRemoteInventoryAction(action) {
       showWarning('inventory action failed', 'rgba(255, 110, 110, 0.95)', 1800);
     })
     .finally(() => {
-      remoteInventoryRequestInFlight = false;
+      remoteSession.inventoryRequestInFlight = false;
     });
 }
 
 function syncRemoteWorldState(world) {
   if (!world) return;
 
-  remoteAuthoritativeField = world.authoritativeField || null;
+  remoteSession.authoritativeField = world.authoritativeField || null;
 
   if (Array.isArray(world.waveRings)) {
     waveRings.rings = world.waveRings.map((remote) => ({
@@ -2637,24 +2605,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
     : mapEntry;
 
   rendererFixtureActive = false;
-  remoteAuthorityActive = true;
   pauseResumeState = createPauseResumeState();
-  remotePauseNeutralizationInFlight = false;
-  remoteAuthoritativeField = null;
-  remoteMapId = targetMapEntry.id;
-  remoteSnapshot = null;
-  remotePlayers = [];
-  remoteLastAckSeq = 0;
-  remoteLastEventSeq = 0;
-  remoteInputRequestInFlight = false;
-  remoteSnapshotRequestInFlight = false;
-  remoteInventoryRequestInFlight = false;
-  remotePendingPulse = false;
-  remotePendingExtractConfirm = false;
-  remotePendingConsumeSlot = null;
-  remotePendingSlingshotEdges = [];
-  remoteNextSlingshotEdgeId = 1;
-  remoteShipPresentation = null;
+  beginRemoteSession(remoteSession, targetMapEntry.id);
   fixtureShipCandidates = [];
 
   const briefingSeed = runningSession?.seed ?? previewSeed;
@@ -2712,7 +2664,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
   triggerTransition(() => {
     void startRemoteGame(mapEntry, options).catch((err) => {
       console.error('[LBH] remote start failed:', err);
-      resetRemoteLaunchState();
+      resetRemoteAfterLaunchFailure(remoteSession);
       if (RUNTIME_FLAGS.allowLegacySoloFallback) {
         console.warn('[LBH] authority launch failed; using explicit dev/sandbox legacy solo fallback');
         startGame(mapEntry.map, previewSeed);
@@ -2728,7 +2680,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
 
 async function leaveRemoteSessionToHome() {
   const activeProfileId = profileManager.active?.id || null;
-  if (simClient?.enabled && remoteAuthorityActive) {
+  if (simClient?.enabled && remoteSession.active) {
     try {
       await simClient.leave();
     } catch (err) {
@@ -2745,29 +2697,13 @@ async function leaveRemoteSessionToHome() {
       console.error('[LBH] remote profile sync failed:', err);
     }
   }
-  remoteAuthorityActive = false;
   pauseResumeState = createPauseResumeState();
-  remotePauseNeutralizationInFlight = false;
-  remoteMapId = null;
-  remoteSnapshot = null;
-  remotePlayers = [];
-  remoteSessionHealth = null;
-  remoteLastAckSeq = 0;
-  remoteLastEventSeq = 0;
-  remoteInputRequestInFlight = false;
-  remoteSnapshotRequestInFlight = false;
-  remoteInventoryRequestInFlight = false;
-  remotePendingPulse = false;
-  remotePendingExtractConfirm = false;
-  remotePendingConsumeSlot = null;
-  remotePendingSlingshotEdges = [];
-  remoteNextSlingshotEdgeId = 1;
-  remoteShipPresentation = null;
+  resetRemoteAfterLeave(remoteSession);
 }
 
 async function restartRemoteSession() {
-  if (!simClient?.enabled || !remoteMapId) return;
-  const mapEntry = getPlayableMapEntryById(remoteMapId);
+  if (!simClient?.enabled || !remoteSession.mapId) return;
+  const mapEntry = getPlayableMapEntryById(remoteSession.mapId);
   const profileSnapshot = profileManager.exportActiveProfile?.() || null;
   await simClient.resetSession();
   await simClient.join({
@@ -2778,18 +2714,7 @@ async function restartRemoteSession() {
     consumables: inventorySystem.consumables,
   });
   const snapshot = await simClient.pollSnapshot(true);
-  remoteAuthorityActive = true;
-  remotePlayers = [];
-  remoteInputRequestInFlight = false;
-  remoteSnapshotRequestInFlight = false;
-  remoteInventoryRequestInFlight = false;
-  remoteLastEventSeq = 0;
-  remotePendingPulse = false;
-  remotePendingExtractConfirm = false;
-  remotePendingConsumeSlot = null;
-  remotePendingSlingshotEdges = [];
-  remoteNextSlingshotEdgeId = 1;
-  remoteShipPresentation = null;
+  resetRemoteForRestart(remoteSession);
   applyRemoteSnapshot(snapshot);
   gamePhase = 'playing';
   deathTimer = 0;
@@ -2870,16 +2795,9 @@ let _prevSeedReroll = false;
 let _prevPortalCount = -1;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
-function clearRemotePendingActions() {
-  remotePendingPulse = false;
-  remotePendingExtractConfirm = false;
-  remotePendingConsumeSlot = null;
-  remotePendingSlingshotEdges = [];
-}
-
 function neutralizeRemoteAuthorityInput() {
-  if (!remoteAuthorityActive || !simClient?.enabled || remotePauseNeutralizationInFlight) return;
-  remotePauseNeutralizationInFlight = true;
+  if (!remoteSession.active || !simClient?.enabled || remoteSession.pauseNeutralizationInFlight) return;
+  remoteSession.pauseNeutralizationInFlight = true;
   void simClient.sendInput({
     moveX: 0,
     moveY: 0,
@@ -2896,7 +2814,7 @@ function neutralizeRemoteAuthorityInput() {
     console.error('[LBH] pause input neutralization failed:', err);
     pauseResumeState = observePauseConnection(pauseResumeState, false);
   }).finally(() => {
-    remotePauseNeutralizationInFlight = false;
+    remoteSession.pauseNeutralizationInFlight = false;
   });
 }
 
@@ -2919,7 +2837,7 @@ function snapRemotePresentationToAuthority(snapshot) {
   if (!Number.isFinite(wx) || !Number.isFinite(wy)) return false;
 
   const result = rebaseLocalPlayerReconciliation(
-    remoteShipPresentation || createLocalPlayerReconciliationState({
+    remoteSession.presentation || createLocalPlayerReconciliationState({
       brain: ship,
       worldScale: WORLD_SCALE,
       maxExtrapolationSeconds: REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
@@ -2936,7 +2854,7 @@ function snapRemotePresentationToAuthority(snapshot) {
       forceReset: true,
     },
   );
-  remoteShipPresentation = result.state;
+  remoteSession.presentation = result.state;
   ship.teleport(result.state.wx, result.state.wy);
   ship.vx = result.state.vx;
   ship.vy = result.state.vy;
@@ -2951,12 +2869,12 @@ function applyCoveredTerminalEvents(decision) {
   const resumedRunId = decision?.snapshot?.runId || decision?.snapshot?.session?.runId || null;
   if (!resumedRunId || decision?.eventRunId !== resumedRunId) return;
 
-  remoteLastEventSeq = 0;
+  remoteSession.lastEventSeq = 0;
   const terminalRunId = decision?.terminalEvent?.runId
     || decision?.terminalEvent?.payload?.runId
     || null;
   if (terminalRunId === resumedRunId) applyRemoteEvents([decision.terminalEvent]);
-  remoteLastEventSeq = Math.max(remoteLastEventSeq, decision?.eventWatermark || 0);
+  remoteSession.lastEventSeq = Math.max(remoteSession.lastEventSeq, decision?.eventWatermark || 0);
 }
 
 function applyPauseResumeDecision(decision) {
@@ -2992,7 +2910,7 @@ function applyPauseResumeDecision(decision) {
 }
 
 function resumeFromPause() {
-  if (!remoteAuthorityActive) {
+  if (!remoteSession.active) {
     pauseResumeState = {
       ...pauseResumeState,
       covered: false,
@@ -3006,22 +2924,22 @@ function resumeFromPause() {
 
   const result = reconcilePauseResume(pauseResumeState, {
     now: performance.now(),
-    snapshot: remoteSnapshot,
+    snapshot: remoteSession.snapshot,
     playerId: simClient?.clientId,
-    connectionOk: remoteAuthorityActive
-      ? pauseResumeState.connectionOk !== false && remoteSessionHealth?.ok !== false
+    connectionOk: remoteSession.active
+      ? pauseResumeState.connectionOk !== false && remoteSession.health?.ok !== false
       : true,
     longAwayThresholdMs: PAUSE_LONG_AWAY_THRESHOLD_MS,
   });
   pauseResumeState = result.state;
   const { decision } = result;
 
-  if (remoteAuthorityActive && decision.discardEvents) {
+  if (remoteSession.active && decision.discardEvents) {
     applyCoveredTerminalEvents(decision);
   }
   applyPauseResumeDecision(decision);
 
-  if (remoteAuthorityActive && decision.longAway) {
+  if (remoteSession.active && decision.longAway) {
     snapRemotePresentationToAuthority(decision.snapshot);
     inputManager.neutralizeForPause();
     settlePausePresentationMotion();
@@ -3034,10 +2952,10 @@ function togglePause() {
   if (gamePhase === 'playing') {
     pauseResumeState = enterPause(pauseResumeState, {
       now: performance.now(),
-      snapshot: remoteSnapshot,
+      snapshot: remoteSession.snapshot,
     });
     pauseResumeState = markPauseInputNeutralized(pauseResumeState);
-    clearRemotePendingActions();
+    clearRemotePendingActions(remoteSession);
     inputManager.neutralizeForPause();
     neutralizeRemoteAuthorityInput();
     // UI bus stays audible while the gameplay bed attenuates.
@@ -3779,18 +3697,18 @@ function getHullSlingshotMods() {
 }
 
 function collectThreeSceneState() {
-  const authorityPlayer = remoteAuthorityActive
-    ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+  const authorityPlayer = remoteSession.active
+    ? remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)
     : null;
-  const deliveredThrust = remoteAuthorityActive
+  const deliveredThrust = remoteSession.active
     ? (authorityPlayer?.deliveredThrust ?? 0)
     : (ship?.lastDeliveredThrustIntensity ?? 0);
-  const deliveredBrake = remoteAuthorityActive
+  const deliveredBrake = remoteSession.active
     ? (authorityPlayer?.deliveredBrake ?? 0)
     : (ship?.lastDeliveredBrakeIntensity ?? 0);
   const propulsionActive = gamePhase === 'playing';
   const authoritySlingshot = authorityPlayer?.slingshot || null;
-  const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
+  const slingshotAffordance = gamePhase === 'playing' && !remoteSession.active && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
   const fieldSample = flowField?.sample?.(ship.wx, ship.wy) || null;
@@ -3887,7 +3805,7 @@ function collectThreeSceneState() {
       archetype: scav.archetype || scav.personality || 'scavenger',
       state: scav.state || 'patrol',
     })),
-    remotePlayers: (remotePlayers || []).map((player) => ({
+    remotePlayers: (remoteSession.players || []).map((player) => ({
       id: player.clientId,
       wx: player.wx,
       wy: player.wy,
@@ -3919,8 +3837,8 @@ function collectThreeSceneState() {
       wy: s.wy,
       state: s.state || 'patrol',
     })),
-    collapseEpoch: remoteSnapshot?.world?.collapseEpoch || null,
-    collapseEpochSchedule: remoteSnapshot?.world?.collapseEpochSchedule || [],
+    collapseEpoch: remoteSession.snapshot?.world?.collapseEpoch || null,
+    collapseEpochSchedule: remoteSession.snapshot?.world?.collapseEpochSchedule || [],
     slingshot: {
       phase: authoritySlingshot?.phase || ship.slingshotPhase || (ship.slingshotEngaged ? 'arc' : 'idle'),
       affordance: authoritySlingshot?.aim ? {
@@ -4081,14 +3999,14 @@ function gameLoop(now) {
   // A remote session owns gameplay state until it is explicitly released.
   // Results and transitions still render its final snapshot, but must never
   // resume local simulation of those server-owned entities.
-  const remoteVisualMode = remoteAuthorityActive;
+  const remoteVisualMode = remoteSession.active;
 
   // Register the last server field before any fixed step runs. FluidSim
   // forces from this texture after each step, so visual detail cannot become
   // a second gameplay current between snapshots.
   if (fluid) {
-    if (remoteAuthorityActive && remoteAuthoritativeField) {
-      fluid.setAuthoritativeCoarseField(remoteAuthoritativeField);
+    if (remoteSession.active && remoteSession.authoritativeField) {
+      fluid.setAuthoritativeCoarseField(remoteSession.authoritativeField);
     } else {
       fluid.clearAuthoritativeCoarseField();
     }
@@ -4097,7 +4015,7 @@ function gameLoop(now) {
   // Local sandbox pause freezes its client simulation for debugging. A remote
   // authority pause keeps presentation and snapshot intake alive; it never
   // pauses or claims to pause the server run.
-  const localSandboxPaused = gamePhase === 'paused' && !remoteAuthorityActive;
+  const localSandboxPaused = gamePhase === 'paused' && !remoteSession.active;
   if (!localSandboxPaused) {
     const simStart = performance.now();
     simCore.update(simState, {
@@ -4366,7 +4284,7 @@ function gameLoop(now) {
       // in the end-screen render block.
       const endScreenUnlock = DEATH_LINGER_DURATION + 1.0;
       if (gamePhase === 'dead' && deathTimer > endScreenUnlock) {
-        if (remoteAuthorityActive) {
+        if (remoteSession.active) {
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave failed:', err);
@@ -4419,7 +4337,7 @@ function gameLoop(now) {
         // Extract cargo → profile vault, then transition to home
         metaExtractedItems = inventorySystem.extractCargo();
         metaEmCredited = Math.max(0, Math.round(Number(lastRunResult?.emEarned) || 0));
-        if (remoteAuthorityActive) {
+        if (remoteSession.active) {
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave after extraction failed:', err);
@@ -4463,7 +4381,7 @@ function gameLoop(now) {
       }
     }
 
-    if (remoteAuthorityActive) {
+    if (remoteSession.active) {
       if (!inventoryOpen) {
         inputManager.applyToShip(ship);
       } else {
@@ -4489,28 +4407,27 @@ function gameLoop(now) {
         }
 
         if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
-          remotePendingConsumeSlot = 0;
+          queueRemoteConsumeSlot(remoteSession, 0);
         } else if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
-          remotePendingConsumeSlot = 1;
+          queueRemoteConsumeSlot(remoteSession, 1);
         }
         if (pulseNow && !_prevPulse) {
-          remotePendingPulse = true;
+          queueRemotePulse(remoteSession);
         }
         if (!inventoryOpen && extractNow && !_prevExtract) {
-          remotePendingExtractConfirm = true;
+          queueRemoteExtractConfirm(remoteSession);
         }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
-          const authoritySlingshot = remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)?.slingshot;
+          const authoritySlingshot = remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)?.slingshot;
           if (!authoritySlingshot?.engaged && !authoritySlingshot?.aim) {
             showWarning('no anchor in range // move toward a ring', 'rgba(120, 190, 255, 0.92)', 1600);
           } else if (!authoritySlingshot?.engaged && authoritySlingshot?.aim?.engageEligible === false) {
             showWarning('anchor in range // build tangential speed / follow the ring', 'rgba(120, 190, 255, 0.92)', 1600);
           }
-          remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
-          if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
+          queueRemoteSlingshotEdge(remoteSession);
         }
 
-        if (!remoteInputRequestInFlight) {
+        if (!remoteSession.inputRequestInFlight) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
@@ -4520,11 +4437,8 @@ function gameLoop(now) {
           const intentY = Number.isFinite(inputManager.moveY)
             ? inputManager.moveY
             : (Number.isFinite(facing) ? Math.sin(facing) : 0);
-          const sentPulse = remotePendingPulse;
-          const sentExtractConfirm = remotePendingExtractConfirm;
-          const sentConsumeSlot = remotePendingConsumeSlot;
-          const sentSlingshotEdges = remotePendingSlingshotEdges.slice(0, 8);
-          remoteInputRequestInFlight = true;
+          const sentActions = captureRemotePendingActions(remoteSession);
+          remoteSession.inputRequestInFlight = true;
           void simClient.sendInput({
             // The scalar action fields decide whether thrust/brake happens;
             // the vector is pure intent, so brake-only packets still steer.
@@ -4533,30 +4447,19 @@ function gameLoop(now) {
             thrust,
             brake,
             slingshot: !inventoryOpen && slingshotNow,
-            slingshotEdges: sentSlingshotEdges,
-            pulse: sentPulse,
-            extractConfirm: sentExtractConfirm,
+            slingshotEdges: sentActions.slingshotEdges,
+            pulse: sentActions.pulse,
+            extractConfirm: sentActions.extractConfirm,
             ability1: inputManager.ability1 || false,
             ability2: inputManager.ability2 || false,
-            consumeSlot: sentConsumeSlot,
+            consumeSlot: sentActions.consumeSlot,
           }).then((response) => {
-            remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;
             syncRemoteNetworkPerfStats();
-            if (sentPulse) remotePendingPulse = false;
-            if (sentExtractConfirm) remotePendingExtractConfirm = false;
-            const acceptedEdges = Array.isArray(response.acceptedSlingshotEdges)
-              ? new Set(response.acceptedSlingshotEdges)
-              : new Set(sentSlingshotEdges);
-            if (acceptedEdges.size > 0) {
-              remotePendingSlingshotEdges = remotePendingSlingshotEdges.filter((id) => !acceptedEdges.has(id));
-            }
-            if (sentConsumeSlot !== null && remotePendingConsumeSlot === sentConsumeSlot) {
-              remotePendingConsumeSlot = null;
-            }
+            settleRemoteInputAcknowledgement(remoteSession, sentActions, response);
           }).catch((err) => {
             console.error('[LBH] remote input failed:', err);
           }).finally(() => {
-            remoteInputRequestInFlight = false;
+            remoteSession.inputRequestInFlight = false;
           });
         }
 
@@ -4583,7 +4486,7 @@ function gameLoop(now) {
 
       // Local-only slingshot resolution. In remote-authority mode the same
       // input is sent to the sim server, and snapshots drive presentation.
-      if (!remoteAuthorityActive) {
+      if (!remoteSession.active) {
         const slingshotAnchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
         const slingshotAffordance = !ship.slingshotEngaged
           ? slingshotSystem.findAffordance(ship, slingshotAnchors)
@@ -4825,7 +4728,7 @@ function gameLoop(now) {
 
   // Snapshot/connection intake is independent of the local command overlay.
   // One in-flight request plus SimClient's latest snapshot is the only queue.
-  if (remoteAuthorityActive) {
+  if (remoteSession.active) {
     requestRemoteSnapshot();
     if (gamePhase === 'paused') void refreshRemoteSessionHealth(false);
   }
@@ -4877,15 +4780,15 @@ function gameLoop(now) {
   }
 
   // 6b. Audio update — spatial mixing based on game state
-  const authorityPlayer = remoteAuthorityActive
-    ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+  const authorityPlayer = remoteSession.active
+    ? remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)
     : null;
   audioRouter?.movementState({
     active: gamePhase === 'playing' && !inventoryOpen,
-    deliveredThrust: remoteAuthorityActive
+    deliveredThrust: remoteSession.active
       ? (authorityPlayer?.deliveredThrust ?? 0)
       : ship.lastDeliveredThrustIntensity,
-    deliveredBrake: remoteAuthorityActive
+    deliveredBrake: remoteSession.active
       ? (authorityPlayer?.deliveredBrake ?? 0)
       : ship.lastDeliveredBrakeIntensity,
     speed: Math.hypot(ship.vx || 0, ship.vy || 0),
@@ -4946,11 +4849,11 @@ function gameLoop(now) {
       durationSeconds: CONFIG.universe.runDuration,
     },
     phase: gamePhase,
-    runId: remoteSnapshot?.session?.runId || null,
-    frameId: remoteSnapshot?.snapshotId || Math.floor(totalTime * 60),
+    runId: remoteSession.snapshot?.session?.runId || null,
+    frameId: remoteSession.snapshot?.snapshotId || Math.floor(totalTime * 60),
     scene: collectThreeSceneState(),
     events: [
-      ...(remoteSnapshot?.recentEvents || []),
+      ...(remoteSession.snapshot?.recentEvents || []),
       ...vfxEvents,
     ],
     vfxConfig: CONFIG.vfx,
@@ -5539,7 +5442,7 @@ function gameLoop(now) {
     }
 
     // Detect scavenger portal consumption in local mode.
-    if (!remoteAuthorityActive) {
+    if (!remoteSession.active) {
       const currentPortalCount = portalSystem.activeCount;
       if (_prevPortalCount >= 0 && currentPortalCount < _prevPortalCount && gamePhase === 'playing') {
         const lost = _prevPortalCount - currentPortalCount;
@@ -5553,7 +5456,7 @@ function gameLoop(now) {
     }
 
     // Scavenger death drops remain local-only in local authority mode.
-    if (!remoteAuthorityActive) {
+    if (!remoteSession.active) {
       for (const drop of scavengerSystem.deathDrops) {
         for (let i = 0; i < drop.lootCount; i++) {
           const angle = Math.random() * Math.PI * 2;
@@ -5578,12 +5481,12 @@ function gameLoop(now) {
 
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();
-    const authoritativePlayer = remoteAuthorityActive
-      ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+    const authoritativePlayer = remoteSession.active
+      ? remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)
       : null;
     const portalInteraction = authoritativePlayer?.portalInteraction;
     const slingshotInteraction = getSlingshotInteractionState(
-      authoritativePlayer?.slingshot || (remoteAuthorityActive ? null : {
+      authoritativePlayer?.slingshot || (remoteSession.active ? null : {
         engaged: ship.slingshotEngaged,
         affordance: !ship.slingshotEngaged
           ? slingshotSystem?.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))?.anchor
@@ -6751,14 +6654,14 @@ function gameLoop(now) {
     const awaySeconds = pauseResumeState.enteredAt == null
       ? 0
       : Math.max(0, (performance.now() - pauseResumeState.enteredAt) / 1000);
-    const remotePause = remoteAuthorityActive;
+    const remotePause = remoteSession.active;
     ctx.fillStyle = remotePause ? 'rgba(157, 252, 255, 0.96)' : 'rgba(255, 217, 102, 0.92)';
     ctx.font = canvasFont(14, { weight: '700' });
     ctx.fillText(remotePause ? 'WORLD CONTINUES' : 'LOCAL SANDBOX // SIM FROZEN', cx, cy - 91);
     ctx.fillStyle = 'rgba(150, 175, 195, 0.72)';
     ctx.font = canvasFont(11);
     const status = remotePause
-      ? `authority ${remoteSessionHealth?.ok === false ? 'disconnected' : 'connected'} // ${remoteSnapshot?.session?.status || 'unknown'}`
+      ? `authority ${remoteSession.health?.ok === false ? 'disconnected' : 'connected'} // ${remoteSession.snapshot?.session?.status || 'unknown'}`
       : 'client debug freeze // no product authority claim';
     ctx.fillText(fitUiText(ctx, status, pausePanelRect.w - 36), cx, cy - 72);
     if (remotePause) {

@@ -8,6 +8,7 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
 
 (async () => {
   const reconcile = await import(path.join(ROOT, 'src/pause-resume-reconcile.js'));
+  const remoteState = await import(path.join(ROOT, 'src/sim/remote-session-state.js'));
   const {
     PAUSE_LONG_AWAY_THRESHOLD_MS,
     authoritativePausePhase,
@@ -19,6 +20,15 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
     observePauseSnapshot,
     reconcilePauseResume,
   } = reconcile;
+  const {
+    beginRemoteSession,
+    clearRemotePendingActions,
+    createRemoteSessionState,
+    resetRemoteAfterLeave,
+    resetRemoteAfterLaunchFailure,
+    resetRemoteForLocalGame,
+    resetRemoteForRestart,
+  } = remoteState;
   let passed = 0;
   let total = 0;
   function check(condition, message) {
@@ -130,8 +140,81 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   const failedConnection = reconcilePauseResume(observed, { now: 900, snapshot: newer, playerId: 'pilot', connectionOk: false });
   check(failedConnection.decision.phase === 'recovery', 'disconnect while covered routes to recovery');
 
+  const dirtyRemoteState = () => Object.assign(createRemoteSessionState(), {
+    active: true,
+    mapId: 'deep-field',
+    snapshot: { snapshotId: 9 },
+    authoritativeField: { tick: 9 },
+    players: [{ clientId: 'pilot' }],
+    lastEventSeq: 9,
+    inputRequestInFlight: true,
+    snapshotRequestInFlight: true,
+    inventoryRequestInFlight: true,
+    health: { ok: true },
+    healthRequestInFlight: true,
+    healthLastFetchedAt: 42,
+    pendingPulse: true,
+    pendingExtractConfirm: true,
+    pendingConsumeSlot: 1,
+    pendingSlingshotEdges: [7],
+    nextSlingshotEdgeId: 8,
+    presentation: { wx: 1 },
+    pauseNeutralizationInFlight: true,
+  });
+  const launchFailure = dirtyRemoteState();
+  resetRemoteAfterLaunchFailure(launchFailure);
+  check(!launchFailure.active && launchFailure.mapId === null && launchFailure.snapshot === null
+    && launchFailure.authoritativeField === null && launchFailure.players.length === 0
+    && launchFailure.health === null && !launchFailure.pendingExtractConfirm
+    && launchFailure.pendingSlingshotEdges.length === 0 && launchFailure.nextSlingshotEdgeId === 1
+    && launchFailure.presentation === null,
+  'failed launch clears only authority identity and presentation caches');
+  check(launchFailure.pendingPulse && launchFailure.pendingConsumeSlot === 1
+    && launchFailure.lastEventSeq === 9 && launchFailure.inputRequestInFlight
+    && launchFailure.healthLastFetchedAt === 42 && launchFailure.pauseNeutralizationInFlight,
+  'failed launch preserves in-flight and unsent state outside its legacy boundary');
+
+  const localStart = dirtyRemoteState();
+  resetRemoteForLocalGame(localStart);
+  check(!localStart.active && localStart.players.length === 1 && localStart.health?.ok
+    && localStart.lastEventSeq === 0 && !localStart.inputRequestInFlight
+    && !localStart.pendingPulse && localStart.pendingSlingshotEdges.length === 0
+    && localStart.nextSlingshotEdgeId === 1 && !localStart.pauseNeutralizationInFlight,
+  'local start preserves remote player and health caches while clearing authority input state');
+
+  const remoteStart = dirtyRemoteState();
+  beginRemoteSession(remoteStart, 'shallows');
+  check(remoteStart.active && remoteStart.mapId === 'shallows' && remoteStart.snapshot === null
+    && remoteStart.authoritativeField === null && remoteStart.players.length === 0
+    && remoteStart.health?.ok && remoteStart.healthRequestInFlight
+    && !remoteStart.pendingPulse && remoteStart.nextSlingshotEdgeId === 1,
+  'remote start keeps freshly fetched health while clearing run presentation');
+
+  const left = dirtyRemoteState();
+  resetRemoteAfterLeave(left);
+  check(!left.active && left.health === null && left.authoritativeField?.tick === 9
+    && left.healthRequestInFlight && left.healthLastFetchedAt === 42
+    && left.lastEventSeq === 0 && !left.inputRequestInFlight && !left.pendingPulse,
+  'leave clears session health but preserves field and health-request timing');
+
+  const restarted = dirtyRemoteState();
+  resetRemoteForRestart(restarted);
+  check(restarted.active && restarted.mapId === 'deep-field' && restarted.snapshot?.snapshotId === 9
+    && restarted.authoritativeField?.tick === 9 && restarted.health?.ok
+    && restarted.pauseNeutralizationInFlight && restarted.players.length === 0
+    && restarted.lastEventSeq === 0 && !restarted.inputRequestInFlight
+    && restarted.pendingSlingshotEdges.length === 0 && restarted.nextSlingshotEdgeId === 1,
+  'restart preserves run caches and pause request state while clearing player input state');
+
+  const pauseInput = dirtyRemoteState();
+  clearRemotePendingActions(pauseInput);
+  check(!pauseInput.pendingPulse && !pauseInput.pendingExtractConfirm
+    && pauseInput.pendingConsumeSlot === null && pauseInput.pendingSlingshotEdges.length === 0
+    && pauseInput.nextSlingshotEdgeId === 8,
+  'pause clears unsent actions without rewinding the edge id sequence');
+
   check(inputSource.includes('neutralizeForPause()'), 'input exposes one pause neutralization operation');
-  check(mainSource.includes('const localSandboxPaused = gamePhase === \'paused\' && !remoteAuthorityActive;'), 'local debug freeze remains separate');
+  check(mainSource.includes('const localSandboxPaused = gamePhase === \'paused\' && !remoteSession.active;'), 'local debug freeze remains separate');
   check(mainSource.includes('requestRemoteSnapshot();'), 'remote snapshot intake remains live under pause');
   check(mainSource.includes('applyCoveredTerminalEvents(decision);'), 'resume applies only current terminal result events');
   check(mainSource.includes('decision?.eventRunId !== resumedRunId'), 'resume rejects a terminal cache from another run');
@@ -140,9 +223,6 @@ const inputSource = fs.readFileSync(path.join(ROOT, 'src/input.js'), 'utf8');
   check(mainSource.includes('WORLD CONTINUES') && mainSource.includes('awaySeconds'), 'pause panel exposes live authority and elapsed-away status');
   check(mainSource.includes("sampleTerminalWindow(uiMotionTimer") && mainSource.includes('reducedMotion: motion.reducedMotion'), 'pause and recovery surfaces honor reduced motion');
   check(mainSource.includes("actionDescriptor('back', currentPromptOptions())"), 'pause actions use centralized Deck-safe glyph descriptors');
-  for (const field of ['remotePendingPulse', 'remotePendingExtractConfirm', 'remotePendingConsumeSlot', 'remotePendingSlingshotEdges']) {
-    check(mainSource.includes(`clearRemotePendingActions`) && mainSource.includes(field), `${field} is cleared on pause entry`);
-  }
 
   console.log(`PauseResume ${passed}/${total} passed.`);
 })().catch((error) => {
