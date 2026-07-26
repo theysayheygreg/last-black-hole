@@ -155,7 +155,13 @@ async function main() {
       return file;
     };
 
-    const aim = await waitFor(playerFor, (player) => player?.slingshot?.phase === "aim", "aim cue");
+    const aim = await waitFor(
+      playerFor,
+      (player) => player?.slingshot?.phase === "aim"
+        && player.slingshot?.aim?.anchorId === well.id
+        && player.slingshot?.aim?.engageEligible === true,
+      "engageable aim cue",
+    );
     assert(aim.slingshot?.aim?.anchorId === well.id && aim.slingshot?.aim?.engageEligible === true,
       `Capture setup must be authority-engageable: ${JSON.stringify(aim.slingshot?.aim)}`);
     await capture("01-aim-cue");
