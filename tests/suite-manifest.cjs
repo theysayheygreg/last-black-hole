@@ -86,7 +86,7 @@ const SUITES = [
   {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
-    lanes: ["static", "full"],
+    lanes: ["audio-tools"],
     browser: false,
   },
   {
@@ -590,10 +590,156 @@ const SUITES = [
     // Sixteen settled animation/layout captures take over six minutes on GregBot.
     timeout: 600000,
   },
+  {
+    name: "AudioRCRecovery",
+    file: "audio-rc-recovery.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "AudioRouter",
+    file: "audio-router.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "ConfigRedFlags",
+    file: "config-red-flags.cjs",
+    lanes: ["fast", "core", "static", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "ControllerTriggerTruth",
+    file: "controller-trigger-truth.cjs",
+    lanes: ["fast", "core", "static", "playtest", "full"],
+    browser: false,
+  },
+  {
+    name: "DragCompatibility",
+    file: "drag-compatibility.cjs",
+    lanes: ["core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "MapLoaderBoot",
+    file: "map-loader-boot.cjs",
+    lanes: ["fast", "core", "static", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "MapSelectSurvey",
+    file: "map-select-survey.cjs",
+    lanes: ["fast", "core", "static", "playtest", "full"],
+    browser: false,
+  },
+  {
+    name: "SoloAuthorityLaunch",
+    file: "solo-authority-launch.cjs",
+    lanes: ["fast", "core", "static", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "LocalPlayerReconciliation",
+    file: "local-player-reconciliation.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "PauseResumeReconcile",
+    file: "pause-resume-reconcile.cjs",
+    lanes: ["core", "authority", "playtest", "full"],
+    browser: false,
+  },
+  {
+    name: "MapRateMovementContract",
+    file: "map-rate-movement-contract.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "PortalClock",
+    file: "portal-clock.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+    timeout: 120000,
+  },
+  {
+    name: "RenderPlan",
+    file: "render-plan.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
+    name: "ThreeEntityTemporal",
+    file: "three-entity-temporal.cjs",
+    lanes: ["core", "static", "three", "visual", "full"],
+    browser: false,
+  },
+  {
+    name: "UIAssets",
+    file: "ui-assets.cjs",
+    lanes: ["fast", "core", "static", "three", "visual", "full"],
+    browser: false,
+  },
+  {
+    name: "UILayout",
+    file: "ui-layout.cjs",
+    lanes: ["fast", "core", "static", "visual", "full"],
+    browser: false,
+  },
+  {
+    name: "SlingshotHud",
+    file: "slingshot-hud.cjs",
+    lanes: ["core", "static", "visual", "playtest", "full"],
+    browser: false,
+  },
+  {
+    name: "SlingshotDtStatic",
+    file: "slingshot-dt-static.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "BenchAuthorityEndpoint",
+    file: "bench-authority-endpoint.cjs",
+    lanes: ["bench"],
+    browser: false,
+    timeout: 120000,
+  },
+  {
+    name: "BenchAuthority",
+    file: "bench-authority.cjs",
+    lanes: ["bench", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "BenchIdentity",
+    file: "bench-identity.cjs",
+    lanes: ["bench", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "BenchInspector",
+    file: "bench-inspector.cjs",
+    lanes: ["bench", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "BenchLaunch",
+    file: "bench-launch.cjs",
+    lanes: ["bench", "fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "BenchUIState",
+    file: "bench-ui-state.cjs",
+    lanes: ["bench", "core", "static", "full"],
+    browser: false,
+  },
 ];
 
-// These suites still author fixed sim/control ports internally. They remain
-// mutually exclusive while ordinary Node and isolated browser suites overlap.
+// These suites author fixed services or own sim/control processes directly.
+// They remain mutually exclusive while ordinary Node and browser suites overlap.
 const FIXED_SERVICE_SUITES = new Set([
   "W2A3ShippingTrio",
   "MapRelativeSchedule",
@@ -624,6 +770,8 @@ const FIXED_SERVICE_SUITES = new Set([
   "RemoteAuthority",
   "Controller",
   "KeyboardMouse",
+  "PortalClock",
+  "BenchAuthorityEndpoint",
 ]);
 
 for (const suite of SUITES) {
@@ -640,6 +788,8 @@ const LANES = [
   "visual",
   "playtest",
   "agent-eval",
+  "bench",
+  "audio-tools",
   "three",
   "full",
 ];

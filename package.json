@@ -41,6 +41,8 @@
     "test:sim-structure": "node tests/run-all.cjs --lane=sim-structure --renderer=three",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
+    "test:bench": "node tests/run-all.cjs --lane=bench --renderer=three",
+    "test:audio-tools": "node tests/run-all.cjs --lane=audio-tools --renderer=three",
     "test:agent-eval:visible": "node scripts/run-visible-agent-eval.cjs",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",
     "test:solo-authority": "node tests/solo-authority-launch.cjs",

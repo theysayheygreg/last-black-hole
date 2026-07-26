@@ -89,7 +89,10 @@ async function waitForBench(port) {
     assert.strictEqual(edit.status, 200);
     assert.ok(edit.body.state.world.entities.filter((entity) => entity.archetype === "well.standard")
       .every((well) => well.influenceRadius === 300 && well.linkedSlingshot.captureDistance === 210));
-    assert.strictEqual(edit.body.state.adapters[0].properties[0].currentValue, 300);
+    assert.strictEqual(
+      edit.body.state.adapters.find((adapter) => adapter.id === "well.standard").properties[0].currentValue,
+      300,
+    );
 
     const replayEdited = await requestJson(port, "POST", "/bench/replay", {});
     assert.ok(replayEdited.body.authorityTruth.world.entities
@@ -110,7 +113,7 @@ async function waitForBench(port) {
     assert.strictEqual(health.body.idleState.shutdownInMs, null);
     await new Promise((resolve) => setTimeout(resolve, 150));
     const snapshot = await getJson(port, "/snapshot");
-    assert.strictEqual(snapshot.status, 200);
+    assert.strictEqual(snapshot.status, 200, snapshot.body.error);
     assert.strictEqual(snapshot.body.bench.galleryId, "bench-gallery-v1");
     assert.ok(snapshot.body.bench.world.entities.length > 0);
     const probe = snapshot.body.bench.world.entities.find((entity) => entity.family === "probe-ship");
