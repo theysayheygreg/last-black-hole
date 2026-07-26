@@ -2,6 +2,12 @@
 
 ## 2026-07-25
 
+- **Movement completion tranche 2:** normal slingshot input now explains the
+  difference between no anchor and an in-range anchor that still needs
+  tangential speed. Local prediction consumes the authority force ledger's
+  fluid-coupling vector and refreshes authoritative fuel parameters on every
+  snapshot rebase, reducing current-driven correction and stale depletion
+  behavior without adding a second sim or changing movement tuning.
 - **Goal D map-rate movement contract:** route proof now uses the canonical
   Shallows/Expanse/Deep Field authority rates of `15/12/10 Hz`, finite fuel,
   and the shared drag/fluid movement step. The prior 60 Hz route remains a

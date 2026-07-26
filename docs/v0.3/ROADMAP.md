@@ -37,6 +37,15 @@ policy. Deep Field's long finite-fuel route is recorded as a playtest/content
 risk, not hidden tuning. Ballpark remains the spatial/materialized-payload
 layer; the local/offline seeded-sea presentation split is backlog work.
 
+The second movement-completion tranche closes three remaining player-facing
+seams without retuning the game: F/Y reports why an in-range slingshot cannot
+engage yet, reconciliation consumes authoritative fluid coupling, and snapshot
+rebases refresh fuel truth. Ordered replay of rapid pending inputs remains a
+bounded presentation backlog for the separate movement/refactor program. The
+natural browser smoke is still asynchronous because its one-shot probe stopped
+at Home navigation before a map launched; authority and focused movement
+contracts remain green.
+
 ### Production Polish Candidate
 
 Branch `codex/v0.3-production-polish` carries a focused post-review batch over
