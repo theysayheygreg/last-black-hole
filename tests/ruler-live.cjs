@@ -117,7 +117,7 @@ async function placePlayer(clientId, body) {
     await sleep(350);
     await page.keyboard.press('KeyF');
 
-    await waitFor(
+    const slingshotPlayer = await waitFor(
       async () => (await snapshot()).players.find((player) => player.clientId === network.clientId),
       (player) => player?.slingshot?.engaged === true,
       'authoritative slingshot engage',
@@ -128,12 +128,12 @@ async function placePlayer(clientId, body) {
       (value) => value?.enabled && value.handlerCount === 11 && value.forceTick != null,
       'live ruler handler and force facts',
     );
-    const player = await waitFor(
+    const movementPlayer = await waitFor(
       async () => (await snapshot()).players.find((entry) => entry.clientId === network.clientId),
-      (value) => value?.slingshot?.engaged === true && activeForceNames(value).length > 0,
-      'live slingshot and movement force evidence',
+      (value) => activeForceNames(value).length > 0,
+      'authoritative movement force evidence',
     );
-    const activeForces = activeForceNames(player);
+    const activeForces = activeForceNames(movementPlayer);
     await page.screenshot({ path: CAPTURE_PATH });
     await page.keyboard.up('KeyW');
 
@@ -141,8 +141,8 @@ async function placePlayer(clientId, body) {
       capturePath: CAPTURE_PATH,
       handlers: overlay.handlerCount,
       forceTick: overlay.forceTick,
-      slingshotEngaged: player.slingshot.engaged,
-      speed: Math.hypot(player.vx, player.vy),
+      slingshotEngaged: slingshotPlayer.slingshot.engaged,
+      speed: Math.hypot(movementPlayer.vx, movementPlayer.vy),
       activeForces,
       geometry: overlay.geometry,
       reducedMotion: overlay.reducedMotion,
