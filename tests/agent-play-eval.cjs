@@ -359,7 +359,9 @@ async function steerTo(page, clientId, target, options = {}) {
 
       if (options.portalId
         && player.portalInteraction?.portalId === options.portalId
-        && player.portalInteraction.ready === true) {
+        && player.portalInteraction.ready === true
+        && dist <= radius
+        && speed <= (options.arrivalSpeed ?? 0.08)) {
         return { start, end: last, closest, target: { ...target }, player, snapshot };
       }
 
@@ -589,10 +591,20 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
   const portalApproach = {
-    maxCruiseSpeed: 0.27,
+    // The standard portal's public capture radius is 0.08. Half of that
+    // radius leaves a real movement margin after the next 15 Hz authority
+    // sample without requiring precision-docking input.
+    radius: 0.04,
+    maxCruiseSpeed: 0.18,
+    arrivalSpeed: 0.12,
     portalId: initialPortal.id,
     timeout: 70000,
   };
+  const waitForPortalReady = (label) => waitForPlayer(
+    clientId,
+    (player) => player.portalInteraction?.portalId === initialPortal.id && player.portalInteraction.ready === true,
+    { timeout: 7000, label },
+  );
   const travel = await steerTo(page, clientId, initialPortal, portalApproach);
   const ready = { player: travel.player, snapshot: travel.snapshot };
   assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
@@ -602,6 +614,7 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   // to carry the ship out. Reacquire normal ready state before the real input
   // instead of widening the production residence/abort contract for the test.
   await steerTo(page, clientId, initialPortal, portalApproach);
+  await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready state`);
   // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
   await tapGamepadButton(page, 0, 100);
   const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
