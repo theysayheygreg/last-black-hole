@@ -2934,6 +2934,9 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sw
       player.vy += contactNY * impulse;
       scav.vx -= contactNX * impulse;
       scav.vy -= contactNY * impulse;
+      emitPlayerNoise(player, NOISE_CONFIG.impulses.collisionMeters, "IMPACT", {
+        action: "scavenger-contact",
+      });
       publishEvent("player.scavengerBumped", {
         clientId: player.clientId,
         scavengerId: scav.id,
@@ -3546,7 +3549,7 @@ function applyDebugPlayerState(player, body) {
   } else if (Number.isFinite(Number(body.signalLevel))) {
     // Harness migration shim only: old debug callers may seed a meter, never a
     // player-facing signal band or threshold.
-    player.noise.audibleRadiusMeters = Math.max(0, Number(body.signalLevel)) * 1000;
+    player.noise.audibleRadiusMeters = Math.max(0, simUnitsToMeters(Number(body.signalLevel)));
     player.noise.maxAudibleRadiusMeters = Math.max(player.noise.maxAudibleRadiusMeters || 0, player.noise.audibleRadiusMeters);
   }
   if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
@@ -4242,12 +4245,14 @@ function refreshPlayerNoiseListeners(player) {
   const listeners = [];
   const ws = runtime.session.worldScale;
   for (const fauna of runtime.mapState.fauna || []) {
-    if (fauna.alive === false) continue;
+    // Jellies are ambient scenery. Only Signal Blooms consume the player
+    // Noise envelope and therefore belong in listener counts/state.
+    if (fauna.alive === false || fauna.type !== "bloom") continue;
     const distanceSimUnits = worldDistance(player.wx, player.wy, fauna.wx, fauna.wy, ws);
     const listener = enemyListenerStateFor({
       radiusMeters: noise.audibleRadiusMeters,
       distanceSimUnits,
-      sensitivity: fauna.type === "bloom" ? FAUNA_CONFIG.bloomListenerSensitivity : FAUNA_CONFIG.jellyListenerSensitivity,
+      sensitivity: FAUNA_CONFIG.bloomListenerSensitivity,
     });
     fauna.listenerState = listener.state;
     if (listener.state !== "QUIET") {
@@ -4268,7 +4273,16 @@ function refreshPlayerNoiseListeners(player) {
     const distanceSimUnits = worldDistance(player.wx, player.wy, inh.wx, inh.wy, ws);
     const audible = emitterAudibleFor({ radiusMeters: noise.audibleRadiusMeters, distanceSimUnits });
     if (audible.audible) {
-      listeners.push({ id: "inhibitor", kind: "INHIBITOR", state: "HEARD", distanceMeters: audible.distanceMeters, sourceWX: inh.wx, sourceWY: inh.wy });
+      listeners.push({
+        id: "inhibitor",
+        kind: "INHIBITOR",
+        state: inh.noiseListenerState === "LOCKED ON" ? "LOCKED ON"
+          : inh.noiseListenerState === "TRACKING" ? "TRACKING"
+            : "HEARD",
+        distanceMeters: audible.distanceMeters,
+        sourceWX: inh.wx,
+        sourceWY: inh.wy,
+      });
     }
   }
   noise.listeners = listeners;
@@ -5895,6 +5909,24 @@ function tickFauna(dt) {
     f.age += dt;
     if (f.age >= f.lifespan) { f.alive = false; fauna.splice(i, 1); continue; }
 
+    // Blooms use their existing lightweight velocity/force path to investigate
+    // a remembered Noise source. Jellies remain ambient and never consume it.
+    if (f.type === "bloom"
+      && (f.listenerState === "HEARD" || f.listenerState === "TRACKING")
+      && Number.isFinite(f.lastHeardWX)
+      && Number.isFinite(f.lastHeardWY)) {
+      const dx = worldDisplacement(f.wx, f.lastHeardWX, ws);
+      const dy = worldDisplacement(f.wy, f.lastHeardWY, ws);
+      const distance = Math.hypot(dx, dy);
+      if (distance > 0.001) {
+        const force = f.listenerState === "TRACKING"
+          ? cfg.bloomBumpForce * 1.5
+          : cfg.bloomBumpForce;
+        f.vx += (dx / distance) * force;
+        f.vy += (dy / distance) * force;
+      }
+    }
+
     const dragRetention = Math.pow(cfg.dragRetentionPerSecond, dt);
     f.vx *= dragRetention;
     f.vy *= dragRetention;
@@ -6174,6 +6206,8 @@ function tickInhibitor(dt) {
   const noiseSource = selectInhibitorNoiseSource({ includeDecoys: inh.form < 3 });
   const vesselTarget = selectInhibitorNoiseSource({ includeDecoys: false, includeZeroPlayers: true });
   const peakNoiseMeters = noiseSource?.radiusMeters || 0;
+  inh.noiseListenerState = "QUIET";
+  inh.noiseSearchState = "IDLE";
   rememberInhibitorNoiseSource(inh, noiseSource, dt);
   // Conductor time alone advances Inhibitor phases. Noise only affects the
   // already-awake movement/search behavior.
@@ -6201,15 +6235,22 @@ function tickInhibitor(dt) {
       distanceSimUnits: worldDistance(inh.wx, inh.wy, noiseSource.wx, noiseSource.wy, ws),
     }).audible;
     if (swarmHearsSource) {
+      inh.noiseListenerState = "HEARD";
+      inh.noiseSearchState = "LISTENING";
       inh.swarmSearchTimer = 0;
       if (inh.swarmTrackTimer >= cfg.swarmTrackInterval) {
         inh.swarmTargetX = noiseSource.wx;
         inh.swarmTargetY = noiseSource.wy;
         inh.swarmTrackTimer = 0;
+        inh.noiseListenerState = "TRACKING";
+        inh.noiseSearchState = "TRACKING";
       }
     } else if (inh.swarmSearchTimer >= cfg.swarmSearchTimeout || inh.silenceTimer >= cfg.swarmSearchTimeout) {
+      inh.noiseListenerState = "INVESTIGATING";
+      inh.noiseSearchState = "SEARCHING";
       setSwarmSearchTarget(inh, dt, ws);
     } else {
+      inh.noiseSearchState = "LISTENING";
       inh.swarmSearchTimer = (inh.swarmSearchTimer || 0) + dt;
     }
 

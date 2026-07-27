@@ -120,6 +120,11 @@ import {
   NOISE_LAST_HEARD_FADE_SECONDS,
   NOISE_PUBLIC_SOURCE_CLASSES,
 } from './content/noise.js';
+import { metersToSimUnits, simUnitsToMeters } from './units.js';
+import {
+  prioritizeAudibleContacts,
+  projectAudibleContact,
+} from './presentation/audible-contact-memory.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -1587,6 +1592,8 @@ function spawnPresentationPortals(portals = []) {
       spawnTime: 0,
       lifespan: portal.lifespan ?? 120,
       finalInhibitor: portal.finalInhibitor === true,
+      finalExfil: portal.finalExfil === true,
+      guaranteedFinalExfil: portal.guaranteedFinalExfil === true,
       blockedByInhibitor: portal.blockedByInhibitor === true,
     });
   }
@@ -2338,50 +2345,30 @@ function contactKey(payload) {
   return `${noiseCategory(payload?.source)}:${Number(payload?.wx || 0).toFixed(3)}:${Number(payload?.wy || 0).toFixed(3)}`;
 }
 
-function publicIdentityRank(identity) {
-  return identity === 'VESSEL THRUST' ? 2 : identity === 'VESSEL' ? 1 : 0;
-}
-
 function observeAudibleContact(key, observation, nowSeconds) {
   if (!Number.isFinite(observation.wx) || !Number.isFinite(observation.wy)) return;
-  const radiusMeters = Math.max(0, Number(observation.radiusMeters) || 0);
-  const current = audibleContactMemory.get(key);
-  if (radiusMeters <= 0) {
-    if (current && current.live) {
-      current.live = false;
-      current.expiresAt = nowSeconds + NOISE_LAST_HEARD_FADE_SECONDS;
-    }
-    return;
-  }
   const distanceSimUnits = worldDistance(ship.wx, ship.wy, observation.wx, observation.wy);
-  const audible = distanceSimUnits <= radiusMeters / 1000;
-  if (!audible) {
-    if (current && current.live) {
-      current.live = false;
-      current.expiresAt = nowSeconds + NOISE_LAST_HEARD_FADE_SECONDS;
-    }
-    return;
-  }
-  const next = current || {
+  const [dx, dy] = worldDisplacement(ship.wx, ship.wy, observation.wx, observation.wy);
+  const projection = projectAudibleContact({
+    existing: audibleContactMemory.get(key),
+    sourceWX: observation.wx,
+    sourceWY: observation.wy,
+    distanceSimUnits,
+    bearingRadians: Math.atan2(dy, dx),
+    emittedRadiusMeters: observation.radiusMeters,
+    nowSeconds,
     category: noiseCategory(observation.source),
-    identity: null,
-    identified: false,
-  };
-  next.category = noiseCategory(observation.source);
-  next.wx = observation.wx;
-  next.wy = observation.wy;
-  next.rangeMeters = radiusMeters;
-  next.lastHeardAt = nowSeconds;
-  next.live = true;
-  next.expiresAt = nowSeconds + NOISE_LAST_HEARD_FADE_SECONDS;
-  const publicClass = String(observation.sourceClass || '').toUpperCase();
-  const inner = distanceSimUnits <= (radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000;
-  if (inner && NOISE_PUBLIC_SOURCE_CLASSES.includes(publicClass)
-    && publicIdentityRank(publicClass) >= publicIdentityRank(next.identity)) {
-    next.identified = true;
-    next.identity = publicClass;
+    sourceClass: observation.sourceClass,
+    identificationFraction: NOISE_IDENTIFICATION_FRACTION,
+    publicSourceClasses: NOISE_PUBLIC_SOURCE_CLASSES,
+    fadeSeconds: NOISE_LAST_HEARD_FADE_SECONDS,
+  });
+  if (projection.contact) {
+    projection.contact.id = key;
+    audibleContactMemory.set(key, projection.contact);
+  } else {
+    audibleContactMemory.delete(key);
   }
-  audibleContactMemory.set(key, next);
 }
 
 function updateAudibleContactMemory(nowSeconds) {
@@ -3653,7 +3640,7 @@ function renderNoiseOverlay(ctx, ship, camX, camY, canvasW, canvasH, nowSeconds)
   const radiusMeters = Math.max(0, Number(noiseState.audibleRadiusMeters) || 0);
   ctx.save();
   if (radiusMeters > 0) {
-    const radiusPx = worldRadiusToScreen(radiusMeters / 1000, canvasW, canvasH);
+    const radiusPx = worldRadiusToScreen(metersToSimUnits(radiusMeters), canvasW, canvasH);
     const alpha = noiseState.trend === 'falling' ? 0.24 : 0.36;
     ctx.strokeStyle = `rgba(90, 220, 220, ${alpha})`;
     ctx.lineWidth = 1;
@@ -3671,7 +3658,11 @@ function renderNoiseOverlay(ctx, ship, camX, camY, canvasW, canvasH, nowSeconds)
       continue;
     }
     const [rx, ry] = worldToScreen(ripple.wx, ripple.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldRadiusToScreen((ripple.radiusMeters / 1000) * (0.35 + age * 0.65), canvasW, canvasH);
+    const radiusPx = worldRadiusToScreen(
+      metersToSimUnits(ripple.radiusMeters) * (0.35 + age * 0.65),
+      canvasW,
+      canvasH,
+    );
     const alpha = Math.max(0, 0.35 * (1 - age / 2.5));
     ctx.strokeStyle = `rgba(120, 230, 230, ${alpha.toFixed(2)})`;
     ctx.lineWidth = 1.5;
@@ -3836,6 +3827,8 @@ function collectPresentationSceneSource() {
         captureRadius: portal.getCaptureRadius?.(),
         blockedByInhibitor: portal.blockedByInhibitor,
         finalInhibitor: portal.finalInhibitor,
+        finalExfil: portal.finalExfil === true,
+        guaranteedFinalExfil: portal.guaranteedFinalExfil === true,
         warning: portal.isWarning?.(runElapsedTime) === true,
         critical: portal.isCritical?.(runElapsedTime) === true,
       })),
@@ -5081,67 +5074,6 @@ function gameLoop(now) {
       }
     }
 
-    // --- INHIBITOR EDGE DIM ---
-    // When the Inhibitor is active, darken the edge of the screen closest
-    // to its approach vector. No arrow, no tooltip — the universe just
-    // gets darker in the direction of the thing that's coming for you.
-    // Intensity scales with inhibitor form. Color is inhibitor magenta
-    // (DESIGN-SYSTEM.md §2). Reference: RETURNAL-APPLICATION.md steal #3.
-    if (inhibitorState && inhibitorState.form > 0) {
-      const w = overlayCanvas.width;
-      const h = overlayCanvas.height;
-
-      // Direction from player to inhibitor — toroidal displacement so the
-      // cue points at the actual nearest approach across the wrap seam,
-      // not across the entire world.
-      const [dx, dy] = worldDisplacement(ship.wx, ship.wy, inhibitorState.wx, inhibitorState.wy);
-      const worldDist = Math.hypot(dx, dy);
-
-      // Only dim if we're not right on top of the inhibitor (once it's
-      // that close, the dim is useless — the player is dying)
-      if (worldDist > 0.08) {
-        // Normalize to a screen-space angle. Screen Y is flipped from world Y.
-        const angle = Math.atan2(-dy, dx);
-
-        // Intensity: ramps with form (1→3) and inhibitor.intensity (0→1),
-        // plus distance attenuation so far-away inhibitors glow less.
-        const formWeight = Math.min(1, inhibitorState.form / 3);
-        const distFrac = Math.max(0, Math.min(1, 1 - worldDist / (WORLD_SCALE * 0.6)));
-        const coreIntensity = formWeight * (0.4 + 0.6 * distFrac);
-        const pulse = 0.8 + 0.2 * Math.sin(totalTime * 1.4);
-        const edgeAlpha = Math.min(0.6, coreIntensity * pulse);
-
-        if (edgeAlpha > 0.02) {
-          // Radial gradient from the edge point inward toward the player.
-          // The "edge point" is the intersection of the direction vector
-          // with the screen rectangle. Compute by projecting along the
-          // angle until we hit a screen edge.
-          const cxs = w / 2;
-          const cys = h / 2;
-          const screenReach = Math.max(w, h);
-          const edgeX = cxs + Math.cos(angle) * screenReach;
-          const edgeY = cys + Math.sin(angle) * screenReach;
-
-          // Gradient from the edge point inward, fading as it approaches
-          // the center of the screen. Outer: inhibitor magenta. Inner:
-          // fully transparent.
-          const grad = ctx.createRadialGradient(
-            edgeX, edgeY, 0,
-            edgeX, edgeY, screenReach * 0.95
-          );
-          grad.addColorStop(0, `rgba(204, 26, 128, ${edgeAlpha.toFixed(3)})`);
-          grad.addColorStop(0.35, `rgba(80, 10, 60, ${(edgeAlpha * 0.55).toFixed(3)})`);
-          grad.addColorStop(0.70, `rgba(20, 5, 30, ${(edgeAlpha * 0.2).toFixed(3)})`);
-          grad.addColorStop(1.0, 'rgba(0, 0, 20, 0)');
-
-          ctx.save();
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, w, h);
-          ctx.restore();
-        }
-      }
-    }
-
     // Legacy signalDampen remains a data-compatible item id; Noise v1 does not
     // invent a new player receiver modifier for it.
 
@@ -5183,25 +5115,11 @@ function gameLoop(now) {
       }
 
       updateAudibleContactMemory(simState.runElapsedTime);
-      const categoryPriority = {
-        INHIBITOR: 5,
-        VESSEL: 5,
-        'VESSEL THRUST': 5,
-        IMPACT: 4,
-        PULSE: 3,
-        THRUST: 2,
-        'THRUST AGAINST FLOW': 2,
-        'THRUST WITH FLOW': 2,
-        SALVAGE: 1,
-        CREW: 1,
-        NOISE: 0,
-      };
-      const contacts = [...audibleContactMemory.values()]
-        .filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt)
-        .sort((a, b) => (categoryPriority[b.identity || b.category] || 0) - (categoryPriority[a.identity || a.category] || 0)
-          || Number(b.rangeMeters || 0) - Number(a.rangeMeters || 0)
-          || Number(a.lastHeardAt || 0) - Number(b.lastHeardAt || 0))
-        .slice(0, 5);
+      const contacts = prioritizeAudibleContacts(
+        [...audibleContactMemory.values()]
+          .filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt),
+        { limit: 5 },
+      );
       for (const contact of contacts) {
         const [sx, sy] = worldToScreen(contact.wx, contact.wy, camX, camY, w, h);
         const fading = !contact.live;

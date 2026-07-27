@@ -52,6 +52,7 @@ function projectAbilityState(state) {
 
 function projectNoise(player) {
   const noise = player.noise || {};
+  const publicListenerStates = new Set(["HEARD", "TRACKING", "INVESTIGATING", "LOCKED ON"]);
   return {
     audibleRadiusMeters: Math.max(0, Number(noise.audibleRadiusMeters) || 0),
     trend: noise.trend || "steady",
@@ -63,7 +64,7 @@ function projectNoise(player) {
     lockedOnListenerCount: Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0)),
     listeners: Array.isArray(noise.listeners) ? noise.listeners.map((listener) => ({
       kind: listener.kind || "FAUNA",
-      state: listener.state === "LOCKED ON" ? "LOCKED ON" : "HEARD",
+      state: publicListenerStates.has(listener.state) ? listener.state : "HEARD",
       distanceMeters: Math.max(0, Number(listener.distanceMeters) || 0),
     })) : [],
     maxAudibleRadiusMeters: Math.max(0, Number(noise.maxAudibleRadiusMeters) || 0),
@@ -214,6 +215,8 @@ function projectInhibitor(inhibitor, schedule) {
     schedule,
     targetWX: inhibitor.swarmTargetX,
     targetWY: inhibitor.swarmTargetY,
+    listenerState: inhibitor.noiseListenerState || "QUIET",
+    searchState: inhibitor.noiseSearchState || "IDLE",
     lastNoiseWX: inhibitor.lastNoiseWX,
     lastNoiseWY: inhibitor.lastNoiseWY,
     finalPortalSpawned: Boolean(inhibitor.finalPortalSpawned),

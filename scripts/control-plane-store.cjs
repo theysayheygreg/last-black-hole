@@ -218,9 +218,21 @@ function buildRunEntry({ profile, player, outcome, runDuration, session, runResu
       ...loadoutSnapshot.equipped,
       ...loadoutSnapshot.consumables,
     ]),
-    signalPeak: runResult?.signalPeak ?? player?.signal?.level ?? null,
-    signalPeakZone: runResult?.signalPeakZone || player?.signal?.zone || null,
-    timePerZone: runResult?.timePerZone && typeof runResult.timePerZone === "object" ? { ...runResult.timePerZone } : {},
+    noiseMaxMeters: runResult?.noiseMaxMeters
+      ?? player?.noise?.maxAudibleRadiusMeters
+      ?? null,
+    noiseSource: runResult?.noiseSource
+      || player?.noise?.loudestSource
+      || player?.noise?.dominantSource
+      || null,
+    noiseTimeHeardSeconds: toFiniteNumber(
+      runResult?.noiseTimeHeardSeconds ?? player?.noise?.timeHeardSeconds,
+      0,
+    ),
+    noiseTimeTrackedSeconds: toFiniteNumber(
+      runResult?.noiseTimeTrackedSeconds ?? player?.noise?.timeTrackedSeconds,
+      0,
+    ),
     inhibitorFormReached: runResult?.inhibitorFormReached ?? null,
     inhibitorFormTimes: Array.isArray(runResult?.inhibitorFormTimes) ? [...runResult.inhibitorFormTimes] : [],
     emEarned,
@@ -518,5 +530,6 @@ class ControlPlaneStore {
 
 module.exports = {
   ControlPlaneStore,
+  buildRunEntry,
   normalizeProfileSnapshot,
 };

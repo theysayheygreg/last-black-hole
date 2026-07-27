@@ -394,7 +394,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     const radius = Math.max(0, Number(noise.audibleRadiusMeters) || 0);
     const trend = String(noise.trend || 'steady').toUpperCase();
     _noiseReadoutEl.textContent = `NOISE ${Math.round(radius)}m · ${trend}`;
-    _noiseDetailEl.textContent = `SOURCE ${String(noise.currentSource || noise.dominantSource || 'IDLE').toUpperCase()} · HEARD BY ${Math.max(0, Math.floor(Number(noise.heardListenerCount) || 0))} · LOCKED ON ${Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0))}`;
+    _noiseDetailEl.textContent = `SOURCE ${String(noise.currentSource || noise.dominantSource || 'IDLE').toUpperCase()} · HEARD BY ${Math.max(0, Math.floor(Number(noise.heardListenerCount) || 0))} · TRACKED BY ${Math.max(0, Math.floor(Number(noise.trackedListenerCount) || 0))} · LOCKED ON ${Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0))}`;
     _noiseReadoutEl.style.color = radius > 0 ? 'rgba(80, 220, 220, 0.92)' : 'rgba(120, 160, 180, 0.72)';
   }
 

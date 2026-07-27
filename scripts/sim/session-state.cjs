@@ -107,6 +107,8 @@ function createInhibitorState({ phaseZero = null, config = null, searchAngle = 0
     lastSignalWX: 0,
     lastSignalWY: 0,
     lastSignalAge: 0,
+    noiseListenerState: "QUIET",
+    noiseSearchState: "IDLE",
     swarmSearchTimer: 0,
     swarmSearchAngle: searchAngle,
     gravityBonus: 0,

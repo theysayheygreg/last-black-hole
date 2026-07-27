@@ -78,6 +78,8 @@ function projectPortal(remote) {
     alive: remote.alive !== false,
     blockedByInhibitor: remote.blockedByInhibitor === true,
     finalInhibitor: remote.finalInhibitor === true,
+    finalExfil: remote.finalExfil === true,
+    guaranteedFinalExfil: remote.guaranteedFinalExfil === true,
     opacity: remote.opacity ?? 1,
     timeLeft(runTime) {
       return Math.max(0, (this.spawnTime + this.lifespan) - runTime);

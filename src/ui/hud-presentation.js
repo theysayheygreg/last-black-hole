@@ -144,7 +144,8 @@ export function findNearestActivePortal(ship, portalSystem) {
   for (const portal of portalSystem.portals) {
     if (!portal?.alive || portal.blockedByInhibitor) continue;
     const isExit = portal.type === 'exit' || portal.type === 'extraction'
-      || portal.finalExfil === true || portal.guaranteedFinalExfil === true;
+      || portal.finalExfil === true || portal.guaranteedFinalExfil === true
+      || portal.finalInhibitor === true;
     if (!isExit) continue;
     const distance = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
     if (!nearest || distance < nearest.distance) nearest = { portal, distance };
