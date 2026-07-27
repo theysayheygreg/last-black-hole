@@ -133,7 +133,7 @@ async function run() {
           wy: 3.6628763833671747,
           vx: 5.65685424949238,
           vy: -5.65685424949238,
-          deltaV: 0.1,
+          deltaV: 0.2,
           timeSinceThrust: 0.06666666666666667,
         },
         lastStep: {
