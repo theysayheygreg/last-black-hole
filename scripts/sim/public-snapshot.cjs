@@ -7,6 +7,7 @@ const {
   projectVesselEntity,
   INHIBITOR_ECOLOGY_CONFIG,
 } = require("./inhibitor-ecology.cjs");
+const { NOISE_CONFIG } = require("./noise-radius.cjs");
 
 /**
  * Public authority projection only. This module selects the stable wire shape
@@ -163,12 +164,47 @@ function projectPlayer(player, facts) {
 
 function projectWorld({
   mapState,
+  inhibitorEntities = [],
   portalSchedule,
   waveRings,
   collapseEpochState,
   collapseEpochSchedule,
   getAuthoritativeField,
 }) {
+  const worldNoise = NOISE_CONFIG.world || {};
+  const inhibitorNoise = worldNoise.inhibitor || {};
+  const noiseEmitters = Array.from(inhibitorEntities || [])
+    .filter((entity) => entity && entity.lifecycle !== "expired")
+    .map((entity) => {
+      const tuning = inhibitorNoise[entity.kind] || {};
+      return {
+        id: entity.id,
+        sourceKind: "inhibitor",
+        wx: entity.wx,
+        wy: entity.wy,
+        radiusMeters: tuning.radiusMeters || 0,
+        cadenceSeconds: tuning.cadenceSeconds || 0,
+        source: tuning.category || "NOISE",
+        sourceClass: tuning.sourceClass || null,
+        lifecycle: entity.lifecycle,
+      };
+    });
+  for (const portal of mapState.portals || []) {
+    if (!portal || portal.alive === false) continue;
+    const tuning = worldNoise.exfil || {};
+    noiseEmitters.push({
+      id: `exfil:${portal.id}`,
+      sourceKind: "exfil",
+      wx: portal.wx,
+      wy: portal.wy,
+      radiusMeters: tuning.radiusMeters || 0,
+      cadenceSeconds: tuning.cadenceSeconds || 0,
+      source: tuning.category || "EXFIL TONE",
+      sourceClass: tuning.sourceClass || "EXFIL",
+      portalId: portal.id,
+    });
+  }
+  noiseEmitters.sort((a, b) => String(a.id).localeCompare(String(b.id)));
   return {
     anomalyCatalog: mapState.anomalyCatalog,
     wells: mapState.wells,
@@ -182,6 +218,7 @@ function projectWorld({
     scavengers: mapState.scavengers,
     fauna: mapState.fauna,
     sentries: mapState.sentries,
+    noiseEmitters,
     waveRings: waveRings.map((ring) => ({
       id: ring.id,
       sourceWX: ring.sourceWX,
@@ -205,48 +242,29 @@ function projectWorld({
 }
 
 function projectInhibitor(inhibitor, schedule, entities = [], ecology = {}) {
-  const legacyScalar = {
-    form: inhibitor.form,
+  const glitch = INHIBITOR_ECOLOGY_CONFIG.glitch;
+  const swarm = INHIBITOR_ECOLOGY_CONFIG.swarm;
+  const projectedEntities = Array.from(entities || []).map((entity) => entity.kind === "swarm"
+    ? projectSwarmEntity(entity)
+    : entity.kind === "vessel"
+      ? projectVesselEntity(entity)
+      : projectGlitchEntity(entity));
+  const ecologyCounts = projectedEntities.reduce((counts, entity) => {
+    const kind = String(entity.kind || "unknown");
+    counts[kind] = (counts[kind] || 0) + 1;
+    return counts;
+  }, {});
+  return {
     phase: inhibitor.phase,
     waveId: inhibitor.waveId,
     scheduledTime: inhibitor.scheduledTime,
     waveBudget: inhibitor.waveBudget,
-    wx: inhibitor.wx,
-    wy: inhibitor.wy,
-    intensity: inhibitor.intensity,
-    radius: inhibitor.radius,
-    localTime: inhibitor.localTime,
-    formTimes: Array.isArray(inhibitor.formTimes)
-      ? inhibitor.formTimes.slice(0, 4)
-      : [null, null, null, null],
-    schedule,
-    targetWX: inhibitor.swarmTargetX,
-    targetWY: inhibitor.swarmTargetY,
-    listenerState: inhibitor.noiseListenerState || "QUIET",
-    searchState: inhibitor.noiseSearchState || "IDLE",
-    lastNoiseWX: inhibitor.lastNoiseWX,
-    lastNoiseWY: inhibitor.lastNoiseWY,
-    finalPortalSpawned: Boolean(inhibitor.finalPortalSpawned),
-    finalPortalExpired: Boolean(inhibitor.finalPortalExpired),
-    gravityBonus: inhibitor.gravityBonus || 0,
-  };
-  const glitch = INHIBITOR_ECOLOGY_CONFIG.glitch;
-  const swarm = INHIBITOR_ECOLOGY_CONFIG.swarm;
-  return {
-    ...legacyScalar,
-    // Keep the old scalar fields readable for Swarm/Vessel/client consumers,
-    // but label the object so new consumers use the collection below.
-    compatibility: {
-      label: "legacy-scalar-projection",
-      owner: "unmigrated-vertical-4-hud-audio-results-shader",
-      scalar: legacyScalar,
+    entities: projectedEntities,
+    ecology: {
+      counts: ecologyCounts,
+      reachedKinds: Object.keys(ecologyCounts).sort(),
+      activeCount: projectedEntities.length,
     },
-    phase: inhibitor.phase,
-    entities: Array.from(entities || []).map((entity) => entity.kind === "swarm"
-      ? projectSwarmEntity(entity)
-      : entity.kind === "vessel"
-        ? projectVesselEntity(entity)
-        : projectGlitchEntity(entity)),
     glitchSchedule: {
       phase: 1,
       populationCap: glitch.populationCap,
@@ -283,7 +301,7 @@ function buildPublicSnapshot(state, facts) {
     lastEventSeq: state.clock.lastEventSeq,
     bench: state.bench,
     players: Array.from(state.players).map((player) => projectPlayer(player, facts)),
-    world: projectWorld(state.world),
+    world: projectWorld({ ...state.world, inhibitorEntities: state.inhibitorEntities }),
     inhibitor: projectInhibitor(
       state.inhibitor,
       state.world.portalSchedule,
@@ -299,5 +317,6 @@ function buildPublicSnapshot(state, facts) {
 
 module.exports = {
   buildPublicSnapshot,
+  projectWorld,
   projectPublicSession,
 };

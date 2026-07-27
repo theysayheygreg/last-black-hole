@@ -26,10 +26,6 @@ export class PortalVisualFamily extends VisualFamilyLifecycle {
       const core = draw.sprite(this.group, selectPortalAsset(portal), portal.world.x, portal.world.y,
         (portal.radius || 0.08) * 1.15, 0, 'portals', portal);
       if (core) this.countObject(1);
-      if (core && portal.visualState === 'blocked' && draw.semantic?.(
-        this.geometries.ring, this.materials.portalBlockedState || this.materials.portal,
-        portal.world.x, portal.world.y, (portal.radius || 0.08) * 1.28, 0, 0.145, 'screen'
-      )) this.countPart(1);
       if (core && portal.visualState === 'final' && draw.semantic?.(
         this.geometries.ring, this.materials.portalFinalState || this.materials.portal,
         portal.world.x, portal.world.y, (portal.radius || 0.08) * 1.22, 0, 0.145, 'screen'

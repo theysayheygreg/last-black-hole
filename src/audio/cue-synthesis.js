@@ -8,7 +8,6 @@ const CUE_HANDLERS = Object.freeze({
   portalProximity: (synth, now, vol, pan, bus) => synth._playPortalProximity(now, vol, pan, bus),
   portalReady: (synth, now, vol, pan, bus) => synth._setPortalReady(true, now, vol, pan, bus),
   portalAbort: (synth, now, vol, pan, bus) => synth._setPortalReady(false, now, vol, pan, bus),
-  portalBlocked: (synth, now, vol, pan, bus) => synth._playPortalBlocked(now, vol, bus),
   portalFinal: (synth, now, vol, pan, bus) => synth._playPortalDeath(now, vol, pan, bus),
   portalConfirm: (synth, now, vol, pan, bus) => synth._playPortalConfirm(now, vol, pan, bus),
   scavengerBump: (synth, now, vol, pan, bus) => synth._playScavengerBump(now, vol, pan, bus),
@@ -182,10 +181,6 @@ export class CueSynthesis {
     voice.gain.gain.exponentialRampToValueAtTime(.001, now + .22);
     osc.start(now);
     osc.stop(now + .24);
-  }
-
-  _playPortalBlocked(now, vol, bus = 'critical') {
-    this._playWarning(now, vol, 176, bus);
   }
 
   _playWarning(now, vol, base = 146, bus = 'critical') {

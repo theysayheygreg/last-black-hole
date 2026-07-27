@@ -31,11 +31,12 @@ uniform float u_viewAspect;   // retained for pass ABI; ignored while the fluid 
 uniform float u_dirThreshold; // speed threshold for directional character selection
 uniform float u_dirBlendRange; // speed window where direction emerges through shimmer
 uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions + wake shock)
-uniform int u_inhibitorForm;     // 0=inactive, 1=glitch, 2=swarm, 3=vessel
-uniform vec2 u_inhibitorPos;     // fluid UV position of the authoritative Inhibitor
-uniform float u_inhibitorRadius; // world-space corruption radius
-uniform float u_inhibitorIntensity;
-uniform float u_inhibitorTime;
+uniform int u_ecologyCount;
+uniform vec2 u_ecologyPos[16];
+uniform float u_ecologyRadius[16];
+uniform float u_ecologyIntensity[16];
+uniform float u_ecologyTime[16];
+uniform int u_ecologyKind[16]; // 1=glitch, 2=swarm, 3=vessel
 
 const float INHIBITOR_MATH_ROW = 4.0;
 const float INHIBITOR_VESSEL_ROW = 5.0;
@@ -118,42 +119,43 @@ void main() {
     }
   }
 
-  if (u_inhibitorForm > 0) {
-    vec2 inhDiff = wrappedFluidUV - u_inhibitorPos;
-    inhDiff = inhDiff - round(inhDiff);  // toroidal world wrap in fluid UV
+  for (int i = 0; i < 16; i++) {
+    if (i >= u_ecologyCount) break;
+    vec2 inhDiff = wrappedFluidUV - u_ecologyPos[i];
+    inhDiff = inhDiff - round(inhDiff);
     float inhDist = length(inhDiff) * u_gridWindow;
-
-    float zone = smoothstep(u_inhibitorRadius * 1.8, u_inhibitorRadius * 0.35, inhDist);
-    float chance = zone * u_inhibitorIntensity * 0.24;
+    float radius = u_ecologyRadius[i];
+    float intensity = u_ecologyIntensity[i];
+    float localTime = u_ecologyTime[i];
+    float zone = smoothstep(radius * 1.8, radius * 0.35, inhDist);
+    float chance = zone * intensity * 0.24;
     float targetRow = INHIBITOR_MATH_ROW;
 
-    if (u_inhibitorForm == 2) {
-      // Swarm tendrils are shader-local: visual corruption follows radial
-      // current-like arms without adding per-frame CPU readback.
+    if (u_ecologyKind[i] == 2) {
       float angle = atan(inhDiff.y, inhDiff.x);
-      float tendril = pow(max(0.0, sin(angle * 7.0 + u_inhibitorTime * 2.3 + inhDist * 18.0)), 12.0);
-      float tendrilBand = smoothstep(u_inhibitorRadius * 2.55, u_inhibitorRadius * 0.75, inhDist)
-                        * (1.0 - smoothstep(u_inhibitorRadius * 0.55, u_inhibitorRadius * 0.25, inhDist));
+      float tendril = pow(max(0.0, sin(angle * 7.0 + localTime * 2.3 + inhDist * 18.0)), 12.0);
+      float tendrilBand = smoothstep(radius * 2.55, radius * 0.75, inhDist)
+                        * (1.0 - smoothstep(radius * 0.55, radius * 0.25, inhDist));
       zone = max(zone, tendril * tendrilBand * 0.85);
-      chance = max(chance, zone * u_inhibitorIntensity * 0.42);
-    } else if (u_inhibitorForm == 3) {
+      chance = max(chance, zone * intensity * 0.42);
+    } else if (u_ecologyKind[i] == 3) {
       targetRow = INHIBITOR_VESSEL_ROW;
-      float cosA = cos(u_inhibitorTime * 0.2);
-      float sinA = sin(u_inhibitorTime * 0.2);
+      float cosA = cos(localTime * 0.2);
+      float sinA = sin(localTime * 0.2);
       vec2 rotDiff = vec2(inhDiff.x * cosA + inhDiff.y * sinA,
                           -inhDiff.x * sinA + inhDiff.y * cosA) * u_gridWindow;
-      float rectMask = step(abs(rotDiff.x), u_inhibitorRadius * 0.34)
-                     * step(abs(rotDiff.y), u_inhibitorRadius * 1.28);
+      float rectMask = step(abs(rotDiff.x), radius * 0.34)
+                     * step(abs(rotDiff.y), radius * 1.28);
       zone = max(zone * 0.45, rectMask);
-      chance = max(chance, rectMask * u_inhibitorIntensity * 0.92);
+      chance = max(chance, rectMask * intensity * 0.92);
     }
 
-    float inhNoise = fract(sin(dot(cellIndex + floor(u_inhibitorTime * 21.0) * 0.43, vec2(53.23, 91.97))) * 43758.5453);
+    float inhNoise = fract(sin(dot(cellIndex + floor(localTime * 21.0) * 0.43, vec2(53.23, 91.97))) * 43758.5453);
     if (inhNoise < clamp(chance, 0.0, 0.95)) {
-      float rndChar = fract(sin(dot(cellIndex * 1.7 + u_inhibitorTime * 13.0, vec2(127.1, 311.7))) * 43758.5453);
+      float rndChar = fract(sin(dot(cellIndex * 1.7 + localTime * 13.0, vec2(127.1, 311.7))) * 43758.5453);
       charIdx = floor(rndChar * rampSize);
       rampRow = targetRow;
-      sceneColor.rgb = mix(sceneColor.rgb, vec3(1.0, 0.18, 0.48), clamp((0.45 + zone * 0.55) * u_inhibitorIntensity, 0.0, 1.0));
+      sceneColor.rgb = mix(sceneColor.rgb, vec3(1.0, 0.18, 0.48), clamp((0.45 + zone * 0.55) * intensity, 0.0, 1.0));
     }
   }
 

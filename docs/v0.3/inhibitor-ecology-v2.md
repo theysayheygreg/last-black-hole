@@ -72,10 +72,9 @@ match-progress owned and cannot be blocked by an Inhibitor.
 collection and deterministic `inhibitor-glitch-N` lifecycle. Glitches accumulate
 on the Phase-1 cadence up to the bounded cap, drift without reading Noise, expire
 by lifetime, apply bounded core hull damage with contact cooldown, and publish
-through `inhibitor.entities`. The renderer-neutral presentation seam carries
-the full collection and preserves procedural magenta/fabric corruption. The
-legacy scalar form remains only as the labeled
-`inhibitor.compatibility` projection for later Swarm/Vessel/client migration.
+through `inhibitor.entities` and emits restrained `STATIC`/`GLITCH` world
+Noise. The renderer-neutral, Three, HUD, audio, and ASCII seams consume the
+collection and preserve procedural magenta/fabric corruption.
 
 **Phase 2 shipped:** the Conductor now adds stable-id `inhibitor-swarm-N`
 entities on the Phase-2+ cadence under an independent bounded cap while
@@ -84,8 +83,8 @@ acquisition, last-heard memory, HEARD/TRACKING/INVESTIGATING and search state,
 movement, lifetime, contact cooldown, and heavy hull damage through the same
 authority death/outcome seam as Glitches. Public snapshots and the
 renderer-neutral/Three presentation expose the mixed collection with the
-procedural magenta/fabric identity. The scalar `inhibitor.compatibility`
-projection remains labeled and is no longer gameplay authority for Swarms.
+procedural magenta/fabric identity. Each live Swarm emits restrained
+`CORRUPTION`/`SWARM` world Noise without increasing the player's Noise.
 
 **Phase 3 shipped:** the Conductor now adds stable-id `inhibitor-vessel-N`
 entities on a `24s` cadence up to a kind-specific cap of `3`. Each Vessel
@@ -97,9 +96,17 @@ wells through capped tiers (`1.18x` per tier, cap `3`); the well keeps its
 identity, position, base mass, and kill radius while authoritative force,
 current, and slingshot mass use the derived multiplier. Public snapshots and
 the renderer-neutral/Three presentation expose Vessel lifecycle, target,
-awareness, procedural magenta identity, and well overdrive tier/multiplier.
-The scalar `inhibitor.compatibility` projection remains labeled for the
-unmigrated HUD/audio/results/shader vertical 4 surfaces only.
+awareness, procedural magenta identity, and well overdrive tier/multiplier. Each
+live Vessel emits restrained `THRUST`/`VESSEL` world Noise without becoming a
+player listener. Active exfils also emit `EXFIL TONE`/`EXFIL` through the same
+emitter-owned contact lifecycle; their on-screen cyan presentation and
+match-progress ownership are unchanged.
 
-Inhibitor/exfil audible contacts and final cleanup remain deferred; they are not
-claimed by this implementation.
+**Vertical 4 shipped:** HUD, audio, Three, ASCII, renderer-neutral scene, and
+run-result consumers now use the accumulated collection and report reached
+kinds/counts rather than a fake final form. The public and runtime scalar
+compatibility projection, portal-block fields, well-consumption fields, and
+independent exit-arrow path are removed. Focused authority/presentation proofs
+cover live world contacts, inner identity, toroidal range/bearing, frozen
+last-heard expiry, deterministic capping, and no player-Noise increase.
+Browser, package, Deck, and full-suite evidence remain separate async gates.

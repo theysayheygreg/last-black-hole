@@ -250,12 +250,13 @@ uniform float u_cameraView;    // world-units visible on each axis; matches the 
 uniform float u_viewAspect;    // retained for pass ABI; ignored while the fluid window is square
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_time;          // elapsed time in seconds (for shimmer noise)
-// Inhibitor state from server
-uniform int u_inhibitorForm;           // 0=inactive, 1=glitch, 2=swarm, 3=vessel
-uniform vec2 u_inhibitorPos;           // fluid UV position
-uniform float u_inhibitorRadius;       // world-space radius
-uniform float u_inhibitorIntensity;    // 0-1 ramp
-uniform float u_inhibitorTime;         // local animation time
+// Collection-backed ecology state from the authority projection.
+uniform int u_ecologyCount;
+uniform vec2 u_ecologyPos[16];
+uniform float u_ecologyRadius[16];
+uniform float u_ecologyIntensity[16];
+uniform float u_ecologyTime[16];
+uniform int u_ecologyKind[16]; // 1=glitch, 2=swarm, 3=vessel
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -356,46 +357,43 @@ void main() {
   }
 
   // === INHIBITOR CORRUPTION ===
-  if (u_inhibitorForm > 0) {
-    vec2 inhDiff = wrappedFluidUV - u_inhibitorPos;
-    inhDiff = inhDiff - round(inhDiff);  // TOROIDAL WRAPPING RULE
+  for (int i = 0; i < 16; i++) {
+    if (i >= u_ecologyCount) break;
+    vec2 inhDiff = wrappedFluidUV - u_ecologyPos[i];
+    inhDiff = inhDiff - round(inhDiff);
     float inhDist = length(inhDiff) * u_gridWindow;
-    vec3 inhColor = vec3(1.0, 0.18, 0.48); // magenta #FF2D7B
+    float radius = u_ecologyRadius[i];
+    float intensity = u_ecologyIntensity[i];
+    float localTime = u_ecologyTime[i];
+    vec3 inhColor = vec3(1.0, 0.18, 0.48);
 
-    if (u_inhibitorForm == 1) {
-      // GLITCH: faint pulsing magenta bleed
-      float glitchFade = smoothstep(u_inhibitorRadius * 1.5, u_inhibitorRadius * 0.5, inhDist);
-      float pulse = 0.5 + 0.5 * sin(u_inhibitorTime * 3.0 + inhDist * 40.0);
-      col += inhColor * glitchFade * pulse * u_inhibitorIntensity * 0.3;
-    } else if (u_inhibitorForm == 2) {
-      // SWARM: roiling mass with dense core
-      float swarmCore = smoothstep(u_inhibitorRadius, u_inhibitorRadius * 0.3, inhDist);
-      float swarmEdge = smoothstep(u_inhibitorRadius * 2.0, u_inhibitorRadius, inhDist);
-      col = mix(col, inhColor, swarmCore * u_inhibitorIntensity * 0.7);
-      float edgePulse = 0.7 + 0.3 * sin(u_inhibitorTime * 2.0 + atan(inhDiff.y, inhDiff.x) * 4.0);
-      col += inhColor * swarmEdge * (1.0 - swarmCore) * edgePulse * u_inhibitorIntensity * 0.15;
-      // Shader-local tendrils sell the "corruption riding the flow" read
-      // without asking the CPU to stream per-frame tendril endpoints.
+    if (u_ecologyKind[i] == 1) {
+      float glitchFade = smoothstep(radius * 1.5, radius * 0.5, inhDist);
+      float pulse = 0.5 + 0.5 * sin(localTime * 3.0 + inhDist * 40.0);
+      col += inhColor * glitchFade * pulse * intensity * 0.3;
+    } else if (u_ecologyKind[i] == 2) {
+      float swarmCore = smoothstep(radius, radius * 0.3, inhDist);
+      float swarmEdge = smoothstep(radius * 2.0, radius, inhDist);
+      col = mix(col, inhColor, swarmCore * intensity * 0.7);
+      float edgePulse = 0.7 + 0.3 * sin(localTime * 2.0 + atan(inhDiff.y, inhDiff.x) * 4.0);
+      col += inhColor * swarmEdge * (1.0 - swarmCore) * edgePulse * intensity * 0.15;
       float angle = atan(inhDiff.y, inhDiff.x);
-      float tendril = pow(max(0.0, sin(angle * 7.0 + u_inhibitorTime * 2.0 + inhDist * 16.0)), 12.0);
-      float tendrilBand = smoothstep(u_inhibitorRadius * 2.45, u_inhibitorRadius * 0.72, inhDist)
-                        * (1.0 - smoothstep(u_inhibitorRadius * 0.55, u_inhibitorRadius * 0.25, inhDist));
-      col += inhColor * tendril * tendrilBand * u_inhibitorIntensity * 0.24;
-    } else if (u_inhibitorForm == 3) {
-      // VESSEL: hard geometric rectangle
-      float cosA = cos(u_inhibitorTime * 0.2);
-      float sinA = sin(u_inhibitorTime * 0.2);
+      float tendril = pow(max(0.0, sin(angle * 7.0 + localTime * 2.0 + inhDist * 16.0)), 12.0);
+      float tendrilBand = smoothstep(radius * 2.45, radius * 0.72, inhDist)
+                        * (1.0 - smoothstep(radius * 0.55, radius * 0.25, inhDist));
+      col += inhColor * tendril * tendrilBand * intensity * 0.24;
+    } else if (u_ecologyKind[i] == 3) {
+      float cosA = cos(localTime * 0.2);
+      float sinA = sin(localTime * 0.2);
       vec2 rotDiff = vec2(inhDiff.x * cosA + inhDiff.y * sinA,
                           -inhDiff.x * sinA + inhDiff.y * cosA) * u_gridWindow;
-      float halfW = u_inhibitorRadius * 0.3;
-      float halfH = u_inhibitorRadius * 1.2;
+      float halfW = radius * 0.3;
+      float halfH = radius * 1.2;
       float rectMask = step(abs(rotDiff.x), halfW) * step(abs(rotDiff.y), halfH);
       vec2 gridUV = rotDiff * 80.0;
-      float grid = step(0.85, fract(gridUV.x)) + step(0.85, fract(gridUV.y));
-      grid = min(grid, 1.0);
+      float grid = min(step(0.85, fract(gridUV.x)) + step(0.85, fract(gridUV.y)), 1.0);
       vec3 vesselColor = inhColor * (0.6 + grid * 0.4);
-      col = mix(col, vesselColor, rectMask * u_inhibitorIntensity);
-      // Edge glow
+      col = mix(col, vesselColor, rectMask * intensity);
       float edgeDist = max(abs(rotDiff.x) - halfW, abs(rotDiff.y) - halfH);
       float edgeGlow = smoothstep(0.02, 0.0, edgeDist) * (1.0 - rectMask);
       col += inhColor * edgeGlow * 0.5;

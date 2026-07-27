@@ -397,16 +397,12 @@ let noiseState = {
 const audibleContactMemory = new Map();
 const noiseRipples = [];
 let inhibitorState = {
-  form: 0,
   phase: 0,
   waveId: 'inhibitor:phase-0',
   scheduledTime: 0,
   waveBudget: 0,
-  wx: 0,
-  wy: 0,
-  intensity: 0,
-  radius: 0,
-  localTime: 0,
+  entities: [],
+  ecology: { counts: {}, reachedKinds: [], activeCount: 0 },
 };
 let inhibitorWakeGlitchTimer = 0;
 let localAbilityState = null;
@@ -1260,17 +1256,16 @@ function init() {
       get remoteControlState() { return currentRemoteControlState(); },
       get remotePlayers() { return remoteSession.players; },
       get inhibitorState() { return inhibitorState; },
-      // Render-only fixture hook. Gameplay Inhibitor truth still comes from
-      // the authoritative sim snapshot path.
+      // Render-only fixture hook. Gameplay ecology truth still comes from the
+      // authoritative collection snapshot path.
       setInhibitorVisualStateForTest: (state = {}) => {
-        const form = Math.max(0, Math.min(3, Math.round(Number(state.form) || 0)));
         inhibitorState = {
-          form,
-          wx: Number.isFinite(Number(state.wx)) ? Number(state.wx) : camX,
-          wy: Number.isFinite(Number(state.wy)) ? Number(state.wy) : camY,
-          intensity: Math.max(0, Math.min(1, Number(state.intensity ?? (form > 0 ? 1 : 0)) || 0)),
-          radius: Math.max(0, Number(state.radius ?? (form === 1 ? 0.1 : form === 2 ? 0.25 : form === 3 ? 0.4 : 0)) || 0),
-          localTime: Math.max(0, Number(state.localTime ?? totalTime) || 0),
+          phase: Math.max(0, Math.min(3, Math.round(Number(state.phase) || 0))),
+          waveId: state.waveId || 'fixture:ecology',
+          scheduledTime: Number(state.scheduledTime) || 0,
+          waveBudget: Number(state.waveBudget) || 0,
+          entities: Array.isArray(state.entities) ? state.entities.map((entity) => ({ ...entity })) : [],
+          ecology: state.ecology || { counts: {}, reachedKinds: [], activeCount: 0 },
         };
         inhibitorWakeGlitchTimer = state.wakeShock ? INHIBITOR_WAKE_GLITCH_DURATION : 0;
         return true;
@@ -1595,7 +1590,6 @@ function spawnPresentationPortals(portals = []) {
       finalInhibitor: portal.finalInhibitor === true,
       finalExfil: portal.finalExfil === true,
       guaranteedFinalExfil: portal.guaranteedFinalExfil === true,
-      blockedByInhibitor: portal.blockedByInhibitor === true,
     });
   }
 }
@@ -1665,7 +1659,14 @@ function loadRendererFixture(name) {
     state: s.state || 'patrol',
     orbitAngle: s.orbitAngle || 0,
   }));
-  inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
+  inhibitorState = {
+    phase: 0,
+    waveId: 'inhibitor:phase-0',
+    scheduledTime: 0,
+    waveBudget: 0,
+    entities: [],
+    ecology: { counts: {}, reachedKinds: [], activeCount: 0 },
+  };
   inhibitorWakeGlitchTimer = 0;
   camX = fixture.worldScale / 2;
   camY = fixture.worldScale / 2;
@@ -2337,7 +2338,7 @@ function noiseCategory(source) {
   const value = String(source || 'NOISE').toUpperCase().trim();
   if (value === 'IDLE') return 'NOISE';
   if (value.startsWith('THRUST')) return value;
-  if (['SALVAGE', 'IMPACT', 'PULSE', 'INHIBITOR', 'CREW', 'VESSEL', 'VESSEL THRUST'].includes(value)) return value;
+  if (['SALVAGE', 'IMPACT', 'PULSE', 'INHIBITOR', 'CREW', 'STATIC', 'CORRUPTION', 'EXFIL TONE', 'EXFIL', 'GLITCH', 'SWARM', 'VESSEL', 'VESSEL THRUST'].includes(value)) return value;
   return 'NOISE';
 }
 
@@ -2383,6 +2384,40 @@ function updateAudibleContactMemory(nowSeconds) {
         radiusMeters: noise.audibleRadiusMeters,
         source: noise.currentSource || noise.dominantSource,
         sourceClass: noise.sourceClass,
+      }, nowSeconds);
+    }
+  }
+  for (const emitter of remoteSession.snapshot?.world?.noiseEmitters || []) {
+    observeAudibleContact(`world:${emitter.id}`, {
+      wx: emitter.wx,
+      wy: emitter.wy,
+      radiusMeters: emitter.radiusMeters,
+      source: emitter.source,
+      sourceClass: emitter.sourceClass,
+    }, nowSeconds);
+  }
+  if (!remoteSession.active) {
+    const inhibitorNoise = NOISE_CONFIG.world?.inhibitor || {};
+    for (const entity of inhibitorState.entities || []) {
+      if (!entity || entity.lifecycle === 'expired') continue;
+      const tuning = inhibitorNoise[entity.kind] || {};
+      observeAudibleContact(`world:inhibitor:${entity.id}`, {
+        wx: entity.position?.wx ?? entity.wx,
+        wy: entity.position?.wy ?? entity.wy,
+        radiusMeters: tuning.radiusMeters,
+        source: tuning.category,
+        sourceClass: tuning.sourceClass,
+      }, nowSeconds);
+    }
+    const exfil = NOISE_CONFIG.world?.exfil || {};
+    for (const portal of portalSystem?.portals || []) {
+      if (!portal || portal.alive === false) continue;
+      observeAudibleContact(`world:exfil:${portal.id}`, {
+        wx: portal.wx,
+        wy: portal.wy,
+        radiusMeters: exfil.radiusMeters,
+        source: exfil.category,
+        sourceClass: exfil.sourceClass,
       }, nowSeconds);
     }
   }
@@ -2458,18 +2493,14 @@ function applyRemoteEvents(events) {
         inhibitorWakeGlitchTimer = INHIBITOR_WAKE_GLITCH_DURATION;
         showInhibitorWarning('something is watching', 1, payload.intensity ?? 0.85, 3500);
         break;
-      case 'inhibitor.form':
-        if (payload.form === 1) {
-          showInhibitorWarning('— glitch —', 1, payload.intensity ?? 0.8, 2600, 'rgba(204, 26, 128, 0.88)');
-        } else if (payload.form === 2) {
-          showInhibitorWarning('— swarm —', 2, payload.intensity ?? 0.95, 3200);
-        } else if (payload.form === 3) {
-          // The vessel is the terminal form. Loud dread.
-          showInhibitorWarning('THE VESSEL', 3, payload.intensity ?? 1, 4000, 'rgba(255, 60, 140, 1.0)', { boost: 1.2 });
-        } else if (payload.form === 0) {
-          // Reset — should be rare but handle it (e.g. session reset)
-          showWarning('inhibitor reset', 'rgba(120, 200, 180, 0.7)', 2000);
-        }
+      case 'inhibitor.glitchSpawned':
+        showInhibitorWarning('STATIC CONTACT · GLITCH', 'glitch', 0.8, 2600, 'rgba(204, 26, 128, 0.88)');
+        break;
+      case 'inhibitor.swarmSpawned':
+        showInhibitorWarning('CORRUPTION CONTACT · SWARM', 'swarm', 0.95, 3200);
+        break;
+      case 'inhibitor.vesselInbound':
+        showInhibitorWarning('THRUST CONTACT · VESSEL', 'vessel', 1, 4000, 'rgba(255, 60, 140, 1.0)', { boost: 1.2 });
         break;
       case 'inhibitor.finalPortal':
         showWarning('final portal opened', 'rgba(255, 217, 102, 0.95)', 4000);
@@ -3829,7 +3860,6 @@ function collectPresentationSceneSource() {
         opacity: portal.opacity,
         alive: portal.alive,
         captureRadius: portal.getCaptureRadius?.(),
-        blockedByInhibitor: portal.blockedByInhibitor,
         finalInhibitor: portal.finalInhibitor,
         finalExfil: portal.finalExfil === true,
         guaranteedFinalExfil: portal.guaranteedFinalExfil === true,
@@ -3844,6 +3874,7 @@ function collectPresentationSceneSource() {
       fauna: remoteFauna || [],
       sentries: remoteSentries || [],
       inhibitors: remoteSession.snapshot?.inhibitor?.entities || [],
+      noiseEmitters: remoteSession.snapshot?.world?.noiseEmitters || [],
       collapseEpoch: remoteSession.snapshot?.world?.collapseEpoch,
       collapseEpochSchedule: remoteSession.snapshot?.world?.collapseEpochSchedule,
     },
@@ -4798,18 +4829,22 @@ function gameLoop(now) {
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
   const viewAspect = overlayCanvas.width / Math.max(1, overlayCanvas.height);
-  // Inhibitor shader data
-  let inhData = null;
-  if (inhibitorState.form > 0) {
-    const [inhU, inhV] = worldToFluidUV(inhibitorState.wx, inhibitorState.wy);
-    inhData = {
-      form: inhibitorState.form,
-      posU: inhU, posV: inhV,
-      radius: inhibitorState.radius,
-      intensity: inhibitorState.intensity,
-      localTime: inhibitorState.localTime,
-    };
-  }
+  // Collection-backed corruption data is bounded before it reaches either
+  // shader. Three owns entity presentation; these arrays keep the ASCII and
+  // fluid languages synchronized without reviving a scalar threat.
+  const inhData = {
+    entities: (inhibitorState.entities || []).filter((entity) => entity.lifecycle !== 'expired').slice(0, 16).map((entity) => {
+      const [posU, posV] = worldToFluidUV(entity.wx, entity.wy);
+      return {
+        kind: entity.kind,
+        posU,
+        posV,
+        radius: Math.max(0.001, Number(entity.radius) || 0.1),
+        intensity: Math.max(0, Math.min(1, Number(entity.intensity) || 0)),
+        localTime: Math.max(0, Number(entity.ageSeconds ?? entity.age) || totalTime),
+      };
+    }),
+  };
   const a = CONFIG.ascii;
   // Renderer fixtures are render-only composition targets. They suppress menu
   // overlays, but should use the same visible well/accretion tuning as title.
@@ -5094,7 +5129,7 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    // === EDGE INDICATORS — stable exit plus emitter-owned audible contacts ===
+    // === EDGE INDICATORS — emitter-owned audible contacts only ===
     {
       ctx.save();
       const margin = 20;
@@ -5123,7 +5158,7 @@ function gameLoop(now) {
       const contacts = prioritizeAudibleContacts(
         [...audibleContactMemory.values()]
           .filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt),
-        { limit: 5 },
+        { limit: NOISE_CONFIG.world?.contactCap || 5 },
       );
       for (const contact of contacts) {
         const [sx, sy] = worldToScreen(contact.wx, contact.wy, camX, camY, w, h);

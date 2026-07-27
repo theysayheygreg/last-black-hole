@@ -106,7 +106,7 @@ function contextFor(family, source) {
     case 'stars': return compact({ mass: finite(source.mass), alive: source.alive !== false, type: text(source.type) });
     case 'wrecks': case 'debris': return compact({ state: text(source.state), alive: source.alive !== false, looted: source.looted === true, lootCount: Array.isArray(source.loot) ? source.loot.length : finite(source.lootCount), size: text(source.size), tier: finite(source.tier) });
     case 'loot': return compact({ state: text(source.state), collected: source.collected === true, kind: text(source.kind ?? source.type) });
-    case 'portals': return compact({ state: text(source.state), alive: source.alive !== false, type: text(source.type), blocked: source.blockedByInhibitor === true, final: source.finalInhibitor === true });
+    case 'portals': return compact({ state: text(source.state), alive: source.alive !== false, type: text(source.type), final: source.finalInhibitor === true });
     case 'objectives': return compact({ state: text(source.state ?? source.status), complete: source.complete === true, objectiveId: text(source.objectiveId) });
     case 'planetoids': return compact({ state: text(source.state), alive: source.alive !== false, pathType: text(source.pathType ?? source.type) });
     case 'scavengers': case 'enemies': return compact({ name: text(source.name ?? source.callsign), state: text(source.state), alive: source.alive !== false, faction: text(source.faction) });
@@ -144,7 +144,7 @@ function systemIdentities(snapshot) {
       key: 'inhibitor:conductor', family: 'inhibitor', id: 'conductor', archetype: 'inhibitor',
       displayLabel: LABELS.inhibitor, position: positionFor('inhibitor', inhibitor),
       radius: Math.max(0, finite(inhibitor.radius) || 0.1),
-      context: compact({ form: finite(inhibitor.form), phase: finite(inhibitor.phase), waveId: text(inhibitor.waveId), intensity: finite(inhibitor.intensity), finalPortalSpawned: inhibitor.finalPortalSpawned === true }),
+      context: compact({ phase: finite(inhibitor.phase), waveId: text(inhibitor.waveId), kinds: Array.isArray(inhibitor.ecology?.reachedKinds) ? inhibitor.ecology.reachedKinds : [] }),
       groupKey: 'inhibitor:inhibitor', tunableContract: null,
     }));
   }

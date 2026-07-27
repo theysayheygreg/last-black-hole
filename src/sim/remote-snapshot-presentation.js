@@ -76,7 +76,6 @@ function projectPortal(remote) {
     spawnTime: remote.spawnTime ?? 0,
     lifespan: remote.lifespan ?? 90,
     alive: remote.alive !== false,
-    blockedByInhibitor: remote.blockedByInhibitor === true,
     finalInhibitor: remote.finalInhibitor === true,
     finalExfil: remote.finalExfil === true,
     guaranteedFinalExfil: remote.guaranteedFinalExfil === true,
@@ -85,10 +84,10 @@ function projectPortal(remote) {
       return Math.max(0, (this.spawnTime + this.lifespan) - runTime);
     },
     isWarning(runTime) {
-      return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 15;
+      return this.alive && this.timeLeft(runTime) < 15;
     },
     isCritical(runTime) {
-      return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 5;
+      return this.alive && this.timeLeft(runTime) < 5;
     },
     getCaptureRadius() {
       const base = CONFIG.portals.captureRadius;
@@ -142,6 +141,21 @@ export function projectRemoteWorldPatch(world, {
   if (Array.isArray(world.portals)) {
     patch.portals = world.portals.map(projectPortal);
     patch.nextPortalWaveIndex = world.nextPortalWaveIndex;
+  }
+  if (Array.isArray(world.inhibitors)) {
+    patch.inhibitors = world.inhibitors.map((entity) => ({ ...entity }));
+  }
+  if (Array.isArray(world.noiseEmitters)) {
+    patch.noiseEmitters = world.noiseEmitters.map((emitter) => ({
+      id: emitter.id,
+      sourceKind: emitter.sourceKind || 'world',
+      source: emitter.source || 'NOISE',
+      sourceClass: emitter.sourceClass || null,
+      wx: emitter.wx,
+      wy: emitter.wy,
+      radiusMeters: Math.max(0, Number(emitter.radiusMeters) || 0),
+      cadenceSeconds: Math.max(0, Number(emitter.cadenceSeconds) || 0),
+    }));
   }
   if (Array.isArray(world.scavengers)) {
     const previousById = new Map(previousScavengers.map((scavenger) => [scavenger.id, scavenger]));

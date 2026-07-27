@@ -26,6 +26,7 @@ const WORLD_FAMILIES = Object.freeze([
   'fauna',
   'sentries',
   'inhibitors',
+  'noiseEmitters',
 ]);
 
 function finite(value, fallback = 0) {
@@ -342,21 +343,17 @@ function normalizeEntity(family, source, index) {
     case 'portals':
       {
       const variant = text(source.type, 'standard');
-      const blocked = source.blocked === true || source.blockedByInhibitor === true;
       const final = source.final === true || source.finalInhibitor === true;
       return Object.freeze({
         ...base,
         variant,
         radius: Math.max(0.001, finite(source.radius ?? source.captureRadius, 0.08)),
-        blocked,
         final,
         visualState: variant === 'rift'
           ? 'rift'
-          : blocked
-            ? 'blocked'
-            : source.ready === true || source.interactionReady === true
-              ? 'ready'
-              : final ? 'final' : 'available',
+          : source.ready === true || source.interactionReady === true
+            ? 'ready'
+            : final ? 'final' : 'available',
         hint: hint('portal'),
       });
       }
@@ -436,6 +433,15 @@ function normalizeEntity(family, source, index) {
           priority: 'high',
           labelPolicy: 'debugOnly',
         }),
+      });
+    case 'noiseEmitters':
+      return Object.freeze({
+        ...base,
+        sourceKind: text(source.sourceKind, 'world'),
+        source: text(source.source, 'NOISE'),
+        sourceClass: source.sourceClass ? text(source.sourceClass) : null,
+        radiusMeters: Math.max(0, finite(source.radiusMeters)),
+        hint: hint('ecology', { labelPolicy: 'debugOnly' }),
       });
     default:
       return Object.freeze({ ...base, hint: hint('anomaly') });

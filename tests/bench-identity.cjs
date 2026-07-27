@@ -27,7 +27,11 @@ async function run() {
       waveRings: [{ id: 'wave-a', sourceWX: 2, sourceWY: 2, radius: 0.3, amplitude: 0.7 }],
       collapseEpoch: { epochId: 'approach', epochIndex: 1, transitionCount: 1 },
     },
-    inhibitor: { form: 2, phase: 1, wx: 3.5, wy: 3.5, radius: 0.18 },
+    inhibitor: {
+      phase: 1,
+      ecology: { reachedKinds: ['glitch'] },
+      entities: [{ id: 'inhibitor-glitch-1', kind: 'glitch', wx: 3.5, wy: 3.5, radius: 0.18 }],
+    },
   };
 
   const identities = projection.projectBenchIdentities(snapshot);

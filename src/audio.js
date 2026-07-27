@@ -318,7 +318,7 @@ export class AudioEngine {
       return false;
     }
     this._trace.mark(type, now, { bus });
-    if (['portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death'].includes(type)) {
+    if (['portalConfirm', 'portalFinal', 'extract', 'death'].includes(type)) {
       this._cueSynthesis.clearPortalReady(now);
     }
 

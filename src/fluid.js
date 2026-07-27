@@ -478,15 +478,20 @@ export class FluidSim {
       if (shapeLoc) gl.uniform4fv(shapeLoc, wellShapes[i] ?? [0.01, 0.02, 0.03, 1.0]);
     }
 
-    // Inhibitor uniforms
-    if (inhibitorData && inhibitorData.form > 0) {
-      gl.uniform1i(u['u_inhibitorForm'], inhibitorData.form);
-      gl.uniform2f(u['u_inhibitorPos'], inhibitorData.posU, inhibitorData.posV);
-      gl.uniform1f(u['u_inhibitorRadius'], inhibitorData.radius);
-      gl.uniform1f(u['u_inhibitorIntensity'], inhibitorData.intensity);
-      gl.uniform1f(u['u_inhibitorTime'], inhibitorData.localTime);
-    } else {
-      gl.uniform1i(u['u_inhibitorForm'], 0);
+    // Collection-backed ecology uniforms. The fixed cap keeps the shader ABI
+    // bounded while preserving every live threat's local corruption language.
+    const ecology = inhibitorData?.entities || [];
+    gl.uniform1i(u['u_ecologyCount'], Math.min(16, ecology.length));
+    for (let i = 0; i < 16; i += 1) {
+      const entity = ecology[i];
+      const kind = entity?.kind === 'vessel' ? 3 : entity?.kind === 'swarm' ? 2 : entity?.kind === 'glitch' ? 1 : 0;
+      const pos = entity ? [entity.posU, entity.posV] : [0, 0];
+      const posLoc = u[`u_ecologyPos[${i}]`];
+      if (posLoc) gl.uniform2fv(posLoc, pos);
+      gl.uniform1f(u[`u_ecologyRadius[${i}]`], entity?.radius ?? 0);
+      gl.uniform1f(u[`u_ecologyIntensity[${i}]`], entity?.intensity ?? 0);
+      gl.uniform1f(u[`u_ecologyTime[${i}]`], entity?.localTime ?? 0);
+      gl.uniform1i(u[`u_ecologyKind[${i}]`], kind);
     }
 
     if (target) {

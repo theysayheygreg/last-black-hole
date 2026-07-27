@@ -19,7 +19,16 @@
   "enemyTrackingRadiusRatio": 0.55,
   "identificationFraction": 0.4,
   "lastHeardFadeSeconds": 2.5,
-  "publicSourceClasses": ["VESSEL", "VESSEL THRUST"],
+  "publicSourceClasses": ["GLITCH", "SWARM", "VESSEL", "VESSEL THRUST", "EXFIL"],
+  "world": {
+    "contactCap": 5,
+    "inhibitor": {
+      "glitch": { "category": "STATIC", "sourceClass": "GLITCH", "radiusMeters": 260, "cadenceSeconds": 1.5 },
+      "swarm": { "category": "CORRUPTION", "sourceClass": "SWARM", "radiusMeters": 340, "cadenceSeconds": 1.2 },
+      "vessel": { "category": "THRUST", "sourceClass": "VESSEL", "radiusMeters": 620, "cadenceSeconds": 1.0 }
+    },
+    "exfil": { "category": "EXFIL TONE", "sourceClass": "EXFIL", "radiusMeters": 800, "cadenceSeconds": 1.0 }
+  },
   "tuning": {
     "idleFloorMeters": { "unit": "m", "min": 0, "max": 120, "step": 10, "startBias": "silent hull" },
     "continuousMeters": { "unit": "m", "min": 0, "max": 1000, "step": 10, "startBias": "legible thrust" },

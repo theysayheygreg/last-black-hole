@@ -8,10 +8,10 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { worldToScreen, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
-import { portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
+import { setWarningColor } from './ui/hud-primitives.js';
 import { actionCaptionMarkup, affordanceCaption, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
 import { preloadUiAssets } from './ui/asset-kit.js';
@@ -28,7 +28,6 @@ import {
 import {
   clamp01,
   createAbilitySlot,
-  findNearestActivePortal,
   fmtTime,
   getAbilityPresentationState,
   getHullPresentationState,
@@ -58,17 +57,15 @@ let _salvageCountEl, _salvageValueEl;
 let _scavengersCountEl, _scavengersSub;
 let _pulseEl;
 let _signatureEl;
-let _portalArrowEl;
 let _warningsEl;
 let _noiseReadoutEl, _noiseDetailEl;
 let _hullFillEl, _hullReadoutEl;
 let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCaptionEl;
 let _abilitiesEl;
 let _ability1El, _ability2El;
-let _inhibitorEl, _inhibitorFormEl;
+let _inhibitorEl, _inhibitorSummaryEl;
 let _lastCollapseStr = '';
 let _promptOptions = {};
-const INHIBITOR_FORM_NAMES = ['dormant', 'glitch', 'swarm', 'vessel'];
 
 export function initHUD() {
   _hudEl = document.getElementById('hud');
@@ -82,7 +79,6 @@ export function initHUD() {
   _scavengersSub = document.getElementById('hud-scavengers-sub');
   _pulseEl = document.getElementById('hud-pulse');
   _signatureEl = document.getElementById('hud-signature');
-  _portalArrowEl = document.getElementById('hud-portal-arrow');
   initHudInventory(document.getElementById('hud-inventory-panel'));
   _warningsEl = document.getElementById('hud-warnings');
   _noiseReadoutEl = document.getElementById('hud-noise-readout');
@@ -96,8 +92,8 @@ export function initHUD() {
   _abilitiesEl = document.getElementById('hud-abilities');
   _ability1El = document.getElementById('hud-ability1');
   _ability2El = document.getElementById('hud-ability2');
-  _inhibitorEl = document.getElementById('hud-inhibitor');
-  _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
+  _inhibitorEl = document.getElementById('hud-ecology');
+  _inhibitorSummaryEl = document.getElementById('hud-ecology-summary');
   renderAbilitySlot(_ability1El, createAbilitySlot('Q', '---', { status: '', ready: false }));
   renderAbilitySlot(_ability2El, createAbilitySlot('R', '---', { status: '', ready: false }));
   void preloadUiAssets().catch(() => {});
@@ -107,40 +103,30 @@ function textCorruptionConfig() {
   return CONFIG.inhibitor?.textCorruption || {};
 }
 
-function inhibitorFormName(form) {
-  return INHIBITOR_FORM_NAMES[form] || 'dormant';
-}
-
 function getInhibitorHUDState(opts = {}) {
   const state = opts.inhibitorState || null;
-  const form = Math.max(0, Math.min(3, Math.floor(Number(state?.form) || 0)));
-  const intensity = clamp01(state?.intensity ?? (form > 0 ? 1 : 0));
-  const reach = form === 3 ? 1.2 : form === 2 ? 0.9 : 0.6;
-  const dist = form > 0 && opts.ship
-    ? worldDistance(opts.ship.wx, opts.ship.wy, state.wx, state.wy)
-    : Infinity;
-  const proximity = Number.isFinite(dist) ? clamp01(1 - dist / reach) : 0;
+  const entities = Array.isArray(state?.entities) ? state.entities : [];
+  const active = entities.filter((entity) => entity.lifecycle !== 'expired');
+  const counts = active.reduce((result, entity) => {
+    const kind = String(entity.kind || 'threat').toUpperCase();
+    result[kind] = (result[kind] || 0) + 1;
+    return result;
+  }, {});
+  const intensity = active.reduce((max, entity) => Math.max(max, clamp01(entity.intensity)), 0);
   return {
-    form,
     intensity,
-    reach,
-    dist,
-    proximity,
-    corruption: proximity * intensity,
+    count: active.length,
+    counts,
+    corruption: intensity,
   };
 }
 
 function inhibitorTextAmount(inhibitorHud, boost = 1) {
   const cfg = textCorruptionConfig();
-  if (!cfg.enabled || !inhibitorHud || inhibitorHud.form <= 0) return 0;
+  if (!cfg.enabled || !inhibitorHud || inhibitorHud.count <= 0) return 0;
 
   const base = clamp01(cfg.amount ?? 0);
-  const formBoost = inhibitorHud.form === 3
-    ? Number(cfg.vesselBoost ?? 1.35)
-    : inhibitorHud.form === 2 ? 1.0 : 0.72;
-  const proximityScale = clamp01(cfg.proximityScale ?? 0.75);
-  const proximityFactor = 0.25 + clamp01(inhibitorHud.proximity * proximityScale) * 0.75;
-  return clamp01(base * inhibitorHud.intensity * formBoost * Number(boost || 1) * proximityFactor);
+  return clamp01(base * inhibitorHud.intensity * Number(boost || 1));
 }
 
 function textCorruptionOptions(maxChars = 160) {
@@ -423,39 +409,23 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
 
   const inhibitorHud = getInhibitorHUDState(opts);
 
-  // === INHIBITOR FORM ===
+  // === ACCUMULATED ECOLOGY ===
   if (_inhibitorEl && opts.inhibitorState) {
-    if (inhibitorHud.form <= 0) {
+    if (inhibitorHud.count <= 0) {
       _inhibitorEl.style.display = 'none';
-      _inhibitorEl.classList.remove('form-vessel');
-      setMaybeCorruptedText(_inhibitorFormEl, 'dormant', 0, 'inhibitor-dormant');
     } else {
       _inhibitorEl.style.display = '';
-      const cfg = textCorruptionConfig();
-      const stateTime = opts.inhibitorState.localTime ?? runElapsedTime;
-      const refreshHz = Math.max(1, Number(cfg.refreshHz ?? 5) || 5);
-      const textSeed = `form-${inhibitorHud.form}-${Math.floor(stateTime * refreshHz)}`;
-      setMaybeCorruptedText(
-        _inhibitorFormEl,
-        inhibitorFormName(inhibitorHud.form),
-        inhibitorTextAmount(inhibitorHud),
-        textSeed,
-        { maxChars: 24 }
-      );
-      // Swap the CSS class so the vessel form pulses harder
-      if (inhibitorHud.form === 3) {
-        _inhibitorEl.classList.add('form-vessel');
-      } else {
-        _inhibitorEl.classList.remove('form-vessel');
-      }
+      const summary = Object.entries(inhibitorHud.counts)
+        .map(([kind, count]) => `${kind} ${count}`)
+        .join(' · ');
+      _inhibitorSummaryEl.textContent = `${summary} · PHASE ${Math.max(0, Number(opts.inhibitorState.phase) || 0)}`;
     }
   }
 
   if (opts.inhibitorState && opts.ship) {
-    const form = inhibitorHud.form;
     const corruption = inhibitorHud.corruption;
     if (!reducedMotion && corruption > 0.02) {
-      const jitter = 1 + corruption * (form === 3 ? 3 : 2);
+      const jitter = 1 + corruption * 2;
       const jx = Math.sin(runElapsedTime * 41.3) * jitter * corruption;
       const jy = Math.cos(runElapsedTime * 33.7) * jitter * corruption;
       _hudEl.style.transform = `translate(${jx.toFixed(1)}px, ${jy.toFixed(1)}px)`;
@@ -496,67 +466,6 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     promptOptions: _promptOptions,
   });
 
-  // === PORTAL DIRECTION ARROW ===
-  if (opts.ship && portalSystem && _portalArrowEl && opts.canvasW) {
-    _updatePortalArrow(opts.ship, portalSystem, opts.camX, opts.camY, opts.canvasW, opts.canvasH);
-  }
-}
-
-/**
- * Update the portal direction arrow. Points toward nearest active portal
- * when the portal is off-screen.
- */
-function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
-  const nearest = findNearestActivePortal(ship, portalSystem);
-  if (!nearest) {
-    _portalArrowEl.style.display = 'none';
-    return;
-  }
-  const { portal: nearestPortal, distance: nearestDist } = nearest;
-
-  // Check if portal is on screen
-  const [sx, sy] = worldToScreen(nearestPortal.wx, nearestPortal.wy, camX, camY, canvasW, canvasH);
-  const margin = 60;
-  const onScreen = sx > margin && sx < canvasW - margin && sy > margin && sy < canvasH - margin;
-
-  if (onScreen) {
-    _portalArrowEl.style.display = 'none';
-    return;
-  }
-
-  // Portal is off-screen — show arrow at screen edge pointing toward it
-  const [dx, dy] = worldDisplacement(ship.wx, ship.wy, nearestPortal.wx, nearestPortal.wy);
-  const angle = Math.atan2(dy, dx);
-
-  // Place arrow at edge of screen in the direction of the portal
-  const edgeMargin = 40;
-  const cx = canvasW / 2;
-  const cy = canvasH / 2;
-
-  // Ray from center at angle, clamped to screen edge
-  const cosA = Math.cos(angle);
-  const sinA = Math.sin(angle);
-  const maxX = (cx - edgeMargin);
-  const maxY = (cy - edgeMargin);
-
-  let t = Infinity;
-  if (Math.abs(cosA) > 0.001) t = Math.min(t, maxX / Math.abs(cosA));
-  if (Math.abs(sinA) > 0.001) t = Math.min(t, maxY / Math.abs(sinA));
-
-  const arrowX = cx + cosA * t;
-  const arrowY = cy + sinA * t;
-
-  _portalArrowEl.style.display = '';
-  _portalArrowEl.style.left = `${arrowX}px`;
-  _portalArrowEl.style.top = `${arrowY}px`;
-
-  // Render arrow as a rotated triangle via CSS border trick
-  const deg = (angle * 180 / Math.PI) + 90;  // CSS rotation: 0 = up
-  const distText = nearestDist.toFixed(1);
-  _portalArrowEl.innerHTML = portalArrowMarkup({
-    degrees: deg,
-    distanceText: distText,
-  });
 }
 
 /**
@@ -577,9 +486,8 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
   if (options.corrupt) {
     const warningBoost = Number(textCorruptionConfig().warningBoost ?? 1.15) || 1;
     const corruption = inhibitorTextAmount({
-      form: Math.max(1, Math.min(3, Number(options.form ?? 1) || 1)),
       intensity: clamp01(options.intensity ?? 1),
-      proximity: clamp01(options.proximity ?? 1),
+      count: 1,
     }, warningBoost * Number(options.boost ?? 1));
     setMaybeCorruptedText(
       el,
@@ -608,7 +516,7 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
 
 export function showInhibitorWarning(
   text,
-  form = 1,
+  _kind = 'threat',
   intensity = 1,
   durationMs = 3200,
   color = 'rgba(204, 26, 128, 0.95)',
@@ -616,7 +524,6 @@ export function showInhibitorWarning(
 ) {
   showWarning(text, color, durationMs, {
     corrupt: true,
-    form,
     intensity,
     ...options,
   });

@@ -21,7 +21,7 @@
 //   - dirThreshold:  speed above which directional ramps kick in
 //   - dirBlendRange: speed window where shimmer blends direction into density
 //   - glitchIntensity: 0-1, for scene transitions (0 on title)
-//   - inhibitorData: null or {form,posU,posV,radius,intensity,localTime}
+//   - inhibitorData: {entities:[{kind,posU,posV,radius,intensity,localTime}]}
 //   - camFU, camFV:  camera center in fluid UV (world-anchored shimmer)
 //   - gridWindow:    world-units spanned by the camera-anchored fluid grid
 //   - cameraView:    world-units visible on each axis
@@ -116,19 +116,16 @@ export class ASCIIPass extends Pass {
     gl.uniform1f(this.uniforms.u_dirBlendRange, ctx.dirBlendRange ?? 0.03);
     gl.uniform1f(this.uniforms.u_glitchIntensity, ctx.glitchIntensity ?? 0);
 
-    const inhibitor = ctx.inhibitorData;
-    if (inhibitor && inhibitor.form > 0) {
-      gl.uniform1i(this.uniforms.u_inhibitorForm, inhibitor.form);
-      gl.uniform2f(this.uniforms.u_inhibitorPos, inhibitor.posU, inhibitor.posV);
-      gl.uniform1f(this.uniforms.u_inhibitorRadius, inhibitor.radius);
-      gl.uniform1f(this.uniforms.u_inhibitorIntensity, inhibitor.intensity ?? 1);
-      gl.uniform1f(this.uniforms.u_inhibitorTime, inhibitor.localTime ?? ctx.totalTime);
-    } else {
-      gl.uniform1i(this.uniforms.u_inhibitorForm, 0);
-      gl.uniform2f(this.uniforms.u_inhibitorPos, 0, 0);
-      gl.uniform1f(this.uniforms.u_inhibitorRadius, 0);
-      gl.uniform1f(this.uniforms.u_inhibitorIntensity, 0);
-      gl.uniform1f(this.uniforms.u_inhibitorTime, ctx.totalTime);
+    const entities = ctx.inhibitorData?.entities || [];
+    gl.uniform1i(this.uniforms.u_ecologyCount, Math.min(16, entities.length));
+    for (let i = 0; i < 16; i += 1) {
+      const entity = entities[i];
+      const kind = entity?.kind === 'vessel' ? 3 : entity?.kind === 'swarm' ? 2 : entity?.kind === 'glitch' ? 1 : 0;
+      gl.uniform2f(this.uniforms[`u_ecologyPos[${i}]`], entity?.posU ?? 0, entity?.posV ?? 0);
+      gl.uniform1f(this.uniforms[`u_ecologyRadius[${i}]`], entity?.radius ?? 0);
+      gl.uniform1f(this.uniforms[`u_ecologyIntensity[${i}]`], entity?.intensity ?? 0);
+      gl.uniform1f(this.uniforms[`u_ecologyTime[${i}]`], entity?.localTime ?? ctx.totalTime);
+      gl.uniform1i(this.uniforms[`u_ecologyKind[${i}]`], kind);
     }
 
     composer.drawQuad();

@@ -83,35 +83,14 @@ function createRunningSessionState({
 
 function createInhibitorState({ phaseZero = null, config = null, searchAngle = 0 } = {}) {
   return {
-    form: 0, // 0=inactive, 1=glitch, 2=swarm, 3=vessel
     phase: 0,
     waveId: phaseZero?.id || "inhibitor:phase-0",
     scheduledTime: phaseZero?.time || 0,
     waveBudget: config
       ? (phaseZero?.metadata?.budget ?? config.phaseWaveBudgets[0])
       : 0,
-    wx: 0,
-    wy: 0,
-    vx: 0,
-    vy: 0,
-    intensity: 0,
-    radius: config?.glitchRadius ?? 0.1,
     localTime: 0,
-    swarmTrackTimer: 0,
-    swarmTargetX: 0,
-    swarmTargetY: 0,
-    silenceTimer: 0,
-    finalPortalSpawned: false,
-    finalPortalExpired: false,
-    formTimes: [null, null, null, null],
-    lastSignalWX: 0,
-    lastSignalWY: 0,
-    lastSignalAge: 0,
-    noiseListenerState: "QUIET",
-    noiseSearchState: "IDLE",
-    swarmSearchTimer: 0,
     swarmSearchAngle: searchAngle,
-    gravityBonus: 0,
   };
 }
 

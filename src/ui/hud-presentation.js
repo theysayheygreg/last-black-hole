@@ -142,7 +142,7 @@ export function findNearestActivePortal(ship, portalSystem) {
   if (!ship || !portalSystem?.portals) return null;
   let nearest = null;
   for (const portal of portalSystem.portals) {
-    if (!portal?.alive || portal.blockedByInhibitor) continue;
+    if (!portal?.alive) continue;
     const isExit = portal.type === 'exit' || portal.type === 'extraction'
       || portal.finalExfil === true || portal.guaranteedFinalExfil === true
       || portal.finalInhibitor === true;

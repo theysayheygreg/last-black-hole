@@ -723,11 +723,10 @@ class BallparkMirror {
         collisionMask: BODY_MASKS.PORTAL,
         interactionMask: BODY_MASKS.PORTAL,
         replicationLane: "global",
-        lifecycle: { state: portal.blockedByInhibitor ? "dying" : lifecycleFor(portal) },
+        lifecycle: { state: lifecycleFor(portal) },
         data: {
           sourceId: portal.id ?? null,
           type: portal.type || null,
-          blockedByInhibitor: Boolean(portal.blockedByInhibitor),
           finalInhibitor: Boolean(portal.finalInhibitor),
         },
       });
@@ -836,26 +835,28 @@ class BallparkMirror {
   }
 
   _addInhibitor(runtime, addBody) {
-    const inhibitor = runtime?.inhibitor;
-    if (!inhibitor || finiteNumber(inhibitor.form, 0) <= 0) return;
-    addBody({
-      id: "inhibitor:vessel",
-      category: "inhibitor",
-      wx: inhibitor.wx,
-      wy: inhibitor.wy,
-      vx: finiteNumber(inhibitor.vx, 0),
-      vy: finiteNumber(inhibitor.vy, 0),
-      radius: radiusFor(inhibitor, ["radius"], 0.1),
-      mass: finiteNumber(inhibitor.form, 1),
-      collisionMask: [BODY_MASKS.HAZARD, BODY_MASKS.FORCE, BODY_MASKS.SIGNAL],
-      interactionMask: [BODY_MASKS.HAZARD, BODY_MASKS.SIGNAL],
-      replicationLane: "global",
-      lifecycle: { state: "alive" },
-      data: {
-        form: finiteNumber(inhibitor.form, 0),
-        intensity: finiteNumber(inhibitor.intensity, 0),
-      },
-    });
+    const entities = Array.isArray(runtime?.inhibitorEntities) ? runtime.inhibitorEntities : [];
+    for (const entity of entities) {
+      if (entity.lifecycle === "expired") continue;
+      addBody({
+        id: entity.id,
+        category: "inhibitor",
+        wx: entity.wx,
+        wy: entity.wy,
+        vx: finiteNumber(entity.vx, 0),
+        vy: finiteNumber(entity.vy, 0),
+        radius: radiusFor(entity, ["radius"], 0.1),
+        mass: finiteNumber(entity.radius, 1),
+        collisionMask: [BODY_MASKS.HAZARD, BODY_MASKS.FORCE, BODY_MASKS.SIGNAL],
+        interactionMask: [BODY_MASKS.HAZARD, BODY_MASKS.SIGNAL],
+        replicationLane: "global",
+        lifecycle: { state: lifecycleFor(entity) },
+        data: {
+          kind: entity.kind || "glitch",
+          intensity: finiteNumber(entity.intensity, 0),
+        },
+      });
+    }
   }
 }
 

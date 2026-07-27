@@ -68,7 +68,6 @@ export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
     // Route state accents stay family-owned. Magenta belongs to Inhibitor/corruption.
     portal: makeVisualMaterial(palette.routeCyanCore, 0.86, { blending: add }),
     riftPortal: makeVisualMaterial(palette.playerWhite, 0.90, { blending: add }),
-    portalBlockedState: makeVisualMaterial(palette.threatRed, 0.34, { blending: add }),
     portalFinalState: makeVisualMaterial(palette.routeWhite, 0.40, { blending: add }),
     planetoid: makeVisualMaterial(palette.routeWhite, 0.86, { blending: normal }),
     fauna: makeVisualMaterial(palette.ecologyCore, 0.76, { blending: add }),

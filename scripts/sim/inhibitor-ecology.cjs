@@ -5,7 +5,6 @@ const { simUnitsToMeters } = require("../content/units.cjs");
 // The ecology owner keeps per-kind tuning and entity behavior together. The
 // Conductor still owns when a kind is admitted; this module owns what lives.
 const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
-  compatibilityRemoval: "vertical-4",
   glitch: Object.freeze({
     kind: "glitch",
     populationCap: 6,

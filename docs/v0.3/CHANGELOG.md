@@ -2,11 +2,19 @@
 
 ## 2026-07-27
 
+- **Inhibitor Ecology v2 completion:** finished the player-facing collection
+  migration. Glitches, Swarms, Vessels, and active exfils now project as
+  deterministic world Noise emitters with `STATIC`/`CORRUPTION`/`THRUST`/
+  `EXFIL TONE` categories, truthful inner identities, and no increase to player
+  Noise. HUD, audio, Three, ASCII, renderer-neutral presentation, and results
+  consume accumulated ecology counts/kinds. The shared `2.5s` audible-contact
+  memory is now the only off-screen indicator path; the privileged exit arrow,
+  scalar inhibitor compatibility projection, portal-block fields, and well
+  consumption fields are retired.
+
 - **Design ownership versioning:** archived the complete v0.2 Signal and
   Inhibitor design bodies, replaced their stable paths with pointers, and
   locked the current v0.3 Noise Radius v1 and Inhibitor Ecology v2 owners.
-  The ecology record names the remaining scalar-form, portal-block,
-  `consumedByInhibitor`, and later Vessel/runtime gaps honestly.
 - **Noise Radius v1:** replaced the player-facing Signal meter and bands with
   an authoritative decaying meter-based Noise envelope, local listener state,
   emitter-owned audible contact memory, contextual Heat presentation, and
@@ -15,23 +23,22 @@
 - **Phase-1 Inhibitor Ecology:** shipped the Conductor-owned bounded Glitch
   collection with stable ids, deterministic drift, lifetime expiry, listener-free
   behavior, bounded core hull damage, `inhibitor.entities` public projection,
-  and procedural magenta/fabric presentation. The labeled scalar compatibility
-  projection remains for later Swarm/Vessel/client migration; those later
-  verticals and portal/well cleanup are not claimed here.
+  and procedural magenta/fabric presentation. World Noise contact projection is
+  completed in the v0.3.1 ecology vertical below.
 - **Phase-2 Inhibitor Ecology:** added Conductor-owned mobile Swarms with
   stable ids, an independent cap/cadence/lifetime, per-Swarm Noise and decoy
   acquisition, last-heard search, restrained magenta/fabric presentation, and
   heavy hull contact through the Glitch authority damage/death seam. Retired
   Swarm cargo deletion, control sluggishness, recursive player-Noise spikes,
-  and their event/audio/UI routing.
+  and their event/audio/UI routing; world `CORRUPTION`/`SWARM` contacts now ship
+  with the final ecology projection.
 - **Phase-3 Inhibitor Ecology:** added Conductor-owned capped Vessels with
   deterministic edge inbound tells, strategic nearest-alive targeting,
   outer/core authority damage, procedural magenta presentation, and persistent
   capped well overdrive. Vessels never block exfil or consume, move, reduce, or
   delete wells; their bounded multiplier feeds authoritative force, current,
-  and slingshot mass while the scalar compatibility projection remains only for
-  the unmigrated vertical-4 surfaces. Inhibitor/exfil audible contacts and
-  final cleanup remain deferred.
+  and slingshot mass. The final ecology projection below carries Vessel and
+  active-exfil Noise contacts.
 
 ## 2026-07-26
 

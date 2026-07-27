@@ -849,7 +849,7 @@ export class ScavengerSystem {
     let best = null;
     let bestDist = Infinity;
     for (const portal of portalSystem.portals) {
-      if (!portal.alive || portal.blockedByInhibitor) continue;
+      if (!portal.alive) continue;
       const dist = worldDistance(scav.wx, scav.wy, portal.wx, portal.wy);
       if (dist < bestDist) {
         bestDist = dist;
@@ -861,6 +861,6 @@ export class ScavengerSystem {
 
   _activePortalCount(portalSystem) {
     if (!portalSystem || !portalSystem.portals) return 0;
-    return portalSystem.portals.filter(p => p.alive && !p.blockedByInhibitor).length;
+    return portalSystem.portals.filter(p => p.alive).length;
   }
 }

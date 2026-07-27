@@ -23,10 +23,10 @@ async function run() {
   assert.strictEqual(cue('player.portalConfirmed', { clientId: 'pilot-local' }), 'portalConfirm');
   assert.strictEqual(cue('player.escaped', { clientId: 'pilot-local' }), 'extract');
   assert.strictEqual(cue('player.scavengerBumped', { clientId: 'pilot-local' }), 'scavengerBump');
-  assert.strictEqual(cue('inhibitor.form', { form: 1 }), 'inhibitorGlitch');
-  assert.strictEqual(cue('inhibitor.form', { form: 2 }), null);
-  assert.strictEqual(cue('inhibitor.wake', { form: 2 }), 'inhibitorWake');
-  assert.strictEqual(cue('inhibitor.form', { form: 3 }), 'inhibitorVessel');
+  assert.strictEqual(cue('inhibitor.glitchSpawned', { kind: 'glitch' }), 'inhibitorGlitch');
+  assert.strictEqual(cue('inhibitor.swarmSpawned', { kind: 'swarm' }), 'inhibitorWake');
+  assert.strictEqual(cue('inhibitor.wake', { phase: 2 }), 'inhibitorWake');
+  assert.strictEqual(cue('inhibitor.vesselInbound', { kind: 'vessel' }), 'inhibitorVessel');
 
   const budget = new EventVoiceBudget(16);
   assert.strictEqual(budget.admit('loot', 0), true);

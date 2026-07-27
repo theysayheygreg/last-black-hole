@@ -1,10 +1,16 @@
 import { metersToSimUnits, simUnitsToMeters } from '../units.js';
 
 const DEFAULT_CATEGORY_PRIORITY = Object.freeze({
+  EXFIL: 6,
+  'EXFIL TONE': 6,
   INHIBITOR: 5,
   VESSEL: 5,
   'VESSEL THRUST': 5,
+  SWARM: 4,
+  CORRUPTION: 4,
   IMPACT: 4,
+  GLITCH: 3,
+  STATIC: 3,
   PULSE: 3,
   THRUST: 2,
   'THRUST AGAINST FLOW': 2,
@@ -19,7 +25,8 @@ function finiteOr(value, fallback) {
 }
 
 function identityRank(identity) {
-  return identity === 'VESSEL THRUST' ? 2 : identity === 'VESSEL' ? 1 : 0;
+  if (identity === 'VESSEL THRUST') return 2;
+  return ['GLITCH', 'SWARM', 'VESSEL', 'EXFIL'].includes(identity) ? 1 : 0;
 }
 
 export function projectAudibleContact({

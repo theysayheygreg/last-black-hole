@@ -42,15 +42,18 @@ refreshes the same contact; an expired contact starts category-only again.
 
 The outer audible zone is category-only. Within the inner `40%` of the current
 emitted radius, an event-carried allowlisted public class may identify the
-source as `VESSEL` or `VESSEL THRUST`. Identification never exposes private
-identity, equipment, cargo, cooldown, hidden state, or exact position beyond
-the justified bearing/range.
+source as `GLITCH`, `SWARM`, `VESSEL`, or `EXFIL` (with `VESSEL THRUST`
+retained for the existing authored source). Identification never exposes
+private identity, equipment, cargo, cooldown, hidden state, or exact position
+beyond the justified bearing/range.
 
-Edge indicators are limited to the stable active exit/extraction marker and a
-small deterministic set of genuinely audible contacts. Wells, wrecks,
-objectives, unheard enemies/Inhibitors, teammates, inactive portals, and other
-entities have no omniscient edge marker. The exit marker is visually distinct
-and does not blink with audible-contact memory.
+Every off-screen edge indicator is an audible contact. Ecology entities emit
+restrained world Noise from centralized tuning, and active exfils emit
+`EXFIL TONE` with close `EXFIL` identity in the cyan family. Wells, wrecks,
+objectives, unheard enemies/Inhibitors, teammates, and portals outside their
+live emitted radius have no omniscient marker. Exfil contacts use the same live,
+frozen-bearing, `2.5s` fade, cap, and expiry lifecycle as every other sound;
+there is no stable or privileged exit arrow.
 
 ## Enemy Awareness
 

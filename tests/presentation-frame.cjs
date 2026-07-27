@@ -65,7 +65,8 @@ async function run() {
       },
       wells: [{
         id: 'gravity', catalogId: 'base-well', behaviorId: 'base-well',
-        wx: 1, wy: 2, mass: 1, killRadius: 0.05, ringOuter: 0.125,
+        wx: 1, wy: 2, mass: 1, overdriveTier: 0, overdriveMultiplier: 1,
+        killRadius: 0.05, ringOuter: 0.125,
       }],
       stars: [{ id: 'live', wx: 2, wy: 3, mass: 1, type: 'mainSequence' }],
       remotePlayers: [{
@@ -153,7 +154,7 @@ async function run() {
       },
       portals: [{
         id: 'portal-a', wx: 7, wy: 8, type: 'standard', opacity: 0, radius: 0.12,
-        blockedByInhibitor: true, finalInhibitor: true, warning: true, critical: false,
+        finalInhibitor: true, warning: true, critical: false,
       }],
       wrecks: [{
         id: 'vault', wx: 9, wy: 10, size: 'medium', tier: 1, type: 'vault',
@@ -245,7 +246,7 @@ async function run() {
     assert(frame.world.wrecks[0].visualState === 'cluster', 'Expected normalized wreck visual state');
     assert(frame.world.wrecks[1].visualState === 'valuable' && frame.world.wrecks[1].valuable === true,
       'Vault wrecks must retain their valuable presentation classification');
-    assert(frame.world.portals[0].visualState === 'blocked', 'Expected normalized portal visual state');
+    assert(frame.world.portals[0].visualState === 'available', 'Expected normalized portal visual state');
     assert(frame.world.remotePlayers[0].hint.category === 'remoteShip', 'Expected remote-player hint');
     assert(!('loot' in frame.world.wrecks[0]), 'Presentation frame must omit inventory internals');
     assert(!('payload' in frame.events[0]), 'Presentation events must omit arbitrary sim payloads');

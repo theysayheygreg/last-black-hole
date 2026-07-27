@@ -279,7 +279,7 @@
     #hud-hull-fill[data-tone="critical"] { background: var(--lbh-danger); }
     #hud-hull-readout[data-tone="shielded"] { color: var(--lbh-portal); }
     #hud-hull-readout[data-tone="critical"] { color: var(--lbh-danger); }
-    #hud-inhibitor {
+    #hud-ecology {
       top: 356px; left: var(--lbh-edge-margin);
       width: 254px;
       color: var(--lbh-inhibitor);
@@ -288,29 +288,19 @@
       border-color: rgba(255, 62, 181, 0.24);
       animation: inhibitorPulse 2.4s ease-in-out infinite;
     }
-    #hud-inhibitor .hud-label {
+    #hud-ecology .hud-label {
       font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       color: rgba(255, 120, 205, 0.72);
       text-transform: uppercase;
     }
-    #hud-inhibitor-form {
+    #hud-ecology-summary {
       font-size: var(--lbh-couch-body);
-      text-transform: lowercase;
       font-weight: 600;
       line-height: 1.05;
     }
-    #hud-inhibitor.form-vessel {
-      color: rgba(255, 70, 150, 1.0);
-      text-shadow: 0 0 12px rgba(255, 70, 150, 0.7);
-      animation: inhibitorPulseVessel 1.4s ease-in-out infinite;
-    }
     @keyframes inhibitorPulse {
       0%, 100% { opacity: 0.8; }
-      50% { opacity: 1.0; }
-    }
-    @keyframes inhibitorPulseVessel {
-      0%, 100% { opacity: 0.85; }
       50% { opacity: 1.0; }
     }
     #hud-portals {
@@ -531,13 +521,6 @@
     }
     #hud-interaction-detail { color: var(--lbh-text-muted); margin-top: 3px; }
     #hud-interaction-caption { color: var(--lbh-portal); margin-top: 5px; }
-    #hud-portal-arrow {
-      position: absolute;
-      bottom: 50%;
-      left: 50%;
-      width: 0; height: 0;
-      pointer-events: none;
-    }
     /* Events log — left side, stacks entries, fades by age (like MMO chat) */
     #hud-warnings {
       position: absolute;
@@ -733,9 +716,9 @@
         <div id="hud-noise-detail">SOURCE IDLE · HEARD BY 0 · TRACKED BY 0</div>
       </div>
     </div>
-    <div id="hud-inhibitor" class="hud-panel" style="display: none;">
-      <div class="hud-label">inhibitor</div>
-      <div id="hud-inhibitor-form">dormant</div>
+    <div id="hud-ecology" class="hud-panel" style="display: none;">
+      <div class="hud-label">ecology</div>
+      <div id="hud-ecology-summary">phase 0</div>
     </div>
     <div id="hud-portals" class="hud-panel">
       <div class="hud-label">route objective</div>
@@ -763,7 +746,6 @@
       <div id="hud-interaction-detail"></div>
       <div id="hud-interaction-caption" class="hud-action-caption"></div>
     </div>
-    <div id="hud-portal-arrow"></div>
     <div id="hud-inventory-panel"></div>
     <div id="hud-warnings" role="log" aria-live="polite" aria-relevant="additions"></div>
   </div>

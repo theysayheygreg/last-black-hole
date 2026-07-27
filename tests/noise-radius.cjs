@@ -23,6 +23,7 @@ const hudSource = fs.readFileSync(path.join(root, 'src/hud.js'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(root, 'index-a.html'), 'utf8');
 const snapshotSource = fs.readFileSync(path.join(root, 'scripts/sim/public-snapshot.cjs'), 'utf8');
 const runtimeSource = fs.readFileSync(path.join(root, 'scripts/sim-runtime.cjs'), 'utf8');
+const ecologySource = fs.readFileSync(path.join(root, 'scripts/sim/inhibitor-ecology.cjs'), 'utf8');
 const controlSource = fs.readFileSync(path.join(root, 'scripts/control-plane-store.cjs'), 'utf8');
 
 let checks = 0;
@@ -38,9 +39,6 @@ async function run() {
   const { projectRemoteWorldPatch } = await import(
     pathToFileURL(path.join(root, 'src/sim/remote-snapshot-presentation.js')).href
   );
-  const { findNearestActivePortal } = await import(
-    pathToFileURL(path.join(root, 'src/ui/hud-presentation.js')).href
-  );
 
   check(NOISE_CONFIG.unit === 'm', 'noise uses canonical meters');
   check(NOISE_CONFIG.continuous.withFlowMeters === 180, 'with-flow radius');
@@ -54,6 +52,12 @@ async function run() {
   check(NOISE_CONFIG.identificationFraction === 0.40, 'identification fraction');
   check(NOISE_CONFIG.lastHeardFadeSeconds === 2.5, 'last-heard fade');
   check(JSON.stringify(noiseData) === JSON.stringify(NOISE_CONFIG), 'CJS adapter preserves canonical data');
+  check(NOISE_CONFIG.world.contactCap === 5, 'world Noise contact cap is centralized');
+  check(NOISE_CONFIG.world.inhibitor.glitch.radiusMeters === 260
+    && NOISE_CONFIG.world.inhibitor.swarm.radiusMeters === 340
+    && NOISE_CONFIG.world.inhibitor.vessel.radiusMeters === 620, 'ecology Noise radii are data-owned');
+  check(NOISE_CONFIG.world.exfil.radiusMeters === 800
+    && NOISE_CONFIG.world.exfil.category === 'EXFIL TONE', 'exfil Noise emitter is data-owned');
 
   check(resolveContinuousRadius(0, 240, 1) === 240, 'thrust establishes continuous radius');
   check(resolveContinuousRadius(240, 0, 1) === 150, 'coast decays per wall second');
@@ -105,7 +109,7 @@ async function run() {
     sourceWY: 1.3,
     emittedRadiusMeters: 700,
     identificationFraction: 0.40,
-    publicSourceClasses: ['VESSEL', 'VESSEL THRUST'],
+    publicSourceClasses: ['GLITCH', 'SWARM', 'VESSEL', 'VESSEL THRUST', 'EXFIL'],
     fadeSeconds: 2.5,
     category: 'THRUST',
   };
@@ -186,6 +190,15 @@ async function run() {
     nowSeconds: 7,
   }).contact;
   check(reheard.live && reheard.identity === 'VESSEL THRUST', 're-heard contact starts a fresh identification');
+  const exfilContact = projectAudibleContact({
+    ...contactArgs,
+    distanceSimUnits: 0.2,
+    category: 'EXFIL TONE',
+    sourceClass: 'EXFIL',
+    nowSeconds: 9,
+  }).contact;
+  check(exfilContact.identity === 'EXFIL' && exfilContact.category === 'EXFIL TONE',
+    'active exfil uses the same audible contact identity lifecycle');
   const missingClass = projectAudibleContact({
     ...contactArgs,
     distanceSimUnits: 0.2,
@@ -213,7 +226,12 @@ async function run() {
     ],
   });
   check(portalPatch.portals[1].finalInhibitor && portalPatch.portals[1].finalExfil, 'remote projection preserves final exit flags');
-  check(findNearestActivePortal({ wx: 0, wy: 0 }, { portals: portalPatch.portals })?.portal.id === 'final', 'optional portals omitted and final exit retained');
+  check(!mainSource.includes('findNearestActivePortal') && !mainSource.includes('hud-portal-arrow'),
+    'main edge indicators have no privileged exit arrow');
+  check(!htmlSource.includes('hud-portal-arrow') && !hudSource.includes('findNearestActivePortal'),
+    'HUD edge presentation has no independent exit-marker state');
+  check(!runtimeSource.includes('blockedByInhibitor') && !runtimeSource.includes('consumedByInhibitor'),
+    'portal blocking and well consumption fields are absent from production authority');
 
   const runEntry = buildRunEntry({
     profile: { id: 'pilot', hullType: 'drifter', rigLevels: [0, 0, 0] },
@@ -243,13 +261,15 @@ async function run() {
   check(runtimeSource.includes('f.listenerState === "HEARD"') && runtimeSource.includes('lastHeardWX'), 'Blooms investigate remembered Noise sources');
   check(runtimeSource.includes('force * dt') && runtimeSource.includes('sourceClass, ageSeconds: 0'), 'Bloom steering and impulse class use wall-time projection');
   check(runtimeSource.includes('sourceProjection.sourceClass') && runtimeSource.includes('sourceClass,'), 'authority selects and publishes current Noise source class');
-  check(runtimeSource.includes('noiseListenerState') && runtimeSource.includes('noiseSearchState'), 'Swarm listener/search state is authoritative');
+  check(ecologySource.includes('noiseListenerState') && ecologySource.includes('noiseSearchState'), 'Swarm listener/search state is authoritative');
   check(runtimeSource.includes('NOISE_CONFIG.impulses.collisionMeters') && runtimeSource.includes('scavenger-contact'), 'scavenger contact emits IMPACT Noise');
   check(snapshotSource.includes('noise: projectNoise(player)'), 'Noise is public snapshot state');
   check(snapshotSource.includes('publicListenerStates') && snapshotSource.includes('listener.state'), 'public Noise projection preserves listener states');
   check(mainSource.includes('HEAT_DISPLAY_EPSILON = 0.02'), 'Heat display epsilon is explicit');
   check(mainSource.includes('resolveHeatInstrumentState'), 'Heat render uses pure presentation visibility helper');
   check(mainSource.includes('projectAudibleContact') && mainSource.includes('simUnitsToMeters'), 'edge contact projection uses canonical meter conversion');
+  check(mainSource.includes('world:inhibitor:') && mainSource.includes('NOISE_CONFIG.world?.inhibitor'),
+    'local ecology entities use the shared world Noise contact bridge');
   check(!mainSource.includes('radiusMeters / 1000') && !mainSource.includes('radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000'), 'Noise presentation has no /1000 conversion folklore');
   check(!mainSource.includes('INHIBITOR EDGE DIM'), 'omniscient Inhibitor edge dim is removed');
   check(mainSource.includes('finalInhibitor') && mainSource.includes('finalExfil'), 'local portal presentation carries final exit flags');

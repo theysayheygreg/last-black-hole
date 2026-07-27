@@ -19,8 +19,6 @@ import {
   staggerProgress,
 } from './ui/motion.js';
 
-const INHIBITOR_FORMS = ['dormant', 'glitch', 'swarm', 'vessel'];
-
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
 }
@@ -86,7 +84,16 @@ export function buildRunResultsViewModel({
   const cargo = cargoForOutcome(runResult, fallbackCargo, outcome);
   const noiseMaxMeters = runResult?.noiseMaxMeters ?? 0;
   const noiseSource = runResult?.noiseSource || 'IDLE';
-  const inhibitorForm = Math.max(0, Math.min(3, Number(runResult?.inhibitorFormReached) || 0));
+  const ecologyCounts = runResult?.ecologyCounts && typeof runResult.ecologyCounts === 'object'
+    ? runResult.ecologyCounts
+    : {};
+  const ecologyKinds = Array.isArray(runResult?.ecologyKindsReached)
+    ? runResult.ecologyKindsReached
+    : Object.keys(ecologyCounts);
+  const ecologyLabel = ecologyKinds.length > 0
+    ? `PHASE ${Math.max(0, Number(runResult?.ecologyPhaseReached) || 0)} · ${ecologyKinds
+      .map((kind) => `${String(kind).toUpperCase()} ${Number(ecologyCounts[kind]) || 0}`).join(' / ')}`
+    : 'NO CONTACTS';
   const survivalTime = runResult?.survivalTime ?? fallbackSurvivalTime ?? 0;
   const runDurationSeconds = Number(runResult?.runDurationSeconds ?? fallbackRunDurationSeconds) || 0;
   const emEarned = Number.isFinite(Number(runResult?.emEarned))
@@ -110,7 +117,7 @@ export function buildRunResultsViewModel({
     survivalSeconds: survivalTime,
     runDurationSeconds,
     noiseSummary: `${formatNoiseMeters(noiseMaxMeters)} · ${String(noiseSource).toUpperCase()}`,
-    inhibitorLabel: INHIBITOR_FORMS[inhibitorForm] || 'dormant',
+    ecologyLabel,
     wellsVisited: runResult?.wellsVisited ?? null,
     cargo,
     cargoTitle: extracted ? 'CARGO EXTRACTED' : 'CARGO LOST',
@@ -229,7 +236,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   y += 18;
   drawKeyValueRow(ctx, 'noise max', view.noiseSummary, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
   y += 18;
-  drawKeyValueRow(ctx, 'inhibitor', view.inhibitorLabel, leftX, y, { alpha: contentAlpha, valueRole: 'inhibitor' });
+  drawKeyValueRow(ctx, 'ecology', view.ecologyLabel, leftX, y, { alpha: contentAlpha, valueRole: 'inhibitor' });
   y += 18;
   if (view.wellsVisited != null) {
     drawKeyValueRow(ctx, 'wells visited', String(view.wellsVisited), leftX, y, { alpha: contentAlpha });

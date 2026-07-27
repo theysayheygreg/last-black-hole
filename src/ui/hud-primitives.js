@@ -46,23 +46,6 @@ export function terminalMutedStyle() {
   return `color: ${UI_COLORS.terminalRowMuted};`;
 }
 
-export function portalArrowMarkup({ degrees, distanceText }) {
-  return `<div class="hud-portal-arrow-glyph" style="
-    transform: rotate(${degrees}deg);
-    width: 0; height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 12px solid ${UI_COLORS.portal};
-    filter: drop-shadow(${UI_SHADOWS.portalGlow});
-  "></div>
-  <div class="hud-portal-arrow-distance" style="
-    font: ${UI_TYPOGRAPHY.small}px ${UI_FONT_STACK};
-    color: ${UI_COLORS.portalDim};
-    text-align: center;
-    margin-top: 2px;
-  ">${distanceText}</div>`;
-}
-
 export function setWarningColor(element, color) {
   element.style.color = color || UI_COLORS.warningText;
 }

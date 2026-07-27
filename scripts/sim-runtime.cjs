@@ -385,10 +385,6 @@ const INHIBITOR_CONFIG = {
   // These normalized fronts preserve that anchor on every map tier.
   phaseProgresses: Object.freeze([0, 0.15, 0.30, 0.45]),
   phaseWaveBudgets: [0, 1, 2, 3],
-  // Vertical 1 owns the collection-backed Glitch values.
-  glitchRadius: INHIBITOR_ECOLOGY_CONFIG.glitch.radius,
-  // Form 2 tuning is centralized in inhibitor-ecology.cjs.
-  swarmRadius: INHIBITOR_ECOLOGY_CONFIG.swarm.radius,
 };
 
 function inhibitorPhaseProgress(phase) {
@@ -486,7 +482,6 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId) {
       metadata: {
         system: "inhibitor",
         phase,
-        form: phase,
         progress,
         scheduledTime,
       },
@@ -2102,8 +2097,14 @@ function buildRunResult(player, outcome) {
     noiseSource: player.noise?.loudestSource || player.noise?.dominantSource || "IDLE",
     noiseTimeHeardSeconds: Number((player.noise?.timeHeardSeconds || 0).toFixed(2)),
     noiseTimeTrackedSeconds: Number((player.noise?.timeTrackedSeconds || 0).toFixed(2)),
-    inhibitorFormReached: runtime.inhibitor.form,
-    inhibitorFormTimes: runtime.inhibitor.formTimes || [],
+    ecologyPhaseReached: runtime.inhibitor.phase,
+    ecologyKindsReached: Array.from(new Set(runtime.inhibitorEntities
+      .filter((entity) => entity.lifecycle !== "expired")
+      .map((entity) => entity.kind))).sort(),
+    ecologyCounts: runtime.inhibitorEntities.reduce((counts, entity) => {
+      if (entity.lifecycle !== "expired") counts[entity.kind] = (counts[entity.kind] || 0) + 1;
+      return counts;
+    }, {}),
     survivalBonus,
     emEarned,
     aiOutcomes,
@@ -2370,7 +2371,6 @@ function spawnPortalForWindow(window, type, index, { finalExfil = false } = {}) 
     opacity: 1,
     finalInhibitor: finalExfil,
     guaranteedFinalExfil: finalExfil,
-    blockedByInhibitor: false,
   };
   runtime.mapState.portals.push(portal);
   publishEvent("portal.spawned", portalEventPayload(window, {
@@ -2410,7 +2410,6 @@ function openPortalWindow(window) {
 
   if (window.metadata?.finalExfil) {
     runtime.portalClock.finalOpen = true;
-    runtime.inhibitor.finalPortalSpawned = true;
     const finalPortal = runtime.mapState.portals.find((portal) => portal.windowId === window.windowId);
     publishEvent("inhibitor.finalPortal", portalEventPayload(window, {
       portalId: finalPortal?.id || null,
@@ -2449,7 +2448,6 @@ function closePortalWindow(window) {
   }
   if (finalExfil) {
     runtime.portalClock.finalClosed = true;
-    runtime.inhibitor.finalPortalExpired = true;
   }
 }
 
@@ -3600,50 +3598,23 @@ function applyDebugInhibitorState(body) {
   const inh = runtime.inhibitor;
   const ws = runtime.session.worldScale || runtime.mapState.worldScale || 5;
   if (!inh) return null;
-  let requestedForm = null;
-
-  // Harnesses can render rare late-run forms without waiting through a full
-  // match clock; normal gameplay transitions still belong to the Conductor.
-  if (Number.isFinite(Number(body.form))) requestedForm = Math.max(0, Math.min(3, Math.round(Number(body.form))));
-  if (Number.isFinite(Number(body.wx))) inh.wx = wrapWorldPosition(Number(body.wx), ws);
-  if (Number.isFinite(Number(body.wy))) inh.wy = wrapWorldPosition(Number(body.wy), ws);
-  if (Number.isFinite(Number(body.intensity))) inh.intensity = Math.max(0, Math.min(1, Number(body.intensity)));
-  if (Number.isFinite(Number(body.radius))) inh.radius = Math.max(0, Math.min(ws, Number(body.radius)));
-  if (Number.isFinite(Number(body.localTime))) inh.localTime = Math.max(0, Number(body.localTime));
-  if (Number.isFinite(Number(body.swarmTrackTimer))) inh.swarmTrackTimer = Math.max(0, Number(body.swarmTrackTimer));
-  if (Number.isFinite(Number(body.swarmTargetX))) inh.swarmTargetX = wrapWorldPosition(Number(body.swarmTargetX), ws);
-  if (Number.isFinite(Number(body.swarmTargetY))) inh.swarmTargetY = wrapWorldPosition(Number(body.swarmTargetY), ws);
-  if (typeof body.finalPortalSpawned === "boolean") inh.finalPortalSpawned = body.finalPortalSpawned;
-  if (typeof body.finalPortalExpired === "boolean") inh.finalPortalExpired = body.finalPortalExpired;
-  if (Number.isFinite(Number(body.lastNoiseWX))) inh.lastNoiseWX = wrapWorldPosition(Number(body.lastNoiseWX), ws);
-  if (Number.isFinite(Number(body.lastNoiseWY))) inh.lastNoiseWY = wrapWorldPosition(Number(body.lastNoiseWY), ws);
-  if (Number.isFinite(Number(body.lastSignalWX))) inh.lastNoiseWX = wrapWorldPosition(Number(body.lastSignalWX), ws);
-  if (Number.isFinite(Number(body.lastSignalWY))) inh.lastNoiseWY = wrapWorldPosition(Number(body.lastSignalWY), ws);
-  if (Number.isFinite(Number(body.gravityBonus))) inh.gravityBonus = Math.max(0, Math.min(0.35, Number(body.gravityBonus)));
-  if (Array.isArray(body.formTimes)) {
-    inh.formTimes = body.formTimes.slice(0, 4).map((value) => Number.isFinite(Number(value)) ? Number(value) : null);
-    while (inh.formTimes.length < 4) inh.formTimes.push(null);
+  const requestedPhase = Number.isFinite(Number(body.phase))
+    ? Math.max(0, Math.min(3, Math.round(Number(body.phase))))
+    : null;
+  if (requestedPhase !== null) setInhibitorPhase(requestedPhase, null, { debug: true });
+  const patches = Array.isArray(body.entities) ? body.entities : body.entity ? [body.entity] : [];
+  for (const patch of patches) {
+    const entity = runtime.inhibitorEntities.find((entry) => entry.id === patch.id);
+    if (!entity) continue;
+    if (Number.isFinite(Number(patch.wx))) entity.wx = wrapWorldPosition(Number(patch.wx), ws);
+    if (Number.isFinite(Number(patch.wy))) entity.wy = wrapWorldPosition(Number(patch.wy), ws);
+    if (Number.isFinite(Number(patch.intensity))) entity.intensity = Math.max(0, Math.min(1, Number(patch.intensity)));
+    if (Number.isFinite(Number(patch.radius))) entity.radius = Math.max(0, Math.min(ws, Number(patch.radius)));
   }
-
-  if (requestedForm !== null) setInhibitorForm(requestedForm, { debug: true });
-
-  if (inh.form === 0) {
-    inh.intensity = 0;
-    inh.radius = 0;
-  } else {
-    if (!Number.isFinite(inh.intensity) || inh.intensity <= 0) inh.intensity = 1;
-    if (!Number.isFinite(inh.radius) || inh.radius <= 0) {
-      inh.radius = inh.form === 1
-        ? INHIBITOR_CONFIG.glitchRadius
-        : inh.form === 2
-          ? INHIBITOR_CONFIG.swarmRadius
-          : INHIBITOR_CONFIG.swarmRadius * 1.5;
-    }
-    if (!Number.isFinite(inh.swarmTargetX)) inh.swarmTargetX = inh.wx;
-    if (!Number.isFinite(inh.swarmTargetY)) inh.swarmTargetY = inh.wy;
-  }
-
-  return inh;
+  return {
+    phase: inh.phase,
+    entities: runtime.inhibitorEntities.filter((entity) => entity.lifecycle !== "expired"),
+  };
 }
 
 function applyDebugPortalState(body) {
@@ -3664,7 +3635,6 @@ function applyDebugPortalState(body) {
       lifespan: 60,
       alive: true,
       opacity: 1,
-      blockedByInhibitor: false,
       finalInhibitor: false,
     };
     runtime.mapState.portals.push(portal);
@@ -3678,7 +3648,6 @@ function applyDebugPortalState(body) {
   if (Number.isFinite(Number(body.lifespan))) portal.lifespan = Math.max(0.1, Number(body.lifespan));
   if (Number.isFinite(Number(body.opacity))) portal.opacity = Math.max(0, Math.min(1, Number(body.opacity)));
   if (typeof body.alive === "boolean") portal.alive = body.alive;
-  if (typeof body.blockedByInhibitor === "boolean") portal.blockedByInhibitor = body.blockedByInhibitor;
   if (typeof body.finalInhibitor === "boolean") portal.finalInhibitor = body.finalInhibitor;
 
   return portal;
@@ -5239,9 +5208,11 @@ function aiScoreWreck(ai, wreck) {
     const sd = worldDistance(wreck.wx, wreck.wy, sentry.wx, sentry.wy, ws);
     if (sd < 0.15) threat = Math.max(threat, 1 - sd / 0.15);
   }
-  if (runtime.inhibitor.form >= 2) {
-    const inhD = worldDistance(wreck.wx, wreck.wy, runtime.inhibitor.wx, runtime.inhibitor.wy, ws);
-    if (inhD < 0.4) threat = Math.max(threat, 1 - inhD / 0.4);
+  for (const entity of runtime.inhibitorEntities) {
+    if (entity.lifecycle === "expired") continue;
+    const inhD = worldDistance(wreck.wx, wreck.wy, entity.wx, entity.wy, ws);
+    const threatRadius = entity.kind === "vessel" ? 0.5 : 0.4;
+    if (inhD < threatRadius) threat = Math.max(threat, 1 - inhD / threatRadius);
   }
   score -= threat * w.dangerPenalty * 0.5;
 
@@ -5287,10 +5258,10 @@ function aiShouldExtract(ai) {
   const cargoValue = ai.cargo.reduce((s, item) => s + (item ? (item.value || 0) : 0), 0);
   const cargoCount = ai.cargo.filter(Boolean).length;
   const portalsAlive = runtime.mapState.portals.filter(isPortalAvailable).length;
-  const inhForm = runtime.inhibitor.form;
+  const ecologyPhase = runtime.inhibitor.phase;
 
   // Hard triggers
-  if (inhForm >= 3) return true;
+  if (ecologyPhase >= 3) return true;
   if (portalsAlive <= 1) return true;
   if (runtime.simTime > runtime.session.runDurationSeconds - 30) return true;
 
@@ -5298,7 +5269,7 @@ function aiShouldExtract(ai) {
   if (cargoValue >= w.minCargoValue) return true;
   if (cargoCount >= ai.aiState.lootTarget) return true;
   if (portalsAlive <= w.panicPortalCount) return true;
-  if (inhForm >= 2 && cargoCount >= 3) return true;
+  if (ecologyPhase >= 2 && cargoCount >= 3) return true;
 
   return false;
 }
@@ -5322,8 +5293,12 @@ function aiTacticalDecision(ai) {
   }
 
   // Evade inhibitor if nearby
-  if (runtime.inhibitor.form >= 2) {
-    const inhDist = worldDistance(ai.wx, ai.wy, runtime.inhibitor.wx, runtime.inhibitor.wy, ws);
+  const nearbyEcology = runtime.inhibitorEntities
+    .filter((entity) => entity.lifecycle !== "expired")
+    .map((entity) => ({ entity, distance: worldDistance(ai.wx, ai.wy, entity.wx, entity.wy, ws) }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  if (nearbyEcology && nearbyEcology.distance < 0.4) {
+    const inhDist = nearbyEcology.distance;
     if (inhDist < 0.4) {
       ai.aiState.goal = 'evade';
       ai.aiState.targetWreckId = null;
@@ -5438,8 +5413,16 @@ function tickAIPlayers(dt) {
       }
     } else if (ai.goal === 'evade') {
       // Flee away from inhibitor
-      const inhDX = worldDisplacement(runtime.inhibitor.wx, player.wx, ws);
-      const inhDY = worldDisplacement(runtime.inhibitor.wy, player.wy, ws);
+      const target = runtime.inhibitorEntities
+        .filter((entity) => entity.lifecycle !== "expired")
+        .sort((a, b) => worldDistance(player.wx, player.wy, a.wx, a.wy, ws)
+          - worldDistance(player.wx, player.wy, b.wx, b.wy, ws))[0];
+      if (!target) {
+        ai.goal = "loot";
+        continue;
+      }
+      const inhDX = worldDisplacement(target.wx, player.wx, ws);
+      const inhDY = worldDisplacement(target.wy, player.wy, ws);
       const inhDist = Math.hypot(inhDX, inhDY);
       if (inhDist > 0.01) {
         targetWX = wrapWorldPosition(player.wx + (inhDX / inhDist) * 0.5, ws);
@@ -5959,19 +5942,8 @@ function tickFauna(dt) {
   }
 }
 
-// --- Inhibitor System (Existential Tier) ---
-// Three-form escalation is a deterministic match-scoped Conductor clock.
-// Form 1 (Glitch): drifting corruption zone, magenta pulse.
-// Form 2 (Swarm): irreversible wake — hunting mass, cargo drain, control debuff.
-// Form 3 (Vessel): geometric anti-fluid — instant kill, portal blocking, gravity pull.
-// Final portal guaranteed 60s after Vessel. Portal-window conversion is W1-F3.
-// Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
-
-function ensureInhibitorFormTimes(inh = runtime.inhibitor) {
-  if (!Array.isArray(inh.formTimes)) inh.formTimes = [null, null, null, null];
-  while (inh.formTimes.length < 4) inh.formTimes.push(null);
-  return inh.formTimes;
-}
+// --- Inhibitor Ecology ---
+// Conductor phase fronts admit accumulating Glitches, Swarms, and Vessels.
 
 function getScheduledInhibitorWave(phase) {
   return runtime.inhibitorSchedule?.severityWaves?.find((wave) => wave.tier === phase) || null;
@@ -5993,17 +5965,14 @@ function publishInhibitorPhaseEvent(phase, wave, extra = {}) {
     ...extra,
   };
   publishEvent("inhibitor.waveAnnounced", payload);
-  publishEvent("inhibitor.phase", { ...payload, form: phase });
+  publishEvent("inhibitor.phase", payload);
   return payload;
 }
 
 function setInhibitorPhase(phase, wave, payload = {}) {
   const inh = runtime.inhibitor;
-  if (inh.form === phase && inh.phase === phase && !payload.debug) return false;
+  if (inh.phase === phase && !payload.debug) return false;
   inh.phase = phase;
-  inh.form = phase;
-  const formTimes = ensureInhibitorFormTimes(inh);
-  if (phase > 0 && formTimes[phase] == null) formTimes[phase] = runtime.simTime;
   const event = wave || {
     id: `inhibitor:debug:phase-${phase}`,
     time: runtime.simTime,
@@ -6017,54 +5986,14 @@ function setInhibitorPhase(phase, wave, payload = {}) {
   inh.waveId = eventPayload.waveId;
   inh.scheduledTime = eventPayload.scheduledTime;
   inh.waveBudget = eventPayload.budget;
-  publishEvent("inhibitor.form", { form: phase, ...eventPayload });
-  if (phase === 2) publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy, ...eventPayload });
+  if (phase === 2) publishEvent("inhibitor.wake", { phase, ...eventPayload });
   return true;
 }
 
-function setInhibitorForm(form, payload = {}) {
-  const phase = Math.max(0, Math.min(3, Math.round(Number(form) || 0)));
-  const debugPhaseZero = payload.debug && phase === 0
-    ? runtime.inhibitorSchedule?.eventFronts?.find((event) => event.id === "inhibitor:phase-0")
-    : null;
-  return setInhibitorPhase(phase, debugPhaseZero || (payload.debug ? null : getScheduledInhibitorWave(phase)), payload);
-}
-
-function configureInhibitorPhase(phase, noiseSource, ws) {
-  const inh = runtime.inhibitor;
-  const cfg = INHIBITOR_CONFIG;
-  if (phase === 1) {
-    inh.intensity = 0;
-    inh.radius = cfg.glitchRadius;
-    // Phase 1 has no Noise input. The collection spawn below is the sole
-    // authority for Glitch position and drift; these fields are only the
-    // temporary scalar compatibility projection for older clients.
-    inh.wx = wrapWorldPosition(ws * 0.5, ws);
-    inh.wy = wrapWorldPosition(ws * 0.5, ws);
-    inh.lastNoiseWX = null;
-    inh.lastNoiseWY = null;
-    inh.silenceTimer = 0;
-  } else if (phase === 2) {
-    inh.intensity = 0;
-    inh.radius = cfg.swarmRadius;
-    inh.swarmTrackTimer = 0;
-    inh.swarmSearchTimer = 0;
-    const target = noiseSource;
-    if (target) {
-      inh.swarmTargetX = target.wx;
-      inh.swarmTargetY = target.wy;
-    }
-  } else if (phase === 3) {
-    inh.intensity = 0;
-    inh.radius = Math.max(inh.radius || 0, cfg.swarmRadius * 1.5);
-  }
-}
-
-function advanceInhibitorClock({ noiseSource, ws } = {}) {
+function advanceInhibitorClock() {
   const inh = runtime.inhibitor;
   for (const wave of runtime.inhibitorSchedule?.severityWaves || []) {
     if (wave.time > runtime.simTime || wave.tier <= inh.phase) continue;
-    configureInhibitorPhase(wave.tier, noiseSource, ws);
     setInhibitorPhase(wave.tier, wave);
   }
 }
@@ -6187,71 +6116,6 @@ function spawnConductorVessel() {
   publishEvent("inhibitor.vesselInbound", payload, { lane: "vfx", subject: entity.id });
   publishEvent("inhibitor.vesselSpawned", payload, { lane: "vfx", subject: entity.id });
   return entity;
-}
-
-function syncGlitchCompatibilityProjection() {
-  const source = runtime.inhibitorEntities.find((entity) => entity.lifecycle !== "expired");
-  if (!source) return;
-  const inh = runtime.inhibitor;
-  inh.form = 1;
-  inh.phase = 1;
-  inh.wx = source.wx;
-  inh.wy = source.wy;
-  inh.vx = source.vx;
-  inh.vy = source.vy;
-  inh.intensity = source.intensity;
-  inh.radius = source.radius;
-  inh.localTime = source.localTime;
-  inh.noiseListenerState = "QUIET";
-  inh.noiseSearchState = "IDLE";
-  inh.lastNoiseWX = null;
-  inh.lastNoiseWY = null;
-}
-
-function syncSwarmCompatibilityProjection() {
-  const source = runtime.inhibitorEntities.find((entity) =>
-    entity.kind === "swarm" && entity.lifecycle !== "expired"
-  );
-  if (!source) return;
-  const inh = runtime.inhibitor;
-  inh.form = 2;
-  inh.phase = 2;
-  inh.wx = source.wx;
-  inh.wy = source.wy;
-  inh.vx = source.vx;
-  inh.vy = source.vy;
-  inh.intensity = source.intensity;
-  inh.radius = source.radius;
-  inh.localTime = source.localTime;
-  inh.swarmTargetX = source.targetWX;
-  inh.swarmTargetY = source.targetWY;
-  inh.noiseListenerState = source.noiseListenerState;
-  inh.noiseSearchState = source.noiseSearchState;
-  inh.lastNoiseWX = source.lastHeardWX;
-  inh.lastNoiseWY = source.lastHeardWY;
-}
-
-function syncVesselCompatibilityProjection() {
-  const source = runtime.inhibitorEntities.find((entity) =>
-    entity.kind === "vessel" && entity.lifecycle !== "expired"
-  );
-  if (!source) return;
-  const inh = runtime.inhibitor;
-  inh.form = 3;
-  inh.phase = 3;
-  inh.wx = source.wx;
-  inh.wy = source.wy;
-  inh.vx = source.vx;
-  inh.vy = source.vy;
-  inh.intensity = source.intensity;
-  inh.radius = source.radius;
-  inh.localTime = source.localTime;
-  inh.swarmTargetX = source.targetWX;
-  inh.swarmTargetY = source.targetWY;
-  inh.noiseListenerState = "NONE";
-  inh.noiseSearchState = "NONE";
-  inh.lastNoiseWX = null;
-  inh.lastNoiseWY = null;
 }
 
 function applyInhibitorContacts(contacts, cause) {
@@ -6409,9 +6273,6 @@ function tickInhibitorEcology(dt, noiseSources = []) {
       }, { lane: "vfx", subject: well.id });
     }
   }
-  if (runtime.inhibitor.phase === 1) syncGlitchCompatibilityProjection();
-  if (runtime.inhibitor.phase === 2) syncSwarmCompatibilityProjection();
-  if (runtime.inhibitor.phase === 3) syncVesselCompatibilityProjection();
 }
 
 function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -6450,20 +6311,11 @@ function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers
 
 function tickInhibitor(dt) {
   const inh = runtime.inhibitor;
-  const ws = runtime.session.worldScale;
   inh.localTime += dt;
-  ensureInhibitorFormTimes(inh);
-
-  const noiseSource = null;
-  inh.noiseListenerState = "QUIET";
-  inh.noiseSearchState = "IDLE";
   // Conductor time alone advances Inhibitor phases. Noise is only a Swarm
   // acquisition input and never drives Vessel awareness or exfil timing.
-  advanceInhibitorClock({ noiseSource, ws });
-
-  tickInhibitorEcology(dt, inh.form >= 2
-    ? collectInhibitorNoiseSources({ includeDecoys: inh.form < 3 })
-    : []);
+  advanceInhibitorClock();
+  tickInhibitorEcology(dt, collectInhibitorNoiseSources({ includeDecoys: true }));
 
 }
 

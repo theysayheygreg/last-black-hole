@@ -30,6 +30,7 @@ const {
   shouldSpawnSwarm,
 } = require("../scripts/sim/inhibitor-ecology.cjs");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
+const { projectWorld } = require("../scripts/sim/public-snapshot.cjs");
 
 const PORT = Number(process.env.LBH_INHIBITOR_ECOLOGY_SIM_PORT || 8818);
 const URL = `http://127.0.0.1:${PORT}`;
@@ -264,6 +265,7 @@ async function run() {
   assert(!runtimeSource.includes("updateInhibitorPortalBlocks"), "Vessel ecology must not own portal blocking");
   assert(!runtimeSource.includes("vesselPortalBlockRange"), "Vessel ecology must not score portals by proximity");
   assert(!runtimeSource.includes("consumedByInhibitor"), "Vessel ecology must not consume or reduce wells");
+  assert(!runtimeSource.includes("blockedByInhibitor"), "Vessel ecology must not block portals");
 
   await startSimServer(PORT, {
     keepAlive: true,
@@ -295,8 +297,8 @@ async function run() {
     assert.strictEqual(firstEntity.lifetime, INHIBITOR_ECOLOGY_CONFIG.glitch.lifetimeSeconds, "Snapshot must expose configured lifetime");
     assert.strictEqual(phaseOneSnapshot.inhibitor.glitchSchedule.populationCap, INHIBITOR_ECOLOGY_CONFIG.glitch.populationCap,
       "Snapshot must expose the bounded ecology schedule");
-    assert.strictEqual(phaseOneSnapshot.inhibitor.compatibility.label, "legacy-scalar-projection",
-      "Legacy scalar state must be explicitly labeled as compatibility");
+    assert(!Object.prototype.hasOwnProperty.call(phaseOneSnapshot.inhibitor, "compatibility"),
+      "Public ecology must not expose a scalar compatibility projection");
 
     const accumulated = await waitFor((body) => body.inhibitor.entities?.length >= 2);
     const ids = accumulated.inhibitor.entities.map((entity) => entity.id);
@@ -308,7 +310,7 @@ async function run() {
     assert(accumulated.recentEvents.some((event) => event.type === "inhibitor.glitchSpawned"),
       "Conductor spawning must publish a focused arrival event");
 
-    await request("/debug/inhibitor-state", { form: 2 });
+    await request("/debug/inhibitor-state", { phase: 2 });
     const phaseTwo = await waitFor((body) => body.inhibitor?.phase === 2
       && body.inhibitor.entities?.some((entity) => entity.kind === "swarm"));
     const phaseTwoSwarms = phaseTwo.inhibitor.entities.filter((entity) => entity.kind === "swarm");
@@ -334,7 +336,7 @@ async function run() {
     assert(phaseTwoAccumulated.recentEvents.some((event) => event.type === "inhibitor.swarmSpawned"),
       "Conductor Phase 2 spawning must publish a Swarm arrival event");
 
-    await request("/debug/inhibitor-state", { form: 3 });
+    await request("/debug/inhibitor-state", { phase: 3 });
     const phaseThree = await waitFor((body) => body.inhibitor?.phase === 3
       && body.inhibitor.entities?.some((entity) => entity.kind === "vessel"));
     const firstVessel = phaseThree.inhibitor.entities.find((entity) => entity.kind === "vessel");
@@ -346,17 +348,47 @@ async function run() {
       "Phase 3 snapshot must expose the centralized Vessel schedule");
     assert(phaseThree.recentEvents.some((event) => event.type === "inhibitor.vesselInbound"),
       "Conductor Vessel spawning must publish an inbound tell event");
+    assert(Array.isArray(phaseThree.world.noiseEmitters), "World snapshot must expose Noise emitters");
+    const ecologyEmitters = phaseThree.world.noiseEmitters.filter((emitter) => emitter.sourceKind === "inhibitor");
+    assert(ecologyEmitters.some((emitter) => emitter.sourceClass === "GLITCH"),
+      "Glitches must emit category-only world Noise contacts");
+    assert(ecologyEmitters.some((emitter) => emitter.sourceClass === "SWARM"),
+      "Swarms must emit category-only world Noise contacts");
+    assert(ecologyEmitters.some((emitter) => emitter.sourceClass === "VESSEL"),
+      "Vessels must emit world Noise contacts");
+    assert(ecologyEmitters.every((emitter) => emitter.radiusMeters > 0 && emitter.cadenceSeconds > 0),
+      "World Noise emitters must carry centralized meter/cadence data");
+    const exfilProjection = projectWorld({
+      mapState: {
+        anomalyCatalog: [], wells: [], stars: [], wrecks: [], planetoids: [],
+        portals: [{ id: "portal-final-exfil", alive: true, wx: 4.2, wy: 1.1 }],
+        scavengers: [], fauna: [], sentries: [], nextPortalWindowIndex: 0, nextPortalWaveIndex: 0,
+      },
+      inhibitorEntities: [],
+      portalSchedule: null,
+      waveRings: [],
+      collapseEpochState: null,
+      collapseEpochSchedule: [],
+      getAuthoritativeField: () => null,
+    });
+    assert.strictEqual(exfilProjection.noiseEmitters[0].sourceClass, "EXFIL",
+      "Active exfils must emit world Noise contacts through the shared projection");
 
     const sceneSource = await import(pathToFileURL(path.join(__dirname, "..", "src/presentation/scene-source.js")).href);
     const presentationFrame = await import(pathToFileURL(path.join(__dirname, "..", "src/presentation/presentation-frame.js")).href);
     const scene = sceneSource.createPresentationSceneSource({
       phase: "playing",
       localPlayer: { ship: { wx: 0, wy: 0, vx: 0, vy: 0, slingshotEngaged: false } },
-      world: { inhibitors: accumulated.inhibitor.entities },
+      world: {
+        inhibitors: accumulated.inhibitor.entities,
+        noiseEmitters: [...phaseThree.world.noiseEmitters, ...exfilProjection.noiseEmitters],
+      },
     });
     const frame = presentationFrame.createPresentationFrame({ phase: "playing", scene });
     assert.strictEqual(frame.world.inhibitors.length, accumulated.inhibitor.entities.length,
       "Collection-owned Glitches must cross the renderer-neutral presentation seam");
+    assert(frame.world.noiseEmitters.some((emitter) => emitter.sourceClass === "EXFIL"),
+      "Renderer-neutral presentation must carry active exfil emitters");
     assert.strictEqual(frame.world.inhibitors[0].hint.roleColor, "anomalyMagenta",
       "Glitch presentation must retain the procedural magenta role");
     const mixedScene = sceneSource.createPresentationSceneSource({

@@ -20,7 +20,6 @@ class Portal {
     this.spawnTime = opts.spawnTime ?? 0;
     this.lifespan = opts.lifespan ?? 90;
     this.alive = true;
-    this.blockedByInhibitor = opts.blockedByInhibitor === true;
     this.finalInhibitor = opts.finalInhibitor === true;
     this.opacity = 1.0;
   }
@@ -32,12 +31,12 @@ class Portal {
 
   /** Is this portal in its warning phase (last 15s)? */
   isWarning(runTime) {
-    return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 15;
+    return this.alive && this.timeLeft(runTime) < 15;
   }
 
   /** Is this portal in its critical phase (last 5s)? */
   isCritical(runTime) {
-    return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 5;
+    return this.alive && this.timeLeft(runTime) < 5;
   }
 
   /** Capture radius varies by type. */
@@ -64,7 +63,7 @@ export class PortalSystem {
 
   /** Get count of currently alive portals. */
   get activeCount() {
-    return this.portals.filter(p => p.alive && !p.blockedByInhibitor).length;
+    return this.portals.filter(p => p.alive).length;
   }
 
   /** Are there more waves coming? */
@@ -191,7 +190,7 @@ export class PortalSystem {
 
   checkExtraction(shipWX, shipWY) {
     for (const portal of this.portals) {
-      if (!portal.alive || portal.blockedByInhibitor) continue;
+      if (!portal.alive) continue;
       const dist = worldDistance(shipWX, shipWY, portal.wx, portal.wy);
       if (dist < portal.getCaptureRadius()) return portal;
     }
@@ -205,7 +204,7 @@ export class PortalSystem {
       if (!portal.alive) continue;
       const [sx, sy] = worldToScreen(portal.wx, portal.wy, camX, camY, canvasW, canvasH);
       const pulse = 0.5 + 0.5 * Math.sin(totalTime * cfg.pulseRate * Math.PI * 2);
-      const alpha = portal.blockedByInhibitor ? Math.min(portal.opacity, 0.35) : portal.opacity;
+      const alpha = portal.opacity;
 
       // Critical blink (last 5s)
       const critBlink = portal.isCritical(runElapsedTime)
@@ -262,25 +261,11 @@ export class PortalSystem {
         ctx.fillText(`${secs}s`, sx, sy + size + 14);
       }
 
-      if (portal.blockedByInhibitor) {
-        const blockR = size * 1.5;
-        ctx.strokeStyle = 'rgba(255, 45, 123, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.shadowColor = 'rgba(255, 45, 123, 0.6)';
-        ctx.shadowBlur = 10;
-        ctx.beginPath();
-        ctx.moveTo(sx - blockR, sy - blockR);
-        ctx.lineTo(sx + blockR, sy + blockR);
-        ctx.moveTo(sx + blockR, sy - blockR);
-        ctx.lineTo(sx - blockR, sy + blockR);
-        ctx.stroke();
-      }
-
       ctx.restore();
     }
   }
 
   getUVPositions() {
-    return this.portals.filter(p => p.alive && !p.blockedByInhibitor).map(p => worldToFluidUV(p.wx, p.wy));
+    return this.portals.filter(p => p.alive).map(p => worldToFluidUV(p.wx, p.wy));
   }
 }

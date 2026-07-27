@@ -18,7 +18,6 @@ const LOCAL_PLAYER_EVENTS = new Set([
   'player.scavengerBumped',
   'player.portalReady',
   'player.portalAborted',
-  'player.portalBlocked',
 ]);
 
 function isLocalEvent(payload, clientId) {
@@ -38,18 +37,13 @@ export function cueForAuthoritativeEvent(event, { clientId = null } = {}) {
     case 'player.portalProximity': return payload.entered === false ? null : { cue: 'portalProximity', payload };
     case 'player.portalReady': return { cue: 'portalReady', payload };
     case 'player.portalAborted': return { cue: 'portalAbort', payload };
-    case 'player.portalBlocked': return { cue: 'portalBlocked', payload };
     case 'player.portalConfirmed': return { cue: 'portalConfirm', payload };
     case 'player.escaped': return { cue: 'extract', payload };
     case 'player.scavengerBumped': return { cue: 'scavengerBump', payload };
     case 'inhibitor.wake': return { cue: 'inhibitorWake', payload };
-    case 'inhibitor.form':
-      if (Number(payload.form) >= 3) return { cue: 'inhibitorVessel', payload };
-      // Form 2 publishes a dedicated inhibitor.wake event immediately after
-      // the form edge; leave that event as the single audible source.
-      if (Number(payload.form) === 2) return null;
-      if (Number(payload.form) === 1) return { cue: 'inhibitorGlitch', payload };
-      return null;
+    case 'inhibitor.glitchSpawned': return { cue: 'inhibitorGlitch', payload };
+    case 'inhibitor.swarmSpawned': return { cue: 'inhibitorWake', payload };
+    case 'inhibitor.vesselInbound': return { cue: 'inhibitorVessel', payload };
     default:
       return null;
   }

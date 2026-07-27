@@ -14,7 +14,6 @@ export const CUE_SPECS = Object.freeze({
   portalProximity: spec('portalProximity', { bus: 'world', priority: 'navigation', cooldown: 0.75, duration: 0.45, spatial: true, motif: 'route-cell' }),
   portalReady: spec('portalReady', { bus: 'world', priority: 'navigation', duration: 1.8, cooldown: 0.2, spatial: true, motif: 'route-cell' }),
   portalAbort: spec('portalAbort', { bus: 'ui', priority: 'navigation', duration: 0.25, cooldown: 0.12, motif: 'route-cell' }),
-  portalBlocked: spec('portalBlocked', { bus: 'critical', priority: 'warning', duration: 0.32, cooldown: 0.5, motif: 'red-consequence' }),
   portalFinal: spec('portalFinal', { bus: 'critical', priority: 'critical', duration: 0.6, cooldown: 0.5, motif: 'magenta-inhibitor' }),
   portalConfirm: spec('portalConfirm', { bus: 'critical', priority: 'critical', maxVoices: 2, duration: 0.55, spatial: true, motif: 'route-cell' }),
   extract: spec('extract', { bus: 'critical', priority: 'critical', maxVoices: 5, duration: 2.2, cooldown: 0.5, spatial: true, motif: 'route-cell' }),
