@@ -293,6 +293,8 @@ function normalizeEntity(family, source, index) {
         catalogId: id(source.catalogId, 'base-well'),
         behaviorId: id(source.behaviorId, 'base-well'),
         mass: Math.max(0, finite(source.mass, 1)),
+        overdriveTier: Math.max(0, Math.floor(finite(source.overdriveTier))),
+        overdriveMultiplier: Math.max(1, finite(source.overdriveMultiplier, 1)),
         visual: Object.freeze({
           coreRadius: Math.max(0.001, finite(source.killRadius, 0.04)),
           contourRadius: Math.max(0.001, finite(source.ringOuter, 0.1)),
@@ -406,6 +408,13 @@ function normalizeEntity(family, source, index) {
         radius: Math.max(0.001, finite(source.radius, 0.1)),
         coreRadius: Math.max(0.001, finite(source.coreRadius, 0.045)),
         contactRadius: Math.max(0, finite(source.contactRadius)),
+        outerDamageRadius: Math.max(0, finite(source.outerDamageRadius)),
+        inbound: source.inbound ? Object.freeze({
+          edge: source.inbound.edge || null,
+          tellSeconds: Math.max(0, finite(source.inbound.tellSeconds)),
+          remainingSeconds: Math.max(0, finite(source.inbound.remainingSeconds)),
+        }) : null,
+        awareness: text(source.awareness, source.kind === 'vessel' ? 'STRATEGIC' : 'NONE'),
         target: source.target ? point(source.target, 'wx', 'wy') : null,
         lastHeard: source.lastHeard ? Object.freeze({
           ...point(source.lastHeard, 'wx', 'wy'),
@@ -416,8 +425,10 @@ function normalizeEntity(family, source, index) {
         noiseSearchState: text(source.noiseSearchState, 'IDLE'),
         movement: Object.freeze({ velocity: velocity(source) }),
         visual: Object.freeze({
-          family: source.kind === 'swarm' ? 'noise-hunting-fabric' : 'magenta-fabric-corruption',
-          core: 'damaging',
+          family: source.kind === 'vessel'
+            ? 'strategic-vessel-magenta'
+            : source.kind === 'swarm' ? 'noise-hunting-fabric' : 'magenta-fabric-corruption',
+          core: source.kind === 'vessel' ? 'instant-kill' : 'damaging',
         }),
         hint: hint('anomaly', {
           roleColor: 'anomalyMagenta',

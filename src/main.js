@@ -2575,6 +2575,10 @@ function syncRemoteWorldState(world) {
       local.wx = remote.wx;
       local.wy = remote.wy;
       local.mass = remote.mass;
+      local.overdriveTier = remote.overdriveTier ?? 0;
+      local.overdriveMultiplier = remote.overdriveMultiplier ?? 1;
+      local.overdriveSource = remote.overdriveSource ?? null;
+      local.overdriveTime = remote.overdriveTime ?? null;
       if (remote.catalogId) local.catalogId = remote.catalogId;
       if (remote.behaviorId) local.behaviorId = remote.behaviorId;
       if (remote.catalogActivation) local.catalogActivation = remote.catalogActivation;

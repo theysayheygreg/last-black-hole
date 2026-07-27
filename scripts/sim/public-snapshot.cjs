@@ -4,6 +4,7 @@ const { getHeatRatio, isPlayerOverheated } = require("./player-movement-step.cjs
 const {
   projectGlitchEntity,
   projectSwarmEntity,
+  projectVesselEntity,
   INHIBITOR_ECOLOGY_CONFIG,
 } = require("./inhibitor-ecology.cjs");
 
@@ -237,13 +238,15 @@ function projectInhibitor(inhibitor, schedule, entities = [], ecology = {}) {
     // but label the object so new consumers use the collection below.
     compatibility: {
       label: "legacy-scalar-projection",
-      owner: "unmigrated-vessel-client-surfaces",
+      owner: "unmigrated-vertical-4-hud-audio-results-shader",
       scalar: legacyScalar,
     },
     phase: inhibitor.phase,
     entities: Array.from(entities || []).map((entity) => entity.kind === "swarm"
       ? projectSwarmEntity(entity)
-      : projectGlitchEntity(entity)),
+      : entity.kind === "vessel"
+        ? projectVesselEntity(entity)
+        : projectGlitchEntity(entity)),
     glitchSchedule: {
       phase: 1,
       populationCap: glitch.populationCap,
@@ -257,6 +260,13 @@ function projectInhibitor(inhibitor, schedule, entities = [], ecology = {}) {
       spawnCadenceSeconds: swarm.spawnCadenceSeconds,
       lifetimeSeconds: swarm.lifetimeSeconds,
       nextSpawnAt: ecology.nextSwarmSpawnAt ?? null,
+    },
+    vesselSchedule: {
+      phase: 3,
+      populationCap: INHIBITOR_ECOLOGY_CONFIG.vessel.populationCap,
+      spawnCadenceSeconds: INHIBITOR_ECOLOGY_CONFIG.vessel.spawnCadenceSeconds,
+      inboundTellSeconds: INHIBITOR_ECOLOGY_CONFIG.vessel.inboundTellSeconds,
+      nextSpawnAt: ecology.nextVesselSpawnAt ?? null,
     },
     schedule,
   };

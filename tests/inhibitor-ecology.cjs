@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
 const { createConductor } = require("../scripts/sim/conductor.cjs");
@@ -14,6 +15,15 @@ const {
   advanceSwarmEntity,
   applySwarmContacts,
   projectSwarmEntity,
+  createVesselEntity,
+  advanceVesselEntity,
+  applyVesselForcesAndContacts,
+  projectVesselEntity,
+  countLiveVessels,
+  shouldSpawnVessel,
+  applyWellOverdrive,
+  deriveWellOverdriveMultiplier,
+  effectiveWellMass,
   countLiveGlitches,
   countLiveSwarms,
   shouldSpawnGlitch,
@@ -183,6 +193,78 @@ async function run() {
   assert(swarmProjection.lastHeard && Number.isFinite(swarmProjection.lastHeard.wx),
     "Swarm projection must retain last-heard memory");
 
+  const vesselCfg = {
+    ...INHIBITOR_ECOLOGY_CONFIG.vessel,
+    populationCap: 3,
+    inboundTellSeconds: 3,
+    contactCooldownSeconds: 1,
+  };
+  const vessel = createVesselEntity({
+    id: "inhibitor-vessel-1",
+    edge: "left",
+    edgeProgress: 0.4,
+    worldScale: 5,
+    config: vesselCfg,
+  });
+  assert.strictEqual(vessel.lifecycle, "inbound", "Vessels must enter through an explicit inbound lifecycle");
+  assert.strictEqual(vessel.edge, "left", "Vessel edge entry must be deterministic and public");
+  assert(shouldSpawnVessel({ phase: 3, simTime: 24, nextSpawnAt: 24, entities: [vessel], config: vesselCfg }),
+    "Phase 3 must admit Vessels while their kind cap has room");
+  assert.strictEqual(countLiveVessels([
+    vessel,
+    { kind: "vessel", lifecycle: "expired" },
+    { kind: "glitch", lifecycle: "alive" },
+  ]), 1, "Vessel cap counting must be kind-specific and ignore expired entries");
+  const vesselPilot = { clientId: "vessel-pilot", status: "alive", wx: 2, wy: 2, vx: 0, vy: 0, hullDamage: 0 };
+  advanceVesselEntity(vessel, { dt: 1, worldScale: 5, players: [vesselPilot], config: vesselCfg });
+  assert.strictEqual(vessel.awareness, "STRATEGIC", "Vessels must use strategic awareness");
+  assert.strictEqual(vessel.targetClientId, vesselPilot.clientId, "Vessel must target the nearest alive player");
+  assert.strictEqual(vessel.noiseListenerState, "NONE", "Vessels must not use audible listener state");
+  advanceVesselEntity(vessel, { dt: 2, worldScale: 5, players: [vesselPilot], config: vesselCfg });
+  assert.strictEqual(vessel.lifecycle, "alive", "Vessel inbound tell must end at its configured cadence");
+  vessel.wx = 2;
+  vessel.wy = 2;
+  vesselPilot.wx = 2 + vesselCfg.outerDamageRadius * 0.9;
+  vesselPilot.wy = 2;
+  const vesselOuterContact = applyVesselForcesAndContacts([vessel], [vesselPilot], { dt: 0.1, worldScale: 5, tick: 1 });
+  assert.strictEqual(vesselOuterContact[0].damage, vesselCfg.outerDamage, "Vessel outer contact must apply configured damage");
+  assert.strictEqual(vesselPilot.hullDamage, vesselCfg.outerDamage, "Vessel outer damage must use the existing hull state seam");
+  assert.strictEqual(applyVesselForcesAndContacts([vessel], [vesselPilot], { dt: 0.1, worldScale: 5, tick: 2 }).length, 0,
+    "Vessel outer damage must respect its cooldown");
+  vesselPilot.wx = vessel.wx;
+  vesselPilot.wy = vessel.wy;
+  const vesselCoreContact = applyVesselForcesAndContacts([vessel], [vesselPilot], { dt: 1, worldScale: 5, tick: 3 });
+  assert(vesselCoreContact[0].instantKill && vesselCoreContact[0].lethal, "Vessel core contact must be instant lethal");
+  const vesselProjection = projectVesselEntity(vessel);
+  assert.strictEqual(vesselProjection.awareness, "STRATEGIC", "Vessel projection must expose strategic awareness");
+  assert.strictEqual(vesselProjection.presentation.palette, "procedural-magenta", "Vessel presentation must be procedural magenta");
+
+  const overdriveWell = { id: "well-overdrive", wx: 1, wy: 1, mass: 2, killRadius: 0.05 };
+  const firstOverdrive = applyWellOverdrive({ well: overdriveWell, source: vessel.id, time: 10, config: vesselCfg });
+  const cappedOverdrive = [firstOverdrive];
+  let currentTier = firstOverdrive.tier;
+  for (let i = 0; i < 4; i += 1) {
+    const next = applyWellOverdrive({
+      well: { ...overdriveWell, overdriveTier: currentTier },
+      source: vessel.id,
+      time: 11 + i,
+      config: vesselCfg,
+    });
+    cappedOverdrive.push(next);
+    currentTier = next.tier;
+  }
+  assert.strictEqual(currentTier, vesselCfg.tierCap, "Well overdrive must cap at the configured tier");
+  assert.strictEqual(cappedOverdrive.at(-1).multiplier, deriveWellOverdriveMultiplier(vesselCfg.tierCap, vesselCfg),
+    "Well overdrive must derive its bounded per-tier multiplier");
+  assert.strictEqual(effectiveWellMass({ ...overdriveWell, overdriveMultiplier: cappedOverdrive.at(-1).multiplier }),
+    overdriveWell.mass * cappedOverdrive.at(-1).multiplier, "Overdrive must strengthen effective force mass");
+  assert.strictEqual(overdriveWell.mass, 2, "Pure well overdrive must not reduce or mutate base well mass");
+
+  const runtimeSource = fs.readFileSync(path.join(__dirname, "..", "scripts/sim-runtime.cjs"), "utf8");
+  assert(!runtimeSource.includes("updateInhibitorPortalBlocks"), "Vessel ecology must not own portal blocking");
+  assert(!runtimeSource.includes("vesselPortalBlockRange"), "Vessel ecology must not score portals by proximity");
+  assert(!runtimeSource.includes("consumedByInhibitor"), "Vessel ecology must not consume or reduce wells");
+
   await startSimServer(PORT, {
     keepAlive: true,
     idleShutdownMs: 5000,
@@ -252,6 +334,19 @@ async function run() {
     assert(phaseTwoAccumulated.recentEvents.some((event) => event.type === "inhibitor.swarmSpawned"),
       "Conductor Phase 2 spawning must publish a Swarm arrival event");
 
+    await request("/debug/inhibitor-state", { form: 3 });
+    const phaseThree = await waitFor((body) => body.inhibitor?.phase === 3
+      && body.inhibitor.entities?.some((entity) => entity.kind === "vessel"));
+    const firstVessel = phaseThree.inhibitor.entities.find((entity) => entity.kind === "vessel");
+    assert(firstVessel.id.startsWith("inhibitor-vessel-"), "Vessel ids must use the stable ecology namespace");
+    assert(["inbound", "alive"].includes(firstVessel.lifecycle), "Snapshot must expose Vessel inbound lifecycle");
+    assert.strictEqual(firstVessel.awareness, "STRATEGIC", "Snapshot must expose strategic Vessel awareness");
+    assert.strictEqual(firstVessel.listensToNoise, false, "Vessels must remain outside Noise listener ownership");
+    assert.strictEqual(phaseThree.inhibitor.vesselSchedule.populationCap, INHIBITOR_ECOLOGY_CONFIG.vessel.populationCap,
+      "Phase 3 snapshot must expose the centralized Vessel schedule");
+    assert(phaseThree.recentEvents.some((event) => event.type === "inhibitor.vesselInbound"),
+      "Conductor Vessel spawning must publish an inbound tell event");
+
     const sceneSource = await import(pathToFileURL(path.join(__dirname, "..", "src/presentation/scene-source.js")).href);
     const presentationFrame = await import(pathToFileURL(path.join(__dirname, "..", "src/presentation/presentation-frame.js")).href);
     const scene = sceneSource.createPresentationSceneSource({
@@ -275,6 +370,14 @@ async function run() {
     const presentedSwarm = mixedFrame.world.inhibitors.find((entity) => entity.kind === "swarm");
     assert(presentedSwarm && presentedSwarm.visual.family === "noise-hunting-fabric",
       "Swarm presentation must retain its procedural magenta/fabric identity");
+    const vesselScene = sceneSource.createPresentationSceneSource({
+      phase: "playing",
+      localPlayer: { ship: { wx: 0, wy: 0, vx: 0, vy: 0, slingshotEngaged: false } },
+      world: { inhibitors: [firstVessel] },
+    });
+    const vesselFrame = presentationFrame.createPresentationFrame({ phase: "playing", scene: vesselScene });
+    assert.strictEqual(vesselFrame.world.inhibitors[0].visual.family, "strategic-vessel-magenta",
+      "Vessel presentation must retain its renderer-neutral procedural identity");
   } finally {
     await stopSimServer(PORT);
   }

@@ -24,6 +24,14 @@
   heavy hull contact through the Glitch authority damage/death seam. Retired
   Swarm cargo deletion, control sluggishness, recursive player-Noise spikes,
   and their event/audio/UI routing.
+- **Phase-3 Inhibitor Ecology:** added Conductor-owned capped Vessels with
+  deterministic edge inbound tells, strategic nearest-alive targeting,
+  outer/core authority damage, procedural magenta presentation, and persistent
+  capped well overdrive. Vessels never block exfil or consume, move, reduce, or
+  delete wells; their bounded multiplier feeds authoritative force, current,
+  and slingshot mass while the scalar compatibility projection remains only for
+  the unmigrated vertical-4 surfaces. Inhibitor/exfil audible contacts and
+  final cleanup remain deferred.
 
 ## 2026-07-26
 

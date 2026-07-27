@@ -87,9 +87,19 @@ renderer-neutral/Three presentation expose the mixed collection with the
 procedural magenta/fabric identity. The scalar `inhibitor.compatibility`
 projection remains labeled and is no longer gameplay authority for Swarms.
 
-The remaining gaps are explicit and must not be mistaken for shipped truth:
+**Phase 3 shipped:** the Conductor now adds stable-id `inhibitor-vessel-N`
+entities on a `24s` cadence up to a kind-specific cap of `3`. Each Vessel
+enters from a deterministic map edge with a public `3s` inbound tell and
+trajectory, then uses `STRATEGIC` nearest-alive targeting without hearing.
+Vessels apply the configured outer hull damage and instant-kill core through the
+existing authority outcome seam. A Vessel can persistently overdrive nearby
+wells through capped tiers (`1.18x` per tier, cap `3`); the well keeps its
+identity, position, base mass, and kill radius while authoritative force,
+current, and slingshot mass use the derived multiplier. Public snapshots and
+the renderer-neutral/Three presentation expose Vessel lifecycle, target,
+awareness, procedural magenta identity, and well overdrive tier/multiplier.
+The scalar `inhibitor.compatibility` projection remains labeled for the
+unmigrated HUD/audio/results/shader vertical 4 surfaces only.
 
-- `consumedByInhibitor` and related portal-block/legacy form behavior remain in
-  `scripts/sim-runtime.cjs`.
-- Swarm, Vessel, persistent overdriven wells, Noise emissions, exfil audio, and
-  final cleanup remain later verticals.
+Inhibitor/exfil audible contacts and final cleanup remain deferred; they are not
+claimed by this implementation.

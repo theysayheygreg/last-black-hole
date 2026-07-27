@@ -7,6 +7,10 @@ function wrapUV(value) {
   return ((value % 1) + 1) % 1;
 }
 
+function effectiveWellMass(well) {
+  return (well.mass || 1) * Math.max(1, Number(well.overdriveMultiplier) || 1);
+}
+
 export class FlowField {
   constructor(fluid = null, sources = {}) {
     this.fluid = fluid;
@@ -52,14 +56,14 @@ export class FlowField {
       const orbital = orbitalCurrentSpeed(
         dirToWell.dist,
         wellCfg.currentStrength ?? 0.3,
-        well.mass || 1,
+        effectiveWellMass(well),
         wellCfg.currentFalloff ?? wellCfg.shipPullFalloff ?? 1.5,
         currentRange
       );
       const gravity = inversePowerForce(
         dirToWell.dist,
         wellCfg.shipPullStrength ?? 0.6,
-        well.mass || 1,
+        effectiveWellMass(well),
         wellCfg.shipPullFalloff ?? 1.5,
         wellRange
       );

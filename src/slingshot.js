@@ -110,7 +110,8 @@ export class SlingshotSystem {
           ref: w,
           type: 'well',
           wx: w.wx, wy: w.wy,
-          massWeight: SLINGSHOT_CONFIG.massWeight.well * (w.mass || 1.0),
+          massWeight: SLINGSHOT_CONFIG.massWeight.well * (w.mass || 1.0)
+            * Math.max(1, Number(w.overdriveMultiplier) || 1),
           range: SLINGSHOT_CONFIG.range.well,
           killRadius: w.killRadius ?? 0.04,
         });
@@ -275,7 +276,8 @@ export class SlingshotSystem {
     const radialPull = inversePowerForce(
       dist,
       CONFIG.wells?.shipPullStrength ?? 0.6,
-      anchor.ref?.mass ?? anchor.massWeight ?? 1,
+      (anchor.ref?.mass ?? anchor.massWeight ?? 1)
+        * Math.max(1, Number(anchor.ref?.overdriveMultiplier) || 1),
       CONFIG.wells?.shipPullFalloff ?? 1.5,
       CONFIG.wells?.maxRange ?? anchor.range
     );

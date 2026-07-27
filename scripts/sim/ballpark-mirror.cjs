@@ -659,11 +659,13 @@ class BallparkMirror {
         collisionMask: [BODY_MASKS.WELL, BODY_MASKS.HAZARD, BODY_MASKS.FORCE],
         interactionMask: [BODY_MASKS.HAZARD, BODY_MASKS.FORCE],
         replicationLane: "global",
-        lifecycle: { state: well.consumedByInhibitor ? "dying" : "alive" },
+        lifecycle: { state: "alive" },
         data: {
           sourceId: well.id ?? null,
           ringOuter: finiteNumber(well.ringOuter, 0),
           killRadius: finiteNumber(well.killRadius, 0),
+          overdriveTier: Math.max(0, Math.trunc(finiteNumber(well.overdriveTier, 0))),
+          overdriveMultiplier: Math.max(1, finiteNumber(well.overdriveMultiplier, 1)),
         },
       });
     }

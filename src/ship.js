@@ -284,7 +284,7 @@ export class Ship {
         const gravity = wellGravityVector('player', {
           direction,
           strength: wellCfg.shipPullStrength * pullScale,
-          mass: well.mass,
+          mass: (well.mass || 1) * Math.max(1, Number(well.overdriveMultiplier) || 1),
           falloff: wellCfg.shipPullFalloff,
           maxRange,
         });

@@ -17,6 +17,12 @@ function signatureMultiplier(well, name) {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
+function effectiveWellMass(well) {
+  const baseMass = Math.max(0, Number(well?.mass) || 0);
+  const overdrive = Math.max(1, Number(well?.overdriveMultiplier) || 1);
+  return baseMass * overdrive;
+}
+
 function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
   if (dist < 0.001 || dist > maxRange) return 0;
   const safeDist = Math.max(dist, FORCE_MIN_DIST);
@@ -99,7 +105,7 @@ function buildCoarseFlowField({
         const currentAccel = orbitalCurrentSpeed(
           dist,
           wellCurrentScale * signatureMultiplier(well, 'currentStrengthMultiplier'),
-          well.mass || 1,
+          effectiveWellMass(well) || 1,
           wellCurrentFalloff,
           wellCurrentMaxRange * signatureMultiplier(well, 'currentReachMultiplier')
         );
@@ -112,7 +118,7 @@ function buildCoarseFlowField({
           }
         }
 
-        const gravityStrength = wellGravityMagnitude("player", dist, well.mass || 1, {
+        const gravityStrength = wellGravityMagnitude("player", dist, effectiveWellMass(well) || 1, {
           strength: wellGravityScale * signatureMultiplier(well, 'gravityStrengthMultiplier'),
           falloff: wellGravityFalloff,
           maxRange: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),

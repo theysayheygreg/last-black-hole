@@ -47,6 +47,31 @@ const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
       identity: "noise-hunting-fabric",
     }),
   }),
+  vessel: Object.freeze({
+    kind: "vessel",
+    populationCap: 3,
+    spawnCadenceSeconds: 24,
+    inboundTellSeconds: 3,
+    radius: 0.3,
+    coreRadius: 0.075,
+    outerDamageRadius: 0.18,
+    outerDamage: 0.35,
+    contactCooldownSeconds: 1,
+    speed: 0.07,
+    gravityRange: 0.32,
+    gravityStrength: 0.16,
+    wellOverdriveRange: 0.12,
+    tierCap: 3,
+    overdriveMultiplierPerTier: 1.18,
+    massMultiplierPerTier: 1.18,
+    forceMultiplierPerTier: 1.18,
+    slingshotMultiplierPerTier: 1.18,
+    presentation: Object.freeze({
+      family: "inhibitor-vessel",
+      palette: "procedural-magenta",
+      identity: "strategic-anti-fluid-vessel",
+    }),
+  }),
 });
 
 function finite(value, fallback = 0) {
@@ -94,10 +119,20 @@ function countLiveSwarms(entities, kind = INHIBITOR_ECOLOGY_CONFIG.swarm.kind) {
   return countLiveEntities(entities, kind);
 }
 
+function countLiveVessels(entities, kind = INHIBITOR_ECOLOGY_CONFIG.vessel.kind) {
+  return countLiveEntities(entities, kind);
+}
+
 function shouldSpawnSwarm({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.swarm } = {}) {
   return Number(phase) >= 2
     && Number(simTime) >= Number(nextSpawnAt)
     && countLiveSwarms(entities, config.kind) < config.populationCap;
+}
+
+function shouldSpawnVessel({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.vessel } = {}) {
+  return Number(phase) >= 3
+    && Number(simTime) >= Number(nextSpawnAt)
+    && countLiveVessels(entities, config.kind) < config.populationCap;
 }
 
 function createGlitchEntity({
@@ -484,6 +519,280 @@ function projectSwarmEntity(entity) {
   };
 }
 
+function resolveVesselEdgeSpawn({ edge = "top", edgeProgress = 0.5, worldScale = 1, inset = 0.001, speed = 0.07 } = {}) {
+  const scale = Math.max(0.001, finite(worldScale, 1));
+  const progress = clamp(edgeProgress, 0, 1);
+  const margin = clamp(inset, 0, scale / 2);
+  const velocity = Math.max(0, finite(speed));
+  switch (String(edge).toLowerCase()) {
+    case "right":
+      return { wx: scale - margin, wy: progress * scale, vx: -velocity, vy: 0, edge: "right" };
+    case "bottom":
+      return { wx: progress * scale, wy: scale - margin, vx: 0, vy: -velocity, edge: "bottom" };
+    case "left":
+      return { wx: margin, wy: progress * scale, vx: velocity, vy: 0, edge: "left" };
+    case "top":
+    default:
+      return { wx: progress * scale, wy: margin, vx: 0, vy: velocity, edge: "top" };
+  }
+}
+
+function selectNearestAliveTarget(entity, players, worldScale) {
+  return Array.from(players || [])
+    .filter((player) => player && player.status === "alive")
+    .map((player) => ({
+      player,
+      distance: Math.hypot(
+        toroidalDelta(entity.wx, player.wx, worldScale),
+        toroidalDelta(entity.wy, player.wy, worldScale),
+      ),
+    }))
+    .sort((a, b) => a.distance - b.distance
+      || String(a.player.clientId || "").localeCompare(String(b.player.clientId || "")))
+    .map(({ player }) => player)[0] || null;
+}
+
+function createVesselEntity({
+  id,
+  edge = null,
+  edgeProgress = 0.5,
+  worldScale = 1,
+  wx,
+  wy,
+  vx = 0,
+  vy = 0,
+  targetWX = wx,
+  targetWY = wy,
+  createdAt = 0,
+  createdTick = 0,
+  config = INHIBITOR_ECOLOGY_CONFIG.vessel,
+} = {}) {
+  if (!String(id || "").trim()) throw new Error("Vessel id is required");
+  const edgeSpawn = edge == null ? null : resolveVesselEdgeSpawn({
+    edge,
+    edgeProgress,
+    worldScale,
+    speed: config.speed,
+  });
+  const spawnWX = edgeSpawn ? edgeSpawn.wx : finite(wx);
+  const spawnWY = edgeSpawn ? edgeSpawn.wy : finite(wy);
+  return {
+    id: String(id),
+    kind: config.kind,
+    lifecycle: "inbound",
+    createdAt: finite(createdAt),
+    changedAt: finite(createdAt),
+    createdTick: Math.max(0, Math.trunc(finite(createdTick))),
+    changedTick: Math.max(0, Math.trunc(finite(createdTick))),
+    ageSeconds: 0,
+    localTime: 0,
+    wx: spawnWX,
+    wy: spawnWY,
+    prevWX: spawnWX,
+    prevWY: spawnWY,
+    vx: edgeSpawn ? edgeSpawn.vx : finite(vx),
+    vy: edgeSpawn ? edgeSpawn.vy : finite(vy),
+    edge: edgeSpawn?.edge || null,
+    edgeProgress: clamp(edgeProgress, 0, 1),
+    targetWX: finite(targetWX, spawnWX),
+    targetWY: finite(targetWY, spawnWY),
+    targetClientId: null,
+    awareness: "STRATEGIC",
+    inboundTellSeconds: Math.max(0, finite(config.inboundTellSeconds)),
+    inboundRemainingSeconds: Math.max(0, finite(config.inboundTellSeconds)),
+    radius: Math.max(0, finite(config.radius)),
+    coreRadius: Math.max(0, finite(config.coreRadius)),
+    outerDamageRadius: Math.max(0, finite(config.outerDamageRadius)),
+    outerDamage: Math.max(0, finite(config.outerDamage)),
+    gravityRange: Math.max(0, finite(config.gravityRange)),
+    gravityStrength: Math.max(0, finite(config.gravityStrength)),
+    wellOverdriveRange: Math.max(0, finite(config.wellOverdriveRange)),
+    speed: Math.max(0, finite(config.speed)),
+    contactCooldownSeconds: Math.max(0, finite(config.contactCooldownSeconds)),
+    tierCap: Math.max(0, Math.trunc(finite(config.tierCap, 3))),
+    overdriveMultiplierPerTier: Math.max(1, finite(config.overdriveMultiplierPerTier, 1.18)),
+    intensity: 0,
+    listensToNoise: false,
+    noiseListenerState: "NONE",
+    contactCooldowns: Object.create(null),
+    overdriveWellIds: new Set(),
+  };
+}
+
+function advanceVesselEntity(entity, {
+  dt = 0,
+  worldScale = 1,
+  tick = 0,
+  simTime = 0,
+  players = [],
+} = {}) {
+  if (!entity || entity.lifecycle === "expired") return false;
+  const step = Math.max(0, finite(dt));
+  entity.prevWX = entity.wx;
+  entity.prevWY = entity.wy;
+  entity.ageSeconds = Math.max(0, finite(entity.ageSeconds) + step);
+  entity.localTime = entity.ageSeconds;
+  entity.intensity = clamp(entity.ageSeconds / 1.5, 0, 1);
+  entity.awareness = "STRATEGIC";
+  entity.listensToNoise = false;
+  entity.noiseListenerState = "NONE";
+
+  const target = selectNearestAliveTarget(entity, players, worldScale);
+  if (target) {
+    entity.targetClientId = String(target.clientId || "");
+    entity.targetWX = finite(target.wx);
+    entity.targetWY = finite(target.wy);
+  }
+  const dx = toroidalDelta(entity.wx, entity.targetWX, worldScale);
+  const dy = toroidalDelta(entity.wy, entity.targetWY, worldScale);
+  const distance = Math.hypot(dx, dy);
+  if (distance > 0.001) {
+    entity.vx = (dx / distance) * entity.speed;
+    entity.vy = (dy / distance) * entity.speed;
+    entity.wx = wrap(entity.wx + entity.vx * step, worldScale);
+    entity.wy = wrap(entity.wy + entity.vy * step, worldScale);
+  } else {
+    entity.vx = 0;
+    entity.vy = 0;
+  }
+
+  entity.inboundRemainingSeconds = Math.max(0, entity.inboundTellSeconds - entity.ageSeconds);
+  if (entity.lifecycle === "inbound" && entity.ageSeconds >= entity.inboundTellSeconds) {
+    entity.lifecycle = "alive";
+    entity.changedAt = finite(simTime);
+    entity.changedTick = Math.max(0, Math.trunc(finite(tick)));
+  }
+  return entity.lifecycle !== "expired";
+}
+
+function applyVesselForcesAndContacts(entities, players, {
+  dt = 0,
+  worldScale = 1,
+  tick = 0,
+} = {}) {
+  const contacts = [];
+  const step = Math.max(0, finite(dt));
+  for (const vessel of entities || []) {
+    if (!vessel || vessel.kind !== "vessel" || vessel.lifecycle !== "alive") continue;
+    for (const player of players || []) {
+      if (!player || player.status !== "alive") continue;
+      const dx = toroidalDelta(player.wx, vessel.wx, worldScale);
+      const dy = toroidalDelta(player.wy, vessel.wy, worldScale);
+      const distance = Math.hypot(dx, dy);
+      if (distance > 0 && distance < vessel.gravityRange) {
+        const falloff = 1 - distance / Math.max(0.001, vessel.gravityRange);
+        player.vx += (dx / distance) * vessel.gravityStrength * falloff * step;
+        player.vy += (dy / distance) * vessel.gravityStrength * falloff * step;
+      }
+
+      const playerId = String(player.clientId || "unknown");
+      vessel.contactCooldowns[playerId] = Math.max(0,
+        finite(vessel.contactCooldowns[playerId]) - step);
+      if (distance > vessel.outerDamageRadius || vessel.contactCooldowns[playerId] > 0) continue;
+
+      const before = clamp(player.hullDamage, 0, 1);
+      const core = distance <= vessel.coreRadius;
+      const after = core ? 1 : clamp(before + vessel.outerDamage, 0, 1);
+      player.hullDamage = after;
+      vessel.contactCooldowns[playerId] = Math.max(0, finite(vessel.contactCooldownSeconds));
+      contacts.push({
+        entityId: vessel.id,
+        clientId: playerId,
+        damage: after - before,
+        totalDamage: after,
+        instantKill: core,
+        lethal: core || after >= 1,
+        tick: Math.max(0, Math.trunc(finite(tick))),
+      });
+    }
+  }
+  return contacts;
+}
+
+function projectVesselEntity(entity) {
+  return {
+    id: entity.id,
+    kind: entity.kind,
+    lifecycle: entity.lifecycle,
+    createdTick: entity.createdTick,
+    changedTick: entity.changedTick,
+    ageSeconds: Math.max(0, finite(entity.ageSeconds)),
+    wx: finite(entity.wx),
+    wy: finite(entity.wy),
+    vx: finite(entity.vx),
+    vy: finite(entity.vy),
+    radius: Math.max(0, finite(entity.radius)),
+    coreRadius: Math.max(0, finite(entity.coreRadius)),
+    outerDamageRadius: Math.max(0, finite(entity.outerDamageRadius)),
+    inbound: {
+      edge: entity.edge,
+      tellSeconds: Math.max(0, finite(entity.inboundTellSeconds)),
+      remainingSeconds: Math.max(0, finite(entity.inboundRemainingSeconds)),
+    },
+    target: {
+      clientId: entity.targetClientId,
+      wx: finite(entity.targetWX),
+      wy: finite(entity.targetWY),
+    },
+    awareness: "STRATEGIC",
+    listensToNoise: false,
+    noiseListenerState: "NONE",
+    intensity: clamp(entity.intensity, 0, 1),
+    position: { wx: finite(entity.wx), wy: finite(entity.wy) },
+    presentation: { ...INHIBITOR_ECOLOGY_CONFIG.vessel.presentation, core: "instant-kill" },
+  };
+}
+
+function deriveWellOverdriveMultiplier(tier, config = INHIBITOR_ECOLOGY_CONFIG.vessel) {
+  const cap = Math.max(0, Math.trunc(finite(config.tierCap, 3)));
+  const boundedTier = Math.max(0, Math.min(cap, Math.trunc(finite(tier))));
+  const perTier = Math.max(1, finite(config.overdriveMultiplierPerTier, 1.18));
+  return Math.pow(perTier, boundedTier);
+}
+
+function applyWellOverdrive(wellOrOptions, maybeOptions = {}) {
+  const options = arguments.length === 1 && wellOrOptions?.well
+    ? wellOrOptions
+    : { ...maybeOptions, well: wellOrOptions };
+  const well = options.well;
+  if (!well || typeof well !== "object") throw new TypeError("well is required");
+  const config = options.config || INHIBITOR_ECOLOGY_CONFIG.vessel;
+  const previousTier = Math.max(0, Math.trunc(finite(well.overdriveTier)));
+  const nextTier = Math.min(Math.max(0, Math.trunc(finite(config.tierCap, 3))), previousTier + 1);
+  const multiplier = deriveWellOverdriveMultiplier(nextTier, config);
+  const source = String(options.source || "inhibitor-vessel");
+  const time = finite(options.time, 0);
+  const after = {
+    overdriveTier: nextTier,
+    overdriveMultiplier: multiplier,
+    overdriveSource: source,
+    overdriveTime: time,
+  };
+  return {
+    changed: nextTier > previousTier,
+    before: {
+      overdriveTier: previousTier,
+      overdriveMultiplier: deriveWellOverdriveMultiplier(previousTier, config),
+    },
+    after,
+    tier: nextTier,
+    multiplier,
+    source,
+    time,
+    overdriveTier: nextTier,
+    overdriveMultiplier: multiplier,
+    overdriveSource: source,
+    overdriveTime: time,
+    well: { ...well, ...after },
+  };
+}
+
+function effectiveWellMass(well) {
+  const baseMass = Math.max(0, finite(well?.mass, 1));
+  const multiplier = Math.max(1, finite(well?.overdriveMultiplier, 1));
+  return baseMass * multiplier;
+}
+
 module.exports = {
   INHIBITOR_ECOLOGY_CONFIG,
   createGlitchEntity,
@@ -496,8 +805,19 @@ module.exports = {
   projectSwarmEntity,
   countLiveGlitches,
   countLiveSwarms,
+  countLiveVessels,
   shouldSpawnGlitch,
   shouldSpawnSwarm,
+  shouldSpawnVessel,
+  resolveVesselEdgeSpawn,
+  selectNearestAliveTarget,
+  createVesselEntity,
+  advanceVesselEntity,
+  applyVesselForcesAndContacts,
+  projectVesselEntity,
+  deriveWellOverdriveMultiplier,
+  applyWellOverdrive,
+  effectiveWellMass,
   wrap,
   toroidalDelta,
 };

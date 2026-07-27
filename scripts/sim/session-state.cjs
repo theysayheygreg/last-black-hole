@@ -155,6 +155,8 @@ function createRunState() {
         nextGlitchSpawnAt: null,
         swarmSequence: 0,
         nextSwarmSpawnAt: null,
+        vesselSequence: 0,
+        nextVesselSpawnAt: null,
       },
     },
   };

@@ -622,14 +622,26 @@ export class WorldScenePresentation {
           well.world.x, well.world.y, Math.max(0.018, well.visual.coreRadius), 0, 0.04)) this.wellDebugPrimitiveCount += 1;
       }
     }
-    // Glitches remain procedural corruption: a bounded magenta core and
-    // fabric ring per authoritative collection entry, with no UI/audio owner.
+    // Ecology remains procedural corruption: a bounded magenta core and fabric
+    // ring per authoritative collection entry, with Vessel trajectory carried
+    // as a renderer-neutral strategic tell.
     const totalTime = Number(frame.timing?.totalTime) || 0;
     for (const [index, inhibitor] of (sceneState.inhibitors || []).entries()) {
       const isSwarm = inhibitor.kind === 'swarm';
+      const isVessel = inhibitor.kind === 'vessel';
       const pulse = 0.88 + 0.12 * Math.sin(totalTime * 4.2 + index * 1.7);
       const radius = Math.max(0.012, inhibitor.radius || 0.1);
-      const threatScale = isSwarm ? 0.86 : 1;
+      const threatScale = isVessel ? 1.08 : isSwarm ? 0.86 : 1;
+      if (isVessel && inhibitor.target && Number.isFinite(inhibitor.target.wx)
+          && Number.isFinite(inhibitor.target.wy)) {
+        draw.line(
+          inhibitor.world.x,
+          inhibitor.world.y,
+          inhibitor.target.wx,
+          inhibitor.target.wy,
+          this.entityMaterials.inhibitorRing,
+        );
+      }
       const ring = addSemantic(
         this.entityGeometries.ring,
         this.entityMaterials.inhibitorRing,

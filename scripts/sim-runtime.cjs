@@ -131,6 +131,12 @@ const {
   createSwarmEntity,
   advanceSwarmEntity,
   applySwarmContacts,
+  createVesselEntity,
+  advanceVesselEntity,
+  applyVesselForcesAndContacts,
+  shouldSpawnVessel,
+  applyWellOverdrive,
+  effectiveWellMass,
   shouldSpawnSwarm,
   shouldSpawnGlitch,
 } = require("./sim/inhibitor-ecology.cjs");
@@ -383,17 +389,6 @@ const INHIBITOR_CONFIG = {
   glitchRadius: INHIBITOR_ECOLOGY_CONFIG.glitch.radius,
   // Form 2 tuning is centralized in inhibitor-ecology.cjs.
   swarmRadius: INHIBITOR_ECOLOGY_CONFIG.swarm.radius,
-  // Form 3: Vessel
-  vesselSpeed: 0.08,
-  vesselKillRadius: 0.08,
-  vesselGravityRange: 0.3,
-  vesselGravityStrength: 0.15,
-  vesselPortalBlockRange: 0.2,
-  vesselWellPullRange: 0.35,
-  vesselWellPullStrength: 0.025,
-  vesselWellConsumeRadius: 0.06,
-  vesselConsumeRadiusGrowth: 0.025,
-  vesselConsumeGravityBonus: 0.03,
 };
 
 function inhibitorPhaseProgress(phase) {
@@ -922,7 +917,13 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     growthRate: ((well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE)
       * (anomalyCatalog.cast[index]?.fabricSignature?.parameters?.growthRateMultiplier ?? 1),
     killRadius: well.killRadius,
-  }, anomalyCatalog.cast[index]?.catalogId));
+  }, anomalyCatalog.cast[index]?.catalogId)).map((well) => ({
+    ...well,
+    overdriveTier: 0,
+    overdriveMultiplier: 1,
+    overdriveSource: null,
+    overdriveTime: null,
+  }));
   const stars = map.stars.map((star) => ({
     ...star,
     alive: star.alive !== false,
@@ -983,7 +984,7 @@ function portalCaptureRadius(portal) {
 }
 
 function isPortalAvailable(portal) {
-  return Boolean(portal && portal.alive !== false && portal.blockedByInhibitor !== true);
+  return Boolean(portal && portal.alive !== false);
 }
 
 function generateScavengerIdentity(archetype) {
@@ -1096,7 +1097,6 @@ function portalPlacementIsValid(position, portalType, band, { finalExfil = false
     return Math.min(nearest, worldDistance(position.wx, position.wy, well.wx, well.wy, worldScale));
   }, Infinity);
   const nearestWellClearance = runtime.mapState.wells.reduce((nearest, well) => {
-    if (well.consumedByInhibitor) return nearest;
     const clearance = worldDistance(position.wx, position.wy, well.wx, well.wy, worldScale)
       - Math.max(0, Number(well.killRadius) || 0);
     return Math.min(nearest, clearance);
@@ -1230,6 +1230,8 @@ const runtime = {
     nextGlitchSpawnAt: null,
     swarmSequence: 0,
     nextSwarmSpawnAt: null,
+    vesselSequence: 0,
+    nextVesselSpawnAt: null,
   },
   mapState: {
     id: "shallows",
@@ -2747,7 +2749,7 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
     let ay = 0;
     for (const well of runtime.mapState.wells) {
       const direction = worldDirection(wreck.wx, wreck.wy, well.wx, well.wy, ws);
-      const gravity = wellGravityVector("wreck", direction, well.mass);
+      const gravity = wellGravityVector("wreck", direction, effectiveWellMass(well));
       ax += gravity.x;
       ay += gravity.y;
     }
@@ -3037,7 +3039,7 @@ function applyWellGravity(player, dt) {
   } else {
     for (const { entity: well } of relevantWells) {
       const direction = worldDirection(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
-      const gravity = wellGravityVector("player", direction, well.mass);
+      const gravity = wellGravityVector("player", direction, effectiveWellMass(well));
       pullX += gravity.x;
       pullY += gravity.y;
     }
@@ -3931,7 +3933,7 @@ function applyWellGravityToEntity(entity, dt) {
       }
       return false;
     }
-    const gravity = wellGravityVector("scavenger", direction, well.mass);
+    const gravity = wellGravityVector("scavenger", direction, effectiveWellMass(well));
     ax += gravity.x;
     ay += gravity.y;
   }
@@ -4542,8 +4544,8 @@ function collectSlingshotAnchors() {
       index,
       wx: well.wx,
       wy: well.wy,
-      massWeight: SLINGSHOT_SERVER.massWeight.well * (well.mass || 1),
-      pullMass: well.mass || 1,
+      massWeight: SLINGSHOT_SERVER.massWeight.well * effectiveWellMass(well),
+      pullMass: effectiveWellMass(well),
       pullStrength: SERVER_WELLS.shipPullStrength,
       pullFalloff: SERVER_WELLS.shipPullFalloff,
       pullRange: SERVER_WELLS.maxRange,
@@ -5276,12 +5278,6 @@ function aiScorePortal(ai, portal) {
     if (cd < dist * 1.2) competitorCount++; // closer than us = competition
   }
   score -= competitorCount * w.competitionPenalty;
-
-  // Inhibitor blocking — Vessel near portal makes it unreachable
-  if (runtime.inhibitor.form >= 3) {
-    const inhD = worldDistance(portal.wx, portal.wy, runtime.inhibitor.wx, runtime.inhibitor.wy, ws);
-    if (inhD < INHIBITOR_CONFIG.vesselPortalBlockRange) return -Infinity;
-  }
 
   return score;
 }
@@ -6034,7 +6030,7 @@ function setInhibitorForm(form, payload = {}) {
   return setInhibitorPhase(phase, debugPhaseZero || (payload.debug ? null : getScheduledInhibitorWave(phase)), payload);
 }
 
-function configureInhibitorPhase(phase, noiseSource, vesselTarget, ws) {
+function configureInhibitorPhase(phase, noiseSource, ws) {
   const inh = runtime.inhibitor;
   const cfg = INHIBITOR_CONFIG;
   if (phase === 1) {
@@ -6053,7 +6049,7 @@ function configureInhibitorPhase(phase, noiseSource, vesselTarget, ws) {
     inh.radius = cfg.swarmRadius;
     inh.swarmTrackTimer = 0;
     inh.swarmSearchTimer = 0;
-    const target = noiseSource || vesselTarget;
+    const target = noiseSource;
     if (target) {
       inh.swarmTargetX = target.wx;
       inh.swarmTargetY = target.wy;
@@ -6064,11 +6060,11 @@ function configureInhibitorPhase(phase, noiseSource, vesselTarget, ws) {
   }
 }
 
-function advanceInhibitorClock({ noiseSource, vesselTarget, ws } = {}) {
+function advanceInhibitorClock({ noiseSource, ws } = {}) {
   const inh = runtime.inhibitor;
   for (const wave of runtime.inhibitorSchedule?.severityWaves || []) {
     if (wave.time > runtime.simTime || wave.tier <= inh.phase) continue;
-    configureInhibitorPhase(wave.tier, noiseSource, vesselTarget, ws);
+    configureInhibitorPhase(wave.tier, noiseSource, ws);
     setInhibitorPhase(wave.tier, wave);
   }
 }
@@ -6153,6 +6149,46 @@ function spawnConductorSwarm() {
   return entity;
 }
 
+function spawnConductorVessel() {
+  const ecology = runtime.inhibitorEcology;
+  const cfg = INHIBITOR_ECOLOGY_CONFIG.vessel;
+  const worldScale = runtime.session.worldScale;
+  const sequence = Math.max(0, Math.trunc(Number(ecology.vesselSequence) || 0)) + 1;
+  const edges = ["top", "right", "bottom", "left"];
+  const edge = edges[(sequence - 1) % edges.length];
+  const edgeRng = currentRNG(`inhibitor.vessel.edge.${sequence}`);
+  const edgeProgress = edgeRng();
+  const id = `inhibitor-vessel-${sequence}`;
+  const entity = createVesselEntity({
+    id,
+    edge,
+    edgeProgress,
+    worldScale,
+    createdAt: runtime.simTime,
+    createdTick: runtime.tick,
+    config: cfg,
+  });
+  ecology.vesselSequence = sequence;
+  runtime.inhibitorEntities.push(entity);
+  const payload = {
+    conductorId: runtime.conductor?.id || "match-conductor",
+    entityId: entity.id,
+    kind: entity.kind,
+    phase: runtime.inhibitor.phase,
+    scheduledTime: runtime.simTime,
+    inboundTellSeconds: entity.inboundTellSeconds,
+    edge: entity.edge,
+    wx: entity.wx,
+    wy: entity.wy,
+    vx: entity.vx,
+    vy: entity.vy,
+    awareness: entity.awareness,
+  };
+  publishEvent("inhibitor.vesselInbound", payload, { lane: "vfx", subject: entity.id });
+  publishEvent("inhibitor.vesselSpawned", payload, { lane: "vfx", subject: entity.id });
+  return entity;
+}
+
 function syncGlitchCompatibilityProjection() {
   const source = runtime.inhibitorEntities.find((entity) => entity.lifecycle !== "expired");
   if (!source) return;
@@ -6195,6 +6231,29 @@ function syncSwarmCompatibilityProjection() {
   inh.lastNoiseWY = source.lastHeardWY;
 }
 
+function syncVesselCompatibilityProjection() {
+  const source = runtime.inhibitorEntities.find((entity) =>
+    entity.kind === "vessel" && entity.lifecycle !== "expired"
+  );
+  if (!source) return;
+  const inh = runtime.inhibitor;
+  inh.form = 3;
+  inh.phase = 3;
+  inh.wx = source.wx;
+  inh.wy = source.wy;
+  inh.vx = source.vx;
+  inh.vy = source.vy;
+  inh.intensity = source.intensity;
+  inh.radius = source.radius;
+  inh.localTime = source.localTime;
+  inh.swarmTargetX = source.targetWX;
+  inh.swarmTargetY = source.targetWY;
+  inh.noiseListenerState = "NONE";
+  inh.noiseSearchState = "NONE";
+  inh.lastNoiseWX = null;
+  inh.lastNoiseWY = null;
+}
+
 function applyInhibitorContacts(contacts, cause) {
   for (const contact of contacts) {
     const player = runtime.players.get(contact.clientId);
@@ -6224,6 +6283,7 @@ function tickInhibitorEcology(dt, noiseSources = []) {
   const ecology = runtime.inhibitorEcology;
   const cfg = INHIBITOR_ECOLOGY_CONFIG.glitch;
   const swarmCfg = INHIBITOR_ECOLOGY_CONFIG.swarm;
+  const vesselCfg = INHIBITOR_ECOLOGY_CONFIG.vessel;
   const worldScale = runtime.session.worldScale;
   // Expired entries remain visible for one snapshot so lifecycle is truthful,
   // then the bounded active collection drops them on the next tick.
@@ -6261,6 +6321,20 @@ function tickInhibitorEcology(dt, noiseSources = []) {
     ecology.nextSwarmSpawnAt = runtime.simTime + swarmCfg.spawnCadenceSeconds;
   }
 
+  if (runtime.inhibitor.phase >= 3 && ecology.nextVesselSpawnAt == null) {
+    ecology.nextVesselSpawnAt = runtime.simTime;
+  }
+  if (shouldSpawnVessel({
+    phase: runtime.inhibitor.phase,
+    simTime: runtime.simTime,
+    nextSpawnAt: ecology.nextVesselSpawnAt,
+    entities: runtime.inhibitorEntities,
+    config: vesselCfg,
+  })) {
+    spawnConductorVessel();
+    ecology.nextVesselSpawnAt = runtime.simTime + vesselCfg.spawnCadenceSeconds;
+  }
+
   for (const entity of runtime.inhibitorEntities) {
     if (entity.kind === "glitch") {
       advanceGlitchEntity(entity, {
@@ -6279,6 +6353,14 @@ function tickInhibitorEcology(dt, noiseSources = []) {
         noiseSources,
         config: swarmCfg,
       });
+    } else if (entity.kind === "vessel") {
+      advanceVesselEntity(entity, {
+        dt,
+        worldScale,
+        tick: runtime.tick,
+        simTime: runtime.simTime,
+        players: runtime.players.values(),
+      });
     }
   }
   const glitchContacts = applyGlitchForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
@@ -6293,8 +6375,43 @@ function tickInhibitorEcology(dt, noiseSources = []) {
     tick: runtime.tick,
   });
   applyInhibitorContacts(swarmContacts, "inhibitor_swarm");
+  const vesselContacts = applyVesselForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
+    dt,
+    worldScale,
+    tick: runtime.tick,
+  });
+  applyInhibitorContacts(vesselContacts, "inhibitor_vessel");
+
+  for (const vessel of runtime.inhibitorEntities) {
+    if (vessel.kind !== "vessel" || vessel.lifecycle !== "alive") continue;
+    if (!(vessel.overdriveWellIds instanceof Set)) vessel.overdriveWellIds = new Set();
+    for (const well of runtime.mapState.wells) {
+      const distance = worldDistance(vessel.wx, vessel.wy, well.wx, well.wy, worldScale);
+      if (distance > vessel.wellOverdriveRange) continue;
+      const wellKey = String(well.id || well.name || "well");
+      if (vessel.overdriveWellIds.has(wellKey)) continue;
+      const change = applyWellOverdrive({
+        well,
+        source: vessel.id,
+        time: runtime.simTime,
+        config: vesselCfg,
+      });
+      Object.assign(well, change.after);
+      vessel.overdriveWellIds.add(wellKey);
+      publishEvent("inhibitor.wellOverdriven", {
+        conductorId: runtime.conductor?.id || "match-conductor",
+        entityId: vessel.id,
+        wellId: well.id,
+        tier: change.tier,
+        multiplier: change.multiplier,
+        source: change.source,
+        time: change.time,
+      }, { lane: "vfx", subject: well.id });
+    }
+  }
   if (runtime.inhibitor.phase === 1) syncGlitchCompatibilityProjection();
   if (runtime.inhibitor.phase === 2) syncSwarmCompatibilityProjection();
+  if (runtime.inhibitor.phase === 3) syncVesselCompatibilityProjection();
 }
 
 function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -6331,130 +6448,23 @@ function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers
   return sources;
 }
 
-function selectInhibitorNoiseSource(options = {}) {
-  return collectInhibitorNoiseSources(options)[0] || null;
-}
-
-function moveInhibitorToward(inh, targetWX, targetWY, speed, dt, ws) {
-  const dx = worldDisplacement(inh.wx, targetWX, ws);
-  const dy = worldDisplacement(inh.wy, targetWY, ws);
-  const dist = Math.hypot(dx, dy);
-  if (dist <= 0.01) return;
-  inh.wx = wrapWorldPosition(inh.wx + (dx / dist) * speed * dt, ws);
-  inh.wy = wrapWorldPosition(inh.wy + (dy / dist) * speed * dt, ws);
-}
-
-function updateInhibitorPortalBlocks(inh, ws) {
-  const cfg = INHIBITOR_CONFIG;
-  for (const portal of runtime.mapState.portals) {
-    if (portal.alive === false) continue;
-    if (portal.guaranteedFinalExfil) {
-      if (portal.blockedByInhibitor === true) {
-        portal.blockedByInhibitor = false;
-        publishEvent("portal.unblocked", {
-          portalId: portal.id,
-          by: "guaranteed-final-exfil",
-        });
-      }
-      continue;
-    }
-    const shouldBlock = inh.form >= 3 &&
-      worldDistance(inh.wx, inh.wy, portal.wx, portal.wy, ws) < cfg.vesselPortalBlockRange;
-    if (portal.blockedByInhibitor !== shouldBlock) {
-      portal.blockedByInhibitor = shouldBlock;
-      publishEvent(shouldBlock ? "portal.blocked" : "portal.unblocked", {
-        portalId: portal.id,
-        by: "inhibitor",
-      });
-    }
-  }
-}
-
-function updateVesselWellDistortion(inh, dt, ws) {
-  const cfg = INHIBITOR_CONFIG;
-  for (const well of runtime.mapState.wells) {
-    if (well.consumedByInhibitor) continue;
-    const dx = worldDisplacement(well.wx, inh.wx, ws);
-    const dy = worldDisplacement(well.wy, inh.wy, ws);
-    const dist = Math.hypot(dx, dy);
-    if (dist > 0.001 && dist < cfg.vesselWellPullRange) {
-      const pull = cfg.vesselWellPullStrength * (1 - dist / cfg.vesselWellPullRange);
-      well.wx = wrapWorldPosition(well.wx + (dx / dist) * pull * dt, ws);
-      well.wy = wrapWorldPosition(well.wy + (dy / dist) * pull * dt, ws);
-    }
-    if (dist < cfg.vesselWellConsumeRadius) {
-      const absorbedMass = Math.max(0, Number(well.mass) || 0);
-      well.consumedByInhibitor = true;
-      well.mass = Math.max(0.05, absorbedMass * 0.25);
-      well.killRadius = wellKillRadiusForMass(well);
-      inh.radius = Math.min(0.75, (inh.radius || cfg.swarmRadius * 1.5) + absorbedMass * cfg.vesselConsumeRadiusGrowth);
-      inh.gravityBonus = Math.min(0.35, (inh.gravityBonus || 0) + absorbedMass * cfg.vesselConsumeGravityBonus);
-      publishEvent("inhibitor.consumeWell", {
-        wellId: well.id,
-        wx: well.wx,
-        wy: well.wy,
-        absorbedMass,
-      });
-    }
-  }
-}
-
 function tickInhibitor(dt) {
   const inh = runtime.inhibitor;
-  const cfg = INHIBITOR_CONFIG;
   const ws = runtime.session.worldScale;
   inh.localTime += dt;
   ensureInhibitorFormTimes(inh);
 
   const noiseSource = null;
-  const vesselTarget = inh.form >= 3
-    ? selectInhibitorNoiseSource({ includeDecoys: false, includeZeroPlayers: true })
-    : null;
   inh.noiseListenerState = "QUIET";
   inh.noiseSearchState = "IDLE";
-  // Conductor time alone advances Inhibitor phases. Noise only affects the
-  // already-awake movement/search behavior.
-  advanceInhibitorClock({ noiseSource, vesselTarget, ws });
+  // Conductor time alone advances Inhibitor phases. Noise is only a Swarm
+  // acquisition input and never drives Vessel awareness or exfil timing.
+  advanceInhibitorClock({ noiseSource, ws });
 
   tickInhibitorEcology(dt, inh.form >= 2
     ? collectInhibitorNoiseSources({ includeDecoys: inh.form < 3 })
     : []);
 
-  if (inh.form === 3) {
-    inh.intensity = Math.min(1, inh.intensity + dt * 0.2);
-    if (vesselTarget) {
-      moveInhibitorToward(inh, vesselTarget.wx, vesselTarget.wy, cfg.vesselSpeed, dt, ws);
-    }
-
-    updateVesselWellDistortion(inh, dt, ws);
-
-    const pullStrength = cfg.vesselGravityStrength + (inh.gravityBonus || 0);
-    for (const player of runtime.players.values()) {
-      if (player.status !== "alive") continue;
-      const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
-      if (pd < cfg.vesselGravityRange && pd > 0.001) {
-        const pull = pullStrength * (1 - pd / cfg.vesselGravityRange);
-        const pdx = worldDisplacement(player.wx, inh.wx, ws);
-        const pdy = worldDisplacement(player.wy, inh.wy, ws);
-        player.vx += (pdx / pd) * pull * dt;
-        player.vy += (pdy / pd) * pull * dt;
-      }
-      if (pd < cfg.vesselKillRadius) {
-        player.status = "dead";
-        player.vx = 0;
-        player.vy = 0;
-        publishEvent("player.died", {
-          clientId: player.clientId,
-          cause: "inhibitor_vessel",
-          entityId: "inhibitor-vessel",
-        });
-        commitPlayerOutcome(player, "dead");
-        player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
-      }
-    }
-  }
-
-  updateInhibitorPortalBlocks(inh, ws);
 }
 
 function tickAuthorityPlayers(dt, relevance) {
