@@ -1,6 +1,7 @@
 import { WORLD_SCALE, worldDisplacement, wrapWorld } from '../coords.js';
 import {
   MOVEMENT_INPUT,
+  getHeatRatio,
   stepPlayerMovementCore,
 } from '../content/movement-step.js';
 import { UNIT_SCALE } from '../content/units.js';
@@ -86,6 +87,9 @@ function authorityState(player, { runId = null, now = 0 } = {}) {
     deltaVRegenBoost: Math.max(0, finite(player.deltaVRegenBoost)),
     deltaVBurnEff: Math.max(0, finite(player.deltaVBurnEff, 1)),
     deltaVBurnRate: Math.max(0, finite(player.deltaVBurnRate)),
+    heat: getHeatRatio(player),
+    heatRatio: getHeatRatio(player),
+    overheatRemaining: Math.max(0, finite(player.overheatRemaining, 0)),
     timeSinceThrust: Math.max(0, finite(player.timeSinceThrust)),
     forceLedger: player.forceLedger || null,
     receivedAt: now,
@@ -104,6 +108,9 @@ function predictionFromAuthority(authority) {
     deltaVRegenBoost: authority.deltaVRegenBoost,
     deltaVBurnEff: authority.deltaVBurnEff,
     deltaVBurnRate: authority.deltaVBurnRate,
+    heat: authority.heat,
+    heatRatio: authority.heatRatio,
+    overheatRemaining: authority.overheatRemaining,
     timeSinceThrust: authority.timeSinceThrust,
   };
 }
@@ -145,6 +152,9 @@ export function createLocalPlayerReconciliationState({
     deltaVRegenBoost: 0,
     deltaVBurnEff: 1,
     deltaVBurnRate: 0,
+    heat: 0,
+    heatRatio: 0,
+    overheatRemaining: 0,
     timeSinceThrust: 0,
     brain: movementBrain(brain || {}),
     inputConfig,
@@ -200,6 +210,9 @@ export function rebaseLocalPlayerReconciliation(state, player, {
     deltaVRegenBoost: authority.deltaVRegenBoost,
     deltaVBurnEff: authority.deltaVBurnEff,
     deltaVBurnRate: authority.deltaVBurnRate,
+    heat: authority.heat,
+    heatRatio: authority.heatRatio,
+    overheatRemaining: authority.overheatRemaining,
     timeSinceThrust: authority.timeSinceThrust,
   };
   const pendingInputCount = pendingInputs === undefined
@@ -258,6 +271,9 @@ export function advanceLocalPlayerReconciliation(state, {
     deltaVRegenBoost: state.deltaVRegenBoost,
     deltaVBurnEff: state.deltaVBurnEff,
     deltaVBurnRate: state.deltaVBurnRate,
+    heat: state.heat,
+    heatRatio: state.heatRatio,
+    overheatRemaining: state.overheatRemaining,
     timeSinceThrust: state.timeSinceThrust,
   });
   predicted.brain = state.brain;
@@ -311,6 +327,9 @@ export function advanceLocalPlayerReconciliation(state, {
       deltaVRegenBoost: predicted.deltaVRegenBoost,
       deltaVBurnEff: predicted.deltaVBurnEff,
       deltaVBurnRate: predicted.deltaVBurnRate,
+      heat: predicted.heat,
+      heatRatio: predicted.heatRatio,
+      overheatRemaining: predicted.overheatRemaining,
       timeSinceThrust: predicted.timeSinceThrust,
       correctionDistance: distance,
       correctionVelocity: velocityDistance,

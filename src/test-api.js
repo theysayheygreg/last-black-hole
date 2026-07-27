@@ -126,7 +126,16 @@ export function initTestAPI(getState) {
         deltaV: ship.deltaV,
         deltaVMax: ship.deltaVMax,
         ratio: ship.getDeltaVRatio(),
+        heat: ship.getHeatRatio(),
+        heatRatio: ship.getHeatRatio(),
+        overheated: ship.getHeatState().overheated,
+        overheatRemaining: ship.getHeatState().overheatRemaining,
       };
+    },
+
+    getShipHeatState() {
+      const { ship } = getState();
+      return ship.getHeatState();
     },
 
     getShipTuningState() {
@@ -141,8 +150,15 @@ export function initTestAPI(getState) {
 
     setShipFuel(deltaV) {
       const { ship } = getState();
-      ship.deltaV = Math.max(0, Math.min(ship.deltaVMax, Number(deltaV) || 0));
+      const nextDeltaV = Math.max(0, Math.min(ship.deltaVMax, Number(deltaV) || 0));
+      ship.setHeatRatio(1 - nextDeltaV / Math.max(ship.deltaVMax, 1e-6));
       return this.getShipFuelState();
+    },
+
+    setShipHeat(heatRatio) {
+      const { ship } = getState();
+      ship.setHeatRatio(Math.max(0, Math.min(1, Number(heatRatio) || 0)));
+      return this.getShipHeatState();
     },
 
     refreshShipHullStats(refill = false) {

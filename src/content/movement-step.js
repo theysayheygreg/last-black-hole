@@ -5,9 +5,14 @@ export const MOVEMENT_INPUT = Object.freeze({
   coastHalfLifeSeconds: MOVEMENT.player.coastHalfLifeSeconds,
   fluidCoupling: MOVEMENT.player.fluidCoupling,
   brakeThrustScale: MOVEMENT.player.brakeThrustScale,
-  brakeFuelScale: MOVEMENT.player.brakeFuelScale,
+  // Kept as a private compatibility name for input/config consumers. The
+  // player-facing resource is Heat; reverse thrust still costs 60% of the
+  // forward heat gain through the canonical heat owner below.
+  brakeFuelScale: MOVEMENT.player.heat.brakeScale,
+  brakeHeatScale: MOVEMENT.player.heat.brakeScale,
   maxSpeedWorld: MOVEMENT.player.maxSpeedWorld,
   deltaVRegenDelay: MOVEMENT.player.deltaVRegenDelay,
+  heatCoolDelaySeconds: MOVEMENT.player.heat.coolDelaySeconds,
 });
 
 function finiteNumber(value, fallback = 0) {
@@ -20,49 +25,129 @@ function wrapWorldPosition(value, worldScale) {
   return ((value % scale) + scale) % scale;
 }
 
-function consumePlayerDeltaV(player, intensity, dt, costScale = 1) {
+function clamp01(value) {
+  return Math.max(0, Math.min(1, finiteNumber(value, 0)));
+}
+
+function getHeatRatio(player) {
+  if (Number.isFinite(Number(player?.heatRatio))) {
+    return clamp01(player.heatRatio);
+  }
+  if (Number.isFinite(Number(player?.heat))) {
+    return clamp01(player.heat);
+  }
+  const maxDeltaV = Number(player?.deltaVMax) || MOVEMENT.player.deltaVMax;
+  const deltaV = Math.max(0, Number(player?.deltaV) || 0);
+  return maxDeltaV > 0 ? clamp01(1 - deltaV / maxDeltaV) : 0;
+}
+
+function isPlayerOverheated(player) {
+  return Math.max(0, Number(player?.overheatRemaining) || 0) > 0
+    || getHeatRatio(player) >= MOVEMENT.player.heat.overheatThreshold;
+}
+
+function setHeatRatio(player, ratio) {
+  const heatRatio = clamp01(ratio);
+  const maxDeltaV = Math.max(1, Number(player?.deltaVMax) || MOVEMENT.player.deltaVMax);
+  player.heat = heatRatio;
+  player.heatRatio = heatRatio;
+  // deltaV remains a private wire/replay alias while Heat owns the resource.
+  player.deltaVMax = maxDeltaV;
+  player.deltaV = maxDeltaV * (1 - heatRatio);
+  return heatRatio;
+}
+
+function heatRateScale(player, legacyRate, baseLegacyRate) {
+  const maxDeltaV = Math.max(1, Number(player?.deltaVMax) || MOVEMENT.player.deltaVMax);
+  const rate = Math.max(0, Number(legacyRate) || 0);
+  const baseRate = Math.max(Number.EPSILON, Number(baseLegacyRate) || 0);
+  return (rate / maxDeltaV) / (baseRate / MOVEMENT.player.deltaVMax);
+}
+
+function heatGainPerSecond(player, costScale = 1) {
+  const burnRate = (Number(player?.deltaVBurnRate) || MOVEMENT.player.deltaVBurnRate)
+    * (Number(player?.deltaVBurnEff) || 1);
+  return MOVEMENT.player.heat.gainPerSecond
+    * heatRateScale(player, burnRate, MOVEMENT.player.deltaVBurnRate)
+    * Math.max(0, Number(costScale) || 0);
+}
+
+function heatCoolRates(player) {
+  const baseRate = heatRateScale(player, player?.deltaVRegen, MOVEMENT.player.deltaVRegen);
+  const boostRate = heatRateScale(player, player?.deltaVRegenBoost, MOVEMENT.player.deltaVRegenBoost);
+  return {
+    base: MOVEMENT.player.heat.coolPerSecond * baseRate,
+    boost: MOVEMENT.player.heat.coolBoostPerSecond * boostRate,
+  };
+}
+
+function advancePlayerOverheat(player, dt) {
+  const remaining = Math.max(0, Number(player?.overheatRemaining) || 0);
+  if (remaining <= 0) return false;
+  const nextRemaining = Math.max(0, remaining - Math.max(0, Number(dt) || 0));
+  player.overheatRemaining = nextRemaining;
+  if (nextRemaining <= 0) {
+    setHeatRatio(player, MOVEMENT.player.heat.resetRatio);
+    player._heatResetThisStep = true;
+    player.deltaVRecovering = false;
+    return false;
+  }
+  player.deltaVRecovering = true;
+  return true;
+}
+
+function consumePlayerHeat(player, intensity, dt, costScale = 1) {
   const requested = Math.max(0, Math.min(1, Number(intensity) || 0));
   if (requested <= 0) return 0;
-  const available = Math.max(0, Number(player.deltaV) || 0);
-  const burnRate = (Number(player.deltaVBurnRate) || MOVEMENT.player.deltaVBurnRate)
-    * (Number(player.deltaVBurnEff) || 1)
-    * costScale;
-  const burnCost = burnRate * requested * dt;
-  // Do not spend the last fractional sample. Once a tank is dry (or cannot
-  // afford this input sample), hold the request while regen refills enough for
-  // one usable pulse. This closes the zero/near-zero oscillation caused by
-  // immediately consuming each tiny regen tick while thrust remains held.
-  if (available < burnCost) {
+  if (Math.max(0, Number(player.overheatRemaining) || 0) > 0) {
     player.deltaVRecovering = true;
     return 0;
   }
-  player.deltaV = Math.max(0, available - burnCost);
-  player.deltaVRecovering = player.deltaV <= 0;
+  const heat = getHeatRatio(player);
+  const gain = heatGainPerSecond(player, costScale) * requested * Math.max(0, Number(dt) || 0);
+  const nextHeat = setHeatRatio(player, heat + gain);
+  const threshold = MOVEMENT.player.heat.overheatThreshold;
+  if (nextHeat >= threshold - Number.EPSILON) {
+    setHeatRatio(player, threshold);
+    player.overheatRemaining = MOVEMENT.player.heat.lockoutSeconds;
+    player.deltaVRecovering = true;
+  } else {
+    player.deltaVRecovering = false;
+  }
   return requested;
 }
 
-function applyPlayerDeltaVRegen(player, dt, burned, inputConfig = MOVEMENT_INPUT) {
-  if (burned) {
+function applyPlayerHeatCooling(player, dt, active, inputConfig = MOVEMENT_INPUT) {
+  if (player._heatResetThisStep) {
+    player._heatResetThisStep = false;
+    player.timeSinceThrust = 0;
+    return;
+  }
+  if (Math.max(0, Number(player.overheatRemaining) || 0) > 0) {
+    player.timeSinceThrust = 0;
+    return;
+  }
+  if (active) {
     player.timeSinceThrust = 0;
     return;
   }
   player.timeSinceThrust = (player.timeSinceThrust || 0) + dt;
-  const boost = player.timeSinceThrust >= inputConfig.deltaVRegenDelay
-    ? (player.deltaVRegenBoost || 0)
+  const coolDelay = inputConfig.heatCoolDelaySeconds ?? inputConfig.deltaVRegenDelay;
+  const boost = player.timeSinceThrust >= coolDelay
+    ? heatCoolRates(player).boost
     : 0;
-  const regenRate = (player.deltaVRegen || 0) + boost;
-  const maxDeltaV = Number(player.deltaVMax) || MOVEMENT.player.deltaVMax;
-  player.deltaV = Math.min(maxDeltaV, (player.deltaV || 0) + regenRate * dt);
+  const rates = heatCoolRates(player);
+  setHeatRatio(player, getHeatRatio(player) - (rates.base + boost) * dt);
 }
 
-function clampPlayerSpeed(player, inputConfig = MOVEMENT_INPUT) {
-  const speed = Math.hypot(player.vx, player.vy);
-  const maxSpeed = inputConfig.maxSpeedWorld;
-  if (Number.isFinite(maxSpeed) && speed > maxSpeed) {
-    const scale = maxSpeed / speed;
-    player.vx *= scale;
-    player.vy *= scale;
-  }
+// Private compatibility aliases keep the existing authority/replay adapters
+// stable while all resource state and player-facing projections use Heat.
+function applyPlayerDeltaVRegen(player, dt, burned, inputConfig = MOVEMENT_INPUT) {
+  return applyPlayerHeatCooling(player, dt, burned, inputConfig);
+}
+
+function consumePlayerDeltaV(player, intensity, dt, costScale = 1) {
+  return consumePlayerHeat(player, intensity, dt, costScale);
 }
 
 function applyPlayerDriveAndFlow(player, input, dt, options = {}) {
@@ -73,7 +158,8 @@ function applyPlayerDriveAndFlow(player, input, dt, options = {}) {
   const flowSample = options.flowSample || { current: { x: 0, y: 0 } };
   const moveX = finiteNumber(input?.moveX, 0);
   const moveY = finiteNumber(input?.moveY, 0);
-  const thrustIntensity = consumePlayerDeltaV(player, input?.thrust, dt, 1);
+  const overheatActive = advancePlayerOverheat(player, dt);
+  const thrustIntensity = overheatActive ? 0 : consumePlayerHeat(player, input?.thrust, dt, 1);
   const thrustScale = Number(brain.thrustScale) || 1;
   const accel = MOVEMENT.player.thrustAccel * thrustScale
     * (burnModifiers.thrust || 1) * thrustIntensity * controlMult;
@@ -97,6 +183,16 @@ function applyPlayerDriveAndFlow(player, input, dt, options = {}) {
   return { thrustIntensity, coupling, flowSample, thrustDeltaV, couplingDeltaV };
 }
 
+function clampPlayerSpeed(player, inputConfig = MOVEMENT_INPUT) {
+  const speed = Math.hypot(player.vx, player.vy);
+  const maxSpeed = inputConfig.maxSpeedWorld;
+  if (Number.isFinite(maxSpeed) && speed > maxSpeed) {
+    const scale = maxSpeed / speed;
+    player.vx *= scale;
+    player.vy *= scale;
+  }
+}
+
 function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   const inputConfig = options.inputConfig || MOVEMENT_INPUT;
   const brain = options.brain || player.brain || {};
@@ -105,7 +201,12 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   const moveX = finiteNumber(input?.moveX, 0);
   const moveY = finiteNumber(input?.moveY, 0);
   const thrustIntensity = Math.max(0, Number(options.thrustIntensity) || 0);
-  const brakeIntensity = consumePlayerDeltaV(player, input?.brake, dt, inputConfig.brakeFuelScale);
+  const brakeIntensity = consumePlayerHeat(
+    player,
+    input?.brake,
+    dt,
+    inputConfig.brakeHeatScale ?? inputConfig.brakeFuelScale,
+  );
   const thrustDeltaV = { x: 0, y: 0 };
 
   if (brakeIntensity > 0) {
@@ -120,7 +221,7 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
 
   const beforeDragVX = player.vx;
   const beforeDragVY = player.vy;
-  applyPlayerDeltaVRegen(player, dt, thrustIntensity > 0.01 || brakeIntensity > 0.01, inputConfig);
+  applyPlayerHeatCooling(player, dt, thrustIntensity > 0.01 || brakeIntensity > 0.01, inputConfig);
   const dragScale = Number(brain.dragScale) || 1;
   const dragFactor = dragFactorFromHalfLife(inputConfig.coastHalfLifeSeconds, dt, dragScale);
   player.vx *= dragFactor;
@@ -152,11 +253,18 @@ function stepPlayerMovementCore(player, input, dt, options = {}) {
 
 export {
   applyPlayerBrakeAndIntegrate,
+  applyPlayerHeatCooling,
   applyPlayerDeltaVRegen,
   applyPlayerDriveAndFlow,
+  consumePlayerHeat,
   clampPlayerSpeed,
   consumePlayerDeltaV,
   finiteNumber,
+  getHeatRatio,
+  heatCoolRates,
+  heatGainPerSecond,
+  isPlayerOverheated,
+  setHeatRatio,
   stepPlayerMovementCore,
   wrapWorldPosition,
 };

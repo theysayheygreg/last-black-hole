@@ -13,6 +13,9 @@ import {
   MOVEMENT_INPUT,
   applyPlayerBrakeAndIntegrate,
   applyPlayerDriveAndFlow,
+  getHeatRatio,
+  isPlayerOverheated,
+  setHeatRatio,
 } from './content/movement-step.js';
 import {
   dragPerReferenceFrameFromHalfLife,
@@ -47,11 +50,9 @@ export class Ship {
     this.lastFluidVel = { x: 0, y: 0 };
     this.lastFluidSpeed = 0;
 
-    // --- Delta-v / thrust fuel ---
-    // deltaV gates thrust. Hull-defaults from hulls.data.json override
-    // these via setHullStats(); applyDeltaVItemBonus folds in equipped-
-    // item coefficients. Pillar 2 enforcement: fluid currents become an
-    // economic decision when thrust is no longer free.
+    // --- Propulsion Heat ---
+    // Heat gates thrust. deltaV remains a private compatibility alias for
+    // snapshots, fixtures, and saved profiles while movement-step owns Heat.
     this.deltaV = CONFIG.ship.deltaVMax;
     this.deltaVMax = CONFIG.ship.deltaVMax;
     this.deltaVRegen = CONFIG.ship.deltaVRegen;
@@ -63,6 +64,9 @@ export class Ship {
     this.deltaVBurnEff = 1.0;
     this.timeSinceThrust = 999;
     this.deltaVRecovering = false;
+    this.heat = 0;
+    this.heatRatio = 0;
+    this.overheatRemaining = 0;
 
     // --- Hull-supplied movement modifiers ---
     // Were defined in hulls.data.json but the legacy ship.update read
@@ -88,7 +92,7 @@ export class Ship {
 
   /**
    * Apply hull stats to the ship. Called on hull selection / scene load.
-   * Resets deltaV to the new max so a fresh hull starts fueled. Items
+   * Resets Heat to cool so a fresh hull starts ready. Items
    * on top get folded in by applyDeltaVItemBonus().
    */
   setHullStats({
@@ -102,13 +106,14 @@ export class Ship {
     wellResistScale = 1.0,
     refill = true,
   } = {}) {
-    const prevRatio = this.deltaV / Math.max(this.deltaVMax, 1e-6);
+    const prevHeatRatio = this.getHeatRatio();
     this.deltaVMax = deltaVMax;
     this.deltaVRegen = deltaVRegen;
     this.deltaVRegenBoost = deltaVRegenBoost;
     this.deltaVBurnEff = deltaVBurnEff;
-    this.deltaV = refill ? deltaVMax : prevRatio * deltaVMax;
+    this.setHeatRatio(refill ? 0 : prevHeatRatio);
     this.deltaVRecovering = false;
+    this.overheatRemaining = 0;
     this.thrustScale = thrustScale;
     this.dragScale = dragScale;
     this.currentCoupling = currentCoupling;
@@ -125,13 +130,13 @@ export class Ship {
     deltaVRegenMult = 1,
     deltaVBurnMult = 1,
   } = {}) {
-    const prevRatio = this.deltaV / Math.max(this.deltaVMax, 1e-6);
+    const prevHeatRatio = this.getHeatRatio();
     this.deltaVMax *= deltaVCapacityMult;
     this.deltaVRegen *= deltaVRegenMult;
     this.deltaVRegenBoost *= deltaVRegenMult;
     this.deltaVBurnEff *= deltaVBurnMult;
-    // Keep the same %-fueled feel through equipment swaps mid-run.
-    this.deltaV = prevRatio * this.deltaVMax;
+    // Keep the same Heat percentage through equipment swaps mid-run.
+    this.setHeatRatio(prevHeatRatio);
   }
 
   /** Layer equipped movement coefficients onto the hull baseline. */
@@ -151,9 +156,10 @@ export class Ship {
     this.dragScale *= profileDragScaleFromUpgradeRank(rank);
   }
 
-  /** Refill fuel by an absolute amount (used by fuelCell consumable). */
+  /** Legacy compatibility refill for the existing consumable path. */
   refillDeltaV(amount) {
-    this.deltaV = Math.min(this.deltaVMax, this.deltaV + amount);
+    const next = Math.min(this.deltaVMax, this.deltaV + amount);
+    this.setHeatRatio(1 - next / Math.max(this.deltaVMax, 1e-6));
   }
 
   wakeTerminalVelocityWorld() {
@@ -164,6 +170,29 @@ export class Ship {
   /** Fraction 0..1 for HUD gauge consumers. */
   getDeltaVRatio() {
     return this.deltaVMax > 0 ? Math.max(0, Math.min(1, this.deltaV / this.deltaVMax)) : 0;
+  }
+
+  getHeatRatio() {
+    return getHeatRatio(this);
+  }
+
+  setHeatRatio(ratio, { overheatRemaining = this.overheatRemaining } = {}) {
+    setHeatRatio(this, ratio);
+    this.overheatRemaining = Math.max(0, Number(overheatRemaining) || 0);
+    this.deltaVRecovering = this.overheatRemaining > 0
+      || this.heatRatio >= CONFIG.ship.heat.overheatThreshold;
+  }
+
+  getHeatState() {
+    const heatRatio = this.getHeatRatio();
+    return {
+      heat: heatRatio,
+      heatRatio,
+      overheated: isPlayerOverheated(this),
+      overheatRemaining: Math.max(0, this.overheatRemaining || 0),
+      deltaV: this.deltaV,
+      deltaVMax: this.deltaVMax,
+    };
   }
 
   setThrust(active) {

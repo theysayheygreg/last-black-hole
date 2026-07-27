@@ -247,7 +247,11 @@ function normalizeLocalPlayer(source = null, scene = {}) {
     movement: Object.freeze({
       velocity: motion,
       facing: finite(source.facing, Math.atan2(motion.y, motion.x)),
-      fuelRatio: Math.max(0, Math.min(1, finite(source.deltaVRatio ?? source.fuelRatio, 1))),
+      heatRatio: Math.max(0, Math.min(1, finite(
+        source.heatRatio ?? (source.deltaVRatio != null ? 1 - source.deltaVRatio : 0),
+      ))),
+      overheated: source.overheated === true,
+      overheatRemaining: Math.max(0, finite(source.overheatRemaining)),
       thrusting: source.thrusting === true,
       braking: source.braking === true,
       pathState: pathState(source, sling),

@@ -1,5 +1,6 @@
 const { PROTOCOL_VERSION, filterEventsForPlayer } = require("../sim-protocol.cjs");
 const { getLegacySessionCompatibility } = require("./session-compatibility.cjs");
+const { getHeatRatio, isPlayerOverheated } = require("./player-movement-step.cjs");
 
 /**
  * Public authority projection only. This module selects the stable wire shape
@@ -50,6 +51,8 @@ function projectAbilityState(state) {
 }
 
 function projectPlayer(player, facts) {
+  const heatRatio = getHeatRatio(player);
+  const overheatRemaining = Math.max(0, Number(player.overheatRemaining) || 0);
   const coyote = player.slingshot ? facts.slingshotCoyoteTelemetry(player.slingshot) : null;
   const slingshot = player.slingshot ? {
     phase: player.slingshot.phase || "idle",
@@ -103,6 +106,10 @@ function projectPlayer(player, facts) {
     deltaV: player.deltaV,
     deltaVMax: player.deltaVMax,
     deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
+    heat: heatRatio,
+    heatRatio,
+    overheated: isPlayerOverheated(player),
+    overheatRemaining,
     deliveredThrust: Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0)),
     deliveredBrake: Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0)),
     forceLedger: player.forceLedger || null,

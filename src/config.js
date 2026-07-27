@@ -50,12 +50,11 @@ export const CONFIG = {
                              // thrust-only terminal of 0.47); the cap exists as
                              // a creative tuning lever for later, not a current
                              // gameplay constraint.
-    // --- Delta-v / thrust fuel ---
-    // Thrust now costs a finite fuel resource (deltaV). Burning at full
-    // intensity drains deltaV at deltaVBurnRate per second; the gauge
-    // refills slowly when not thrusting (small ambient regen) and after
-    // a short pause when releasing thrust (deltaVRegenDelay). These are
-    // the BASELINE — hulls override via deltaV{Max,Regen,BurnEff}.
+    // --- Propulsion Heat ---
+    // Heat is the player-facing resource. The legacy deltaV fields below
+    // remain private compatibility aliases for the server wire shape and
+    // saved fixtures; heat rates/thresholds live in movement.data.json.
+    heat: MOVEMENT.player.heat,
     deltaVMax: MOVEMENT.player.deltaVMax, // Default tank size (Drifter is small/efficient,
                               // Breacher is large/expensive — see hulls.data.json).
     deltaVRegen: MOVEMENT.player.deltaVRegen, // deltaV/sec ambient regen (always-on, even mid-burn).
@@ -309,14 +308,10 @@ export const CONFIG = {
                               // Between small and big: linear blend.
 
     triggerThreshold: 0.05,   // Trigger activation threshold (0-1). Prevents ghost input.
-    // Brake is now a reverse-thrust: instead of adding drag, it applies
-    // thrust in the opposite-of-facing direction at brakeThrustScale of
-    // the forward thrustAccel, costing fuel at brakeFuelScale of the
-    // forward burn rate. Player can reverse, anti-slingshot, or just
-    // course-correct without paying full delta-v. Less powerful than
-    // the gas pedal by design.
+    // Brake is reverse thrust at brakeThrustScale. It contributes Heat at
+    // the canonical heat.brakeScale (the existing 0.6 reverse-cost rule).
     brakeThrustScale: MOVEMENT.player.brakeThrustScale, // Reverse thrust multiplier.
-    brakeFuelScale: MOVEMENT.player.brakeFuelScale, // Reverse fuel-cost multiplier.
+    brakeFuelScale: MOVEMENT.player.heat.brakeScale, // Private legacy alias.
 
     // --- Mouse thrust curve (keyboard + mouse install path) ---
     mouseDeadzonePx: 28,      // Cursor distance from ship below this = drift/no thrust.

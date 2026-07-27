@@ -3,6 +3,8 @@
  * Inputs are current client facts; this module neither queries authority nor
  * mutates gameplay owners.
  */
+import { MOVEMENT } from '../content/movement.js';
+
 export function createPresentationSceneSource(input = {}) {
   const phase = input.phase;
   const local = input.localPlayer || {};
@@ -13,6 +15,9 @@ export function createPresentationSceneSource(input = {}) {
   const localAffordance = input.slingshot?.localAffordance || null;
   const fieldSample = input.semanticFieldSample || null;
   const propulsionActive = phase === 'playing';
+  const legacyDeltaVRatio = local.authorityDeltaVRatio ?? local.localDeltaVRatio;
+  const heatRatio = local.authorityHeatRatio ?? local.localHeatRatio
+    ?? (legacyDeltaVRatio == null ? 0 : 1 - legacyDeltaVRatio);
 
   return {
     phase,
@@ -24,7 +29,12 @@ export function createPresentationSceneSource(input = {}) {
       vy: ship.vy,
       facing: ship.facing,
       hullType: local.hullType || 'drifter',
-      deltaVRatio: local.authorityDeltaVRatio ?? local.localDeltaVRatio ?? 1,
+      heatRatio,
+      overheated: local.authorityOverheated ?? local.localOverheated
+        ?? heatRatio >= MOVEMENT.player.heat.overheatThreshold,
+      overheatRemaining: local.authorityOverheatRemaining ?? local.localOverheatRemaining ?? 0,
+      // Private compatibility field for older renderer fixtures only.
+      deltaVRatio: 1 - heatRatio,
       forceLedger: local.forceLedger || null,
       ruler: local.ruler || null,
       slingshotEngaged: Boolean(ship.slingshotEngaged),

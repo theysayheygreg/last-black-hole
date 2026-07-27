@@ -7,12 +7,21 @@
     "coastHalfLifeSeconds": 0.7643727575403364,
     "fluidCoupling": 1.2,
     "brakeThrustScale": 0.4,
-    "brakeFuelScale": 0.6,
     "maxSpeedWorld": 8.0,
     "deltaVRegenDelay": 0.5,
     "deltaVMax": 100,
     "deltaVRegen": 3.0,
     "deltaVRegenBoost": 12.0,
-    "deltaVBurnRate": 12
+    "deltaVBurnRate": 12,
+    "heat": {
+      "gainPerSecond": 0.12,
+      "coolPerSecond": 0.03,
+      "coolBoostPerSecond": 0.12,
+      "coolDelaySeconds": 0.5,
+      "brakeScale": 0.6,
+      "overheatThreshold": 1,
+      "resetRatio": 0.25,
+      "lockoutSeconds": 3
+    }
   }
 }

@@ -101,6 +101,8 @@ const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queri
 const {
   applyPlayerBrakeAndIntegrate,
   applyPlayerDriveAndFlow,
+  getHeatRatio,
+  setHeatRatio,
 } = require("./sim/player-movement-step.cjs");
 const {
   WELL_GRAVITY_PARAMS,
@@ -1342,7 +1344,7 @@ function syncPlayerCargoCapacity(player) {
 
 function refreshPlayerBrain(player, durableProfile = null) {
   if (!player) return null;
-  const prevFuelRatio = player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 1;
+  const prevHeatRatio = getHeatRatio(player);
   player.hullType = normalizeHullType(player.hullType, durableProfile?.hullType || durableProfile?.shipType || player.profileShipType);
   const rigLevels = normalizeRigLevels(
     durableProfile?.rigLevels || player.rigLevels, player.hullType
@@ -1362,21 +1364,21 @@ function refreshPlayerBrain(player, durableProfile = null) {
     equipped: player.equipped,
   });
   syncPlayerCargoCapacity(player);
-  applyPlayerDeltaVBrain(player, { previousRatio: prevFuelRatio });
+  applyPlayerDeltaVBrain(player, { previousHeatRatio: prevHeatRatio });
   return player.brain;
 }
 
-function applyPlayerDeltaVBrain(player, { previousRatio = null } = {}) {
+function applyPlayerDeltaVBrain(player, { previousHeatRatio = null } = {}) {
   const brain = player.brain || BRAIN_DEFAULTS;
-  const ratio = Number.isFinite(previousRatio)
-    ? previousRatio
-    : player.deltaVMax > 0 ? (Number(player.deltaV) || 0) / player.deltaVMax : 1;
+  const heatRatio = Number.isFinite(previousHeatRatio)
+    ? previousHeatRatio
+    : getHeatRatio(player);
   player.deltaVMax = Math.max(1, Number(brain.deltaVMax) || BRAIN_DEFAULTS.deltaVMax);
   player.deltaVRegen = Math.max(0, Number(brain.deltaVRegen) || 0);
   player.deltaVRegenBoost = Math.max(0, Number(brain.deltaVRegenBoost) || 0);
   player.deltaVBurnEff = Math.max(0.1, Number(brain.deltaVBurnEff) || 1);
   player.deltaVBurnRate = Math.max(1, Number(brain.deltaVBurnRate) || BRAIN_DEFAULTS.deltaVBurnRate);
-  player.deltaV = Math.max(0, Math.min(player.deltaVMax, ratio * player.deltaVMax));
+  setHeatRatio(player, heatRatio);
   if (!Number.isFinite(player.timeSinceThrust)) player.timeSinceThrust = 999;
 }
 
@@ -1487,6 +1489,9 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     deltaVBurnRate: brain.deltaVBurnRate || BRAIN_DEFAULTS.deltaVBurnRate,
     timeSinceThrust: 999,
     deltaVRecovering: false,
+    heat: 0,
+    heatRatio: 0,
+    overheatRemaining: 0,
   };
 }
 
@@ -3352,7 +3357,8 @@ function applyConsumable(player, slotIndex) {
       break;
     case "fuelRefill": {
       const refillAmount = Number(item.refillAmount || item.amount || item.deltaV || 35);
-      player.deltaV = Math.min(player.deltaVMax || refillAmount, (player.deltaV || 0) + refillAmount);
+      const nextDeltaV = Math.min(player.deltaVMax || refillAmount, (player.deltaV || 0) + refillAmount);
+      setHeatRatio(player, 1 - nextDeltaV / Math.max(player.deltaVMax || refillAmount, 1));
       break;
     }
     default:
@@ -3550,7 +3556,12 @@ function applyDebugPlayerState(player, body) {
   if (Number.isFinite(Number(body.wy))) player.wy = wrapWorldPosition(Number(body.wy), runtime.session.worldScale);
   if (Number.isFinite(Number(body.vx))) player.vx = Number(body.vx);
   if (Number.isFinite(Number(body.vy))) player.vy = Number(body.vy);
-  if (Number.isFinite(Number(body.deltaV))) player.deltaV = Math.max(0, Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, Number(body.deltaV)));
+  if (Number.isFinite(Number(body.heatRatio))) {
+    setHeatRatio(player, Number(body.heatRatio));
+  } else if (Number.isFinite(Number(body.deltaV))) {
+    const nextDeltaV = Math.max(0, Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, Number(body.deltaV)));
+    setHeatRatio(player, 1 - nextDeltaV / Math.max(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, 1));
+  }
   if (Number.isFinite(Number(body.signalLevel))) {
     player.signal.level = Math.max(0, Math.min(1, Number(body.signalLevel)));
     player.signal.zone = signalZoneForLevel(player.signal.level);

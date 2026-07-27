@@ -413,22 +413,29 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     _signalZoneEl.style.color = zoneColors[zone] || zoneColors.ghost;
   }
 
-  // === FUEL (delta-v) ===
-  if (_fuelFillEl && opts.fuelRatio !== undefined) {
-    const ratio = Math.max(0, Math.min(1, opts.fuelRatio));
+  // === PROPULSION HEAT ===
+  if (_fuelFillEl && (opts.heatRatio !== undefined || opts.fuelRatio !== undefined)) {
+    // fuelRatio is a private compatibility input for older local fixtures;
+    // the player-facing gauge always renders the inverted value as Heat.
+    const ratio = opts.heatRatio !== undefined
+      ? Math.max(0, Math.min(1, opts.heatRatio))
+      : 1 - Math.max(0, Math.min(1, opts.fuelRatio));
     const pct = Math.round(ratio * 100);
     _fuelFillEl.style.width = `${pct}%`;
     _fuelFillEl.parentElement?.setAttribute('aria-valuenow', String(pct));
-    // Threshold-based color: green → yellow → orange → red as the gauge
-    // empties. Players see the cost climbing before they hit the wall.
+    // Heat shifts from cool cyan to amber/red as propulsion approaches lockout.
     let color;
-    if (ratio > 0.6)      color = 'rgba(120, 220, 140, 0.9)';   // green
-    else if (ratio > 0.3) color = 'rgba(220, 200, 80, 0.9)';    // yellow
-    else if (ratio > 0.1) color = 'rgba(230, 140, 40, 0.95)';   // orange
-    else                  color = 'rgba(220, 60, 40, 0.95)';    // red
+    if (ratio < 0.35)      color = 'rgba(100, 220, 220, 0.9)';
+    else if (ratio < 0.7)  color = 'rgba(220, 220, 90, 0.9)';
+    else if (ratio < 0.99) color = 'rgba(240, 150, 50, 0.95)';
+    else                   color = 'rgba(240, 60, 50, 0.98)';
     _fuelFillEl.style.backgroundColor = color;
     if (_fuelReadoutEl) {
-      _fuelReadoutEl.textContent = `${pct}%`;
+      const overheated = opts.overheated === true || ratio >= 0.999;
+      const remaining = Math.max(0, Number(opts.overheatRemaining) || 0);
+      _fuelReadoutEl.textContent = overheated && remaining > 0
+        ? `${pct}% · locked ${remaining.toFixed(1)}s`
+        : `${pct}%`;
       _fuelReadoutEl.style.color = color;
     }
   }

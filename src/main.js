@@ -1717,9 +1717,9 @@ function startGame(map, seed = null) {
   camX = ship.wx;
   camY = ship.wy;
 
-  // Apply hull stats (delta-v and friends) + equipped-item bonuses on
-  // top. Done here once per run so the ship starts with full fuel and
-  // the right tank size for the chosen hull.
+  // Apply hull stats (Heat and movement coefficients) + equipped-item
+  // bonuses on top. Done once per run so the ship starts cool with the
+  // right hull-relative propulsion profile.
   applyHullToShip();
   // Drop any leftover slingshot state from a previous run.
   if (slingshotSystem) slingshotSystem.cancel(ship);
@@ -1857,9 +1857,15 @@ function applyRemoteSnapshot(snapshot) {
   applyRemoteInventoryShape(localPlayer);
   shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
   combatSystem.playerCooldown = Math.max(0, localPlayer.effectState?.pulseCooldownRemaining ?? 0);
-  if (Number.isFinite(localPlayer.deltaVMax) && Number.isFinite(localPlayer.deltaV)) {
+  if (Number.isFinite(localPlayer.heatRatio)) {
+    ship.deltaVMax = Math.max(1, Number(localPlayer.deltaVMax) || ship.deltaVMax);
+    ship.setHeatRatio(localPlayer.heatRatio, {
+      overheatRemaining: localPlayer.overheatRemaining,
+    });
+  } else if (Number.isFinite(localPlayer.deltaVMax) && Number.isFinite(localPlayer.deltaV)) {
+    // Older authority snapshots are still readable during local development.
     ship.deltaVMax = localPlayer.deltaVMax;
-    ship.deltaV = Math.max(0, Math.min(localPlayer.deltaVMax, localPlayer.deltaV));
+    ship.setHeatRatio(1 - Math.max(0, Math.min(localPlayer.deltaVMax, localPlayer.deltaV)) / localPlayer.deltaVMax);
   }
   applyRemoteSlingshotState(localPlayer.slingshot);
   if (localPlayer.signal) {
@@ -3640,8 +3646,12 @@ function collectPresentationSceneSource() {
     localPlayer: {
       ship,
       hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
-      authorityDeltaVRatio: authorityPlayer?.deltaVRatio,
-      localDeltaVRatio: ship?.getDeltaVRatio?.(),
+      authorityHeatRatio: authorityPlayer?.heatRatio,
+      localHeatRatio: ship?.getHeatRatio?.(),
+      authorityOverheated: authorityPlayer?.overheated,
+      localOverheated: ship?.getHeatState?.().overheated,
+      authorityOverheatRemaining: authorityPlayer?.overheatRemaining,
+      localOverheatRemaining: ship?.getHeatState?.().overheatRemaining,
       forceLedger: authorityPlayer?.forceLedger || null,
       ruler: authorityPlayer?.ruler || null,
       deliveredThrust,
@@ -3704,8 +3714,8 @@ function collectFrameVfxEvents(ctx, w, h) {
 
 /**
  * Apply the active profile's hull stats and equipped-item bonuses to the
- * ship. Fresh runs refill the tank; mid-run inventory swaps preserve the
- * current fuel ratio through the whole hull+item recompute.
+ * ship. Fresh runs start cool; mid-run inventory swaps preserve the current
+ * Heat ratio through the whole hull+item recompute.
  */
 function applyHullToShip({ refill = true } = {}) {
   const hullType = profileManager.active?.hullType
@@ -3742,8 +3752,10 @@ function applyConsumableEffect(effectId, item = null) {
       // amount. Tier scales the amount: T1 small, T2 medium, T3 large.
       const refillAmount = Number.isFinite(item?.amount) ? item.amount
         : (item?.tier === 3 ? 200 : item?.tier === 2 ? 80 : 35);
+      const heatBefore = ship.getHeatRatio();
       ship.refillDeltaV(refillAmount);
-      showWarning(`fuel +${refillAmount}`, 'rgba(120, 220, 140, 0.95)', 1800);
+      const heatCooled = Math.max(0, Math.round((heatBefore - ship.getHeatRatio()) * 100));
+      showWarning(`heat cooled ${heatCooled}%`, 'rgba(120, 220, 140, 0.95)', 1800);
       break;
     }
     case 'breachFlare': {
@@ -4367,10 +4379,10 @@ function gameLoop(now) {
           inventoryConfirm(inventorySystem);
           const afterEquipSig = inventorySystem.equipped.map((it) => it?.id ?? null).join('|');
           // If equipped slots changed (equip / unequip / swap), refresh
-          // the ship's hull-derived stats so deltaV-related coefficients
+          // the ship's hull-derived stats so propulsion coefficients
           // from the new artifacts apply mid-run instead of waiting for
           // the next scene load. applyDeltaVItemBonus preserves the
-          // current %-fueled ratio so a partial tank stays partial.
+          // current Heat ratio so a partially heated ship stays consistent.
           if (beforeEquipSig !== afterEquipSig) {
             applyHullToShip({ refill: false });
           }
@@ -5305,7 +5317,9 @@ function gameLoop(now) {
       abilityState: localAbilityState,
       inhibitorState,
       ship,
-      fuelRatio: authoritativePlayer?.deltaVRatio ?? ship.getDeltaVRatio(),
+      heatRatio: authoritativePlayer?.heatRatio ?? ship.getHeatRatio(),
+      overheated: authoritativePlayer?.overheated ?? ship.getHeatState().overheated,
+      overheatRemaining: authoritativePlayer?.overheatRemaining ?? ship.getHeatState().overheatRemaining,
       hullState: authoritativePlayer ? {
         status: authoritativePlayer.status,
         shieldCharges: authoritativePlayer.effectState?.shieldCharges || 0,
@@ -6009,7 +6023,7 @@ function gameLoop(now) {
       ctx.fillText('DROP WINDOW READY', centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 78);
       ctx.fillStyle = roleColor('muted', 0.76);
       ctx.font = canvasFont(13);
-      ctx.fillText('choose a route, spend the fuel, steal from the dark', centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 106);
+      ctx.fillText('choose a route, manage the heat, steal from the dark', centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 106);
       }
     } else {
       ctx.textAlign = 'center';
