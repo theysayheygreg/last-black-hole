@@ -11,8 +11,8 @@
     "maxSpeedWorld": 8.0,
     "deltaVRegenDelay": 0.5,
     "deltaVMax": 100,
-    "deltaVRegen": 1.5,
-    "deltaVRegenBoost": 6.0,
+    "deltaVRegen": 3.0,
+    "deltaVRegenBoost": 12.0,
     "deltaVBurnRate": 12
   }
 }
