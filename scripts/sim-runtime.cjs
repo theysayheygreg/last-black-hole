@@ -5016,12 +5016,37 @@ function applyPlayerSlingshotForces(player, dt, input) {
   state.anchorWX = anchor.wx;
   state.anchorWY = anchor.wy;
   state.anchorRange = anchor.range;
-  const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
-  const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
-  const dist = Math.hypot(dx, dy) || 1e-4;
+  let dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+  let dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+  let dist = Math.hypot(dx, dy) || 1e-4;
   if (dist > anchor.range * 1.1) {
-    releasePlayerSlingshot(player, runtime.simTime, input, { reason: "range-break" });
-    return;
+    if (!input?.slingshot) {
+      releasePlayerSlingshot(player, runtime.simTime, input, { reason: "range-break" });
+      return;
+    }
+
+    // A held orbit owns the stick until deliberate button-up. Keep the
+    // existing range-break cleanup for released input, but correct a single
+    // outward integration step back to the capture boundary so stale held
+    // input cannot create a release ghost before the release packet arrives.
+    const radialNX = dx / dist;
+    const radialNY = dy / dist;
+    player.wx = wrapWorldPosition(
+      anchor.wx + radialNX * anchor.range,
+      runtime.session.worldScale,
+    );
+    player.wy = wrapWorldPosition(
+      anchor.wy + radialNY * anchor.range,
+      runtime.session.worldScale,
+    );
+    const outwardVelocity = player.vx * radialNX + player.vy * radialNY;
+    if (outwardVelocity > 0) {
+      player.vx -= radialNX * outwardVelocity;
+      player.vy -= radialNY * outwardVelocity;
+    }
+    dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+    dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+    dist = Math.hypot(dx, dy) || 1e-4;
   }
 
   const radialNX = dx / dist;
