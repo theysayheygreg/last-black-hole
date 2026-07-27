@@ -16,6 +16,12 @@ const WELL_ADJ = ['Hungering', 'Endless', 'Silent', 'Abyssal', 'Forsaken',
 const WELL_NOUN = ['Maw', 'Abyss', 'Void', 'Terminus', 'Oblivion',
   'Singularity', 'Collapse', 'Devourer', 'Remnant', 'Eye'];
 
+// Remote play suppresses local well forces, but the fluid's cosmetic density
+// still fades every fixed step. Four cheap rotating anchors replenish only the
+// visible fabric cue; authority remains the sole owner of the actual current.
+const REMOTE_ANCHOR_POINTS = 4;
+const REMOTE_ANCHOR_REPLENISHMENT = 0.01;
+
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function generateWellName() {
@@ -81,12 +87,29 @@ export class WellSystem {
    * sessions pass authorityDriven so this path cannot compete with the server
    * field that is forcing the GPU.
    */
-  update(fluid, dt, _totalTime, { authorityDriven = false } = {}) {
-    if (authorityDriven) return;
+  update(fluid, dt, totalTime, { authorityDriven = false } = {}) {
     const cfg = CONFIG.wells;
     const s = uvScale();
+    const s2 = s * s;
     for (const well of this.wells) {
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
+      if (authorityDriven) {
+        const ringRadius = Math.max(0.015 * s, well.getAccretionRadius() * well.mass * s);
+        const spin = totalTime * well.getAccretionSpinRate() * well.orbitalDir;
+        const seedR = 0.15 + 0.25 * well.mass;
+        for (let i = 0; i < REMOTE_ANCHOR_POINTS; i += 1) {
+          const angle = spin + (i / REMOTE_ANCHOR_POINTS) * Math.PI * 2;
+          fluid.visualSplat(
+            fu + Math.cos(angle) * ringRadius,
+            fv + Math.sin(angle) * ringRadius,
+            0.003 * s2,
+            seedR * REMOTE_ANCHOR_REPLENISHMENT,
+            0.23 * REMOTE_ANCHOR_REPLENISHMENT,
+            0.11 * REMOTE_ANCHOR_REPLENISHMENT,
+          );
+        }
+        continue;
+      }
       fluid.applyWellForce(
         [fu, fv],
         cfg.gravity * well.mass * Math.pow(s, cfg.falloff),
