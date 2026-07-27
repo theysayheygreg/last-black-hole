@@ -94,6 +94,31 @@ export function projectAudibleContact({
   return { contact, state: 'live' };
 }
 
+export function reconcileUnobservedAudibleContacts(memory, observedKeys, nowSeconds, {
+  fadeSeconds = 2.5,
+} = {}) {
+  for (const [key, existing] of memory || []) {
+    if (observedKeys?.has(key)) continue;
+    const projection = projectAudibleContact({
+      existing,
+      sourceWX: existing.wx,
+      sourceWY: existing.wy,
+      distanceSimUnits: Infinity,
+      bearingRadians: existing.bearingRadians,
+      emittedRadiusMeters: 0,
+      nowSeconds,
+      fadeSeconds,
+    });
+    if (projection.contact) {
+      projection.contact.id = key;
+      memory.set(key, projection.contact);
+    } else {
+      memory.delete(key);
+    }
+  }
+  return memory;
+}
+
 export function prioritizeAudibleContacts(contacts = [], {
   limit = 5,
   categoryPriority = DEFAULT_CATEGORY_PRIORITY,

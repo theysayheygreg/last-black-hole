@@ -792,6 +792,18 @@ function effectiveWellMass(well) {
   return baseMass * multiplier;
 }
 
+function summarizeEcologyEncounters(ecology = {}) {
+  const counts = {
+    glitch: Math.max(0, Math.trunc(finite(ecology.glitchSequence))),
+    swarm: Math.max(0, Math.trunc(finite(ecology.swarmSequence))),
+    vessel: Math.max(0, Math.trunc(finite(ecology.vesselSequence))),
+  };
+  return {
+    kinds: Object.keys(counts).filter((kind) => counts[kind] > 0).sort(),
+    counts: Object.fromEntries(Object.entries(counts).filter(([, count]) => count > 0)),
+  };
+}
+
 module.exports = {
   INHIBITOR_ECOLOGY_CONFIG,
   createGlitchEntity,
@@ -817,6 +829,7 @@ module.exports = {
   deriveWellOverdriveMultiplier,
   applyWellOverdrive,
   effectiveWellMass,
+  summarizeEcologyEncounters,
   wrap,
   toroidalDelta,
 };

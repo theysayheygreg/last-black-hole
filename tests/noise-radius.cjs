@@ -33,7 +33,11 @@ function check(condition, message) {
 }
 
 async function run() {
-  const { projectAudibleContact, prioritizeAudibleContacts } = await import(
+  const {
+    projectAudibleContact,
+    prioritizeAudibleContacts,
+    reconcileUnobservedAudibleContacts,
+  } = await import(
     pathToFileURL(path.join(root, 'src/presentation/audible-contact-memory.js')).href
   );
   const { projectRemoteWorldPatch } = await import(
@@ -218,6 +222,21 @@ async function run() {
     { id: 'thrust', category: 'THRUST', rangeMeters: 20, emittedRadiusMeters: 240, lastHeardAt: 3 },
   ], { limit: 2 });
   check(capped.length === 2 && capped.map((entry) => entry.id).join(',') === cappedAgain.map((entry) => entry.id).join(','), 'audible contact cap and priority are deterministic');
+  const omittedKey = 'world:omitted-source';
+  const omittedMemory = new Map([[omittedKey, { ...outward, id: omittedKey }]]);
+  reconcileUnobservedAudibleContacts(omittedMemory, new Set(), 10, { fadeSeconds: 2.5 });
+  const omittedFading = omittedMemory.get(omittedKey);
+  check(!omittedFading.live
+    && omittedFading.expiresAt === 12.5
+    && omittedFading.rangeMeters === outward.rangeMeters
+    && omittedFading.bearingRadians === outward.bearingRadians
+    && omittedFading.identity === outward.identity,
+  'omitted live source freezes identity/range/bearing and begins its fade once');
+  reconcileUnobservedAudibleContacts(omittedMemory, new Set(), 11, { fadeSeconds: 2.5 });
+  check(omittedMemory.get(omittedKey).expiresAt === 12.5,
+    'repeated omission preserves the original fade deadline');
+  reconcileUnobservedAudibleContacts(omittedMemory, new Set(), 12.6, { fadeSeconds: 2.5 });
+  check(!omittedMemory.has(omittedKey), 'omitted source expires and is deleted after its memory window');
 
   const portalPatch = projectRemoteWorldPatch({
     portals: [

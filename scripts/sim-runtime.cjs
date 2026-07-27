@@ -137,6 +137,7 @@ const {
   shouldSpawnVessel,
   applyWellOverdrive,
   effectiveWellMass,
+  summarizeEcologyEncounters,
   shouldSpawnSwarm,
   shouldSpawnGlitch,
 } = require("./sim/inhibitor-ecology.cjs");
@@ -2032,6 +2033,7 @@ function buildRunResult(player, outcome) {
     ...loadoutSnapshot.equipped,
     ...loadoutSnapshot.consumables,
   ].filter(Boolean);
+  const ecologyEncountered = summarizeEcologyEncounters(runtime.inhibitorEcology);
 
   // Death cause taxonomy
   let deathCause = null;
@@ -2098,13 +2100,8 @@ function buildRunResult(player, outcome) {
     noiseTimeHeardSeconds: Number((player.noise?.timeHeardSeconds || 0).toFixed(2)),
     noiseTimeTrackedSeconds: Number((player.noise?.timeTrackedSeconds || 0).toFixed(2)),
     ecologyPhaseReached: runtime.inhibitor.phase,
-    ecologyKindsReached: Array.from(new Set(runtime.inhibitorEntities
-      .filter((entity) => entity.lifecycle !== "expired")
-      .map((entity) => entity.kind))).sort(),
-    ecologyCounts: runtime.inhibitorEntities.reduce((counts, entity) => {
-      if (entity.lifecycle !== "expired") counts[entity.kind] = (counts[entity.kind] || 0) + 1;
-      return counts;
-    }, {}),
+    ecologyKindsReached: ecologyEncountered.kinds,
+    ecologyCounts: ecologyEncountered.counts,
     survivalBonus,
     emEarned,
     aiOutcomes,

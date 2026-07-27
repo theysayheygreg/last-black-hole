@@ -124,6 +124,7 @@ import { metersToSimUnits, simUnitsToMeters } from './units.js';
 import {
   prioritizeAudibleContacts,
   projectAudibleContact,
+  reconcileUnobservedAudibleContacts,
 } from './presentation/audible-contact-memory.js';
 import { resolveHeatInstrumentState } from './presentation/heat-instrument.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
@@ -2348,7 +2349,7 @@ function contactKey(payload) {
 }
 
 function observeAudibleContact(key, observation, nowSeconds) {
-  if (!Number.isFinite(observation.wx) || !Number.isFinite(observation.wy)) return;
+  if (!Number.isFinite(observation.wx) || !Number.isFinite(observation.wy)) return false;
   const distanceSimUnits = worldDistance(ship.wx, ship.wy, observation.wx, observation.wy);
   const [dx, dy] = worldDisplacement(ship.wx, ship.wy, observation.wx, observation.wy);
   const projection = projectAudibleContact({
@@ -2371,59 +2372,64 @@ function observeAudibleContact(key, observation, nowSeconds) {
   } else {
     audibleContactMemory.delete(key);
   }
+  return true;
 }
 
 function updateAudibleContactMemory(nowSeconds) {
+  const observedKeys = new Set();
+  const observe = (key, observation) => {
+    if (observeAudibleContact(key, observation, nowSeconds)) observedKeys.add(key);
+  };
   if (remoteSession.active) {
     for (const player of remoteSession.players || []) {
       if (!player || player.clientId === simClient?.clientId) continue;
       const noise = player.noise || {};
-      observeAudibleContact(`player:${player.clientId}`, {
+      observe(`player:${player.clientId}`, {
         wx: player.wx,
         wy: player.wy,
         radiusMeters: noise.audibleRadiusMeters,
         source: noise.currentSource || noise.dominantSource,
         sourceClass: noise.sourceClass,
-      }, nowSeconds);
+      });
     }
   }
   for (const emitter of remoteSession.snapshot?.world?.noiseEmitters || []) {
-    observeAudibleContact(`world:${emitter.id}`, {
+    observe(`world:${emitter.id}`, {
       wx: emitter.wx,
       wy: emitter.wy,
       radiusMeters: emitter.radiusMeters,
       source: emitter.source,
       sourceClass: emitter.sourceClass,
-    }, nowSeconds);
+    });
   }
   if (!remoteSession.active) {
     const inhibitorNoise = NOISE_CONFIG.world?.inhibitor || {};
     for (const entity of inhibitorState.entities || []) {
       if (!entity || entity.lifecycle === 'expired') continue;
       const tuning = inhibitorNoise[entity.kind] || {};
-      observeAudibleContact(`world:inhibitor:${entity.id}`, {
+      observe(`world:inhibitor:${entity.id}`, {
         wx: entity.position?.wx ?? entity.wx,
         wy: entity.position?.wy ?? entity.wy,
         radiusMeters: tuning.radiusMeters,
         source: tuning.category,
         sourceClass: tuning.sourceClass,
-      }, nowSeconds);
+      });
     }
     const exfil = NOISE_CONFIG.world?.exfil || {};
     for (const portal of portalSystem?.portals || []) {
       if (!portal || portal.alive === false) continue;
-      observeAudibleContact(`world:exfil:${portal.id}`, {
+      observe(`world:exfil:${portal.id}`, {
         wx: portal.wx,
         wy: portal.wy,
         radiusMeters: exfil.radiusMeters,
         source: exfil.category,
         sourceClass: exfil.sourceClass,
-      }, nowSeconds);
+      });
     }
   }
-  for (const [key, contact] of audibleContactMemory) {
-    if (!contact.live && nowSeconds >= contact.expiresAt) audibleContactMemory.delete(key);
-  }
+  reconcileUnobservedAudibleContacts(audibleContactMemory, observedKeys, nowSeconds, {
+    fadeSeconds: NOISE_LAST_HEARD_FADE_SECONDS,
+  });
 }
 
 function applyRemoteEvents(events) {

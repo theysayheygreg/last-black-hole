@@ -28,6 +28,7 @@ const {
   countLiveSwarms,
   shouldSpawnGlitch,
   shouldSpawnSwarm,
+  summarizeEcologyEncounters,
 } = require("../scripts/sim/inhibitor-ecology.cjs");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
 const { projectWorld } = require("../scripts/sim/public-snapshot.cjs");
@@ -266,6 +267,16 @@ async function run() {
   assert(!runtimeSource.includes("vesselPortalBlockRange"), "Vessel ecology must not score portals by proximity");
   assert(!runtimeSource.includes("consumedByInhibitor"), "Vessel ecology must not consume or reduce wells");
   assert(!runtimeSource.includes("blockedByInhibitor"), "Vessel ecology must not block portals");
+  assert.deepStrictEqual(summarizeEcologyEncounters({
+    glitchSequence: 9,
+    swarmSequence: 4,
+    vesselSequence: 2,
+  }), {
+    kinds: ["glitch", "swarm", "vessel"],
+    counts: { glitch: 9, swarm: 4, vessel: 2 },
+  }, "Run result ecology totals must derive from cumulative spawn sequences after entities expire");
+  assert(runtimeSource.includes("summarizeEcologyEncounters(runtime.inhibitorEcology)"),
+    "Authoritative run results must consume the run-owned cumulative ecology counters");
 
   await startSimServer(PORT, {
     keepAlive: true,
