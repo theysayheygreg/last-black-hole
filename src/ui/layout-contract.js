@@ -192,7 +192,7 @@ export function resultsSurfaceLayout(width, height) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
   const panelW = Math.min(880, Math.max(760, w - 48));
-  const panelH = Math.min(560, Math.max(500, h - 40));
+  const panelH = Math.min(600, Math.max(540, h - 36));
   const panel = rect((w - panelW) / 2, (h - panelH) / 2, panelW, panelH);
   const pad = UI_DECK_GEOMETRY.panel.paddingX + 6;
   const columnGap = UI_DECK_GEOMETRY.panel.gap + 10;
@@ -207,8 +207,8 @@ export function resultsSurfaceLayout(width, height) {
     columnW,
     leftX,
     rightX,
-    button: rect((w - buttonW) / 2, panel.y + panel.h - 98, buttonW, UI_DECK_GEOMETRY.button.minHeight),
-    cargoRowH: UI_DECK_GEOMETRY.listRow.minHeight - 12,
+    button: rect((w - buttonW) / 2, panel.y + panel.h - UI_DECK_GEOMETRY.button.minHeight - pad, buttonW, UI_DECK_GEOMETRY.button.minHeight),
+    cargoRowH: UI_DECK_GEOMETRY.listRow.minHeight - 14,
     cargoGap: UI_DECK_GEOMETRY.separation,
   };
 }

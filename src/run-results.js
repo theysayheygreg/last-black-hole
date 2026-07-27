@@ -261,7 +261,11 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ry += 22;
   ctx.textAlign = 'left';
   ctx.font = canvasFont(13);
-  const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 5) : ['[ empty ]'];
+  const cargoLines = view.cargoLabels.length > 0
+    ? view.cargoLabels.length > 3
+      ? [...view.cargoLabels.slice(0, 2), `+${view.cargoLabels.length - 2} more items`]
+      : view.cargoLabels.slice(0, 3)
+    : ['[ empty ]'];
   for (let i = 0; i < cargoLines.length; i++) {
     const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
       delay: 0.82,
@@ -295,7 +299,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ry += 24;
   ctx.font = canvasFont(13);
   ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
-  const lines = notableLines.length > 0 ? notableLines.slice(0, 5) : ['no unusual telemetry'];
+  const lines = notableLines.length > 0 ? notableLines.slice(0, 3) : ['no unusual telemetry'];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {

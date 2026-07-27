@@ -4,6 +4,7 @@ const assert = require('assert');
   const tokens = await import('../src/ui/design-tokens.js');
   const prompts = await import('../src/ui/input-prompts.js');
   const layout = await import('../src/ui/layout-contract.js');
+  const loadout = await import('../src/ui/loadout-presentation.js');
 
   const geometry = tokens.UI_DECK_GEOMETRY;
   const separated = (a, b, gap = geometry.separation) => (
@@ -71,6 +72,13 @@ const assert = require('assert');
   assert(layout.rectContains({ x: title.panelX, y: title.panelY, w: title.panelW, h: title.panelH }, title.footerRect), 'title prompt rail escaped panel');
   const results = layout.resultsSurfaceLayout(960, 720);
   assert(layout.rectContains(results.panel, results.button, geometry.panel.paddingX), 'results CTA escaped panel');
+  assert(results.button.y + results.button.h + geometry.panel.paddingY <= results.panel.y + results.panel.h, 'results CTA lost its bottom gutter');
+  assert(results.cargoRowH >= 40, 'results cargo rows became too small for Deck readability');
+  const itemEffects = loadout.formatItemEffects({ coefficients: { thrustScale: 1.08, cargoSlots: 1 } });
+  assert(itemEffects.includes('thrust response +8%'), 'item effect should use a readable percentage tag');
+  assert(itemEffects.includes('cargo slots +1'), 'item effect should retain additive slot identity');
+  assert.strictEqual(loadout.formatSlotIdentity({ subcategory: 'equippable' }), 'artifact slot');
+  assert.strictEqual(loadout.formatSlotIdentity({ subcategory: 'consumable' }), 'hotbar slot');
   const hud = layout.hudSurfaceLayout(960, 720);
   assertSurface('HUD surfaces', [hud.vitals, hud.portals, hud.actions, hud.interaction]);
 

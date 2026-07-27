@@ -117,7 +117,7 @@ import { getMapDurationSeconds } from './content/map-scales.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
-import { drawItemIcon } from './ui/asset-kit.js';
+import { drawItemIcon, drawShipSprite, preloadShipSprites } from './ui/asset-kit.js';
 import {
   drawCornerFrame,
   drawKeyValueRow,
@@ -148,6 +148,7 @@ import {
 import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
 import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
 import { deckPanelLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
+import { formatHullStats, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
 
@@ -618,62 +619,26 @@ function mapRiskLabel(map) {
   return 'readable route';
 }
 
-function drawHomeShipSilhouette(ctx, x, y, {
+function drawHomeShipSprite(ctx, x, y, {
   scale = 1,
   hullType = 'drifter',
   role = 'flow',
   alpha = 1,
   pulse = 0,
 } = {}) {
-  const r = 42 * scale;
+  const size = 112 * scale;
   ctx.save();
   ctx.globalAlpha *= alpha;
-  ctx.translate(x, y);
-  ctx.fillStyle = roleColor('void', 0.72);
-  ctx.beginPath();
-  ctx.ellipse(0, 12 * scale, r * 1.22, r * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = roleColor(role, 0.22 + 0.18 * pulse);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(0, 12 * scale, r * 1.28, r * 0.48, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.strokeStyle = roleColor(role, 0.58 + 0.26 * pulse);
-  ctx.fillStyle = roleColor('bone', 0.88);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.95);
-  ctx.lineTo(r * 0.42, r * 0.64);
-  ctx.lineTo(0, r * 0.30);
-  ctx.lineTo(-r * 0.42, r * 0.64);
-  ctx.closePath();
-  ctx.stroke();
-
-  ctx.strokeStyle = roleColor(role, 0.9);
-  ctx.lineWidth = 1.3;
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.72);
-  ctx.lineTo(0, r * 0.26);
-  ctx.moveTo(-r * 0.18, -r * 0.22);
-  ctx.lineTo(r * 0.18, -r * 0.22);
-  ctx.moveTo(-r * 0.25, r * 0.30);
-  ctx.lineTo(r * 0.25, r * 0.30);
-  ctx.stroke();
-
-  const engineAlpha = 0.55 + 0.30 * Math.sin(totalTime * 4.0);
-  ctx.fillStyle = roleColor(role, engineAlpha);
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.14, r * 0.52);
-  ctx.lineTo(r * 0.14, r * 0.52);
-  ctx.lineTo(0, r * (0.92 + pulse * 0.12));
-  ctx.closePath();
-  ctx.fill();
-
+  ctx.fillStyle = roleColor('void', 0.64);
+  ctx.fillRect(x - size / 2 - 8, y - size / 2 - 8, size + 16, size + 16);
+  ctx.strokeStyle = roleColor(role, 0.32 + 0.14 * pulse);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - size / 2 - 8.5, y - size / 2 - 8.5, size + 17, size + 17);
+  drawShipSprite(ctx, hullType, { x: x - size / 2, y: y - size / 2, w: size, h: size }, { alpha: 0.98 });
   ctx.textAlign = 'center';
   ctx.font = canvasFont(11, { weight: '700' });
   ctx.fillStyle = roleColor('muted', 0.74);
-  ctx.fillText(String(hullType || 'drifter').toUpperCase(), 0, r + 30);
+  ctx.fillText(String(hullType || 'drifter').toUpperCase(), x, y + size / 2 + 30);
   ctx.restore();
 }
 
@@ -1032,6 +997,7 @@ function init() {
   }
 
   // Load title scene (clears everything, loads default map, seeds fluid)
+  void preloadShipSprites().catch(() => {});
   loadTitleScene();
 
   // Input: mouse, keyboard, and gamepad all flow through InputManager.
@@ -5727,7 +5693,21 @@ function gameLoop(now) {
       ctx.font = canvasFont(12);
       ctx.fillStyle = roleColor('muted', 0.82);
       ctx.fillText(`${equippedCount}/2 artifacts // ${consumableCount}/2 hotbar`, centerX, centerY + 23);
-      drawHomeShipSilhouette(ctx, centerPanel.x + centerPanel.w * 0.71, centerPanel.y + 142, {
+      const movementStats = inventorySystem?.getMovementStats?.() || {};
+      const deltaVStats = inventorySystem?.getDeltaVStats?.() || {};
+      const hullDefinition = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
+      const hullStats = formatHullStats(hullDefinition, {
+        thrustScale: (hullDefinition.thrustScale || 1) * (movementStats.thrustScale || 1),
+        dragScale: (hullDefinition.dragScale || 1) * (movementStats.dragScale || 1),
+        currentCoupling: (hullDefinition.currentCoupling || 1) * (movementStats.currentCoupling || 1),
+        deltaVMax: (hullDefinition.deltaVMax || 0) * (deltaVStats.deltaVCapacityMult || 1),
+      });
+      ctx.font = canvasFont(9);
+      ctx.fillStyle = roleColor('flow', 0.78);
+      ctx.fillText(fitUiText(ctx, `BASE / FITTED  ${hullStats[0].label} ${hullStats[0].base} / ${hullStats[0].fitted}   ${hullStats[1].label} ${hullStats[1].base} / ${hullStats[1].fitted}`, centerTextW * 0.72), centerX, centerY + 38);
+      ctx.fillStyle = roleColor('salvage', 0.78);
+      ctx.fillText(fitUiText(ctx, `${hullStats[2].label} ${hullStats[2].base} / ${hullStats[2].fitted}   ${hullStats[3].label} ${hullStats[3].base} / ${hullStats[3].fitted}`, centerTextW * 0.72), centerX, centerY + 50);
+      drawHomeShipSprite(ctx, centerPanel.x + centerPanel.w * 0.71, centerPanel.y + 142, {
         scale: 1.08,
         hullType,
         role: 'flow',
@@ -5847,23 +5827,15 @@ function gameLoop(now) {
         ctx.fillStyle = tierColor;
         const tierLabel = typeof item.tier === 'number' ? `T${item.tier} ` : '';
         const affinityTag = item.affinity ? ` [${item.affinity}]` : '';
-        ctx.fillText(fitUiText(ctx, `${tierLabel}${item.name}${affinityTag}`, centerTextW - 184), centerX + 56, vy + 24);
+        const slotTag = formatSlotIdentity(item).toUpperCase();
+        ctx.fillText(fitUiText(ctx, `${tierLabel}${item.name}${affinityTag}`, centerTextW - 184), centerX + 56, vy + 18);
         ctx.fillStyle = roleColor('muted', 0.72);
+        ctx.font = canvasFont(10);
+        ctx.fillText(slotTag, centerX + 56, vy + 36);
         ctx.textAlign = 'right';
+        ctx.font = canvasFont(11);
         ctx.fillText(`${item.value || '?'} EM`, centerX + centerTextW - 12, vy + 24);
         ctx.textAlign = 'left';
-        if (selected) {
-          let action = 'sell';
-          if (item.subcategory === 'equippable') action = 'equip';
-          else if (item.subcategory === 'consumable') action = 'load';
-          ctx.fillStyle = roleColor('salvage', 0.86);
-          drawActionPrompt(ctx, {
-            x: centerX + centerTextW - 220,
-            y: vy + 4,
-            w: 96,
-            h: UI_DECK_GEOMETRY.actionGlyph.minHeight,
-          }, actionDescriptor('confirm', currentPromptOptions()), { verb: action, alpha: 0.86, color: roleColor('salvage') });
-        }
         vy += vaultRowH + UI_DECK_GEOMETRY.separation;
       }
       if (p.vault.length === 0) {
@@ -5874,12 +5846,39 @@ function gameLoop(now) {
       // Item description for selected vault item
       if (p.vault[homeVaultCursor]) {
         const selItem = p.vault[homeVaultCursor];
-        const descY = centerPanel.y + centerPanel.h - 58;
-        ctx.fillStyle = roleColor('muted', 0.74);
-        ctx.font = canvasFont(11);
-        const desc = selItem.effectDesc || selItem.useDesc || selItem.desc
-          || (selItem.upgradeTarget ? `upgrade: ${selItem.upgradeTarget}` : `${selItem.category} — ${selItem.tier}`);
-        ctx.fillText(fitUiText(ctx, desc, centerTextW), centerX, descY);
+        const detailRect = {
+          x: centerX - 6,
+          y: centerPanel.y + centerPanel.h - 148,
+          w: centerTextW,
+          h: 82,
+        };
+        drawSelectedRow(ctx, detailRect, {
+          role: selItem.subcategory === 'consumable' ? 'anomaly' : 'salvage',
+          active: true,
+          alpha: 0.82,
+          fillAlpha: 0.12,
+          borderAlpha: 0.30,
+          railWidth: 3,
+        });
+        ctx.fillStyle = roleColor('text', 0.94);
+        ctx.font = canvasFont(12, { weight: '700' });
+        ctx.fillText(fitUiText(ctx, String(selItem.name || 'selected item').toUpperCase(), detailRect.w - 132), detailRect.x + 12, detailRect.y + 22);
+        ctx.fillStyle = roleColor('muted', 0.78);
+        ctx.font = canvasFont(10);
+        ctx.fillText(`${formatSlotIdentity(selItem).toUpperCase()} // ${selItem.affinity ? `${selItem.affinity} HULL` : 'GENERAL FIT'}`, detailRect.x + 12, detailRect.y + 39);
+        const effects = formatItemEffects(selItem).join('  //  ');
+        ctx.fillStyle = roleColor('salvage', 0.90);
+        ctx.font = canvasFont(11, { weight: '700' });
+        ctx.fillText(fitUiText(ctx, effects, detailRect.w - 132), detailRect.x + 12, detailRect.y + 60);
+        let action = 'sell';
+        if (selItem.subcategory === 'equippable') action = 'equip';
+        else if (selItem.subcategory === 'consumable') action = 'load';
+        drawActionPrompt(ctx, {
+          x: detailRect.x + detailRect.w - 106,
+          y: detailRect.y + 24,
+          w: 92,
+          h: UI_DECK_GEOMETRY.actionGlyph.minHeight,
+        }, actionDescriptor('confirm', currentPromptOptions()), { verb: action, alpha: 0.90, color: roleColor('salvage') });
       }
 
     } else if (homeTab === 2 && p) {
@@ -6011,7 +6010,7 @@ function gameLoop(now) {
     } else if (homeTab === 4) {
       // === LAUNCH subscreen ===
       ctx.textAlign = 'center';
-      drawHomeShipSilhouette(ctx, centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 - 68, {
+      drawHomeShipSprite(ctx, centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 - 68, {
         scale: 1.38,
         hullType,
         role: 'salvage',

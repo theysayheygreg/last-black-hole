@@ -13,6 +13,11 @@ const FRAME_FILES = {
   right: 'rail-right.png',
 };
 
+const SHIP_SPRITE_FILES = Object.freeze({
+  drifter: 'assets/visual/entities/ship-drifter.png',
+  breacher: 'assets/visual/entities/ship-breacher.png',
+});
+
 let manifestPromise = null;
 let manifestCache = null;
 const imagePromises = new Map();
@@ -133,6 +138,31 @@ export async function preloadUiAssets(options = {}) {
   const urls = manifest.atlases.ui.map(assetUrl);
   await Promise.all(urls.map((url) => loadImage(url, options)));
   return manifest;
+}
+
+export async function preloadShipSprites(options = {}) {
+  await Promise.all(Object.values(SHIP_SPRITE_FILES).map((file) => loadImage(assetUrl(file), options)));
+}
+
+export function drawShipSprite(ctx, hullType, rect, { alpha = 1, disabled = false } = {}) {
+  const file = SHIP_SPRITE_FILES[String(hullType || '').toLowerCase()];
+  if (!file) return false;
+  const image = imageCache.get(assetUrl(file));
+  if (!image) {
+    void loadImage(assetUrl(file)).catch(() => {});
+    return false;
+  }
+
+  const x = Number(rect?.x) || 0;
+  const y = Number(rect?.y) || 0;
+  const w = Math.max(1, Number(rect?.w ?? rect?.width) || 1);
+  const h = Math.max(1, Number(rect?.h ?? rect?.height) || 1);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, disabled ? alpha * 0.42 : alpha));
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, x, y, w, h);
+  ctx.restore();
+  return true;
 }
 
 export async function preloadInventoryIcons(items, options = {}) {
