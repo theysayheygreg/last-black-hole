@@ -42,18 +42,22 @@ function routeLegs(map) {
   });
 }
 
-function createRouteProbe(fuel) {
+function createRouteProbe(heat) {
+  const deltaVMax = MOVEMENT.player.deltaVMax;
+  const initialHeatRatio = heat.initialRatio;
   return {
     wx: 0,
     wy: 0,
     vx: 0,
     vy: 0,
-    deltaV: fuel.initialDeltaV,
-    deltaVMax: fuel.deltaVMax,
-    deltaVBurnRate: fuel.deltaVBurnRate,
+    heat: initialHeatRatio,
+    heatRatio: initialHeatRatio,
+    deltaV: deltaVMax * (1 - initialHeatRatio),
+    deltaVMax,
+    deltaVBurnRate: MOVEMENT.player.deltaVBurnRate,
     deltaVBurnEff: 1,
-    deltaVRegen: fuel.deltaVRegen,
-    deltaVRegenBoost: fuel.deltaVRegenBoost,
+    deltaVRegen: MOVEMENT.player.deltaVRegen,
+    deltaVRegenBoost: MOVEMENT.player.deltaVRegenBoost,
     timeSinceThrust: 0,
     brain: { thrustScale: 1, dragScale: 1, currentCoupling: 1 },
   };
@@ -64,7 +68,7 @@ function measureProductRoute(mapId) {
   const product = AUTHORED_MAP_CONTRACT.travel.productRate;
   const hz = MOVEMENT.authority.integrationHz;
   const dt = 1 / hz;
-  const player = createRouteProbe(product.fuel);
+  const player = createRouteProbe(product.heat);
   const legs = [];
 
   for (const distance of routeLegs(maps[mapId])) {
@@ -87,7 +91,7 @@ function measureProductRoute(mapId) {
     assert(traveled >= distance, `${mapId}: product-rate route leg did not complete`);
     legs.push({
       seconds: Number((steps * dt).toFixed(2)),
-      fuelRemaining: Number(player.deltaV.toFixed(2)),
+      heatPercent: Number((player.heatRatio * 100).toFixed(1)),
     });
   }
 
@@ -120,9 +124,9 @@ async function run() {
       `${mapId}: product-rate travel observations drifted`,
     );
     assert.deepStrictEqual(
-      measured.legs.map((leg) => leg.fuelRemaining),
-      expected.productFuelRemaining,
-      `${mapId}: finite-fuel observations drifted`,
+      measured.legs.map((leg) => leg.heatPercent),
+      expected.productHeatPercentAfterLeg,
+      `${mapId}: Heat observations drifted`,
     );
     assert.strictEqual(measured.routeSeconds, expected.productRouteSeconds,
       `${mapId}: product route total drifted`);

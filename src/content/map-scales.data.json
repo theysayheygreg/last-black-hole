@@ -112,14 +112,9 @@
         "sufficientDeltaV": true
       },
       "productRate": {
-        "protocol": "zero-flow full-thrust route with one finite tank carried across authored legs",
-        "fuel": {
-          "initialDeltaV": 100,
-          "deltaVMax": 100,
-          "deltaVBurnRate": 12,
-          "deltaVRegen": 1.5,
-          "deltaVRegenBoost": 6,
-          "deltaVRegenDelaySeconds": 0.5
+        "protocol": "zero-flow full-thrust route with one finite Heat resource carried across authored legs",
+        "heat": {
+          "initialRatio": 0
         }
       },
       "tiers": {
@@ -127,22 +122,22 @@
           "baselineObservedLegSeconds": [1.48],
           "baselineBoundsSeconds": { "floor": 1.4, "ceiling": 1.6 },
           "productObservedLegSeconds": [1.53],
-          "productFuelRemaining": [81.6],
+          "productHeatPercentAfterLeg": [18.4],
           "productRouteSeconds": 1.53
         },
         "expanse": {
           "baselineObservedLegSeconds": [1.55, 8.52, 1.22],
           "baselineBoundsSeconds": { "floor": 1.1, "ceiling": 8.75 },
-          "productObservedLegSeconds": [1.6, 18.0, 5.87],
-          "productFuelRemaining": [80.8, 0.1, 0.5],
-          "productRouteSeconds": 25.47
+          "productObservedLegSeconds": [1.6, 11.67, 0.87],
+          "productHeatPercentAfterLeg": [19.2, 49.0, 59.4],
+          "productRouteSeconds": 14.14
         },
         "deep-field": {
           "baselineObservedLegSeconds": [1.98, 14.22],
           "baselineBoundsSeconds": { "floor": 1.9, "ceiling": 14.5 },
-          "productObservedLegSeconds": [2.13, 64.07],
-          "productFuelRemaining": [74.4, 0.0],
-          "productRouteSeconds": 66.2
+          "productObservedLegSeconds": [2.13, 20.67],
+          "productHeatPercentAfterLeg": [25.6, 53.0],
+          "productRouteSeconds": 22.8
         }
       }
     }

@@ -6,6 +6,7 @@ const { stepPlayerMovementCore } = require('../scripts/sim/player-movement-step.
 const EPSILON = 1e-12;
 const DT = 1 / 30;
 const FLOW = { current: { x: 0, y: 0 } };
+const INITIAL_HEAT_RATIO = 0.2;
 
 const INPUTS = [
   { moveX: 0.6, moveY: 0.8, thrust: 1, brake: 0 },
@@ -30,7 +31,9 @@ function makeAuthorityPlayer() {
     vx: -0.18,
     vy: 0.23,
     brain: { ...BRAIN },
-    deltaV: 80,
+    heat: INITIAL_HEAT_RATIO,
+    heatRatio: INITIAL_HEAT_RATIO,
+    deltaV: BRAIN.deltaVMax * (1 - INITIAL_HEAT_RATIO),
     deltaVMax: BRAIN.deltaVMax,
     deltaVRegen: BRAIN.deltaVRegen,
     deltaVRegenBoost: BRAIN.deltaVRegenBoost,
@@ -46,7 +49,6 @@ function makeLocalShip() {
   ship.wy = 2.1;
   ship.vx = -0.18;
   ship.vy = 0.23;
-  ship.deltaV = 80;
   ship.deltaVMax = BRAIN.deltaVMax;
   ship.deltaVRegen = BRAIN.deltaVRegen;
   ship.deltaVRegenBoost = BRAIN.deltaVRegenBoost;
@@ -56,6 +58,7 @@ function makeLocalShip() {
   ship.thrustScale = BRAIN.thrustScale;
   ship.dragScale = BRAIN.dragScale;
   ship.currentCoupling = BRAIN.currentCoupling;
+  ship.setHeatRatio(INITIAL_HEAT_RATIO);
   // The facing is deliberately unrelated to the stick vector below.
   ship.facing = -Math.PI / 2;
   return ship;
@@ -90,7 +93,10 @@ async function run() {
       assertClose(`tick ${tick} wy`, local.wy, authority.wy);
       assertClose(`tick ${tick} vx`, local.vx, authority.vx);
       assertClose(`tick ${tick} vy`, local.vy, authority.vy);
-      assertClose(`tick ${tick} deltaV`, local.deltaV, authority.deltaV);
+      assertClose(`tick ${tick} Heat`, local.getHeatRatio(), authority.heatRatio);
+      assertClose(`tick ${tick} local deltaV alias`, local.deltaV, authority.deltaV);
+      assertClose(`tick ${tick} authority Heat/legacy parity`, authority.heatRatio,
+        1 - authority.deltaV / authority.deltaVMax);
       assertClose(`tick ${tick} timeSinceThrust`, local.timeSinceThrust, authority.timeSinceThrust);
       assertClose(`tick ${tick} delivered thrust`, local.lastDeliveredThrustIntensity, input.thrust);
       assertClose(`tick ${tick} delivered brake`, local.lastDeliveredBrakeIntensity, input.brake);
