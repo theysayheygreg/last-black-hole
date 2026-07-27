@@ -76,8 +76,8 @@
       --lbh-text-muted: rgba(154, 180, 206, 0.72);
       --lbh-timer-normal: rgba(234, 247, 255, 0.9);
       --lbh-timer-glow: rgba(0, 226, 255, 0.28);
-      --lbh-signal: rgba(0, 226, 255, 0.9);
-      --lbh-signal-label: rgba(0, 226, 255, 0.62);
+      --lbh-noise: rgba(0, 226, 255, 0.9);
+      --lbh-noise-label: rgba(0, 226, 255, 0.62);
       --lbh-danger: rgba(255, 51, 54, 0.95);
       --lbh-ecology: rgba(56, 245, 138, 0.9);
       --lbh-inhibitor: rgba(255, 62, 181, 0.95);
@@ -243,62 +243,19 @@
       color: var(--lbh-text-primary);
       text-align: right;
     }
-    #hud-signal {
-      color: var(--lbh-signal);
+    #hud-noise {
+      color: var(--lbh-noise);
       text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
     }
-    #hud-signal .hud-label {
+    #hud-noise .hud-label {
       font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
-      color: var(--lbh-signal-label);
+      color: var(--lbh-noise-label);
       text-transform: uppercase;
     }
-    #hud-signal-bar {
-      width: 100%; height: 18px;
-      background: var(--lbh-track-bg);
-      border: 1px solid rgba(234, 247, 255, 0.14);
-      border-radius: 2px;
-      margin: 4px 0 0;
-      overflow: hidden;
-    }
-    #hud-signal-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 2px;
-      transition: width 0.15s, background-color 0.3s;
-    }
-    #hud-signal-zone {
-      font-size: var(--lbh-couch-small);
-      letter-spacing: 0;
-    }
-    #hud-fuel {
-      color: var(--lbh-ecology);
-      text-shadow: 0 0 6px rgba(56, 245, 138, 0.28);
-    }
-    #hud-fuel .hud-label {
-      font-size: var(--lbh-couch-micro);
-      letter-spacing: 0;
-      color: rgba(56, 245, 138, 0.72);
-      text-transform: uppercase;
-    }
-    #hud-fuel-bar {
-      width: 100%; height: 18px;
-      background: var(--lbh-track-bg);
-      border: 1px solid rgba(234, 247, 255, 0.14);
-      border-radius: 2px;
-      margin: 4px 0 0;
-      overflow: hidden;
-    }
-    #hud-fuel-fill {
-      height: 100%;
-      width: 0%;
-      border-radius: 2px;
-      transition: width 0.15s, background-color 0.3s;
-    }
-    #hud-fuel-readout {
-      font-size: var(--lbh-couch-small);
-      letter-spacing: 0;
-    }
+    #hud-noise .hud-vital-head { align-items: flex-start; }
+    #hud-noise-readout { font-size: var(--lbh-couch-small); letter-spacing: 0; white-space: nowrap; }
+    #hud-noise-detail { margin-top: 4px; color: var(--lbh-text-muted); font-size: var(--lbh-couch-micro); line-height: 1.3; }
     #hud-hull {
       color: var(--lbh-text-primary);
       text-shadow: 0 0 6px rgba(234, 247, 255, 0.2);
@@ -703,7 +660,7 @@
       top: 2px;
       bottom: 2px;
       width: 3px;
-      background: var(--lbh-signal);
+      background: var(--lbh-noise);
     }
     #hud-inventory-panel .inv-icon-consumable::after {
       left: 2px; right: 2px; top: auto; bottom: 2px; width: auto; height: 3px;
@@ -767,17 +724,13 @@
       <div class="hud-sub" id="hud-collapse-event"></div>
     </div>
     <div id="hud-vitals" class="hud-panel" role="group" aria-label="ship status">
-      <div id="hud-fuel" class="hud-vital">
-        <div class="hud-vital-head"><div class="hud-label">propulsion heat</div><div id="hud-fuel-readout" class="hud-vital-readout">0%</div></div>
-        <div id="hud-fuel-bar" role="progressbar" aria-label="propulsion heat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="hud-fuel-fill"></div></div>
-      </div>
       <div id="hud-hull" class="hud-vital">
         <div class="hud-vital-head"><div class="hud-label">hull</div><div id="hud-hull-readout" class="hud-vital-readout">nominal</div></div>
         <div id="hud-hull-bar" role="progressbar" aria-label="hull condition" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="hud-hull-fill"></div></div>
       </div>
-      <div id="hud-signal" class="hud-vital">
-        <div class="hud-vital-head"><div class="hud-label">signal</div><div id="hud-signal-zone" class="hud-vital-readout">ghost</div></div>
-        <div id="hud-signal-bar" role="progressbar" aria-label="signal level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="hud-signal-fill"></div></div>
+      <div id="hud-noise" class="hud-vital">
+        <div class="hud-vital-head"><div class="hud-label">noise radius</div><div id="hud-noise-readout" class="hud-vital-readout">NOISE 0m · STEADY</div></div>
+        <div id="hud-noise-detail">SOURCE IDLE · HEARD BY 0 · TRACKED BY 0</div>
       </div>
     </div>
     <div id="hud-inhibitor" class="hud-panel" style="display: none;">

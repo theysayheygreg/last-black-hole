@@ -1,0 +1,29 @@
+{
+  "unit": "m",
+  "idleFloorMeters": 0,
+  "continuous": {
+    "withFlowMeters": 180,
+    "neutralMeters": 240,
+    "againstFlowMeters": 320,
+    "brakeMeters": 220
+  },
+  "impulses": {
+    "salvage": { "1": 180, "2": 320, "3": 480 },
+    "forcePulseMeters": 600,
+    "decoyLaunchMeters": 700,
+    "collisionMeters": 300
+  },
+  "impulseHoldSeconds": 0.35,
+  "impulseDecayMetersPerSecond": 120,
+  "continuousDecayMetersPerSecond": 90,
+  "enemyTrackingRadiusRatio": 0.55,
+  "identificationFraction": 0.4,
+  "lastHeardFadeSeconds": 2.5,
+  "publicSourceClasses": ["VESSEL", "VESSEL THRUST"],
+  "tuning": {
+    "idleFloorMeters": { "unit": "m", "min": 0, "max": 120, "step": 10, "startBias": "silent hull" },
+    "continuousMeters": { "unit": "m", "min": 0, "max": 1000, "step": 10, "startBias": "legible thrust" },
+    "impulseDecayMetersPerSecond": { "unit": "m/s", "min": 0, "max": 600, "step": 10, "startBias": "visible event" },
+    "continuousDecayMetersPerSecond": { "unit": "m/s", "min": 0, "max": 600, "step": 10, "startBias": "quiet coast" }
+  }
+}

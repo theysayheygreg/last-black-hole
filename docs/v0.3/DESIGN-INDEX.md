@@ -36,8 +36,10 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 
 ## Signal
 
-- [`S10`](reviews/v0.3.1-design-review.md#s10--signalnoise-tabled-backlogged-2026-07-14)
-- [`open decisions`](OPEN-DECISIONS.md)
+- [`Noise Radius v1`](noise-radius-v1.md) — current player-facing authority,
+  listener, HUD, edge-memory, and result contract.
+- [`S10`](reviews/v0.3.1-design-review.md#s10--signalnoise-tabled-backlogged-2026-07-14) — historical Signal/noise design review.
+- [`open decisions`](OPEN-DECISIONS.md) — only for unresolved future design.
 
 ## Scavengers
 

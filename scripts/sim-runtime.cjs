@@ -23,8 +23,13 @@ const {
 } = require("./sim/seeded-sea.cjs");
 const { decayWaveAmplitude, WAVE_HALF_LIFE_SECONDS } = require("./sim/event-wave.cjs");
 const {
-  signalFractionPerSecond,
-} = require("../src/content/tuning.js");
+  NOISE_CONFIG,
+  clampMeters,
+  emitterAudibleFor,
+  resolveContinuousRadius,
+  resolveImpulseRadius,
+  enemyListenerStateFor,
+} = require("./sim/noise-radius.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PUBLIC_HULL_IDS,
@@ -356,38 +361,6 @@ const SLINGSHOT_SERVER = Object.freeze({
   internal: SLINGSHOT_INTERNAL,
   massWeight: Object.freeze({ well: 1.0, star: 0.6, planetoid: 0.3 }),
 });
-const SIGNAL_CONFIG = {
-  // Generation rates (per second for continuous, instant for spikes)
-  thrustBasePercentPerSecond: 0.5,
-  thrustOppositionMult: 2.0,
-  lootSpikeT1: 0.06,
-  lootSpikeT2: 0.10,
-  lootSpikeT3: 0.18,
-  pulseSpike: 0.12,
-  flareLaunchSpike: 0.04,
-  flareSignalBonus: 0.10,
-  // collisionSpike removed — no generic entity-entity collision exists; fauna/sentries
-  // have per-type bumpSignal values tuned to their gameplay role.
-  // extractionRate removed — extraction is instant (no charge time), so continuous
-  // signal generation during extraction never fires. If extraction gains a charge
-  // period, re-add at 0.3%/s.
-  wellProximityPercentPerSecond: 0.2,
-  wellProximityDist: 0.30,
-  coastPercentPerSecond: 0.1,
-  // Decay rates (per second)
-  decayBasePercentPerSecond: 2.5,
-  decayWreckWakePercentPerSecond: 4.0,
-  decayAccretionShadowPercentPerSecond: 5.0,
-  // Thresholds
-  ghostMax: 0.15,
-  whisperMax: 0.35,
-  presenceMax: 0.55,
-  beaconMax: 0.75,
-  flareMax: 0.90,
-  // Zone names (ordered)
-  zones: ["ghost", "whisper", "presence", "beacon", "flare", "threshold"],
-};
-
 const INHIBITOR_CONFIG = {
   // The prior Expanse schedule is 90/180/270 seconds on a 600-second run.
   // These normalized fronts preserve that anchor on every map tier.
@@ -638,22 +611,18 @@ const FAUNA_CONFIG = {
   jellySpawnInterval: 8,
   jellyLifespan: [40, 60],
   jellyBumpForce: 0.005,
-  jellyBumpSignal: 0.01,
   jellySize: 3,
-  // Signal Blooms — spawn near signal sources
-  bloomAttraction: 0.008,
-  bloomMaxSpeed: 0.025,
+  // Noise listeners — local fauna, not global signal-seeking spawns.
   bloomSpawnRange: [0.3, 0.6],
   bloomLifespan: [20, 40],
   bloomBumpForce: 0.006,
-  bloomBumpSignal: 0.01,
   bloomSize: 2,
   // The former 0.99/tick drag was authored at the 15 Hz authority cadence.
   // Store its equivalent per-second retention so the unit stays explicit.
   dragRetentionPerSecond: Math.pow(0.99, MOVEMENT.authority.integrationHz),
-  bloomSpawnRate: {
-    ghost: 0, whisper: 0.15, presence: 0.25, beacon: 0.5, flare: 1.0, threshold: 1.5,
-  },
+  bloomSpawnRatePerSecond: 0.35,
+  bloomListenerSensitivity: 1.0,
+  jellyListenerSensitivity: 0.7,
 };
 
 const SENTRY_CONFIG = {
@@ -665,7 +634,7 @@ const SENTRY_CONFIG = {
   lungeDuration: 0.5,          // seconds
   lungeRecovery: 2.5,          // seconds before returning to patrol
   bumpForce: 0.02,             // wu/s impulse TOWARD well
-  bumpSignal: 0.05,            // signal spike on lunge contact
+  bumpNoiseMeters: 300,         // noise impulse on lunge contact
   segments: 4,                 // body segments for rendering
   color: [0, 255, 136],        // #00FF88 bright mint
 };
@@ -1228,7 +1197,6 @@ const PLAYER_LOCAL_EVENT_TYPES = new Set([
   "player.effectUsed",
   "player.portalProximity",
   "player.portalConfirmed",
-  "signal.zoneCrossing",
   "inhibitor.drainCargo",
 ]);
 
@@ -1434,10 +1402,23 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     },
     _wellGraceContactActive: false,
     _wellGraceLastTick: -1,
-    signal: {
-      level: 0,
-      zone: "ghost",
-      prevZone: "ghost",
+    noise: {
+      audibleRadiusMeters: 0,
+      previousRadiusMeters: 0,
+      trend: "steady",
+      currentSource: "IDLE",
+      dominantSource: "IDLE",
+      sourceClass: null,
+      listeners: [],
+      heardListenerCount: 0,
+      trackedListenerCount: 0,
+      lockedOnListenerCount: 0,
+      lastHeardPosition: null,
+      maxAudibleRadiusMeters: 0,
+      timeHeardSeconds: 0,
+      timeTrackedSeconds: 0,
+      continuousRadiusMeters: 0,
+      impulses: [],
     },
     controlDebuff: 0,
     portalInteraction: null,
@@ -2111,9 +2092,10 @@ function buildRunResult(player, outcome) {
     cargoLost,
     salvageBrought,
     loadoutSnapshot,
-    signalPeak: player._signalPeak || player.signal.level,
-    signalPeakZone: player._signalPeakZone || player.signal.zone,
-    timePerZone: player._signalTimePerZone || {},
+    noiseMaxMeters: Math.round(player.noise?.maxAudibleRadiusMeters || 0),
+    noiseSource: player.noise?.loudestSource || player.noise?.dominantSource || "IDLE",
+    noiseTimeHeardSeconds: Number((player.noise?.timeHeardSeconds || 0).toFixed(2)),
+    noiseTimeTrackedSeconds: Number((player.noise?.timeTrackedSeconds || 0).toFixed(2)),
     inhibitorFormReached: runtime.inhibitor.form,
     inhibitorFormTimes: runtime.inhibitor.formTimes || [],
     survivalBonus,
@@ -2211,8 +2193,8 @@ function buildEchoWreckRecord(player, runResult) {
     wx: player.wx,
     wy: player.wy,
     survivalTime: runtime.simTime,
-    signalPeak: player._signalPeak || 0,
-    signalPeakZone: player._signalPeakZone || 'ghost',
+    noiseMaxMeters: Math.round(player.noise?.maxAudibleRadiusMeters || 0),
+    noiseSource: player.noise?.loudestSource || player.noise?.dominantSource || 'IDLE',
     peakCargoValue,
     tier: echoTierFromCargoValue(peakCargoValue),
     loot: selectEchoLoot(cargo, 0.6),
@@ -3213,15 +3195,11 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
     // Track the peak cargo value this player ever held during the cycle.
     // Used later to tier-rate their chronicle echo wreck if they die.
     updatePeakCargoValue(player);
-    // Signal spike from looting (tier-based)
+    // Salvage is a discrete emitter impulse. Echo proximity itself is silent.
     const wreckTier = wreck.tier || 1;
-    let lootSpike = wreckTier >= 3 ? SIGNAL_CONFIG.lootSpikeT3
-      : wreckTier >= 2 ? SIGNAL_CONFIG.lootSpikeT2
-      : SIGNAL_CONFIG.lootSpikeT1;
-    // Echo wrecks are loud: taking something from the dead makes noise.
-    // Adds +0.10 on top of the tier-based spike. See ECHOES-V1.md.
-    if (wreck.isEcho) lootSpike += 0.10;
-    spikePlayerSignal(player, lootSpike);
+    const salvageRadius = NOISE_CONFIG.impulses.salvage[Math.min(3, Math.max(1, wreckTier))]
+      || NOISE_CONFIG.impulses.salvage[1];
+    emitPlayerNoise(player, salvageRadius, "SALVAGE", { action: "salvage" });
     publishEvent("player.loot", {
       clientId: player.clientId,
       wreckId: wreck.id,
@@ -3417,7 +3395,7 @@ function applyPulse(player) {
     }
   }
 
-  spikePlayerSignal(player, SIGNAL_CONFIG.pulseSpike * pb.pulseSignalScale);
+  emitPlayerNoise(player, NOISE_CONFIG.impulses.forcePulseMeters * (pb.pulseSignalScale || 1), "PULSE", { action: "force-pulse" });
   publishEvent("player.pulse", {
     clientId: player.clientId,
     wx: player.wx,
@@ -3562,11 +3540,14 @@ function applyDebugPlayerState(player, body) {
     const nextDeltaV = Math.max(0, Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, Number(body.deltaV)));
     setHeatRatio(player, 1 - nextDeltaV / Math.max(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, 1));
   }
-  if (Number.isFinite(Number(body.signalLevel))) {
-    player.signal.level = Math.max(0, Math.min(1, Number(body.signalLevel)));
-    player.signal.zone = signalZoneForLevel(player.signal.level);
-    player._signalPeak = Math.max(player._signalPeak || 0, player.signal.level);
-    player._signalPeakZone = player.signal.zone;
+  if (Number.isFinite(Number(body.noiseRadiusMeters))) {
+    player.noise.audibleRadiusMeters = Math.max(0, Number(body.noiseRadiusMeters));
+    player.noise.maxAudibleRadiusMeters = Math.max(player.noise.maxAudibleRadiusMeters || 0, player.noise.audibleRadiusMeters);
+  } else if (Number.isFinite(Number(body.signalLevel))) {
+    // Harness migration shim only: old debug callers may seed a meter, never a
+    // player-facing signal band or threshold.
+    player.noise.audibleRadiusMeters = Math.max(0, Number(body.signalLevel)) * 1000;
+    player.noise.maxAudibleRadiusMeters = Math.max(player.noise.maxAudibleRadiusMeters || 0, player.noise.audibleRadiusMeters);
   }
   if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
   if (body.resetSlingshot === true) {
@@ -3646,8 +3627,10 @@ function applyDebugInhibitorState(body) {
   if (Number.isFinite(Number(body.swarmTargetY))) inh.swarmTargetY = wrapWorldPosition(Number(body.swarmTargetY), ws);
   if (typeof body.finalPortalSpawned === "boolean") inh.finalPortalSpawned = body.finalPortalSpawned;
   if (typeof body.finalPortalExpired === "boolean") inh.finalPortalExpired = body.finalPortalExpired;
-  if (Number.isFinite(Number(body.lastSignalWX))) inh.lastSignalWX = wrapWorldPosition(Number(body.lastSignalWX), ws);
-  if (Number.isFinite(Number(body.lastSignalWY))) inh.lastSignalWY = wrapWorldPosition(Number(body.lastSignalWY), ws);
+  if (Number.isFinite(Number(body.lastNoiseWX))) inh.lastNoiseWX = wrapWorldPosition(Number(body.lastNoiseWX), ws);
+  if (Number.isFinite(Number(body.lastNoiseWY))) inh.lastNoiseWY = wrapWorldPosition(Number(body.lastNoiseWY), ws);
+  if (Number.isFinite(Number(body.lastSignalWX))) inh.lastNoiseWX = wrapWorldPosition(Number(body.lastSignalWX), ws);
+  if (Number.isFinite(Number(body.lastSignalWY))) inh.lastNoiseWY = wrapWorldPosition(Number(body.lastSignalWY), ws);
   if (Number.isFinite(Number(body.gravityBonus))) inh.gravityBonus = Math.max(0, Math.min(0.35, Number(body.gravityBonus)));
   if (Array.isArray(body.formTimes)) {
     inh.formTimes = body.formTimes.slice(0, 4).map((value) => Number.isFinite(Number(value)) ? Number(value) : null);
@@ -4141,146 +4124,159 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
   runtime.mapState.scavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false);
 }
 
-// --- Signal System ---
-// Signal is the core risk/reward meter. It rises from valuable actions (thrust,
-// loot, combat) and decays when quiet. Higher signal attracts fauna and
-// escalates scavenger behavior; it does not advance the Inhibitor clock.
-// Design: signal taxes ambition, never buys capability. See SIGNAL-DESIGN.md.
-// Signal is a 0-1 float per player. Rises from activity, decays when quiet.
-// Zone crossings publish events for client audio/visual feedback.
-
-function signalZoneForLevel(level) {
-  const cfg = SIGNAL_CONFIG;
-  if (level <= cfg.ghostMax) return "ghost";
-  if (level <= cfg.whisperMax) return "whisper";
-  if (level <= cfg.presenceMax) return "presence";
-  if (level <= cfg.beaconMax) return "beacon";
-  if (level <= cfg.flareMax) return "flare";
-  return "threshold";
+// --- Noise Radius System ---
+// Noise is the emitter-owned audible envelope. It rises from delivered actions
+// and decays in canonical meters; Conductor timing remains independent.
+function noiseModifiersFor(player) {
+  const source = player?.noise?.modifiers || {};
+  const radiusMultiplier = Number(source.radiusMultiplier);
+  const decayMultiplier = Number(source.decayMultiplier);
+  return {
+    idleFloorMeters: Number.isFinite(Number(source.idleFloorMeters))
+      ? clampMeters(source.idleFloorMeters)
+      : NOISE_CONFIG.idleFloorMeters,
+    radiusMultiplier: Number.isFinite(radiusMultiplier) && radiusMultiplier >= 0
+      ? radiusMultiplier
+      : 1,
+    decayMultiplier: Number.isFinite(decayMultiplier) && decayMultiplier >= 0
+      ? decayMultiplier
+      : 1,
+  };
 }
 
-function tickPlayerSignal(player, dt) {
-  const cfg = SIGNAL_CONFIG;
-  const sig = player.signal;
-  const input = player.lastInput;
-  const speed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+function noiseSourceLabel(source) {
+  return String(source || "IDLE").toUpperCase().replace(/[^A-Z0-9 ]+/g, "").trim() || "IDLE";
+}
+
+function tickPlayerNoise(player, dt) {
+  const noise = player.noise;
+  if (!noise) return;
+  const input = player.lastInput || {};
   const deliveredThrust = Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0));
-  const isThrusting = deliveredThrust > 0.1;
-
-  // --- Generation ---
-  let generation = 0;
-
-  if (isThrusting) {
-    // Thrust signal: base rate scaled by flow opposition.
-    // Fighting the current is loud; surfing with it is quiet.
-    const flow = estimateFlow(player.wx, player.wy);
-    const flowMag = Math.hypot(flow.x, flow.y);
-    let oppositionMult = 1.0;
-    const inputMag = Math.hypot(input.moveX, input.moveY);
-    if (flowMag > 0.001 && inputMag > 0.001) {
-      const thrustDirX = input.moveX / inputMag;
-      const thrustDirY = input.moveY / inputMag;
-      const alignment = (flow.x * thrustDirX + flow.y * thrustDirY) / flowMag;
-      // alignment: -1 (fighting) to +1 (surfing). Scale opposition: 1.0 (surfing) to 3.0 (fighting)
-      oppositionMult = 1.0 + Math.max(0, -alignment) * (cfg.thrustOppositionMult - 1.0);
-    }
-    generation += signalFractionPerSecond(cfg.thrustBasePercentPerSecond) * oppositionMult * deliveredThrust;
-  } else if (speed > 0.001) {
-    // Coasting — minimal signal
-    generation += signalFractionPerSecond(cfg.coastPercentPerSecond);
+  const deliveredBrake = Math.max(0, Math.min(1, Number(player.lastDeliveredBrakeIntensity) || 0));
+  const flow = estimateFlow(player.wx, player.wy);
+  const flowMag = Math.hypot(flow.x, flow.y);
+  const inputMag = Math.hypot(Number(input.moveX) || 0, Number(input.moveY) || 0);
+  let alignment = 0;
+  if (flowMag > 0.001 && inputMag > 0.001) {
+    alignment = (flow.x * input.moveX + flow.y * input.moveY) / (flowMag * inputMag);
+  }
+  const modifiers = noiseModifiersFor(player);
+  let targetMeters = 0;
+  let activeSource = "IDLE";
+  if (deliveredBrake > 0.01) {
+    targetMeters = NOISE_CONFIG.continuous.brakeMeters * modifiers.radiusMultiplier;
+    activeSource = "BRAKE";
+  } else if (deliveredThrust > 0.01) {
+    const againstFlow = alignment < -0.15;
+    const withFlow = alignment > 0.45;
+    targetMeters = (againstFlow
+      ? NOISE_CONFIG.continuous.againstFlowMeters
+      : withFlow ? NOISE_CONFIG.continuous.withFlowMeters : NOISE_CONFIG.continuous.neutralMeters)
+      * modifiers.radiusMultiplier * deliveredThrust;
+    activeSource = againstFlow ? "THRUST AGAINST FLOW" : withFlow ? "THRUST WITH FLOW" : "THRUST";
   }
 
-  // Well proximity — near wells is noisy
-  for (const well of runtime.mapState.wells) {
-    const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
-    if (dist < cfg.wellProximityDist) {
-      generation += signalFractionPerSecond(cfg.wellProximityPercentPerSecond);
-      break; // only count once
+  noise.continuousRadiusMeters = resolveContinuousRadius(
+    noise.continuousRadiusMeters,
+    targetMeters,
+    dt,
+    modifiers.decayMultiplier,
+  );
+
+  const nextImpulses = [];
+  let impulseRadius = 0;
+  let impulseSource = "IDLE";
+  for (const impulse of Array.isArray(noise.impulses) ? noise.impulses : []) {
+    const ageSeconds = Math.max(0, Number(impulse.ageSeconds) || 0) + dt;
+    const currentRadius = resolveImpulseRadius(impulse.radiusMeters, ageSeconds, modifiers.decayMultiplier);
+    if (currentRadius <= 0) continue;
+    nextImpulses.push({ ...impulse, ageSeconds });
+    if (currentRadius > impulseRadius) {
+      impulseRadius = currentRadius;
+      impulseSource = impulse.source;
     }
   }
-
-  // Echo wreck proximity — the dead of past cycles leak signal within
-  // the player's sensor range. Scales with the pilot's sensor multiplier
-  // so Shroud hulls and sensor-upgraded pilots hear the dead from further
-  // away. Multiple echoes stack. See docs/design/ECHOES-V1.md §Signal.
-  const ECHO_SIGNAL_LEAK = 0.02;         // per second per nearby echo
-  const ECHO_SENSOR_RANGE_BASE = 0.30;   // baseline sensor reach in world units
-  const sensorMult = player.brain?.sensorRange || 1.0;
-  const echoRange = ECHO_SENSOR_RANGE_BASE * sensorMult;
-  if (runtime.mapState.wrecks) {
-    for (const wreck of runtime.mapState.wrecks) {
-      if (!wreck.isEcho || wreck.looted) continue;
-      const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
-      if (dist < echoRange) {
-        generation += ECHO_SIGNAL_LEAK;
-      }
-    }
-  }
-
-  // --- Decay ---
-  let decay = 0;
-  if (!isThrusting) {
-    decay = signalFractionPerSecond(cfg.decayBasePercentPerSecond);
-
-    // Enhanced decay in wreck wake zones
-    for (const wreck of runtime.mapState.wrecks) {
-      if (wreck.looted) continue;
-      const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
-      if (dist < 0.15) {
-        decay = signalFractionPerSecond(cfg.decayWreckWakePercentPerSecond);
-        break;
-      }
-    }
-
-    // Enhanced decay in accretion shadows
-    for (const well of runtime.mapState.wells) {
-      const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
-      if (dist < 0.25) {
-        decay = Math.max(decay, signalFractionPerSecond(cfg.decayAccretionShadowPercentPerSecond));
-        break;
-      }
-    }
-  }
-
-  // --- Apply (hull coefficients + ability modifiers scale generation and decay) ---
-  const pb = player.brain || BRAIN_DEFAULTS;
-  const flowLockMult = getFlowLockSignalMult(player);
-  const burnSignalMult = getBurnModifiers(player).signal;
-  sig.level = Math.max(0, Math.min(1, sig.level + (generation * pb.signalGenMult * flowLockMult * burnSignalMult - decay * pb.signalDecayMult) * dt));
-
-  // Track peak signal for run results
-  if (sig.level > (player._signalPeak || 0)) {
-    player._signalPeak = sig.level;
-    player._signalPeakZone = sig.zone;
-  }
-
-  // --- Zone crossing ---
-  const newZone = signalZoneForLevel(sig.level);
-  if (newZone !== sig.zone) {
-    sig.prevZone = sig.zone;
-    sig.zone = newZone;
-    publishEvent("signal.zoneCrossing", {
-      clientId: player.clientId,
-      from: sig.prevZone,
-      to: sig.zone,
-      level: sig.level,
-    });
+  noise.impulses = nextImpulses;
+  const previousRadius = Math.max(0, Number(noise.audibleRadiusMeters) || 0);
+  const audibleRadius = Math.max(modifiers.idleFloorMeters, noise.continuousRadiusMeters, impulseRadius);
+  noise.previousRadiusMeters = previousRadius;
+  noise.audibleRadiusMeters = clampMeters(audibleRadius);
+  const delta = noise.audibleRadiusMeters - previousRadius;
+  noise.trend = delta > 1 ? "rising" : delta < -1 ? "falling" : "steady";
+  noise.currentSource = noiseSourceLabel(targetMeters > 0 ? activeSource : impulseRadius > 0 ? impulseSource : "IDLE");
+  if (noise.currentSource !== "IDLE") noise.dominantSource = noise.currentSource;
+  if (noise.audibleRadiusMeters > (noise.maxAudibleRadiusMeters || 0)) {
+    noise.maxAudibleRadiusMeters = noise.audibleRadiusMeters;
+    noise.loudestSource = noise.currentSource;
   }
 }
 
-function spikePlayerSignal(player, amount) {
-  player.signal.level = Math.min(1, player.signal.level + amount);
-  const newZone = signalZoneForLevel(player.signal.level);
-  if (newZone !== player.signal.zone) {
-    player.signal.prevZone = player.signal.zone;
-    player.signal.zone = newZone;
-    publishEvent("signal.zoneCrossing", {
-      clientId: player.clientId,
-      from: player.signal.prevZone,
-      to: player.signal.zone,
-      level: player.signal.level,
+function emitPlayerNoise(player, radiusMeters, source, options = {}) {
+  if (!player?.noise) return;
+  const radius = clampMeters(radiusMeters) * noiseModifiersFor(player).radiusMultiplier;
+  if (radius <= 0) return;
+  const eventSource = noiseSourceLabel(source);
+  const sourceClass = NOISE_CONFIG.publicSourceClasses.includes(String(options.sourceClass || "").toUpperCase())
+    ? String(options.sourceClass).toUpperCase()
+    : null;
+  player.noise.impulses = Array.isArray(player.noise.impulses) ? player.noise.impulses : [];
+  player.noise.impulses.push({ radiusMeters: radius, source: eventSource, ageSeconds: 0 });
+  player.noise.currentSource = eventSource;
+  player.noise.dominantSource = eventSource;
+  player.noise.sourceClass = sourceClass;
+  publishEvent("noise.impulse", {
+    clientId: player.clientId,
+    wx: player.wx,
+    wy: player.wy,
+    radiusMeters: radius,
+    source: eventSource,
+    action: options.action || eventSource,
+    sourceClass,
+  });
+}
+
+function refreshPlayerNoiseListeners(player) {
+  const noise = player?.noise;
+  if (!noise) return;
+  const listeners = [];
+  const ws = runtime.session.worldScale;
+  for (const fauna of runtime.mapState.fauna || []) {
+    if (fauna.alive === false) continue;
+    const distanceSimUnits = worldDistance(player.wx, player.wy, fauna.wx, fauna.wy, ws);
+    const listener = enemyListenerStateFor({
+      radiusMeters: noise.audibleRadiusMeters,
+      distanceSimUnits,
+      sensitivity: fauna.type === "bloom" ? FAUNA_CONFIG.bloomListenerSensitivity : FAUNA_CONFIG.jellyListenerSensitivity,
     });
+    fauna.listenerState = listener.state;
+    if (listener.state !== "QUIET") {
+      fauna.lastHeardWX = player.wx;
+      fauna.lastHeardWY = player.wy;
+      listeners.push({
+        id: fauna.id,
+        kind: fauna.type === "bloom" ? "SIGNAL BLOOM" : "FAUNA",
+        state: listener.state,
+        distanceMeters: listener.distanceMeters,
+        sourceWX: fauna.wx,
+        sourceWY: fauna.wy,
+      });
+    }
   }
+  const inh = runtime.inhibitor;
+  if (inh && inh.form >= 2) {
+    const distanceSimUnits = worldDistance(player.wx, player.wy, inh.wx, inh.wy, ws);
+    const audible = emitterAudibleFor({ radiusMeters: noise.audibleRadiusMeters, distanceSimUnits });
+    if (audible.audible) {
+      listeners.push({ id: "inhibitor", kind: "INHIBITOR", state: "HEARD", distanceMeters: audible.distanceMeters, sourceWX: inh.wx, sourceWY: inh.wy });
+    }
+  }
+  noise.listeners = listeners;
+  noise.heardListenerCount = listeners.length;
+  noise.trackedListenerCount = listeners.filter((listener) => listener.state === "TRACKING").length;
+  noise.lockedOnListenerCount = listeners.filter((listener) => listener.state === "LOCKED ON").length;
+  if (listeners.length > 0) noise.timeHeardSeconds = (noise.timeHeardSeconds || 0) + 1 / AUTHORITY_INTEGRATION_HZ;
+  if (noise.trackedListenerCount > 0) noise.timeTrackedSeconds = (noise.timeTrackedSeconds || 0) + 1 / AUTHORITY_INTEGRATION_HZ;
 }
 
 // --- AI Players (Adversarial Tier) ---
@@ -5584,33 +5580,34 @@ function tickHullAbilities(player, dt) {
     }
 
   } else if (as.hullType === 'shroud') {
-    // Wake Cloak: ability1 drops signal by 1 zone
+    // Wake Cloak: keep the existing quieting affordance without restoring
+    // player-facing signal bands.
     if (as.wakeCloakCooldown > 0) as.wakeCloakCooldown -= dt;
-    if (ability1Pressed && as.wakeCloakCooldown <= 0 && player.signal.zone !== 'threshold') {
-      // Drop signal to the top of the zone below current
-      const zones = ['ghost', 'whisper', 'presence', 'beacon', 'flare', 'threshold'];
-      const zoneThresholds = [0, 0.15, 0.35, 0.55, 0.75, 0.90];
-      const idx = zones.indexOf(player.signal.zone);
-      if (idx > 0) {
-        player.signal.level = Math.min(player.signal.level, zoneThresholds[idx] - 0.01);
-        player.signal.zone = zones[idx - 1];
-      }
+    if (ability1Pressed && as.wakeCloakCooldown <= 0) {
+      player.noise.audibleRadiusMeters = Math.min(
+        player.noise.audibleRadiusMeters,
+        NOISE_CONFIG.continuous.withFlowMeters,
+      );
+      player.noise.continuousRadiusMeters = Math.min(
+        player.noise.continuousRadiusMeters,
+        NOISE_CONFIG.continuous.withFlowMeters,
+      );
       as.wakeCloakCooldown = HULL_DEFINITIONS.shroud.abilities.wakeCloak.cooldown;
       publishEvent("ability.activated", { clientId: player.clientId, ability: "wakeCloak" });
     }
 
-    // Ghost Trail: passive — invisible below WHISPER
-    as.ghostTrailActive = player.signal.zone === 'ghost' || player.signal.zone === 'whisper';
+    // Ghost Trail: passive — visual quiet state, not an Inhibitor trigger.
+    as.ghostTrailActive = player.noise.audibleRadiusMeters <= NOISE_CONFIG.continuous.withFlowMeters;
 
     // Decoy Flare: ability2 spawns decoy
     if (as.decoyCooldown > 0) as.decoyCooldown -= dt;
     if (ability2Pressed && as.decoyCharges > 0 && as.decoyCooldown <= 0) {
       as.decoyCharges--;
       as.decoyCooldown = HULL_DEFINITIONS.shroud.abilities.decoyFlare.cooldown;
-      spikePlayerSignal(player, SIGNAL_CONFIG.flareLaunchSpike);
+      emitPlayerNoise(player, NOISE_CONFIG.impulses.decoyLaunchMeters, "DECOY", { action: "decoy-launch" });
       as.decoys.push({
         wx: player.wx, wy: player.wy,
-        signal: Math.min(1, player.signal.level + SIGNAL_CONFIG.flareSignalBonus), age: 0,
+        noiseRadiusMeters: NOISE_CONFIG.impulses.decoyLaunchMeters, age: 0,
       });
       publishEvent("ability.activated", { clientId: player.clientId, ability: "decoyFlare" });
     }
@@ -5621,7 +5618,8 @@ function tickHullAbilities(player, dt) {
       const flow = estimateFlowSample(as.decoys[i].wx, as.decoys[i].wy).current;
       as.decoys[i].wx = wrapWorldPosition(as.decoys[i].wx + flow.x * dt, ws);
       as.decoys[i].wy = wrapWorldPosition(as.decoys[i].wy + flow.y * dt, ws);
-      as.decoys[i].signal *= (1 - HULL_DEFINITIONS.shroud.abilities.decoyFlare.decayRate * dt);
+      as.decoys[i].noiseRadiusMeters = Math.max(0,
+        as.decoys[i].noiseRadiusMeters * (1 - HULL_DEFINITIONS.shroud.abilities.decoyFlare.decayRate * dt));
       if (as.decoys[i].age >= HULL_DEFINITIONS.shroud.abilities.decoyFlare.duration) {
         as.decoys.splice(i, 1);
       }
@@ -5798,7 +5796,7 @@ function tickSentries(dt) {
             player.vx += (toWellX / toWellDist) * cfg.bumpForce;
             player.vy += (toWellY / toWellDist) * cfg.bumpForce;
           }
-          spikePlayerSignal(player, cfg.bumpSignal);
+          emitPlayerNoise(player, cfg.bumpNoiseMeters, "IMPACT", { action: "sentry-contact" });
           sentry.state = "recover";
           sentry.recoverTimer = cfg.lungeRecovery;
           break;
@@ -5839,17 +5837,13 @@ function tickFauna(dt) {
   const ws = runtime.session.worldScale;
   const fauna = runtime.mapState.fauna;
 
-  // Find peak player signal for bloom spawning
-  let peakSignal = 0;
-  let peakPlayer = null;
+  // Blooms are local listener entities. Their existence is not gated by a
+  // global player meter, so Conductor timing and Noise remain separate.
+  let spawnPlayer = null;
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
-    if (player.signal.level > peakSignal) {
-      peakSignal = player.signal.level;
-      peakPlayer = player;
-    }
+    spawnPlayer = spawnPlayer || player;
   }
-  const peakZone = peakPlayer ? peakPlayer.signal.zone : "ghost";
 
   const faunaRng = currentRNG('fauna');
 
@@ -5873,8 +5867,8 @@ function tickFauna(dt) {
   }
 
   // Spawn signal blooms based on signal zone
-  const bloomRate = cfg.bloomSpawnRate[peakZone] || 0;
-  if (bloomRate > 0 && peakPlayer && fauna.length < cfg.maxTotal) {
+    const bloomRate = spawnPlayer ? cfg.bloomSpawnRatePerSecond : 0;
+  if (bloomRate > 0 && spawnPlayer && fauna.length < cfg.maxTotal) {
     runtime._bloomSpawnAccum = (runtime._bloomSpawnAccum || 0) + bloomRate * dt;
     while (runtime._bloomSpawnAccum >= 1) {
       runtime._bloomSpawnAccum -= 1;
@@ -5883,8 +5877,8 @@ function tickFauna(dt) {
       fauna.push({
         id: nextSeededToken(`fauna-${runtime.tick}`, "faunaIds"),
         type: "bloom",
-        wx: wrapWorldPosition(peakPlayer.wx + Math.cos(angle) * dist, ws),
-        wy: wrapWorldPosition(peakPlayer.wy + Math.sin(angle) * dist, ws),
+        wx: wrapWorldPosition(spawnPlayer.wx + Math.cos(angle) * dist, ws),
+        wy: wrapWorldPosition(spawnPlayer.wy + Math.sin(angle) * dist, ws),
         vx: 0, vy: 0,
         age: 0,
         lifespan: cfg.bloomLifespan[0] + faunaRng() * (cfg.bloomLifespan[1] - cfg.bloomLifespan[0]),
@@ -5901,22 +5895,6 @@ function tickFauna(dt) {
     f.age += dt;
     if (f.age >= f.lifespan) { f.alive = false; fauna.splice(i, 1); continue; }
 
-    if (f.type === "bloom" && peakPlayer) {
-      // Attract toward signal source
-      const dx = worldDisplacement(f.wx, peakPlayer.wx, ws);
-      const dy = worldDisplacement(f.wy, peakPlayer.wy, ws);
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.01) {
-        f.vx += (dx / dist) * cfg.bloomAttraction * dt;
-        f.vy += (dy / dist) * cfg.bloomAttraction * dt;
-      }
-      const speed = Math.hypot(f.vx, f.vy);
-      if (speed > cfg.bloomMaxSpeed) {
-        f.vx *= cfg.bloomMaxSpeed / speed;
-        f.vy *= cfg.bloomMaxSpeed / speed;
-      }
-    }
-
     const dragRetention = Math.pow(cfg.dragRetentionPerSecond, dt);
     f.vx *= dragRetention;
     f.vy *= dragRetention;
@@ -5930,7 +5908,6 @@ function tickFauna(dt) {
       const bumpRadius = f.type === "jelly" ? 0.04 : 0.03;
       if (pd < bumpRadius) {
         const bumpForce = f.type === "jelly" ? cfg.jellyBumpForce : cfg.bloomBumpForce;
-        const bumpSignal = f.type === "jelly" ? cfg.jellyBumpSignal : cfg.bloomBumpSignal;
         const bx = worldDisplacement(f.wx, player.wx, ws);
         const by = worldDisplacement(f.wy, player.wy, ws);
         const bd = Math.hypot(bx, by);
@@ -5938,7 +5915,7 @@ function tickFauna(dt) {
           player.vx += (bx / bd) * bumpForce;
           player.vy += (by / bd) * bumpForce;
         }
-        spikePlayerSignal(player, bumpSignal);
+        emitPlayerNoise(player, NOISE_CONFIG.impulses.collisionMeters, "IMPACT", { action: "fauna-contact" });
         f.alive = false; // consumed on contact
         break;
       }
@@ -6017,18 +5994,18 @@ function setInhibitorForm(form, payload = {}) {
   return setInhibitorPhase(phase, debugPhaseZero || (payload.debug ? null : getScheduledInhibitorWave(phase)), payload);
 }
 
-function configureInhibitorPhase(phase, signalSource, vesselTarget, ws) {
+function configureInhibitorPhase(phase, noiseSource, vesselTarget, ws) {
   const inh = runtime.inhibitor;
   const cfg = INHIBITOR_CONFIG;
   if (phase === 1) {
     inh.intensity = 0;
     inh.radius = cfg.glitchRadius;
-    const spawnFrom = signalSource || vesselTarget;
+    const spawnFrom = noiseSource || vesselTarget;
     if (spawnFrom) {
       inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
       inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
-      inh.lastSignalWX = spawnFrom.wx;
-      inh.lastSignalWY = spawnFrom.wy;
+      inh.lastNoiseWX = spawnFrom.wx;
+      inh.lastNoiseWY = spawnFrom.wy;
     } else {
       const rng = currentRNG("inhibitorSpawn");
       inh.wx = rng() * ws;
@@ -6040,7 +6017,7 @@ function configureInhibitorPhase(phase, signalSource, vesselTarget, ws) {
     inh.radius = cfg.swarmRadius;
     inh.swarmTrackTimer = 0;
     inh.swarmSearchTimer = 0;
-    const target = signalSource || vesselTarget;
+    const target = noiseSource || vesselTarget;
     if (target) {
       inh.swarmTargetX = target.wx;
       inh.swarmTargetY = target.wy;
@@ -6051,60 +6028,60 @@ function configureInhibitorPhase(phase, signalSource, vesselTarget, ws) {
   }
 }
 
-function advanceInhibitorClock({ signalSource, vesselTarget, ws } = {}) {
+function advanceInhibitorClock({ noiseSource, vesselTarget, ws } = {}) {
   const inh = runtime.inhibitor;
   for (const wave of runtime.inhibitorSchedule?.severityWaves || []) {
     if (wave.time > runtime.simTime || wave.tier <= inh.phase) continue;
-    configureInhibitorPhase(wave.tier, signalSource, vesselTarget, ws);
+    configureInhibitorPhase(wave.tier, noiseSource, vesselTarget, ws);
     setInhibitorPhase(wave.tier, wave);
   }
 }
 
-function collectInhibitorSignalSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
+function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
   const sources = [];
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
-    const signal = Number(player.signal?.level) || 0;
-    if (includeZeroPlayers || signal > 0) {
+    const radiusMeters = Number(player.noise?.audibleRadiusMeters) || 0;
+    if (includeZeroPlayers || radiusMeters > 0) {
       sources.push({
         kind: player.isAI ? "ai-player" : "player",
         clientId: player.clientId,
         player,
         wx: player.wx,
         wy: player.wy,
-        signal,
+        radiusMeters,
       });
     }
     if (!includeDecoys) continue;
     const decoys = player.abilityState?.decoys;
     if (!Array.isArray(decoys)) continue;
     for (const decoy of decoys) {
-      const decoySignal = Number(decoy.signal) || 0;
-      if (decoySignal <= 0) continue;
+      const decoyRadiusMeters = Number(decoy.noiseRadiusMeters) || 0;
+      if (decoyRadiusMeters <= 0) continue;
       sources.push({
         kind: "decoy",
         clientId: player.clientId,
         wx: decoy.wx,
         wy: decoy.wy,
-        signal: decoySignal,
+        radiusMeters: decoyRadiusMeters,
       });
     }
   }
-  sources.sort((a, b) => b.signal - a.signal);
+  sources.sort((a, b) => b.radiusMeters - a.radiusMeters);
   return sources;
 }
 
-function selectInhibitorSignalSource(options = {}) {
-  return collectInhibitorSignalSources(options)[0] || null;
+function selectInhibitorNoiseSource(options = {}) {
+  return collectInhibitorNoiseSources(options)[0] || null;
 }
 
-function rememberInhibitorSignalSource(inh, source, dt) {
-  if (source && source.signal > SIGNAL_CONFIG.ghostMax) {
-    inh.lastSignalWX = source.wx;
-    inh.lastSignalWY = source.wy;
-    inh.lastSignalAge = 0;
+function rememberInhibitorNoiseSource(inh, source, dt) {
+  if (source && source.radiusMeters > 0) {
+    inh.lastNoiseWX = source.wx;
+    inh.lastNoiseWY = source.wy;
+    inh.lastNoiseAge = 0;
   } else {
-    inh.lastSignalAge = Math.min(999, (inh.lastSignalAge || 0) + dt);
+    inh.lastNoiseAge = Math.min(999, (inh.lastNoiseAge || 0) + dt);
   }
 }
 
@@ -6126,8 +6103,8 @@ function setSwarmSearchTarget(inh, dt, ws) {
     cfg.swarmSearchRadiusMax,
     cfg.swarmSearchRadiusMin + searchAge * cfg.swarmSearchRadiusRate
   );
-  const centerX = Number.isFinite(inh.lastSignalWX) ? inh.lastSignalWX : inh.swarmTargetX;
-  const centerY = Number.isFinite(inh.lastSignalWY) ? inh.lastSignalWY : inh.swarmTargetY;
+  const centerX = Number.isFinite(inh.lastNoiseWX) ? inh.lastNoiseWX : inh.swarmTargetX;
+  const centerY = Number.isFinite(inh.lastNoiseWY) ? inh.lastNoiseWY : inh.swarmTargetY;
   inh.swarmTargetX = wrapWorldPosition(centerX + Math.cos(inh.swarmSearchAngle) * radius, ws);
   inh.swarmTargetY = wrapWorldPosition(centerY + Math.sin(inh.swarmSearchAngle) * radius, ws);
 }
@@ -6194,20 +6171,23 @@ function tickInhibitor(dt) {
   inh.localTime += dt;
   ensureInhibitorFormTimes(inh);
 
-  const signalSource = selectInhibitorSignalSource({ includeDecoys: inh.form < 3 });
-  const vesselTarget = selectInhibitorSignalSource({ includeDecoys: false, includeZeroPlayers: true });
-  const peakSignal = signalSource?.signal || 0;
-  rememberInhibitorSignalSource(inh, signalSource, dt);
-  advanceInhibitorClock({ signalSource, vesselTarget, ws });
+  const noiseSource = selectInhibitorNoiseSource({ includeDecoys: inh.form < 3 });
+  const vesselTarget = selectInhibitorNoiseSource({ includeDecoys: false, includeZeroPlayers: true });
+  const peakNoiseMeters = noiseSource?.radiusMeters || 0;
+  rememberInhibitorNoiseSource(inh, noiseSource, dt);
+  // Conductor time alone advances Inhibitor phases. Noise only affects the
+  // already-awake movement/search behavior.
+  advanceInhibitorClock({ noiseSource, vesselTarget, ws });
 
   if (inh.form === 1) {
     inh.intensity = Math.min(1, inh.intensity + dt * 0.5);
-    if (peakSignal < SIGNAL_CONFIG.ghostMax) inh.silenceTimer += dt;
+    if (peakNoiseMeters <= 0) inh.silenceTimer += dt;
     else inh.silenceTimer = 0;
-    const targetX = Number.isFinite(inh.lastSignalWX) ? inh.lastSignalWX : signalSource?.wx;
-    const targetY = Number.isFinite(inh.lastSignalWY) ? inh.lastSignalWY : signalSource?.wy;
+    const targetX = Number.isFinite(inh.lastNoiseWX) ? inh.lastNoiseWX : noiseSource?.wx;
+    const targetY = Number.isFinite(inh.lastNoiseWY) ? inh.lastNoiseWY : noiseSource?.wy;
     if (Number.isFinite(targetX) && Number.isFinite(targetY)) {
-      const speed = peakSignal > cfg.glitchSolidifySignal ? cfg.glitchSolidifySpeed : cfg.glitchDriftSpeed;
+      const speed = peakNoiseMeters > NOISE_CONFIG.continuous.neutralMeters
+        ? cfg.glitchSolidifySpeed : cfg.glitchDriftSpeed;
       moveInhibitorToward(inh, targetX, targetY, speed, dt, ws);
     }
   }
@@ -6216,11 +6196,15 @@ function tickInhibitor(dt) {
     inh.intensity = Math.min(1, inh.intensity + dt * 0.3);
     inh.swarmTrackTimer += dt;
 
-    if (signalSource && signalSource.signal >= SIGNAL_CONFIG.ghostMax) {
+    const swarmHearsSource = noiseSource && emitterAudibleFor({
+      radiusMeters: noiseSource.radiusMeters,
+      distanceSimUnits: worldDistance(inh.wx, inh.wy, noiseSource.wx, noiseSource.wy, ws),
+    }).audible;
+    if (swarmHearsSource) {
       inh.swarmSearchTimer = 0;
       if (inh.swarmTrackTimer >= cfg.swarmTrackInterval) {
-        inh.swarmTargetX = signalSource.wx;
-        inh.swarmTargetY = signalSource.wy;
+        inh.swarmTargetX = noiseSource.wx;
+        inh.swarmTargetY = noiseSource.wy;
         inh.swarmTrackTimer = 0;
       }
     } else if (inh.swarmSearchTimer >= cfg.swarmSearchTimeout || inh.silenceTimer >= cfg.swarmSearchTimeout) {
@@ -6230,16 +6214,15 @@ function tickInhibitor(dt) {
     }
 
     let speed = cfg.swarmSpeedSilent;
-    if (peakSignal > SIGNAL_CONFIG.flareMax) speed = cfg.swarmSpeedFlare;
-    else if (peakSignal > SIGNAL_CONFIG.presenceMax) speed = cfg.swarmSpeedHeavy;
-    else if (peakSignal > SIGNAL_CONFIG.ghostMax) speed = cfg.swarmSpeedLight;
+    if (peakNoiseMeters >= NOISE_CONFIG.impulses.forcePulseMeters) speed = cfg.swarmSpeedFlare;
+    else if (peakNoiseMeters >= NOISE_CONFIG.continuous.againstFlowMeters) speed = cfg.swarmSpeedHeavy;
+    else if (peakNoiseMeters > 0) speed = cfg.swarmSpeedLight;
     moveInhibitorToward(inh, inh.swarmTargetX, inh.swarmTargetY, speed, dt, ws);
 
     for (const player of runtime.players.values()) {
       if (player.status !== "alive") continue;
       const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
       if (pd < inh.radius * 0.5) {
-        spikePlayerSignal(player, cfg.swarmContactSignalSpike * dt);
         player.controlDebuff = Math.max(player.controlDebuff || 0, cfg.swarmControlDebuffDuration);
         if (currentRNG('swarmDrain')() < cfg.swarmContactDrain * dt) {
           for (let i = player.cargo.length - 1; i >= 0; i--) {
@@ -6371,7 +6354,7 @@ function tickAuthorityPlayers(dt, relevance) {
     tickPlayerPickups(player, relevance.wrecks, sweep);
     tickExtraction(player, extractConfirm);
     if (player.status !== "alive") continue;
-    tickPlayerSignal(player, playerDt);
+    tickPlayerNoise(player, playerDt);
   }
   for (const [player, ledger] of forceLedgers) {
     player.forceLedger = finalizeForceLedger(ledger, player);
@@ -6427,6 +6410,9 @@ function tickSim() {
   if (runtime.session.status !== "running") return;
 
   tickAuthorityPlayers(dt, relevance);
+  for (const player of runtime.players.values()) {
+    if (player.status === "alive") refreshPlayerNoiseListeners(player);
+  }
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
 

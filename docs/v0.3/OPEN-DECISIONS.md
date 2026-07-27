@@ -33,7 +33,7 @@ playtest-tunable.
 
 ### Teaching Route
 
-Shallows is the first-current route: movement/slingshot, salvage, signal
+Shallows is the first-current route: movement/slingshot, salvage, Noise
 consequence, then extraction. Seed preview and authority use the same route
 facts.
 

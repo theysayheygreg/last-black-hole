@@ -60,6 +60,7 @@ async function run() {
         wx: 1, wy: 2, vx: 0.3, vy: -0.2, facing: 0.4,
         hullType: 'breacher', deltaVRatio: 0, heatRatio: 1, overheated: true,
         overheatRemaining: 0, forceLedger: null, ruler: null,
+        noise: null,
         slingshotEngaged: false, thrusting: true, braking: false,
       },
       wells: [{
@@ -147,6 +148,7 @@ async function run() {
         wx: 1, wy: 2, vx: 0, vy: 0, facing: 0,
         hullType: 'drifter', deltaVRatio: 0, heatRatio: 1, overheated: true,
         overheatRemaining: 0, forceLedger, ruler,
+        noise: null,
         slingshotEngaged: true, thrusting: false, braking: false,
       },
       portals: [{

@@ -114,6 +114,12 @@ import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV,
 import { createRNGStreams } from './rng-stream.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { getMapDurationSeconds } from './content/map-scales.js';
+import {
+  NOISE_CONFIG,
+  NOISE_IDENTIFICATION_FRACTION,
+  NOISE_LAST_HEARD_FADE_SECONDS,
+  NOISE_PUBLIC_SOURCE_CLASSES,
+} from './content/noise.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -372,8 +378,18 @@ const BENCH_REQUESTED = new URLSearchParams(window.location.search).get('bench')
 const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
 let shieldActive = false;   // shieldBurst consumable — survive one well contact
-let signalLevel = 0;        // 0-1 float, read from server snapshot
-let signalZone = 'ghost';   // current signal zone name
+const HEAT_DISPLAY_EPSILON = 0.02;
+let noiseState = {
+  audibleRadiusMeters: 0,
+  trend: 'steady',
+  currentSource: 'IDLE',
+  dominantSource: 'IDLE',
+  heardListenerCount: 0,
+  trackedListenerCount: 0,
+  lockedOnListenerCount: 0,
+};
+const audibleContactMemory = new Map();
+const noiseRipples = [];
 let inhibitorState = {
   form: 0,
   phase: 0,
@@ -393,14 +409,14 @@ let lastRunResult = null;  // populated from run.result event
 // HUD and visual effects gracefully no-op when null.
 
 // --- THE PHANTOM ---
-// A purely client-side visual phenomenon. Sometimes, at high signal,
+// A purely client-side visual phenomenon. Sometimes, at high noise,
 // something appears at the edge of sensor range and then doesn't. There
 // is no server entity, no event, no snapshot field, no tooltip, no loot.
 // The game will never acknowledge it happened. Greg's note: "the orb in
 // Returnal is never explained. we have space for that in LBH."
 //
 // Behavior:
-// - Only rolls when signalZone is PRESENCE or higher
+// - Only rolls when the emitted noise radius is visibly elevated
 // - Seeded-deterministic: same seed + same sim time produces same phantom
 // - Appears at sensor range edge, roughly opposite the player's motion
 // - Lifetime ~2.5s, then fades
@@ -503,7 +519,10 @@ function runResultToChronicleRecord(runResult, fallback = {}) {
     emEarned,
     cargoCount: cargo.filter(Boolean).length,
     cargoValue: cargo.reduce((sum, item) => sum + (Number(item?.value) || 0), 0),
-    signalPeakZone: runResult?.signalPeakZone || fallback.signalPeakZone || null,
+    noiseMaxMeters: Number(runResult?.noiseMaxMeters ?? fallback.noiseMaxMeters ?? 0) || 0,
+    noiseSource: runResult?.noiseSource || fallback.noiseSource || null,
+    noiseTimeHeardSeconds: Number(runResult?.noiseTimeHeardSeconds ?? fallback.noiseTimeHeardSeconds ?? 0) || 0,
+    noiseTimeTrackedSeconds: Number(runResult?.noiseTimeTrackedSeconds ?? fallback.noiseTimeTrackedSeconds ?? 0) || 0,
     deathCause: runResult?.deathCause || fallback.deathCause || null,
     deathEntityId: runResult?.deathEntityId || fallback.deathEntityId || null,
     deathEntityName: runResult?.deathEntityName || fallback.deathEntityName || null,
@@ -563,7 +582,10 @@ function buildChronicleViewModel() {
       emEarned: Number(record.emEarned) || 0,
       cargoCount: Number(record.cargoCount) || 0,
       cargoValue: Number(record.cargoValue) || 0,
-      signalPeakZone: record.signalPeakZone || null,
+      noiseMaxMeters: Number(record.noiseMaxMeters) || 0,
+      noiseSource: record.noiseSource || null,
+      noiseTimeHeardSeconds: Number(record.noiseTimeHeardSeconds) || 0,
+      noiseTimeTrackedSeconds: Number(record.noiseTimeTrackedSeconds) || 0,
       deathCause: record.deathEntityId ? `${record.deathCause}: ${record.deathEntityId}` : record.deathCause || null,
       notable: record.notable || null,
     })),
@@ -1834,9 +1856,17 @@ function applyRemoteSnapshot(snapshot) {
     ship.setHeatRatio(1 - Math.max(0, Math.min(localPlayer.deltaVMax, localPlayer.deltaV)) / localPlayer.deltaVMax);
   }
   applyRemoteSlingshotState(localPlayer.slingshot);
-  if (localPlayer.signal) {
-    signalLevel = localPlayer.signal.level ?? 0;
-    signalZone = localPlayer.signal.zone ?? 'ghost';
+  if (localPlayer.noise) {
+    noiseState = {
+      ...noiseState,
+      audibleRadiusMeters: Number(localPlayer.noise.audibleRadiusMeters) || 0,
+      trend: localPlayer.noise.trend || 'steady',
+      currentSource: localPlayer.noise.currentSource || 'IDLE',
+      dominantSource: localPlayer.noise.dominantSource || 'IDLE',
+      heardListenerCount: Number(localPlayer.noise.heardListenerCount) || 0,
+      trackedListenerCount: Number(localPlayer.noise.trackedListenerCount) || 0,
+      lockedOnListenerCount: Number(localPlayer.noise.lockedOnListenerCount) || 0,
+    };
   }
   localAbilityState = localPlayer.abilityState || null;
   if (projected.inhibitor) {
@@ -2127,11 +2157,21 @@ function resetPhantomForNewSession() {
   phantomNextEligibleAt = 0;
   phantomRng = null;
   phantomLastRollTick = -1;
+  noiseState = {
+    audibleRadiusMeters: 0,
+    trend: 'steady',
+    currentSource: 'IDLE',
+    dominantSource: 'IDLE',
+    heardListenerCount: 0,
+    trackedListenerCount: 0,
+    lockedOnListenerCount: 0,
+  };
+  audibleContactMemory.clear();
+  noiseRipples.length = 0;
 }
 
 function phantomEligibleZone(zone) {
-  // Only appears when the universe is paying attention to you.
-  return zone === 'presence' || zone === 'beacon' || zone === 'flare' || zone === 'threshold';
+  return Number(zone) >= NOISE_CONFIG.continuous.neutralMeters;
 }
 
 function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
@@ -2169,13 +2209,12 @@ function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
   phantomLastRollTick = currentTick;
 
   if (simTime < phantomNextEligibleAt) return;
-  if (!phantomEligibleZone(signalZone)) return;
+  if (!phantomEligibleZone(noiseState.audibleRadiusMeters)) return;
 
   // Seeded roll — advanced once per quantum.
   const rng = getPhantomRng();
-  // Signal-weighted: more signal = more likely. Cap at ~0.015 per quantum.
-  // (Was ~0.0035 per frame × ~4 frames per quantum ≈ similar cadence.)
-  const weight = Math.min(0.015, Math.max(0, (signalLevel - 0.3) * 0.035));
+  const weight = Math.min(0.015, Math.max(0,
+    (noiseState.audibleRadiusMeters - NOISE_CONFIG.continuous.neutralMeters) * 0.00004));
   if (rng() > weight) return;
 
   // Spawn at the edge of sensor range, roughly opposite the player's motion
@@ -2286,6 +2325,84 @@ function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
   ctx.restore();
 }
 
+function noiseCategory(source) {
+  const value = String(source || 'NOISE').toUpperCase().trim();
+  if (value === 'IDLE') return 'NOISE';
+  if (value.startsWith('THRUST')) return value;
+  if (['SALVAGE', 'IMPACT', 'PULSE', 'INHIBITOR', 'CREW', 'VESSEL', 'VESSEL THRUST'].includes(value)) return value;
+  return 'NOISE';
+}
+
+function contactKey(payload) {
+  if (payload?.clientId) return `player:${payload.clientId}`;
+  return `${noiseCategory(payload?.source)}:${Number(payload?.wx || 0).toFixed(3)}:${Number(payload?.wy || 0).toFixed(3)}`;
+}
+
+function publicIdentityRank(identity) {
+  return identity === 'VESSEL THRUST' ? 2 : identity === 'VESSEL' ? 1 : 0;
+}
+
+function observeAudibleContact(key, observation, nowSeconds) {
+  if (!Number.isFinite(observation.wx) || !Number.isFinite(observation.wy)) return;
+  const radiusMeters = Math.max(0, Number(observation.radiusMeters) || 0);
+  const current = audibleContactMemory.get(key);
+  if (radiusMeters <= 0) {
+    if (current && current.live) {
+      current.live = false;
+      current.expiresAt = nowSeconds + NOISE_LAST_HEARD_FADE_SECONDS;
+    }
+    return;
+  }
+  const distanceSimUnits = worldDistance(ship.wx, ship.wy, observation.wx, observation.wy);
+  const audible = distanceSimUnits <= radiusMeters / 1000;
+  if (!audible) {
+    if (current && current.live) {
+      current.live = false;
+      current.expiresAt = nowSeconds + NOISE_LAST_HEARD_FADE_SECONDS;
+    }
+    return;
+  }
+  const next = current || {
+    category: noiseCategory(observation.source),
+    identity: null,
+    identified: false,
+  };
+  next.category = noiseCategory(observation.source);
+  next.wx = observation.wx;
+  next.wy = observation.wy;
+  next.rangeMeters = radiusMeters;
+  next.lastHeardAt = nowSeconds;
+  next.live = true;
+  next.expiresAt = nowSeconds + NOISE_LAST_HEARD_FADE_SECONDS;
+  const publicClass = String(observation.sourceClass || '').toUpperCase();
+  const inner = distanceSimUnits <= (radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000;
+  if (inner && NOISE_PUBLIC_SOURCE_CLASSES.includes(publicClass)
+    && publicIdentityRank(publicClass) >= publicIdentityRank(next.identity)) {
+    next.identified = true;
+    next.identity = publicClass;
+  }
+  audibleContactMemory.set(key, next);
+}
+
+function updateAudibleContactMemory(nowSeconds) {
+  if (remoteSession.active) {
+    for (const player of remoteSession.players || []) {
+      if (!player || player.clientId === simClient?.clientId) continue;
+      const noise = player.noise || {};
+      observeAudibleContact(`player:${player.clientId}`, {
+        wx: player.wx,
+        wy: player.wy,
+        radiusMeters: noise.audibleRadiusMeters,
+        source: noise.currentSource || noise.dominantSource,
+        sourceClass: noise.sourceClass,
+      }, nowSeconds);
+    }
+  }
+  for (const [key, contact] of audibleContactMemory) {
+    if (!contact.live && nowSeconds >= contact.expiresAt) audibleContactMemory.delete(key);
+  }
+}
+
 function applyRemoteEvents(events) {
   for (const event of acceptedRemoteEvents(events, remoteSession.lastEventSeq)) {
     // Advance immediately before presentation side effects. If a handler fails,
@@ -2302,6 +2419,28 @@ function applyRemoteEvents(events) {
     });
 
     switch (event.type) {
+      case 'noise.impulse':
+        if (Number.isFinite(Number(payload.wx)) && Number.isFinite(Number(payload.wy))
+          && Number(payload.radiusMeters) > 0) {
+          noiseRipples.push({
+            wx: Number(payload.wx),
+            wy: Number(payload.wy),
+            radiusMeters: Number(payload.radiusMeters),
+            source: noiseCategory(payload.source),
+            startedAt: simState.runElapsedTime,
+          });
+          while (noiseRipples.length > 12) noiseRipples.shift();
+        }
+        if (!isLocal) {
+          observeAudibleContact(contactKey(payload), {
+            wx: Number(payload.wx),
+            wy: Number(payload.wy),
+            radiusMeters: Number(payload.radiusMeters),
+            source: payload.source,
+            sourceClass: payload.sourceClass,
+          }, simState.runElapsedTime);
+        }
+        break;
       case 'player.pulse':
         if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
           combatSystem.spawnRemotePulseVisual(payload.wx, payload.wy, fluid, waveRings, wellSystem);
@@ -3484,6 +3623,65 @@ function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
   ctx.restore();
 }
 
+function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
+  const ratio = Math.max(0, Math.min(1, Number(ship?.getHeatRatio?.()) || 0));
+  const heatState = ship?.getHeatState?.() || {};
+  const overheatRemaining = Math.max(0, Number(heatState.overheatRemaining) || 0);
+  if (ratio <= HEAT_DISPLAY_EPSILON && overheatRemaining <= 0) return;
+  const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
+  const width = 68;
+  const left = sx - width / 2;
+  const top = sy + 35;
+  const color = overheatRemaining > 0
+    ? 'rgba(255, 80, 70, 0.95)'
+    : ratio >= 0.75 ? 'rgba(255, 170, 70, 0.95)' : 'rgba(255, 220, 100, 0.9)';
+  ctx.save();
+  ctx.font = canvasFont(9, { weight: '700' });
+  ctx.textAlign = 'center';
+  ctx.fillStyle = color;
+  ctx.fillText(overheatRemaining > 0 ? `HEAT LOCK ${overheatRemaining.toFixed(1)}s` : `HEAT ${Math.round(ratio * 100)}%`, sx, top);
+  ctx.fillStyle = 'rgba(5, 12, 24, 0.76)';
+  ctx.fillRect(left, top + 5, width, 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(left, top + 5, width * ratio, 4);
+  ctx.restore();
+}
+
+function renderNoiseOverlay(ctx, ship, camX, camY, canvasW, canvasH, nowSeconds) {
+  if (!ship) return;
+  const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
+  const radiusMeters = Math.max(0, Number(noiseState.audibleRadiusMeters) || 0);
+  ctx.save();
+  if (radiusMeters > 0) {
+    const radiusPx = worldRadiusToScreen(radiusMeters / 1000, canvasW, canvasH);
+    const alpha = noiseState.trend === 'falling' ? 0.24 : 0.36;
+    ctx.strokeStyle = `rgba(90, 220, 220, ${alpha})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  for (let i = noiseRipples.length - 1; i >= 0; i--) {
+    const ripple = noiseRipples[i];
+    const age = Math.max(0, nowSeconds - ripple.startedAt);
+    if (age > 2.5) {
+      noiseRipples.splice(i, 1);
+      continue;
+    }
+    const [rx, ry] = worldToScreen(ripple.wx, ripple.wy, camX, camY, canvasW, canvasH);
+    const radiusPx = worldRadiusToScreen((ripple.radiusMeters / 1000) * (0.35 + age * 0.65), canvasW, canvasH);
+    const alpha = Math.max(0, 0.35 * (1 - age / 2.5));
+    ctx.strokeStyle = `rgba(120, 230, 230, ${alpha.toFixed(2)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /**
  * Slingshot color palette by anchor type. Each tier reads visually
  * distinct so a player learns the vocabulary: wells = blue (cold,
@@ -3617,6 +3815,7 @@ function collectPresentationSceneSource() {
       authorityOverheated: authorityPlayer?.overheated,
       localOverheated: ship?.getHeatState?.().overheated,
       authorityOverheatRemaining: authorityPlayer?.overheatRemaining,
+      noise: authorityPlayer?.noise || null,
       localOverheatRemaining: ship?.getHeatState?.().overheatRemaining,
       forceLedger: authorityPlayer?.forceLedger || null,
       ruler: authorityPlayer?.ruler || null,
@@ -4742,7 +4941,9 @@ function gameLoop(now) {
       renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     }
     if (gamePhase === 'playing') {
+      renderNoiseOverlay(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime);
       renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      renderShipHeatInstrument(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
     }
 
     // THE PHANTOM — tick + render. See declaration comments for design notes.
@@ -4824,19 +5025,19 @@ function gameLoop(now) {
         ctx.stroke();
       }
 
-      // Shroud: render decoys as fading signal dots
+      // Shroud: render decoys as fading noise dots
       if (as.hullType === 'shroud' && as.decoys) {
         for (const decoy of as.decoys) {
           const [dx, dy] = worldToScreen(decoy.wx, decoy.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-          const alpha = Math.max(0, (decoy.signal || 0) * 0.8);
+          const alpha = Math.max(0, Math.min(1, (decoy.noiseRadiusMeters || 0) / NOISE_CONFIG.impulses.decoyLaunchMeters) * 0.8);
           ctx.fillStyle = `rgba(200, 100, 255, ${alpha.toFixed(2)})`;
           ctx.beginPath();
           ctx.arc(dx, dy, 4, 0, Math.PI * 2);
           ctx.fill();
-          // Faint signal ring
+          // Faint noise ring
           ctx.strokeStyle = `rgba(200, 100, 255, ${(alpha * 0.3).toFixed(2)})`;
           ctx.beginPath();
-          ctx.arc(dx, dy, 10 + decoy.signal * 5, 0, Math.PI * 2);
+          ctx.arc(dx, dy, 10 + ((decoy.noiseRadiusMeters || 0) / NOISE_CONFIG.impulses.decoyLaunchMeters) * 5, 0, Math.PI * 2);
           ctx.stroke();
         }
       }
@@ -4941,8 +5142,8 @@ function gameLoop(now) {
       }
     }
 
-    // Equippable effect: signalDampen — signal system not yet built, effect is passive
-    // when signal exists. No runtime code needed until then.
+    // Legacy signalDampen remains a data-compatible item id; Noise v1 does not
+    // invent a new player receiver modifier for it.
 
     // Shield burst indicator
     if (shieldActive) {
@@ -4956,7 +5157,7 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    // === EDGE INDICATORS — off-screen wells (red) and nearest wreck (gold) ===
+    // === EDGE INDICATORS — stable exit plus emitter-owned audible contacts ===
     {
       ctx.save();
       const margin = 20;
@@ -4967,7 +5168,7 @@ function gameLoop(now) {
         const cx = w / 2, cy = h / 2;
         const dx = screenX - cx, dy = screenY - cy;
         const maxX = w / 2 - margin, maxY = h / 2 - margin;
-        if (Math.abs(dx) < maxX && Math.abs(dy) < maxY) return; // on screen
+        if (Math.abs(dx) < maxX && Math.abs(dy) < maxY) return null; // on screen
         const scale = Math.min(maxX / Math.abs(dx || 1), maxY / Math.abs(dy || 1));
         const ax = cx + dx * scale, ay = cy + dy * scale;
         const angle = Math.atan2(dy, dx);
@@ -4978,24 +5179,43 @@ function gameLoop(now) {
         ctx.lineTo(ax + Math.cos(angle - 2.5) * size * 0.5, ay + Math.sin(angle - 2.5) * size * 0.5);
         ctx.closePath();
         ctx.fill();
+        return { x: ax, y: ay };
       }
 
-      // Wells — red arrows
-      for (const well of wellSystem.wells) {
-        const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, w, h);
-        drawEdgeArrow(sx, sy, 'rgba(255, 50, 30, 0.5)', 8);
-      }
-
-      // Nearest unlooted wreck — gold arrow
-      let nearestWreck = null, nearestDist = 999;
-      for (const wreck of wreckSystem.wrecks) {
-        if (!wreck.alive || wreck.looted) continue;
-        const dist = worldDistance(ship.wx, ship.wy, wreck.wx, wreck.wy);
-        if (dist < nearestDist) { nearestDist = dist; nearestWreck = wreck; }
-      }
-      if (nearestWreck) {
-        const [sx, sy] = worldToScreen(nearestWreck.wx, nearestWreck.wy, camX, camY, w, h);
-        drawEdgeArrow(sx, sy, 'rgba(255, 200, 60, 0.5)', 7);
+      updateAudibleContactMemory(simState.runElapsedTime);
+      const categoryPriority = {
+        INHIBITOR: 5,
+        VESSEL: 5,
+        'VESSEL THRUST': 5,
+        IMPACT: 4,
+        PULSE: 3,
+        THRUST: 2,
+        'THRUST AGAINST FLOW': 2,
+        'THRUST WITH FLOW': 2,
+        SALVAGE: 1,
+        CREW: 1,
+        NOISE: 0,
+      };
+      const contacts = [...audibleContactMemory.values()]
+        .filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt)
+        .sort((a, b) => (categoryPriority[b.identity || b.category] || 0) - (categoryPriority[a.identity || a.category] || 0)
+          || Number(b.rangeMeters || 0) - Number(a.rangeMeters || 0)
+          || Number(a.lastHeardAt || 0) - Number(b.lastHeardAt || 0))
+        .slice(0, 5);
+      for (const contact of contacts) {
+        const [sx, sy] = worldToScreen(contact.wx, contact.wy, camX, camY, w, h);
+        const fading = !contact.live;
+        const alpha = fading
+          ? Math.max(0, (contact.expiresAt - simState.runElapsedTime) / NOISE_LAST_HEARD_FADE_SECONDS)
+          : 0.9;
+        const edge = drawEdgeArrow(sx, sy, `rgba(100, 220, 220, ${Math.max(0.15, alpha * 0.8).toFixed(2)})`, 7);
+        if (edge) {
+          const label = contact.identity || contact.category;
+          ctx.font = canvasFont(9, { weight: '700' });
+          ctx.textAlign = 'center';
+          ctx.fillStyle = `rgba(160, 235, 235, ${Math.max(0.2, alpha).toFixed(2)})`;
+          ctx.fillText(`${label} · ${Math.round(contact.rangeMeters || 0)}m`, edge.x, edge.y - 10);
+        }
       }
 
       ctx.restore();
@@ -5278,14 +5498,10 @@ function gameLoop(now) {
       signature: currentSignature,
       inventorySystem,
       inventoryOpen,
-      signalLevel,
-      signalZone,
+      noise: noiseState,
       abilityState: localAbilityState,
       inhibitorState,
       ship,
-      heatRatio: authoritativePlayer?.heatRatio ?? ship.getHeatRatio(),
-      overheated: authoritativePlayer?.overheated ?? ship.getHeatState().overheated,
-      overheatRemaining: authoritativePlayer?.overheatRemaining ?? ship.getHeatState().overheatRemaining,
       hullState: authoritativePlayer ? {
         status: authoritativePlayer.status,
         shieldCharges: authoritativePlayer.effectState?.shieldCharges || 0,
@@ -5975,7 +6191,7 @@ function gameLoop(now) {
           const extracted = record.outcome === 'extracted';
           ctx.fillStyle = extracted ? roleColor('ecology', 0.82) : roleColor('danger', 0.76);
           const outcome = extracted ? 'extracted' : record.outcome;
-          const cue = record.notable || record.deathCause || record.signalPeakZone || '';
+          const cue = record.notable || record.deathCause || record.noiseSource || '';
           const line = `${outcome.padEnd(9)} ${record.survivalLabel}  ${record.hullType}  ${record.mapId}  +${record.emEarned} EM  cargo ${record.cargoCount}`;
           ctx.fillText(fitUiText(ctx, line, centerTextW), centerX, cyLine);
           if (cue) {

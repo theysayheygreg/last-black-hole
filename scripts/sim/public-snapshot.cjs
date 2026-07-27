@@ -50,6 +50,28 @@ function projectAbilityState(state) {
   };
 }
 
+function projectNoise(player) {
+  const noise = player.noise || {};
+  return {
+    audibleRadiusMeters: Math.max(0, Number(noise.audibleRadiusMeters) || 0),
+    trend: noise.trend || "steady",
+    currentSource: noise.currentSource || "IDLE",
+    dominantSource: noise.dominantSource || "IDLE",
+    sourceClass: noise.sourceClass || null,
+    heardListenerCount: Math.max(0, Math.floor(Number(noise.heardListenerCount) || 0)),
+    trackedListenerCount: Math.max(0, Math.floor(Number(noise.trackedListenerCount) || 0)),
+    lockedOnListenerCount: Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0)),
+    listeners: Array.isArray(noise.listeners) ? noise.listeners.map((listener) => ({
+      kind: listener.kind || "FAUNA",
+      state: listener.state === "LOCKED ON" ? "LOCKED ON" : "HEARD",
+      distanceMeters: Math.max(0, Number(listener.distanceMeters) || 0),
+    })) : [],
+    maxAudibleRadiusMeters: Math.max(0, Number(noise.maxAudibleRadiusMeters) || 0),
+    timeHeardSeconds: Math.max(0, Number(noise.timeHeardSeconds) || 0),
+    timeTrackedSeconds: Math.max(0, Number(noise.timeTrackedSeconds) || 0),
+  };
+}
+
 function projectPlayer(player, facts) {
   const heatRatio = getHeatRatio(player);
   const overheatRemaining = Math.max(0, Number(player.overheatRemaining) || 0);
@@ -126,7 +148,7 @@ function projectPlayer(player, facts) {
     activeEffects: player.activeEffects,
     effectState: player.effectState,
     portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
-    signal: player.signal,
+    noise: projectNoise(player),
     controlDebuff: player.controlDebuff || 0,
   };
 }
@@ -192,8 +214,8 @@ function projectInhibitor(inhibitor, schedule) {
     schedule,
     targetWX: inhibitor.swarmTargetX,
     targetWY: inhibitor.swarmTargetY,
-    lastSignalWX: inhibitor.lastSignalWX,
-    lastSignalWY: inhibitor.lastSignalWY,
+    lastNoiseWX: inhibitor.lastNoiseWX,
+    lastNoiseWY: inhibitor.lastNoiseWY,
     finalPortalSpawned: Boolean(inhibitor.finalPortalSpawned),
     finalPortalExpired: Boolean(inhibitor.finalPortalExpired),
     gravityBonus: inhibitor.gravityBonus || 0,

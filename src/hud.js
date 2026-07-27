@@ -60,8 +60,7 @@ let _pulseEl;
 let _signatureEl;
 let _portalArrowEl;
 let _warningsEl;
-let _signalFillEl, _signalZoneEl;
-let _fuelFillEl, _fuelReadoutEl;
+let _noiseReadoutEl, _noiseDetailEl;
 let _hullFillEl, _hullReadoutEl;
 let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCaptionEl;
 let _abilitiesEl;
@@ -86,10 +85,8 @@ export function initHUD() {
   _portalArrowEl = document.getElementById('hud-portal-arrow');
   initHudInventory(document.getElementById('hud-inventory-panel'));
   _warningsEl = document.getElementById('hud-warnings');
-  _signalFillEl = document.getElementById('hud-signal-fill');
-  _signalZoneEl = document.getElementById('hud-signal-zone');
-  _fuelFillEl = document.getElementById('hud-fuel-fill');
-  _fuelReadoutEl = document.getElementById('hud-fuel-readout');
+  _noiseReadoutEl = document.getElementById('hud-noise-readout');
+  _noiseDetailEl = document.getElementById('hud-noise-detail');
   _hullFillEl = document.getElementById('hud-hull-fill');
   _hullReadoutEl = document.getElementById('hud-hull-readout');
   _interactionEl = document.getElementById('hud-interaction');
@@ -391,53 +388,14 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     }
   }
 
-  // === SIGNAL ===
-  if (_signalFillEl && opts.signalLevel !== undefined) {
-    const level = opts.signalLevel;
-    const zone = opts.signalZone || 'ghost';
-    const pct = Math.round(level * 100);
-    _signalFillEl.style.width = `${pct}%`;
-    _signalFillEl.parentElement?.setAttribute('aria-valuenow', String(pct));
-
-    // Zone-based color
-    const zoneColors = {
-      ghost:     'rgba(80, 200, 180, 0.7)',   // teal
-      whisper:   'rgba(80, 140, 220, 0.8)',   // blue
-      presence:  'rgba(210, 180, 60, 0.85)',  // amber
-      beacon:    'rgba(230, 140, 40, 0.9)',   // orange
-      flare:     'rgba(220, 50, 40, 0.9)',    // red
-      threshold: 'rgba(255, 255, 255, 0.95)', // glitch white
-    };
-    _signalFillEl.style.backgroundColor = zoneColors[zone] || zoneColors.ghost;
-    _signalZoneEl.textContent = zone;
-    _signalZoneEl.style.color = zoneColors[zone] || zoneColors.ghost;
-  }
-
-  // === PROPULSION HEAT ===
-  if (_fuelFillEl && (opts.heatRatio !== undefined || opts.fuelRatio !== undefined)) {
-    // fuelRatio is a private compatibility input for older local fixtures;
-    // the player-facing gauge always renders the inverted value as Heat.
-    const ratio = opts.heatRatio !== undefined
-      ? Math.max(0, Math.min(1, opts.heatRatio))
-      : 1 - Math.max(0, Math.min(1, opts.fuelRatio));
-    const pct = Math.round(ratio * 100);
-    _fuelFillEl.style.width = `${pct}%`;
-    _fuelFillEl.parentElement?.setAttribute('aria-valuenow', String(pct));
-    // Heat shifts from cool cyan to amber/red as propulsion approaches lockout.
-    let color;
-    if (ratio < 0.35)      color = 'rgba(100, 220, 220, 0.9)';
-    else if (ratio < 0.7)  color = 'rgba(220, 220, 90, 0.9)';
-    else if (ratio < 0.99) color = 'rgba(240, 150, 50, 0.95)';
-    else                   color = 'rgba(240, 60, 50, 0.98)';
-    _fuelFillEl.style.backgroundColor = color;
-    if (_fuelReadoutEl) {
-      const overheated = opts.overheated === true || ratio >= 0.999;
-      const remaining = Math.max(0, Number(opts.overheatRemaining) || 0);
-      _fuelReadoutEl.textContent = overheated && remaining > 0
-        ? `${pct}% · locked ${remaining.toFixed(1)}s`
-        : `${pct}%`;
-      _fuelReadoutEl.style.color = color;
-    }
+  // === NOISE RADIUS ===
+  if (_noiseReadoutEl && opts.noise) {
+    const noise = opts.noise;
+    const radius = Math.max(0, Number(noise.audibleRadiusMeters) || 0);
+    const trend = String(noise.trend || 'steady').toUpperCase();
+    _noiseReadoutEl.textContent = `NOISE ${Math.round(radius)}m · ${trend}`;
+    _noiseDetailEl.textContent = `SOURCE ${String(noise.currentSource || noise.dominantSource || 'IDLE').toUpperCase()} · HEARD BY ${Math.max(0, Math.floor(Number(noise.heardListenerCount) || 0))} · LOCKED ON ${Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0))}`;
+    _noiseReadoutEl.style.color = radius > 0 ? 'rgba(80, 220, 220, 0.92)' : 'rgba(120, 160, 180, 0.72)';
   }
 
   // === HULL ===

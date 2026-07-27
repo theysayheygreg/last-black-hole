@@ -65,7 +65,7 @@ export function getAbilityPresentationState(abilityState = {}) {
       active,
       ready: !active && fuel > 1,
       cooldown: 0,
-      detail: active ? 'thrust spike, loud signal' : 'hold fuel for a line break',
+      detail: active ? 'thrust spike, loud noise' : 'hold fuel for a line break',
       resourceLabel: 'fuel',
       resource: fuel,
       meter: clamp01(fuel / fuelMax),
@@ -98,7 +98,7 @@ export function getAbilityPresentationState(abilityState = {}) {
       active: Boolean(state.ghostTrailActive),
       ready: cloakCooldown <= 0,
       cooldown: cloakCooldown,
-      detail: 'drop a signal zone when exposed',
+      detail: 'drop an audible decoy when exposed',
       meter: cloakCooldown > 0 ? cooldownMeter(cloakCooldown, 30) : 1,
     }));
     slots.push(createAbilitySlot('R', 'decoy', {
@@ -107,7 +107,7 @@ export function getAbilityPresentationState(abilityState = {}) {
       ready: decoyCharges > 0 && decoyCooldown <= 0,
       cooldown: decoyCooldown,
       charges: decoyCharges,
-      detail: 'throw a false signal body',
+      detail: 'throw a false noise source',
       meter: decoyCooldown > 0 ? cooldownMeter(decoyCooldown, 60) : (decoyCharges > 0 ? 1 : 0),
     }));
   } else if (hull === 'hauler') {
@@ -143,6 +143,9 @@ export function findNearestActivePortal(ship, portalSystem) {
   let nearest = null;
   for (const portal of portalSystem.portals) {
     if (!portal?.alive || portal.blockedByInhibitor) continue;
+    const isExit = portal.type === 'exit' || portal.type === 'extraction'
+      || portal.finalExfil === true || portal.guaranteedFinalExfil === true;
+    if (!isExit) continue;
     const distance = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
     if (!nearest || distance < nearest.distance) nearest = { portal, distance };
   }

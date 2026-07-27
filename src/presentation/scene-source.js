@@ -33,6 +33,14 @@ export function createPresentationSceneSource(input = {}) {
       overheated: local.authorityOverheated ?? local.localOverheated
         ?? heatRatio >= MOVEMENT.player.heat.overheatThreshold,
       overheatRemaining: local.authorityOverheatRemaining ?? local.localOverheatRemaining ?? 0,
+      noise: local.noise ? {
+        audibleRadiusMeters: Math.max(0, Number(local.noise.audibleRadiusMeters) || 0),
+        trend: local.noise.trend || 'steady',
+        currentSource: local.noise.currentSource || 'IDLE',
+        heardListenerCount: Math.max(0, Number(local.noise.heardListenerCount) || 0),
+        trackedListenerCount: Math.max(0, Number(local.noise.trackedListenerCount) || 0),
+        lockedOnListenerCount: Math.max(0, Number(local.noise.lockedOnListenerCount) || 0),
+      } : null,
       // Private compatibility field for older renderer fixtures only.
       deltaVRatio: 1 - heatRatio,
       forceLedger: local.forceLedger || null,

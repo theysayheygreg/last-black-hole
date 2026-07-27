@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+## 2026-07-27
+
+- **Noise Radius v1:** replaced the player-facing Signal meter and bands with
+  an authoritative decaying meter-based Noise envelope, local listener state,
+  emitter-owned audible contact memory, contextual Heat presentation, and
+  truthful Noise result stats. This is a source/focused-proof checkpoint;
+  browser, package, and Deck evidence remain separate.
+
 ## 2026-07-26
 
 - **Human-clarity completion:** tested source `ffbcc0ba` completes the named

@@ -232,3 +232,18 @@ The authority also publishes the current aim's `tangentialSpeed` and boolean
 `align with current` without an actionable glyph until that result is true;
 eligible aim retains the device-correct Y/F engage prompt. This is derived
 telemetry and presentation gating, not a sixth gameplay value.
+
+## Noise Radius v1
+
+Decision: retire the player-facing Signal 0-1 meter, bands, and threshold-wake
+interpretation. The server/sim now owns an emitter-derived audible radius in
+canonical meters. Player presentation receives category and range only inside
+the source's live radius; public identification may upgrade at `40%` of that
+radius only for event-carried `VESSEL` or `VESSEL THRUST` classes. Identified
+contacts retain that public class through the bounded `2.5s` last-heard fade;
+loss freezes bearing/range/category and expiry resets the memory.
+
+Heat remains a separate engine-stress presentation, not a Noise source. Gravity
+only slingshot and Inhibitor contact are quiet. Signal Blooms are local enemy
+listeners, Swarm acquisition uses Noise plus its existing search/lock behavior,
+and the Conductor remains the sole Inhibitor arrival authority.

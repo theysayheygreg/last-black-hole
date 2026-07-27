@@ -32,9 +32,9 @@ function formatTime(seconds = 0) {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-function formatSignal(value) {
+function formatNoiseMeters(value) {
   if (!Number.isFinite(Number(value))) return '--';
-  return Number(value).toFixed(2);
+  return `${Math.round(Number(value))}m`;
 }
 
 function itemLabel(item) {
@@ -84,8 +84,8 @@ export function buildRunResultsViewModel({
   const outcome = normalizeOutcome(runResult?.outcome, phase);
   const extracted = outcome === 'extracted';
   const cargo = cargoForOutcome(runResult, fallbackCargo, outcome);
-  const signalPeak = runResult?.signalPeak ?? null;
-  const signalZone = runResult?.signalPeakZone || 'ghost';
+  const noiseMaxMeters = runResult?.noiseMaxMeters ?? 0;
+  const noiseSource = runResult?.noiseSource || 'IDLE';
   const inhibitorForm = Math.max(0, Math.min(3, Number(runResult?.inhibitorFormReached) || 0));
   const survivalTime = runResult?.survivalTime ?? fallbackSurvivalTime ?? 0;
   const runDurationSeconds = Number(runResult?.runDurationSeconds ?? fallbackRunDurationSeconds) || 0;
@@ -109,7 +109,7 @@ export function buildRunResultsViewModel({
     survival: formatTime(survivalTime),
     survivalSeconds: survivalTime,
     runDurationSeconds,
-    signalPeakLabel: `${String(signalZone).toUpperCase()} (${formatSignal(signalPeak)})`,
+    noiseSummary: `${formatNoiseMeters(noiseMaxMeters)} · ${String(noiseSource).toUpperCase()}`,
     inhibitorLabel: INHIBITOR_FORMS[inhibitorForm] || 'dormant',
     wellsVisited: runResult?.wellsVisited ?? null,
     cargo,
@@ -227,7 +227,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   y += 25;
   drawKeyValueRow(ctx, 'survival', view.survival, leftX, y, { alpha: contentAlpha });
   y += 18;
-  drawKeyValueRow(ctx, 'signal peak', view.signalPeakLabel, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
+  drawKeyValueRow(ctx, 'noise max', view.noiseSummary, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
   y += 18;
   drawKeyValueRow(ctx, 'inhibitor', view.inhibitorLabel, leftX, y, { alpha: contentAlpha, valueRole: 'inhibitor' });
   y += 18;

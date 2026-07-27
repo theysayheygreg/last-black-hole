@@ -77,12 +77,12 @@ explicit presentation contracts.
 
 ## Release Pillars
 
-1. **One authority.** Death, movement, contact, loot, signal, extraction,
+1. **One authority.** Death, movement, contact, loot, Noise, extraction,
    inventory, outcomes, and durable profile writes are server/sim facts.
 2. **One world model.** Toroidal geometry, swept contact, stable body identity,
    lifecycle, relevance, and replication lanes use shared modules.
 3. **One playable story.** Shallows teaches movement, slingshot, salvage,
-   signal consequence, and confirmed extraction in a truthful seeded route.
+   Noise consequence, and confirmed extraction in a truthful seeded route.
 4. **One presentation boundary.** The Three renderer receives a neutral frame,
    visual hints, and events; it does not infer gameplay.
 5. **Evidence before Greg.** Contract proof, playable proof, and visual proof
@@ -131,7 +131,7 @@ explicit presentation contracts.
 - Stale run, stale command, stale input, wrong player, and invalid credential
   failures are deterministic.
 - Reconnect preserves player continuity and rotates authority intentionally.
-- Player-local event lanes keep inventory, loot, effects, signal crossings,
+- Player-local event lanes keep inventory, loot, effects, Noise impulses,
   and portal interaction facts private to their owner.
 - The bounded event journal and live snapshot ring expose watermarks, gap
   detection, run invalidation, and valid client snapshot rebase behavior.
@@ -142,7 +142,7 @@ explicit presentation contracts.
 
 - Seed previews and authority launches agree on map, signature, well names,
   counts, loot preview, and route anchors.
-- Shallows route order is movement/slingshot, salvage, signal consequence,
+- Shallows route order is movement/slingshot, salvage, Noise consequence,
   then cyan zone-plus-confirm extraction.
 - Expanse and Deep Field have distinct route identities and scale budgets
   rather than extra shallow catalog promises.
@@ -218,6 +218,15 @@ under the final host conditions; no extra hot-path slice is needed. The shared
 gameplay rate remains fixed at 15 Hz without map-rate profiles, and heap delta
 remains GC-sensitive diagnostic data.
 
+### Noise Radius v1
+
+The historical Signal meter and bands are retired. The authority now emits a
+decaying audible radius in canonical meters, with local fauna listeners,
+Noise-only Swarm acquisition, a compact Deck HUD, capped emitter-owned edge
+memory, and truthful result learning stats. Noise never advances Inhibitor
+arrival; the Conductor remains the only phase owner. See
+[`noise-radius-v1.md`](noise-radius-v1.md).
+
 ## Playable Evidence
 
 The natural agent journey starts a fresh sim and disposable browser at
@@ -232,7 +241,7 @@ recorded receipt proves:
 
 - title, profile, Home, route briefing, and authoritative launch;
 - intentional movement and a well slingshot engage/release;
-- natural wreck salvage and signal/Inhibitor pressure;
+- natural wreck salvage and Noise/Inhibitor pressure;
 - portal ready state before explicit confirmation;
 - authoritative extraction and result writeback;
 - Home rig and Chronicle continuity;
