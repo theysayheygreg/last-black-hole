@@ -12,6 +12,12 @@
   emitter-owned audible contact memory, contextual Heat presentation, and
   truthful Noise result stats. This is a source/focused-proof checkpoint;
   browser, package, and Deck evidence remain separate.
+- **Phase-1 Inhibitor Ecology:** shipped the Conductor-owned bounded Glitch
+  collection with stable ids, deterministic drift, lifetime expiry, listener-free
+  behavior, bounded core hull damage, `inhibitor.entities` public projection,
+  and procedural magenta/fabric presentation. The labeled scalar compatibility
+  projection remains for later Swarm/Vessel/client migration; those later
+  verticals and portal/well cleanup are not claimed here.
 
 ## 2026-07-26
 

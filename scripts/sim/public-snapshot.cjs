@@ -1,6 +1,7 @@
 const { PROTOCOL_VERSION, filterEventsForPlayer } = require("../sim-protocol.cjs");
 const { getLegacySessionCompatibility } = require("./session-compatibility.cjs");
 const { getHeatRatio, isPlayerOverheated } = require("./player-movement-step.cjs");
+const { projectGlitchEntity, INHIBITOR_ECOLOGY_CONFIG } = require("./inhibitor-ecology.cjs");
 
 /**
  * Public authority projection only. This module selects the stable wire shape
@@ -121,6 +122,8 @@ function projectPlayer(player, facts) {
     rigLevels: player.rigLevels || [0, 0, 0],
     abilityState: projectAbilityState(player.abilityState),
     status: player.status,
+    hullDamage: Math.max(0, Number(player.hullDamage) || 0),
+    hullIntegrityRatio: Math.max(0, 1 - Math.max(0, Math.min(1, Number(player.hullDamage) || 0))),
     wx: player.wx,
     wy: player.wy,
     vx: player.vx,
@@ -197,8 +200,8 @@ function projectWorld({
   };
 }
 
-function projectInhibitor(inhibitor, schedule) {
-  return {
+function projectInhibitor(inhibitor, schedule, entities = [], ecology = {}) {
+  const legacyScalar = {
     form: inhibitor.form,
     phase: inhibitor.phase,
     waveId: inhibitor.waveId,
@@ -223,6 +226,27 @@ function projectInhibitor(inhibitor, schedule) {
     finalPortalExpired: Boolean(inhibitor.finalPortalExpired),
     gravityBonus: inhibitor.gravityBonus || 0,
   };
+  const glitch = INHIBITOR_ECOLOGY_CONFIG.glitch;
+  return {
+    ...legacyScalar,
+    // Keep the old scalar fields readable for Swarm/Vessel/client consumers,
+    // but label the object so new consumers use the collection below.
+    compatibility: {
+      label: "legacy-scalar-projection",
+      owner: "swarm-vessel-client-rendering",
+      scalar: legacyScalar,
+    },
+    phase: inhibitor.phase,
+    entities: Array.from(entities || []).map(projectGlitchEntity),
+    glitchSchedule: {
+      phase: 1,
+      populationCap: glitch.populationCap,
+      spawnCadenceSeconds: glitch.spawnCadenceSeconds,
+      lifetimeSeconds: glitch.lifetimeSeconds,
+      nextSpawnAt: ecology.nextGlitchSpawnAt ?? null,
+    },
+    schedule,
+  };
 }
 
 function buildPublicSnapshot(state, facts) {
@@ -237,7 +261,12 @@ function buildPublicSnapshot(state, facts) {
     bench: state.bench,
     players: Array.from(state.players).map((player) => projectPlayer(player, facts)),
     world: projectWorld(state.world),
-    inhibitor: projectInhibitor(state.inhibitor, state.world.portalSchedule),
+    inhibitor: projectInhibitor(
+      state.inhibitor,
+      state.world.portalSchedule,
+      state.inhibitorEntities,
+      state.inhibitorEcology,
+    ),
     portalSchedule: state.world.portalSchedule,
     // Baselines are shared and cacheable. Player-local events are recovered
     // through the authenticated event stream instead.

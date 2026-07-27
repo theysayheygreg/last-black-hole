@@ -124,6 +124,12 @@ const {
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
 const {
+  INHIBITOR_ECOLOGY_CONFIG,
+  createGlitchEntity,
+  advanceGlitchEntity,
+  applyGlitchForcesAndContacts,
+} = require("./sim/inhibitor-ecology.cjs");
+const {
   beginForceLedger,
   finalizeForceLedger,
   recordForceDeltaV,
@@ -368,11 +374,9 @@ const INHIBITOR_CONFIG = {
   // These normalized fronts preserve that anchor on every map tier.
   phaseProgresses: Object.freeze([0, 0.15, 0.30, 0.45]),
   phaseWaveBudgets: [0, 1, 2, 3],
-  // Form 1: Glitch
-  glitchRadius: 0.1,           // world-units
-  glitchDriftSpeed: 0.02,      // wu/s toward last signal position
-  glitchSolidifySignal: 0.35,  // signal level that solidifies glitch
-  glitchSolidifySpeed: 0.04,   // wu/s when solidified
+  // Vertical 1 owns the collection-backed Glitch values. These aliases are
+  // compatibility inputs for the later Swarm/Vessel migration only.
+  glitchRadius: INHIBITOR_ECOLOGY_CONFIG.glitch.radius,
   // Form 2: Swarm
   swarmRadius: 0.25,
   swarmSpeedSilent: 0.02,
@@ -380,10 +384,10 @@ const INHIBITOR_CONFIG = {
   swarmSpeedHeavy: 0.10,
   swarmSpeedFlare: 0.15,
   swarmTrackInterval: 3.0,     // seconds between target updates
-  swarmContactDrain: 1.0,      // items/second on contact
+  swarmContactDrain: 1.0,      // legacy compatibility until the Swarm vertical
   swarmContactSignalSpike: 0.25,
-  swarmControlDebuffDuration: 5.0, // seconds of sluggish controls after Swarm contact
-  swarmControlDebuffMult: 0.4,     // thrust multiplier during debuff
+  swarmControlDebuffDuration: 5.0,
+  swarmControlDebuffMult: 0.4,
   swarmWreckDriftRange: 0.55,
   swarmWreckDriftStrength: 0.018,
   swarmWreckTerminalBonus: 0.035,
@@ -1234,6 +1238,11 @@ const runtime = {
   portalPlacement: null,
   portalClock: null,
   inhibitor: createInhibitorState(),
+  inhibitorEntities: [],
+  inhibitorEcology: {
+    glitchSequence: 0,
+    nextGlitchSpawnAt: null,
+  },
   mapState: {
     id: "shallows",
     name: "The Shallows",
@@ -1393,6 +1402,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       receivedAt: Date.now(),
     },
     status: "alive",
+    hullDamage: 0,
     cargo: new Array(brain.cargoSlots).fill(null),
     equipped: cloneRetiredSafeItems(options.equipped),
     consumables: cloneRetiredSafeItems(options.consumables),
@@ -1595,6 +1605,7 @@ function startSession(config = {}) {
   runtime.eventJournal.startRun(runtime.session.runId);
   runtime.snapshotRing.startRun(runtime.session.runId);
   Object.assign(runtime, runState.history);
+  Object.assign(runtime, runState.ecology);
   runtime.overload = createOverloadController({
     snapshotHz: runtime.session.baseSnapshotHz,
   });
@@ -1832,6 +1843,8 @@ function snapshotBody({ force = false } = {}) {
       getAuthoritativeField: getAuthorityFieldPacket,
     },
     inhibitor: runtime.inhibitor,
+    inhibitorEntities: runtime.inhibitorEntities,
+    inhibitorEcology: runtime.inhibitorEcology,
     recentEvents: runtime.recentEvents,
   }, {
     slingshotCoyoteTelemetry,
@@ -6062,17 +6075,13 @@ function configureInhibitorPhase(phase, noiseSource, vesselTarget, ws) {
   if (phase === 1) {
     inh.intensity = 0;
     inh.radius = cfg.glitchRadius;
-    const spawnFrom = noiseSource || vesselTarget;
-    if (spawnFrom) {
-      inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
-      inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
-      inh.lastNoiseWX = spawnFrom.wx;
-      inh.lastNoiseWY = spawnFrom.wy;
-    } else {
-      const rng = currentRNG("inhibitorSpawn");
-      inh.wx = rng() * ws;
-      inh.wy = rng() * ws;
-    }
+    // Phase 1 has no Noise input. The collection spawn below is the sole
+    // authority for Glitch position and drift; these fields are only the
+    // temporary scalar compatibility projection for older clients.
+    inh.wx = wrapWorldPosition(ws * 0.5, ws);
+    inh.wy = wrapWorldPosition(ws * 0.5, ws);
+    inh.lastNoiseWX = null;
+    inh.lastNoiseWY = null;
     inh.silenceTimer = 0;
   } else if (phase === 2) {
     inh.intensity = 0;
@@ -6097,6 +6106,131 @@ function advanceInhibitorClock({ noiseSource, vesselTarget, ws } = {}) {
     configureInhibitorPhase(wave.tier, noiseSource, vesselTarget, ws);
     setInhibitorPhase(wave.tier, wave);
   }
+}
+
+function spawnConductorGlitch() {
+  const ecology = runtime.inhibitorEcology;
+  const cfg = INHIBITOR_ECOLOGY_CONFIG.glitch;
+  const worldScale = runtime.session.worldScale;
+  const sequence = Math.max(0, Math.trunc(Number(ecology.glitchSequence) || 0)) + 1;
+  const id = `inhibitor-glitch-${sequence}`;
+  const spawn = runtime.conductor.selectToroidalSpawn({
+    streamName: `inhibitor.glitch.${sequence}`,
+    anchor: { wx: worldScale * 0.5, wy: worldScale * 0.5 },
+    worldScale,
+    minRadius: 0,
+    maxRadius: worldScale * 0.45,
+  });
+  const driftRng = currentRNG(`inhibitor.glitch.drift.${sequence}`);
+  const driftAngle = driftRng() * Math.PI * 2;
+  const driftSpeed = cfg.driftSpeed * (0.65 + driftRng() * 0.35);
+  const entity = createGlitchEntity({
+    id,
+    wx: spawn.wx,
+    wy: spawn.wy,
+    vx: Math.cos(driftAngle) * driftSpeed,
+    vy: Math.sin(driftAngle) * driftSpeed,
+    driftPhase: driftAngle,
+    createdAt: runtime.simTime,
+    createdTick: runtime.tick,
+    config: cfg,
+  });
+  ecology.glitchSequence = sequence;
+  runtime.inhibitorEntities.push(entity);
+  publishEvent("inhibitor.glitchSpawned", {
+    conductorId: runtime.conductor?.id || "match-conductor",
+    entityId: entity.id,
+    kind: entity.kind,
+    phase: runtime.inhibitor.phase,
+    scheduledTime: runtime.simTime,
+    wx: entity.wx,
+    wy: entity.wy,
+  }, { lane: "vfx", subject: entity.id });
+  return entity;
+}
+
+function syncGlitchCompatibilityProjection() {
+  const source = runtime.inhibitorEntities.find((entity) => entity.lifecycle !== "expired");
+  if (!source) return;
+  const inh = runtime.inhibitor;
+  inh.form = 1;
+  inh.phase = 1;
+  inh.wx = source.wx;
+  inh.wy = source.wy;
+  inh.vx = source.vx;
+  inh.vy = source.vy;
+  inh.intensity = source.intensity;
+  inh.radius = source.radius;
+  inh.localTime = source.localTime;
+  inh.noiseListenerState = "QUIET";
+  inh.noiseSearchState = "IDLE";
+  inh.lastNoiseWX = null;
+  inh.lastNoiseWY = null;
+}
+
+function applyInhibitorGlitchContacts(contacts) {
+  for (const contact of contacts) {
+    const player = runtime.players.get(contact.clientId);
+    if (!player || player.status !== "alive") continue;
+    publishEvent("player.hullDamaged", {
+      clientId: player.clientId,
+      cause: "inhibitor_glitch",
+      entityId: contact.entityId,
+      damage: contact.damage,
+      hullDamage: contact.totalDamage,
+    }, { lane: "neighborhood", subject: player.clientId });
+    if (!contact.lethal || player.status !== "alive") continue;
+    player.status = "dead";
+    player.vx = 0;
+    player.vy = 0;
+    publishEvent("player.died", {
+      clientId: player.clientId,
+      cause: "inhibitor_glitch",
+      entityId: contact.entityId,
+    });
+    commitPlayerOutcome(player, "dead");
+    player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
+  }
+}
+
+function tickInhibitorEcology(dt) {
+  const ecology = runtime.inhibitorEcology;
+  const cfg = INHIBITOR_ECOLOGY_CONFIG.glitch;
+  const worldScale = runtime.session.worldScale;
+  // Expired entries remain visible for one snapshot so lifecycle is truthful,
+  // then the bounded active collection drops them on the next tick.
+  for (let index = runtime.inhibitorEntities.length - 1; index >= 0; index -= 1) {
+    if (runtime.inhibitorEntities[index].lifecycle === "expired") {
+      runtime.inhibitorEntities.splice(index, 1);
+    }
+  }
+
+  if (runtime.inhibitor.phase >= 1 && ecology.nextGlitchSpawnAt == null) {
+    ecology.nextGlitchSpawnAt = runtime.simTime;
+  }
+  if (runtime.inhibitor.phase === 1
+      && runtime.simTime >= ecology.nextGlitchSpawnAt
+      && runtime.inhibitorEntities.length < cfg.populationCap) {
+    spawnConductorGlitch();
+    ecology.nextGlitchSpawnAt = runtime.simTime + cfg.spawnCadenceSeconds;
+  }
+
+  for (const entity of runtime.inhibitorEntities) {
+    advanceGlitchEntity(entity, {
+      dt,
+      worldScale,
+      tick: runtime.tick,
+      simTime: runtime.simTime,
+      config: cfg,
+    });
+  }
+  const contacts = applyGlitchForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
+    dt,
+    worldScale,
+    tick: runtime.tick,
+  });
+  applyInhibitorGlitchContacts(contacts);
+  if (runtime.inhibitor.phase === 1) syncGlitchCompatibilityProjection();
 }
 
 function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -6233,28 +6367,21 @@ function tickInhibitor(dt) {
   inh.localTime += dt;
   ensureInhibitorFormTimes(inh);
 
-  const noiseSource = selectInhibitorNoiseSource({ includeDecoys: inh.form < 3 });
-  const vesselTarget = selectInhibitorNoiseSource({ includeDecoys: false, includeZeroPlayers: true });
+  const noiseSource = inh.form >= 2
+    ? selectInhibitorNoiseSource({ includeDecoys: inh.form < 3 })
+    : null;
+  const vesselTarget = inh.form >= 3
+    ? selectInhibitorNoiseSource({ includeDecoys: false, includeZeroPlayers: true })
+    : null;
   const peakNoiseMeters = noiseSource?.radiusMeters || 0;
   inh.noiseListenerState = "QUIET";
   inh.noiseSearchState = "IDLE";
-  rememberInhibitorNoiseSource(inh, noiseSource, dt);
+  if (inh.form >= 2) rememberInhibitorNoiseSource(inh, noiseSource, dt);
   // Conductor time alone advances Inhibitor phases. Noise only affects the
   // already-awake movement/search behavior.
   advanceInhibitorClock({ noiseSource, vesselTarget, ws });
 
-  if (inh.form === 1) {
-    inh.intensity = Math.min(1, inh.intensity + dt * 0.5);
-    if (peakNoiseMeters <= 0) inh.silenceTimer += dt;
-    else inh.silenceTimer = 0;
-    const targetX = Number.isFinite(inh.lastNoiseWX) ? inh.lastNoiseWX : noiseSource?.wx;
-    const targetY = Number.isFinite(inh.lastNoiseWY) ? inh.lastNoiseWY : noiseSource?.wy;
-    if (Number.isFinite(targetX) && Number.isFinite(targetY)) {
-      const speed = peakNoiseMeters > NOISE_CONFIG.continuous.neutralMeters
-        ? cfg.glitchSolidifySpeed : cfg.glitchDriftSpeed;
-      moveInhibitorToward(inh, targetX, targetY, speed, dt, ws);
-    }
-  }
+  tickInhibitorEcology(dt);
 
   if (inh.form === 2) {
     inh.intensity = Math.min(1, inh.intensity + dt * 0.3);

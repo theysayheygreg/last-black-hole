@@ -148,6 +148,13 @@ function createRunState() {
       coarseField: null,
       authorityFieldPacket: null,
     },
+    ecology: {
+      inhibitorEntities: [],
+      inhibitorEcology: {
+        glitchSequence: 0,
+        nextGlitchSpawnAt: null,
+      },
+    },
   };
 }
 

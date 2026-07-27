@@ -20,7 +20,7 @@ function clamp(n, min, max) {
 const NOOP_ON_BEFORE_RENDER = () => {};
 const TEMPORAL_SPRITE_FAMILIES = Object.freeze([
   'player', 'shipCandidates', 'remotePlayers', 'wrecks', 'portals',
-  'stars', 'planetoids', 'scavengers', 'fauna', 'sentries',
+  'stars', 'planetoids', 'scavengers', 'fauna', 'sentries', 'inhibitors',
 ]);
 
 function collectTemporalSpriteExpectations(frame = {}) {
@@ -621,6 +621,34 @@ export class WorldScenePresentation {
         if (addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore,
           well.world.x, well.world.y, Math.max(0.018, well.visual.coreRadius), 0, 0.04)) this.wellDebugPrimitiveCount += 1;
       }
+    }
+    // Glitches remain procedural corruption: a bounded magenta core and
+    // fabric ring per authoritative collection entry, with no UI/audio owner.
+    const totalTime = Number(frame.timing?.totalTime) || 0;
+    for (const [index, glitch] of (sceneState.inhibitors || []).entries()) {
+      const pulse = 0.88 + 0.12 * Math.sin(totalTime * 4.2 + index * 1.7);
+      const radius = Math.max(0.012, glitch.radius || 0.1);
+      const ring = addSemantic(
+        this.entityGeometries.ring,
+        this.entityMaterials.inhibitorRing,
+        glitch.world.x,
+        glitch.world.y,
+        radius * (1.55 + pulse * 0.22),
+        totalTime * 1.3 + index,
+        0.055,
+      );
+      if (ring) semanticCount += 1;
+      const core = addEntity(
+        this.entityGeometries.disc,
+        this.entityMaterials.inhibitorCore,
+        glitch.world.x,
+        glitch.world.y,
+        Math.max(glitch.coreRadius || radius * 0.45, radius * 0.32) * pulse,
+        0,
+        0.065,
+      );
+      if (core) entityCount += 1;
+      this._recordSpriteState('inhibitors', glitch, ring || core ? 'visible' : 'offscreen-cull', radius, 'inhibitor');
     }
     // Wave growth remains authoritative fabric state. Product Three mode does
     // not add a generic ring on top; named slingshot/portal state owns the

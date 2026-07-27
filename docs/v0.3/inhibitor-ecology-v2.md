@@ -68,20 +68,20 @@ match-progress owned and cannot be blocked by an Inhibitor.
 
 ## Implementation Status
 
-The current runtime already has the Conductor's map-relative fronts and Noise
-arrival/listener ownership. It is not yet a full Ecology v2 implementation.
-The following gaps are explicit and must not be mistaken for shipped truth:
+**Phase 1 shipped:** the Conductor now owns a stable `runtime.inhibitorEntities`
+collection and deterministic `inhibitor-glitch-N` lifecycle. Glitches accumulate
+on the Phase-1 cadence up to the bounded cap, drift without reading Noise, expire
+by lifetime, apply bounded core hull damage with contact cooldown, and publish
+through `inhibitor.entities`. The renderer-neutral presentation seam carries
+the full collection and preserves procedural magenta/fabric corruption. The
+legacy scalar form remains only as the labeled
+`inhibitor.compatibility` projection for later Swarm/Vessel/client migration.
 
-- `runtime.inhibitor.form` still exposes scalar legacy form state.
+The remaining gaps are explicit and must not be mistaken for shipped truth:
+
 - `consumedByInhibitor` and related portal-block/legacy form behavior remain in
   `scripts/sim-runtime.cjs`.
 - Swarm cargo drain and control debuff behavior remain in the runtime even
   though Ecology v2 retires them as the target contract.
-- Legacy scalar-form presentation and behavior still require replacement with
-  the accumulating cast, persistent overdriven wells, and phase-owned entity
-  population described above.
-
-These gaps are implementation work, not permission to reinterpret the old
-Signal pressure meter or claim that the ecology is already shipped. No exact
-Inhibitor emission radii, cadence, combat mechanics, or new population behavior
-are invented here.
+- Swarm, Vessel, persistent overdriven wells, Noise emissions, exfil audio, and
+  final cleanup remain later verticals.

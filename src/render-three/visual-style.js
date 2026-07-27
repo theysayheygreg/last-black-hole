@@ -73,6 +73,8 @@ export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
     planetoid: makeVisualMaterial(palette.routeWhite, 0.86, { blending: normal }),
     fauna: makeVisualMaterial(palette.ecologyCore, 0.76, { blending: add }),
     sentry: makeVisualMaterial(palette.sentryCore, 0.88, { blending: add }),
+    inhibitorCore: makeVisualMaterial(palette.inhibitorMagenta, 0.86, { blending: add }),
+    inhibitorRing: makeVisualMaterial(palette.corruptMagenta, 0.42, { blending: add }),
 
     tether: new THREE.LineBasicMaterial({
       color: palette.playerWhite,

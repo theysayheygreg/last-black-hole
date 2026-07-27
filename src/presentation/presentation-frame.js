@@ -25,6 +25,7 @@ const WORLD_FAMILIES = Object.freeze([
   'shipCandidates',
   'fauna',
   'sentries',
+  'inhibitors',
 ]);
 
 function finite(value, fallback = 0) {
@@ -394,6 +395,25 @@ function normalizeEntity(family, source, index) {
       });
     case 'sentries':
       return Object.freeze({ ...base, status: text(source.state, 'patrol'), hint: hint('ecology', { priority: 'high' }) });
+    case 'inhibitors':
+      return Object.freeze({
+        ...base,
+        kind: text(source.kind, 'glitch'),
+        lifecycle: text(source.lifecycle, 'alive'),
+        age: Math.max(0, finite(source.age ?? source.ageSeconds)),
+        lifetime: Math.max(0, finite(source.lifetime ?? source.lifetimeSeconds)),
+        intensity: Math.max(0, Math.min(1, finite(source.intensity))),
+        radius: Math.max(0.001, finite(source.radius, 0.1)),
+        coreRadius: Math.max(0.001, finite(source.coreRadius, 0.045)),
+        movement: Object.freeze({ velocity: velocity(source) }),
+        visual: Object.freeze({ family: 'magenta-fabric-corruption', core: 'damaging' }),
+        hint: hint('anomaly', {
+          roleColor: 'anomalyMagenta',
+          vfxFamily: 'inhibitorShard',
+          priority: 'high',
+          labelPolicy: 'debugOnly',
+        }),
+      });
     default:
       return Object.freeze({ ...base, hint: hint('anomaly') });
   }

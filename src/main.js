@@ -3844,6 +3844,7 @@ function collectPresentationSceneSource() {
       shipCandidates: fixtureShipCandidates || [],
       fauna: remoteFauna || [],
       sentries: remoteSentries || [],
+      inhibitors: remoteSession.snapshot?.inhibitor?.entities || [],
       collapseEpoch: remoteSession.snapshot?.world?.collapseEpoch,
       collapseEpochSchedule: remoteSession.snapshot?.world?.collapseEpochSchedule,
     },
