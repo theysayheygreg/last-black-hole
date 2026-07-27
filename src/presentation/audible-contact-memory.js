@@ -59,7 +59,9 @@ export function projectAudibleContact({
   }
 
   const publicClass = String(sourceClass || '').toUpperCase();
-  const canUpgradeIdentity = current?.live !== false;
+  // A faded contact may identify again only after it is genuinely audible;
+  // the no-upgrade rule applies while the source is lost, not on re-entry.
+  const canUpgradeIdentity = true;
   const inIdentificationZone = distance <= metersToSimUnits(radiusMeters * identificationFraction);
   const identity = canUpgradeIdentity
     && inIdentificationZone

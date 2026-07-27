@@ -46,6 +46,34 @@ function identifyPublicSource({ radiusMeters, distanceSimUnits, sourceClass }) {
     : null;
 }
 
+function publicSourceClass(value) {
+  const className = String(value || '').toUpperCase();
+  return NOISE_CONFIG.publicSourceClasses.includes(className) ? className : null;
+}
+
+function resolveNoiseSourceProjection({
+  continuousActive = false,
+  continuousSource = "IDLE",
+  continuousSourceClass = null,
+  impulseRadiusMeters = 0,
+  impulseSource = "IDLE",
+  impulseSourceClass = null,
+} = {}) {
+  if (continuousActive) {
+    return {
+      source: String(continuousSource || "IDLE"),
+      sourceClass: publicSourceClass(continuousSourceClass),
+    };
+  }
+  if (clampMeters(impulseRadiusMeters) > 0) {
+    return {
+      source: String(impulseSource || "IDLE"),
+      sourceClass: publicSourceClass(impulseSourceClass),
+    };
+  }
+  return { source: "IDLE", sourceClass: null };
+}
+
 function enemyListenerStateFor({ radiusMeters, distanceSimUnits, sensitivity = 1 }) {
   const radius = clampMeters(radiusMeters);
   const distanceMeters = Math.max(0, simUnitsToMeters(distanceSimUnits));
@@ -67,4 +95,5 @@ module.exports = {
   enemyListenerStateFor,
   resolveContinuousRadius,
   resolveImpulseRadius,
+  resolveNoiseSourceProjection,
 };

@@ -186,7 +186,7 @@ async function run() {
           cargo,
           equipped: [{ id: "equip-a", name: "Signal Sink" }],
           consumables: [{ id: "cell-a", name: "Shield Cell" }],
-          signal: { level: 0.72, zone: "flare" },
+          noise: { maxAudibleRadiusMeters: 320, dominantSource: "THRUST AGAINST FLOW", timeHeardSeconds: 44, timeTrackedSeconds: 12 },
         },
         runResult: {
           runId,
@@ -199,9 +199,10 @@ async function run() {
           cargoExtracted: cargo,
           cargoLost: [],
           salvageBrought: [{ id: "equip-a", name: "Signal Sink" }],
-          signalPeak: 0.82,
-          signalPeakZone: "flare",
-          timePerZone: { ghost: 40, whisper: 80, flare: 60 },
+          noiseMaxMeters: 420,
+          noiseSource: "SALVAGE",
+          noiseTimeHeardSeconds: 52,
+          noiseTimeTrackedSeconds: 18,
           inhibitorFormReached: 2,
           inhibitorFormTimes: [null, 92, 144, null],
           survivalBonus: 90,
@@ -227,7 +228,8 @@ async function run() {
       assert(run.cargoLost.length === 0, "Expected no lost cargo on extraction");
       assert(run.emEarned === 90, "Expected RunResult ledger EM earned to persist");
       assert(run.survivalBonus === 90, "Expected survival bonus to persist");
-      assert(run.signalPeak === 0.82 && run.signalPeakZone === "flare", "Expected signal peak context");
+      assert(run.noiseMaxMeters === 420 && run.noiseSource === "SALVAGE", "Expected Noise peak context");
+      assert(run.noiseTimeHeardSeconds === 52 && run.noiseTimeTrackedSeconds === 18, "Expected Noise listener timing");
       assert(run.mapContext.mapId === "shallows" && run.mapContext.seed === 4242, "Expected map context");
       assert(run.loadoutSnapshot.equipped.length === 2, "Expected canonical loadout snapshot shape");
       assert(run.loadoutSnapshot.equipped[0].id === "equip-a", "Expected equipped item snapshot");
@@ -262,7 +264,7 @@ async function run() {
           cargo: deathCargo,
           equipped: [],
           consumables: [],
-          signal: { level: 0.91, zone: "threshold" },
+          noise: { maxAudibleRadiusMeters: 640, dominantSource: "IMPACT", timeHeardSeconds: 30, timeTrackedSeconds: 8 },
         },
         runResult: {
           runId: deadRunId,
@@ -276,8 +278,10 @@ async function run() {
           survivalTime: 64,
           cargoExtracted: [],
           cargoLost: deathCargo,
-          signalPeak: 0.91,
-          signalPeakZone: "threshold",
+          noiseMaxMeters: 640,
+          noiseSource: "IMPACT",
+          noiseTimeHeardSeconds: 30,
+          noiseTimeTrackedSeconds: 8,
           survivalBonus: 32,
           emEarned: 16,
           notables: [{ type: "death_cause", description: "well: charybdis", value: "well" }],
@@ -301,7 +305,7 @@ async function run() {
           cargo: [{ id: "lost-b", name: "Cold Shard", value: 25 }],
           equipped: [],
           consumables: [],
-          signal: { level: 0.12, zone: "ghost" },
+          noise: { maxAudibleRadiusMeters: 120, dominantSource: "THRUST", timeHeardSeconds: 3, timeTrackedSeconds: 0 },
         },
       });
 
@@ -318,7 +322,7 @@ async function run() {
       assert(deadRun.notables[0].type === "death_cause", "Expected notable death cause");
       assert(abandonedRun.outcome === "abandoned", "Expected abandoned outcome");
       assert(abandonedRun.cargoLost.length === 1, "Expected abandoned cargo to be recorded as lost");
-      assert(abandonedRun.signalPeakZone === "ghost", "Expected fallback signal zone for abandoned run");
+      assert(abandonedRun.noiseMaxMeters === 120 && abandonedRun.noiseSource === "THRUST", "Expected fallback Noise source for abandoned run");
       assert(profile.exoticMatter === 16, `Expected death residue to credit profile, got ${profile.exoticMatter}`);
       assert(profile.totalExoticMatterEarned === 16, "Expected profile lifetime earned to include death residue");
     });

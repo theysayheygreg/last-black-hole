@@ -12,6 +12,7 @@ const {
   identifyPublicSource,
   resolveContinuousRadius,
   resolveImpulseRadius,
+  resolveNoiseSourceProjection,
 } = require('../scripts/sim/noise-radius.cjs');
 const { buildRunEntry } = require('../scripts/control-plane-store.cjs');
 
@@ -65,6 +66,22 @@ async function run() {
   check(enemyListenerStateFor({ radiusMeters: 240, distanceSimUnits: 0.132 }).state === 'TRACKING', 'enemy inner listener state');
   check(enemyListenerStateFor({ radiusMeters: 240, distanceSimUnits: 0.20 }).state === 'HEARD', 'enemy outer listener state');
   check(enemyListenerStateFor({ radiusMeters: 240, distanceSimUnits: 0.241 }).state === 'QUIET', 'enemy listener loses source outside radius');
+  const continuousSource = resolveNoiseSourceProjection({
+    continuousActive: true,
+    continuousSource: 'THRUST AGAINST FLOW',
+    continuousSourceClass: 'VESSEL THRUST',
+    impulseRadiusMeters: 600,
+    impulseSource: 'PULSE',
+    impulseSourceClass: 'VESSEL',
+  });
+  check(continuousSource.source === 'THRUST AGAINST FLOW' && continuousSource.sourceClass === 'VESSEL THRUST', 'authority projects powered propulsion class');
+  const impulseSource = resolveNoiseSourceProjection({
+    impulseRadiusMeters: 600,
+    impulseSource: 'PULSE',
+    impulseSourceClass: 'VESSEL',
+  });
+  check(impulseSource.source === 'PULSE' && impulseSource.sourceClass === 'VESSEL', 'authority projects action impulse class');
+  check(resolveNoiseSourceProjection().sourceClass === null, 'authority clears stale source class at idle');
 
   const contactArgs = {
     sourceWX: 1.2,
@@ -112,6 +129,30 @@ async function run() {
   }).contact;
   check(!lost.live && lost.rangeMeters === 500 && lost.bearingRadians === 1.25, 'loss freezes actual last-heard range and bearing');
   check(lost.identity === 'VESSEL THRUST', 'loss cannot upgrade or erase valid identity');
+  const categoryOnlyBeforeLoss = projectAudibleContact({
+    ...contactArgs,
+    distanceSimUnits: 0.5,
+    bearingRadians: 0.1,
+    sourceClass: 'VESSEL',
+    nowSeconds: 4,
+  }).contact;
+  const categoryOnlyLost = projectAudibleContact({
+    ...contactArgs,
+    existing: categoryOnlyBeforeLoss,
+    distanceSimUnits: 0.9,
+    bearingRadians: 2.5,
+    sourceClass: 'VESSEL',
+    nowSeconds: 5,
+  }).contact;
+  const categoryReheard = projectAudibleContact({
+    ...contactArgs,
+    existing: categoryOnlyLost,
+    distanceSimUnits: 0.2,
+    bearingRadians: -0.25,
+    sourceClass: 'VESSEL',
+    nowSeconds: 6,
+  }).contact;
+  check(categoryReheard.live && categoryReheard.identity === 'VESSEL', 're-heard inner contact may identify again');
   const expired = projectAudibleContact({
     ...contactArgs,
     existing: lost,
@@ -183,6 +224,8 @@ async function run() {
   check(runtimeSource.includes('Conductor time alone advances Inhibitor phases'), 'Noise cannot advance Inhibitor arrival');
   check(runtimeSource.includes('fauna.type !== "bloom"'), 'jellies are excluded from Noise listener counts');
   check(runtimeSource.includes('f.listenerState === "HEARD"') && runtimeSource.includes('lastHeardWX'), 'Blooms investigate remembered Noise sources');
+  check(runtimeSource.includes('force * dt') && runtimeSource.includes('sourceClass, ageSeconds: 0'), 'Bloom steering and impulse class use wall-time projection');
+  check(runtimeSource.includes('sourceProjection.sourceClass') && runtimeSource.includes('sourceClass,'), 'authority selects and publishes current Noise source class');
   check(runtimeSource.includes('noiseListenerState') && runtimeSource.includes('noiseSearchState'), 'Swarm listener/search state is authoritative');
   check(runtimeSource.includes('NOISE_CONFIG.impulses.collisionMeters') && runtimeSource.includes('scavenger-contact'), 'scavenger contact emits IMPACT Noise');
   check(snapshotSource.includes('noise: projectNoise(player)'), 'Noise is public snapshot state');

@@ -28,6 +28,7 @@ const {
   emitterAudibleFor,
   resolveContinuousRadius,
   resolveImpulseRadius,
+  resolveNoiseSourceProjection,
   enemyListenerStateFor,
 } = require("./sim/noise-radius.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
@@ -4167,9 +4168,11 @@ function tickPlayerNoise(player, dt) {
   const modifiers = noiseModifiersFor(player);
   let targetMeters = 0;
   let activeSource = "IDLE";
+  let activeSourceClass = null;
   if (deliveredBrake > 0.01) {
     targetMeters = NOISE_CONFIG.continuous.brakeMeters * modifiers.radiusMultiplier;
     activeSource = "BRAKE";
+    activeSourceClass = "VESSEL THRUST";
   } else if (deliveredThrust > 0.01) {
     const againstFlow = alignment < -0.15;
     const withFlow = alignment > 0.45;
@@ -4178,6 +4181,7 @@ function tickPlayerNoise(player, dt) {
       : withFlow ? NOISE_CONFIG.continuous.withFlowMeters : NOISE_CONFIG.continuous.neutralMeters)
       * modifiers.radiusMultiplier * deliveredThrust;
     activeSource = againstFlow ? "THRUST AGAINST FLOW" : withFlow ? "THRUST WITH FLOW" : "THRUST";
+    activeSourceClass = "VESSEL THRUST";
   }
 
   noise.continuousRadiusMeters = resolveContinuousRadius(
@@ -4190,6 +4194,7 @@ function tickPlayerNoise(player, dt) {
   const nextImpulses = [];
   let impulseRadius = 0;
   let impulseSource = "IDLE";
+  let impulseSourceClass = null;
   for (const impulse of Array.isArray(noise.impulses) ? noise.impulses : []) {
     const ageSeconds = Math.max(0, Number(impulse.ageSeconds) || 0) + dt;
     const currentRadius = resolveImpulseRadius(impulse.radiusMeters, ageSeconds, modifiers.decayMultiplier);
@@ -4198,6 +4203,7 @@ function tickPlayerNoise(player, dt) {
     if (currentRadius > impulseRadius) {
       impulseRadius = currentRadius;
       impulseSource = impulse.source;
+      impulseSourceClass = impulse.sourceClass || null;
     }
   }
   noise.impulses = nextImpulses;
@@ -4207,7 +4213,16 @@ function tickPlayerNoise(player, dt) {
   noise.audibleRadiusMeters = clampMeters(audibleRadius);
   const delta = noise.audibleRadiusMeters - previousRadius;
   noise.trend = delta > 1 ? "rising" : delta < -1 ? "falling" : "steady";
-  noise.currentSource = noiseSourceLabel(targetMeters > 0 ? activeSource : impulseRadius > 0 ? impulseSource : "IDLE");
+  const sourceProjection = resolveNoiseSourceProjection({
+    continuousActive: targetMeters > 0,
+    continuousSource: activeSource,
+    continuousSourceClass: activeSourceClass,
+    impulseRadiusMeters: impulseRadius,
+    impulseSource,
+    impulseSourceClass,
+  });
+  noise.currentSource = noiseSourceLabel(sourceProjection.source);
+  noise.sourceClass = sourceProjection.sourceClass;
   if (noise.currentSource !== "IDLE") noise.dominantSource = noise.currentSource;
   if (noise.audibleRadiusMeters > (noise.maxAudibleRadiusMeters || 0)) {
     noise.maxAudibleRadiusMeters = noise.audibleRadiusMeters;
@@ -4220,11 +4235,12 @@ function emitPlayerNoise(player, radiusMeters, source, options = {}) {
   const radius = clampMeters(radiusMeters) * noiseModifiersFor(player).radiusMultiplier;
   if (radius <= 0) return;
   const eventSource = noiseSourceLabel(source);
-  const sourceClass = NOISE_CONFIG.publicSourceClasses.includes(String(options.sourceClass || "").toUpperCase())
-    ? String(options.sourceClass).toUpperCase()
+  const requestedSourceClass = options.sourceClass ?? "VESSEL";
+  const sourceClass = NOISE_CONFIG.publicSourceClasses.includes(String(requestedSourceClass).toUpperCase())
+    ? String(requestedSourceClass).toUpperCase()
     : null;
   player.noise.impulses = Array.isArray(player.noise.impulses) ? player.noise.impulses : [];
-  player.noise.impulses.push({ radiusMeters: radius, source: eventSource, ageSeconds: 0 });
+  player.noise.impulses.push({ radiusMeters: radius, source: eventSource, sourceClass, ageSeconds: 0 });
   player.noise.currentSource = eventSource;
   player.noise.dominantSource = eventSource;
   player.noise.sourceClass = sourceClass;
@@ -5922,8 +5938,8 @@ function tickFauna(dt) {
         const force = f.listenerState === "TRACKING"
           ? cfg.bloomBumpForce * 1.5
           : cfg.bloomBumpForce;
-        f.vx += (dx / distance) * force;
-        f.vy += (dy / distance) * force;
+        f.vx += (dx / distance) * force * dt;
+        f.vy += (dy / distance) * force * dt;
       }
     }
 
