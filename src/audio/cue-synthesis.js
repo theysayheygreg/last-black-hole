@@ -29,7 +29,6 @@ const CUE_HANDLERS = Object.freeze({
   scavDeath: (synth, now, vol, pan, bus) => synth._playDebrisClatter(now, vol, pan, bus),
   inhibitorWake: (synth, now, vol, pan, bus) => synth._playInhibitorWake(now, vol, bus),
   inhibitorVessel: (synth, now, vol, pan, bus) => synth._playInhibitorVessel(now, vol, bus),
-  inhibitorDrain: (synth, now, vol, pan, bus) => synth._playErrorBuzz(now, vol * 0.6, bus),
   inhibitorFinalPortal: (synth, now, vol, pan, bus) => synth._playExtract(now, vol * 0.6, bus),
   menuMove: (synth, now, vol, pan, bus) => synth._playMenuBlip(now, vol * 0.3, bus),
   menuConfirm: (synth, now, vol, pan, bus) => synth._playMenuConfirm(now, vol * 0.4, bus),

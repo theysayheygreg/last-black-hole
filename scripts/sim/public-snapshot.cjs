@@ -1,7 +1,11 @@
 const { PROTOCOL_VERSION, filterEventsForPlayer } = require("../sim-protocol.cjs");
 const { getLegacySessionCompatibility } = require("./session-compatibility.cjs");
 const { getHeatRatio, isPlayerOverheated } = require("./player-movement-step.cjs");
-const { projectGlitchEntity, INHIBITOR_ECOLOGY_CONFIG } = require("./inhibitor-ecology.cjs");
+const {
+  projectGlitchEntity,
+  projectSwarmEntity,
+  INHIBITOR_ECOLOGY_CONFIG,
+} = require("./inhibitor-ecology.cjs");
 
 /**
  * Public authority projection only. This module selects the stable wire shape
@@ -153,7 +157,6 @@ function projectPlayer(player, facts) {
     effectState: player.effectState,
     portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
     noise: projectNoise(player),
-    controlDebuff: player.controlDebuff || 0,
   };
 }
 
@@ -227,23 +230,33 @@ function projectInhibitor(inhibitor, schedule, entities = [], ecology = {}) {
     gravityBonus: inhibitor.gravityBonus || 0,
   };
   const glitch = INHIBITOR_ECOLOGY_CONFIG.glitch;
+  const swarm = INHIBITOR_ECOLOGY_CONFIG.swarm;
   return {
     ...legacyScalar,
     // Keep the old scalar fields readable for Swarm/Vessel/client consumers,
     // but label the object so new consumers use the collection below.
     compatibility: {
       label: "legacy-scalar-projection",
-      owner: "swarm-vessel-client-rendering",
+      owner: "unmigrated-vessel-client-surfaces",
       scalar: legacyScalar,
     },
     phase: inhibitor.phase,
-    entities: Array.from(entities || []).map(projectGlitchEntity),
+    entities: Array.from(entities || []).map((entity) => entity.kind === "swarm"
+      ? projectSwarmEntity(entity)
+      : projectGlitchEntity(entity)),
     glitchSchedule: {
       phase: 1,
       populationCap: glitch.populationCap,
       spawnCadenceSeconds: glitch.spawnCadenceSeconds,
       lifetimeSeconds: glitch.lifetimeSeconds,
       nextSpawnAt: ecology.nextGlitchSpawnAt ?? null,
+    },
+    swarmSchedule: {
+      phase: 2,
+      populationCap: swarm.populationCap,
+      spawnCadenceSeconds: swarm.spawnCadenceSeconds,
+      lifetimeSeconds: swarm.lifetimeSeconds,
+      nextSpawnAt: ecology.nextSwarmSpawnAt ?? null,
     },
     schedule,
   };

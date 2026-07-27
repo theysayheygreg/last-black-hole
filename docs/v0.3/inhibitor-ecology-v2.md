@@ -77,11 +77,19 @@ the full collection and preserves procedural magenta/fabric corruption. The
 legacy scalar form remains only as the labeled
 `inhibitor.compatibility` projection for later Swarm/Vessel/client migration.
 
+**Phase 2 shipped:** the Conductor now adds stable-id `inhibitor-swarm-N`
+entities on the Phase-2+ cadence under an independent bounded cap while
+Glitches continue to accumulate and replenish. Each Swarm owns Noise/decoy
+acquisition, last-heard memory, HEARD/TRACKING/INVESTIGATING and search state,
+movement, lifetime, contact cooldown, and heavy hull damage through the same
+authority death/outcome seam as Glitches. Public snapshots and the
+renderer-neutral/Three presentation expose the mixed collection with the
+procedural magenta/fabric identity. The scalar `inhibitor.compatibility`
+projection remains labeled and is no longer gameplay authority for Swarms.
+
 The remaining gaps are explicit and must not be mistaken for shipped truth:
 
 - `consumedByInhibitor` and related portal-block/legacy form behavior remain in
   `scripts/sim-runtime.cjs`.
-- Swarm cargo drain and control debuff behavior remain in the runtime even
-  though Ecology v2 retires them as the target contract.
 - Swarm, Vessel, persistent overdriven wells, Noise emissions, exfil audio, and
   final cleanup remain later verticals.

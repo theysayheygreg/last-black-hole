@@ -6,7 +6,7 @@
   Inhibitor design bodies, replaced their stable paths with pointers, and
   locked the current v0.3 Noise Radius v1 and Inhibitor Ecology v2 owners.
   The ecology record names the remaining scalar-form, portal-block,
-  `consumedByInhibitor`, and Swarm cargo/control runtime gaps honestly.
+  `consumedByInhibitor`, and later Vessel/runtime gaps honestly.
 - **Noise Radius v1:** replaced the player-facing Signal meter and bands with
   an authoritative decaying meter-based Noise envelope, local listener state,
   emitter-owned audible contact memory, contextual Heat presentation, and
@@ -18,6 +18,12 @@
   and procedural magenta/fabric presentation. The labeled scalar compatibility
   projection remains for later Swarm/Vessel/client migration; those later
   verticals and portal/well cleanup are not claimed here.
+- **Phase-2 Inhibitor Ecology:** added Conductor-owned mobile Swarms with
+  stable ids, an independent cap/cadence/lifetime, per-Swarm Noise and decoy
+  acquisition, last-heard search, restrained magenta/fabric presentation, and
+  heavy hull contact through the Glitch authority damage/death seam. Retired
+  Swarm cargo deletion, control sluggishness, recursive player-Noise spikes,
+  and their event/audio/UI routing.
 
 ## 2026-07-26
 

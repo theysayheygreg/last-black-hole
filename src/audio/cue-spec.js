@@ -29,7 +29,6 @@ export const CUE_SPECS = Object.freeze({
   inhibitorGlitch: spec('inhibitorGlitch', { bus: 'world', priority: 'warning', maxVoices: 2, duration: 0.45, cooldown: 0.35, motif: 'magenta-inhibitor' }),
   inhibitorWake: spec('inhibitorWake', { bus: 'critical', priority: 'critical', duration: 0.65, cooldown: 0.5, motif: 'magenta-inhibitor' }),
   inhibitorVessel: spec('inhibitorVessel', { bus: 'critical', priority: 'critical', duration: 1.3, cooldown: 0.8, motif: 'magenta-inhibitor' }),
-  inhibitorDrain: spec('inhibitorDrain', { bus: 'critical', priority: 'critical', duration: 0.5, cooldown: 0.25, motif: 'magenta-inhibitor' }),
   inhibitorFinalPortal: spec('inhibitorFinalPortal', { bus: 'critical', priority: 'critical', maxVoices: 5, duration: 2.2, cooldown: 0.5, motif: 'magenta-inhibitor' }),
   hullWarning: spec('hullWarning', { bus: 'critical', priority: 'warning', duration: 0.22, cooldown: 3, motif: 'red-consequence' }),
   fuelWarning: spec('fuelWarning', { bus: 'critical', priority: 'warning', duration: 0.18, cooldown: 4, motif: 'red-consequence' }),

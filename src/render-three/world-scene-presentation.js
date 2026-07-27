@@ -625,15 +625,17 @@ export class WorldScenePresentation {
     // Glitches remain procedural corruption: a bounded magenta core and
     // fabric ring per authoritative collection entry, with no UI/audio owner.
     const totalTime = Number(frame.timing?.totalTime) || 0;
-    for (const [index, glitch] of (sceneState.inhibitors || []).entries()) {
+    for (const [index, inhibitor] of (sceneState.inhibitors || []).entries()) {
+      const isSwarm = inhibitor.kind === 'swarm';
       const pulse = 0.88 + 0.12 * Math.sin(totalTime * 4.2 + index * 1.7);
-      const radius = Math.max(0.012, glitch.radius || 0.1);
+      const radius = Math.max(0.012, inhibitor.radius || 0.1);
+      const threatScale = isSwarm ? 0.86 : 1;
       const ring = addSemantic(
         this.entityGeometries.ring,
         this.entityMaterials.inhibitorRing,
-        glitch.world.x,
-        glitch.world.y,
-        radius * (1.55 + pulse * 0.22),
+        inhibitor.world.x,
+        inhibitor.world.y,
+        radius * threatScale * (1.55 + pulse * 0.22),
         totalTime * 1.3 + index,
         0.055,
       );
@@ -641,14 +643,14 @@ export class WorldScenePresentation {
       const core = addEntity(
         this.entityGeometries.disc,
         this.entityMaterials.inhibitorCore,
-        glitch.world.x,
-        glitch.world.y,
-        Math.max(glitch.coreRadius || radius * 0.45, radius * 0.32) * pulse,
+        inhibitor.world.x,
+        inhibitor.world.y,
+        Math.max(inhibitor.coreRadius || radius * 0.45, radius * 0.32) * threatScale * pulse,
         0,
         0.065,
       );
       if (core) entityCount += 1;
-      this._recordSpriteState('inhibitors', glitch, ring || core ? 'visible' : 'offscreen-cull', radius, 'inhibitor');
+      this._recordSpriteState('inhibitors', inhibitor, ring || core ? 'visible' : 'offscreen-cull', radius, inhibitor.kind || 'inhibitor');
     }
     // Wave growth remains authoritative fabric state. Product Three mode does
     // not add a generic ring on top; named slingshot/portal state owns the

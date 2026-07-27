@@ -7,7 +7,6 @@ const LOCAL_EVENT_CUES = Object.freeze({
   'player.effectUsed:breachFlare': 'breachFlare',
   'player.shieldAbsorbed': 'shieldAbsorb',
   'player.died': 'death',
-  'inhibitor.drainCargo': 'inhibitorDrain',
   'inhibitor.finalPortal': 'inhibitorFinalPortal',
   'star.consumed': 'starConsumed',
   'scavenger.consumed': 'scavDeath',

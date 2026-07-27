@@ -10,8 +10,14 @@ const {
   advanceGlitchEntity,
   applyGlitchForcesAndContacts,
   projectGlitchEntity,
+  createSwarmEntity,
+  advanceSwarmEntity,
+  applySwarmContacts,
+  projectSwarmEntity,
   countLiveGlitches,
+  countLiveSwarms,
   shouldSpawnGlitch,
+  shouldSpawnSwarm,
 } = require("../scripts/sim/inhibitor-ecology.cjs");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
 
@@ -119,6 +125,64 @@ async function run() {
   assert.strictEqual(projected.noiseListenerState, "NONE", "Glitches must publish no listener state");
   assert(projected.position && Number.isFinite(projected.position.wx), "Glitch projection must expose a position object");
 
+  const swarmCfg = {
+    ...INHIBITOR_ECOLOGY_CONFIG.swarm,
+    populationCap: 2,
+    lifetimeSeconds: 20,
+    trackingIntervalSeconds: 3,
+    searchTimeoutSeconds: 5,
+    hullDamage: 0.6,
+    contactCooldownSeconds: 0.8,
+  };
+  const swarm = createSwarmEntity({ id: "inhibitor-swarm-1", wx: 1, wy: 1, config: swarmCfg });
+  const playerNoise = { kind: "player", wx: 1.05, wy: 1, radiusMeters: 100 };
+  advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
+  assert.strictEqual(swarm.noiseListenerState, "HEARD", "Swarm must acquire audible player Noise independently");
+  advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
+  advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
+  assert.strictEqual(swarm.noiseListenerState, "TRACKING", "Swarm must enter tracking after its configured interval");
+  assert.deepStrictEqual({ wx: swarm.targetWX, wy: swarm.targetWY }, { wx: playerNoise.wx, wy: playerNoise.wy },
+    "Tracking must move the per-Swarm target to the heard source");
+  for (let i = 0; i < 5; i += 1) {
+    advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [], config: swarmCfg });
+  }
+  assert.strictEqual(swarm.noiseListenerState, "INVESTIGATING", "Lost Noise must enter per-Swarm investigation");
+  assert.strictEqual(swarm.noiseSearchState, "SEARCHING", "Lost Noise must use the configured search state");
+  const decoySwarm = createSwarmEntity({ id: "inhibitor-swarm-2", wx: 2, wy: 2, config: swarmCfg });
+  advanceSwarmEntity(decoySwarm, {
+    dt: 1,
+    worldScale: 5,
+    noiseSources: [{ kind: "decoy", wx: 2.04, wy: 2, radiusMeters: 80 }],
+    config: swarmCfg,
+  });
+  assert.strictEqual(decoySwarm.noiseListenerState, "HEARD", "Swarm must acquire decoy Noise through the same seam");
+  assert.strictEqual(countLiveSwarms([swarm, decoySwarm]), 2, "Swarm population counting must be kind-specific");
+  assert(shouldSpawnSwarm({ phase: 2, simTime: 8, nextSpawnAt: 8, entities: [swarm], config: swarmCfg }),
+    "Phase 2 must admit Swarms when their kind cap has room");
+  const contactPlayer = {
+    clientId: "swarm-pilot",
+    status: "alive",
+    wx: swarm.wx,
+    wy: swarm.wy,
+    hullDamage: 0,
+    cargo: [{ id: "cargo-kept" }],
+    noise: { audibleRadiusMeters: 0, impulses: [] },
+  };
+  const swarmContact = applySwarmContacts([swarm], [contactPlayer], { dt: 0.1, worldScale: 5, tick: 1 });
+  assert.strictEqual(swarmContact[0].damage, swarmCfg.hullDamage, "Swarm contact must apply heavy configured hull damage");
+  assert.strictEqual(contactPlayer.cargo.length, 1, "Swarm contact must not mutate cargo");
+  assert.strictEqual(contactPlayer.controlDebuff, undefined, "Swarm contact must not apply control sluggishness");
+  assert.strictEqual(contactPlayer.noise.impulses.length, 0, "Swarm contact must not spike player Noise");
+  assert.strictEqual(applySwarmContacts([swarm], [contactPlayer], { dt: 0.1, worldScale: 5, tick: 2 }).length, 0,
+    "Swarm contact must respect its cooldown");
+  const swarmLethalContact = applySwarmContacts([swarm], [contactPlayer], { dt: 1, worldScale: 5, tick: 3 });
+  assert(swarmLethalContact[0].lethal, "Repeated heavy Swarm contact must reach the configured hull death threshold");
+  const swarmProjection = projectSwarmEntity(swarm);
+  assert.strictEqual(swarmProjection.listensToNoise, true, "Swarm projection must expose Noise ownership");
+  assert.strictEqual(swarmProjection.noiseListenerState, "INVESTIGATING", "Swarm projection must expose current search state");
+  assert(swarmProjection.lastHeard && Number.isFinite(swarmProjection.lastHeard.wx),
+    "Swarm projection must retain last-heard memory");
+
   await startSimServer(PORT, {
     keepAlive: true,
     idleShutdownMs: 5000,
@@ -162,6 +226,32 @@ async function run() {
     assert(accumulated.recentEvents.some((event) => event.type === "inhibitor.glitchSpawned"),
       "Conductor spawning must publish a focused arrival event");
 
+    await request("/debug/inhibitor-state", { form: 2 });
+    const phaseTwo = await waitFor((body) => body.inhibitor?.phase === 2
+      && body.inhibitor.entities?.some((entity) => entity.kind === "swarm"));
+    const phaseTwoSwarms = phaseTwo.inhibitor.entities.filter((entity) => entity.kind === "swarm");
+    assert(phaseTwo.inhibitor.swarmSchedule.populationCap === INHIBITOR_ECOLOGY_CONFIG.swarm.populationCap,
+      "Phase 2 snapshot must expose the centralized Swarm schedule");
+    assert(phaseTwoSwarms[0].id.startsWith("inhibitor-swarm-"), "Swarm ids must use the stable ecology namespace");
+    assert(phaseTwoSwarms[0].listensToNoise === true, "Snapshot must expose individual Swarm Noise ownership");
+    assert(["QUIET", "HEARD", "TRACKING", "INVESTIGATING"].includes(phaseTwoSwarms[0].noiseListenerState),
+      "Snapshot must expose a per-Swarm listener state");
+
+    const phaseTwoAccumulated = await waitFor((body) => {
+      const entities = body.inhibitor.entities || [];
+      return entities.filter((entity) => entity.kind === "swarm").length >= 2
+        && entities.some((entity) => entity.id === "inhibitor-glitch-3");
+    });
+    const phaseTwoEntities = phaseTwoAccumulated.inhibitor.entities;
+    const phaseTwoIds = phaseTwoEntities.map((entity) => entity.id);
+    assert.strictEqual(new Set(phaseTwoIds).size, phaseTwoIds.length, "Mixed ecology ids must remain stable and unique");
+    assert(phaseTwoEntities.filter((entity) => entity.kind === "swarm").length <= INHIBITOR_ECOLOGY_CONFIG.swarm.populationCap,
+      "Swarm collection must respect its kind-specific cap");
+    assert(phaseTwoEntities.filter((entity) => entity.kind === "glitch").length <= INHIBITOR_ECOLOGY_CONFIG.glitch.populationCap,
+      "Glitch collection must retain its independent cap in Phase 2");
+    assert(phaseTwoAccumulated.recentEvents.some((event) => event.type === "inhibitor.swarmSpawned"),
+      "Conductor Phase 2 spawning must publish a Swarm arrival event");
+
     const sceneSource = await import(pathToFileURL(path.join(__dirname, "..", "src/presentation/scene-source.js")).href);
     const presentationFrame = await import(pathToFileURL(path.join(__dirname, "..", "src/presentation/presentation-frame.js")).href);
     const scene = sceneSource.createPresentationSceneSource({
@@ -174,6 +264,17 @@ async function run() {
       "Collection-owned Glitches must cross the renderer-neutral presentation seam");
     assert.strictEqual(frame.world.inhibitors[0].hint.roleColor, "anomalyMagenta",
       "Glitch presentation must retain the procedural magenta role");
+    const mixedScene = sceneSource.createPresentationSceneSource({
+      phase: "playing",
+      localPlayer: { ship: { wx: 0, wy: 0, vx: 0, vy: 0, slingshotEngaged: false } },
+      world: { inhibitors: phaseTwoEntities },
+    });
+    const mixedFrame = presentationFrame.createPresentationFrame({ phase: "playing", scene: mixedScene });
+    assert.strictEqual(mixedFrame.world.inhibitors.length, phaseTwoEntities.length,
+      "Renderer-neutral presentation must expose mixed Glitch and Swarm collections");
+    const presentedSwarm = mixedFrame.world.inhibitors.find((entity) => entity.kind === "swarm");
+    assert(presentedSwarm && presentedSwarm.visual.family === "noise-hunting-fabric",
+      "Swarm presentation must retain its procedural magenta/fabric identity");
   } finally {
     await stopSimServer(PORT);
   }

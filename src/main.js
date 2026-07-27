@@ -2471,11 +2471,6 @@ function applyRemoteEvents(events) {
           showWarning('inhibitor reset', 'rgba(120, 200, 180, 0.7)', 2000);
         }
         break;
-      case 'inhibitor.drainCargo':
-        if (isLocal) {
-          showInhibitorWarning('cargo drained', Math.max(1, payload.form || 2), payload.intensity ?? 0.9, 1800, 'rgba(204, 26, 128, 0.9)');
-        }
-        break;
       case 'inhibitor.finalPortal':
         showWarning('final portal opened', 'rgba(255, 217, 102, 0.95)', 4000);
         break;

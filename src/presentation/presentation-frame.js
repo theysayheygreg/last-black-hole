@@ -405,8 +405,20 @@ function normalizeEntity(family, source, index) {
         intensity: Math.max(0, Math.min(1, finite(source.intensity))),
         radius: Math.max(0.001, finite(source.radius, 0.1)),
         coreRadius: Math.max(0.001, finite(source.coreRadius, 0.045)),
+        contactRadius: Math.max(0, finite(source.contactRadius)),
+        target: source.target ? point(source.target, 'wx', 'wy') : null,
+        lastHeard: source.lastHeard ? Object.freeze({
+          ...point(source.lastHeard, 'wx', 'wy'),
+          ageSeconds: Math.max(0, finite(source.lastHeard.ageSeconds)),
+        }) : null,
+        listensToNoise: source.listensToNoise === true,
+        noiseListenerState: text(source.noiseListenerState, 'QUIET'),
+        noiseSearchState: text(source.noiseSearchState, 'IDLE'),
         movement: Object.freeze({ velocity: velocity(source) }),
-        visual: Object.freeze({ family: 'magenta-fabric-corruption', core: 'damaging' }),
+        visual: Object.freeze({
+          family: source.kind === 'swarm' ? 'noise-hunting-fabric' : 'magenta-fabric-corruption',
+          core: 'damaging',
+        }),
         hint: hint('anomaly', {
           roleColor: 'anomalyMagenta',
           vfxFamily: 'inhibitorShard',

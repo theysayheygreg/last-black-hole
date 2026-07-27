@@ -153,6 +153,8 @@ function createRunState() {
       inhibitorEcology: {
         glitchSequence: 0,
         nextGlitchSpawnAt: null,
+        swarmSequence: 0,
+        nextSwarmSpawnAt: null,
       },
     },
   };

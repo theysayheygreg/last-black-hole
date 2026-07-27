@@ -128,6 +128,10 @@ const {
   createGlitchEntity,
   advanceGlitchEntity,
   applyGlitchForcesAndContacts,
+  createSwarmEntity,
+  advanceSwarmEntity,
+  applySwarmContacts,
+  shouldSpawnSwarm,
   shouldSpawnGlitch,
 } = require("./sim/inhibitor-ecology.cjs");
 const {
@@ -375,28 +379,10 @@ const INHIBITOR_CONFIG = {
   // These normalized fronts preserve that anchor on every map tier.
   phaseProgresses: Object.freeze([0, 0.15, 0.30, 0.45]),
   phaseWaveBudgets: [0, 1, 2, 3],
-  // Vertical 1 owns the collection-backed Glitch values. These aliases are
-  // compatibility inputs for the later Swarm/Vessel migration only.
+  // Vertical 1 owns the collection-backed Glitch values.
   glitchRadius: INHIBITOR_ECOLOGY_CONFIG.glitch.radius,
-  // Form 2: Swarm
-  swarmRadius: 0.25,
-  swarmSpeedSilent: 0.02,
-  swarmSpeedLight: 0.05,
-  swarmSpeedHeavy: 0.10,
-  swarmSpeedFlare: 0.15,
-  swarmTrackInterval: 3.0,     // seconds between target updates
-  swarmContactDrain: 1.0,      // legacy compatibility until the Swarm vertical
-  swarmContactSignalSpike: 0.25,
-  swarmControlDebuffDuration: 5.0,
-  swarmControlDebuffMult: 0.4,
-  swarmWreckDriftRange: 0.55,
-  swarmWreckDriftStrength: 0.018,
-  swarmWreckTerminalBonus: 0.035,
-  swarmSearchTimeout: 5.0,     // seconds before search pattern
-  swarmSearchRadiusMin: 0.08,
-  swarmSearchRadiusMax: 0.65,
-  swarmSearchRadiusRate: 0.025,
-  swarmSearchTurnRate: 1.4,
+  // Form 2 tuning is centralized in inhibitor-ecology.cjs.
+  swarmRadius: INHIBITOR_ECOLOGY_CONFIG.swarm.radius,
   // Form 3: Vessel
   vesselSpeed: 0.08,
   vesselKillRadius: 0.08,
@@ -1204,7 +1190,6 @@ const PLAYER_LOCAL_EVENT_TYPES = new Set([
   "player.effectUsed",
   "player.portalProximity",
   "player.portalConfirmed",
-  "inhibitor.drainCargo",
 ]);
 
 const protocol = createProtocolDescription();
@@ -1243,6 +1228,8 @@ const runtime = {
   inhibitorEcology: {
     glitchSequence: 0,
     nextGlitchSpawnAt: null,
+    swarmSequence: 0,
+    nextSwarmSpawnAt: null,
   },
   mapState: {
     id: "shallows",
@@ -1435,7 +1422,6 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       continuousSourceClass: null,
       impulses: [],
     },
-    controlDebuff: 0,
     portalInteraction: null,
     slingshot: {
       phase: "idle",
@@ -2766,28 +2752,7 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
       ay += gravity.y;
     }
 
-    let terminal = 0.05;
-    const inh = runtime.inhibitor;
-    if (inh?.form >= 2) {
-      const dx = worldDisplacement(inh.wx, wreck.wx, ws);
-      const dy = worldDisplacement(inh.wy, wreck.wy, ws);
-      const dist = Math.hypot(dx, dy);
-      const range = INHIBITOR_CONFIG.swarmWreckDriftRange;
-      if (dist > 0.001 && dist < range) {
-        const proximity = 1 - dist / range;
-        // The Swarm is a gravity disturbance, not a magnet. Add a capped
-        // tangential shove so nearby wrecks visibly shear without becoming
-        // unbounded projectiles during long matches.
-        const tangentX = -dy / dist;
-        const tangentY = dx / dist;
-        const outwardX = dx / dist;
-        const outwardY = dy / dist;
-        const strength = INHIBITOR_CONFIG.swarmWreckDriftStrength * proximity * proximity;
-        ax += (tangentX * 0.78 + outwardX * 0.22) * strength;
-        ay += (tangentY * 0.78 + outwardY * 0.22) * strength;
-        terminal += INHIBITOR_CONFIG.swarmWreckTerminalBonus * proximity;
-      }
-    }
+    const terminal = 0.05;
 
     wreck.vx += ax * dt;
     wreck.vy += ay * dt;
@@ -4312,22 +4277,21 @@ function refreshPlayerNoiseListeners(player) {
       });
     }
   }
-  const inh = runtime.inhibitor;
-  if (inh && inh.form >= 2) {
-    const distanceSimUnits = worldDistance(player.wx, player.wy, inh.wx, inh.wy, ws);
+  for (const swarm of runtime.inhibitorEntities || []) {
+    if (swarm.kind !== "swarm" || swarm.lifecycle !== "alive") continue;
+    const distanceSimUnits = worldDistance(player.wx, player.wy, swarm.wx, swarm.wy, ws);
     const audible = emitterAudibleFor({ radiusMeters: noise.audibleRadiusMeters, distanceSimUnits });
-    if (audible.audible) {
-      listeners.push({
-        id: "inhibitor",
-        kind: "INHIBITOR",
-        state: inh.noiseListenerState === "LOCKED ON" ? "LOCKED ON"
-          : inh.noiseListenerState === "TRACKING" ? "TRACKING"
-            : "HEARD",
-        distanceMeters: audible.distanceMeters,
-        sourceWX: inh.wx,
-        sourceWY: inh.wy,
-      });
-    }
+    if (!audible.audible) continue;
+    listeners.push({
+      id: swarm.id,
+      kind: "SWARM",
+      state: swarm.noiseListenerState === "TRACKING" ? "TRACKING"
+        : swarm.noiseListenerState === "INVESTIGATING" ? "INVESTIGATING"
+          : "HEARD",
+      distanceMeters: audible.distanceMeters,
+      sourceWX: swarm.wx,
+      sourceWY: swarm.wy,
+    });
   }
   noise.listeners = listeners;
   noise.heardListenerCount = listeners.length;
@@ -6150,6 +6114,45 @@ function spawnConductorGlitch() {
   return entity;
 }
 
+function spawnConductorSwarm() {
+  const ecology = runtime.inhibitorEcology;
+  const cfg = INHIBITOR_ECOLOGY_CONFIG.swarm;
+  const worldScale = runtime.session.worldScale;
+  const sequence = Math.max(0, Math.trunc(Number(ecology.swarmSequence) || 0)) + 1;
+  const id = `inhibitor-swarm-${sequence}`;
+  const spawn = runtime.conductor.selectToroidalSpawn({
+    streamName: `inhibitor.swarm.${sequence}`,
+    anchor: { wx: worldScale * 0.5, wy: worldScale * 0.5 },
+    worldScale,
+    minRadius: worldScale * 0.08,
+    maxRadius: worldScale * 0.45,
+  });
+  const rng = currentRNG(`inhibitor.swarm.heading.${sequence}`);
+  const entity = createSwarmEntity({
+    id,
+    wx: spawn.wx,
+    wy: spawn.wy,
+    targetWX: spawn.wx,
+    targetWY: spawn.wy,
+    searchAngle: rng() * Math.PI * 2,
+    createdAt: runtime.simTime,
+    createdTick: runtime.tick,
+    config: cfg,
+  });
+  ecology.swarmSequence = sequence;
+  runtime.inhibitorEntities.push(entity);
+  publishEvent("inhibitor.swarmSpawned", {
+    conductorId: runtime.conductor?.id || "match-conductor",
+    entityId: entity.id,
+    kind: entity.kind,
+    phase: runtime.inhibitor.phase,
+    scheduledTime: runtime.simTime,
+    wx: entity.wx,
+    wy: entity.wy,
+  }, { lane: "vfx", subject: entity.id });
+  return entity;
+}
+
 function syncGlitchCompatibilityProjection() {
   const source = runtime.inhibitorEntities.find((entity) => entity.lifecycle !== "expired");
   if (!source) return;
@@ -6169,13 +6172,36 @@ function syncGlitchCompatibilityProjection() {
   inh.lastNoiseWY = null;
 }
 
-function applyInhibitorGlitchContacts(contacts) {
+function syncSwarmCompatibilityProjection() {
+  const source = runtime.inhibitorEntities.find((entity) =>
+    entity.kind === "swarm" && entity.lifecycle !== "expired"
+  );
+  if (!source) return;
+  const inh = runtime.inhibitor;
+  inh.form = 2;
+  inh.phase = 2;
+  inh.wx = source.wx;
+  inh.wy = source.wy;
+  inh.vx = source.vx;
+  inh.vy = source.vy;
+  inh.intensity = source.intensity;
+  inh.radius = source.radius;
+  inh.localTime = source.localTime;
+  inh.swarmTargetX = source.targetWX;
+  inh.swarmTargetY = source.targetWY;
+  inh.noiseListenerState = source.noiseListenerState;
+  inh.noiseSearchState = source.noiseSearchState;
+  inh.lastNoiseWX = source.lastHeardWX;
+  inh.lastNoiseWY = source.lastHeardWY;
+}
+
+function applyInhibitorContacts(contacts, cause) {
   for (const contact of contacts) {
     const player = runtime.players.get(contact.clientId);
     if (!player || player.status !== "alive") continue;
     publishEvent("player.hullDamaged", {
       clientId: player.clientId,
-      cause: "inhibitor_glitch",
+      cause,
       entityId: contact.entityId,
       damage: contact.damage,
       hullDamage: contact.totalDamage,
@@ -6186,7 +6212,7 @@ function applyInhibitorGlitchContacts(contacts) {
     player.vy = 0;
     publishEvent("player.died", {
       clientId: player.clientId,
-      cause: "inhibitor_glitch",
+      cause,
       entityId: contact.entityId,
     });
     commitPlayerOutcome(player, "dead");
@@ -6194,9 +6220,10 @@ function applyInhibitorGlitchContacts(contacts) {
   }
 }
 
-function tickInhibitorEcology(dt) {
+function tickInhibitorEcology(dt, noiseSources = []) {
   const ecology = runtime.inhibitorEcology;
   const cfg = INHIBITOR_ECOLOGY_CONFIG.glitch;
+  const swarmCfg = INHIBITOR_ECOLOGY_CONFIG.swarm;
   const worldScale = runtime.session.worldScale;
   // Expired entries remain visible for one snapshot so lifecycle is truthful,
   // then the bounded active collection drops them on the next tick.
@@ -6220,22 +6247,54 @@ function tickInhibitorEcology(dt) {
     ecology.nextGlitchSpawnAt = runtime.simTime + cfg.spawnCadenceSeconds;
   }
 
-  for (const entity of runtime.inhibitorEntities) {
-    advanceGlitchEntity(entity, {
-      dt,
-      worldScale,
-      tick: runtime.tick,
-      simTime: runtime.simTime,
-      config: cfg,
-    });
+  if (runtime.inhibitor.phase >= 2 && ecology.nextSwarmSpawnAt == null) {
+    ecology.nextSwarmSpawnAt = runtime.simTime;
   }
-  const contacts = applyGlitchForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
+  if (shouldSpawnSwarm({
+    phase: runtime.inhibitor.phase,
+    simTime: runtime.simTime,
+    nextSpawnAt: ecology.nextSwarmSpawnAt,
+    entities: runtime.inhibitorEntities,
+    config: swarmCfg,
+  })) {
+    spawnConductorSwarm();
+    ecology.nextSwarmSpawnAt = runtime.simTime + swarmCfg.spawnCadenceSeconds;
+  }
+
+  for (const entity of runtime.inhibitorEntities) {
+    if (entity.kind === "glitch") {
+      advanceGlitchEntity(entity, {
+        dt,
+        worldScale,
+        tick: runtime.tick,
+        simTime: runtime.simTime,
+        config: cfg,
+      });
+    } else if (entity.kind === "swarm") {
+      advanceSwarmEntity(entity, {
+        dt,
+        worldScale,
+        tick: runtime.tick,
+        simTime: runtime.simTime,
+        noiseSources,
+        config: swarmCfg,
+      });
+    }
+  }
+  const glitchContacts = applyGlitchForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
     dt,
     worldScale,
     tick: runtime.tick,
   });
-  applyInhibitorGlitchContacts(contacts);
+  applyInhibitorContacts(glitchContacts, "inhibitor_glitch");
+  const swarmContacts = applySwarmContacts(runtime.inhibitorEntities, runtime.players.values(), {
+    dt,
+    worldScale,
+    tick: runtime.tick,
+  });
+  applyInhibitorContacts(swarmContacts, "inhibitor_swarm");
   if (runtime.inhibitor.phase === 1) syncGlitchCompatibilityProjection();
+  if (runtime.inhibitor.phase === 2) syncSwarmCompatibilityProjection();
 }
 
 function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -6276,16 +6335,6 @@ function selectInhibitorNoiseSource(options = {}) {
   return collectInhibitorNoiseSources(options)[0] || null;
 }
 
-function rememberInhibitorNoiseSource(inh, source, dt) {
-  if (source && source.radiusMeters > 0) {
-    inh.lastNoiseWX = source.wx;
-    inh.lastNoiseWY = source.wy;
-    inh.lastNoiseAge = 0;
-  } else {
-    inh.lastNoiseAge = Math.min(999, (inh.lastNoiseAge || 0) + dt);
-  }
-}
-
 function moveInhibitorToward(inh, targetWX, targetWY, speed, dt, ws) {
   const dx = worldDisplacement(inh.wx, targetWX, ws);
   const dy = worldDisplacement(inh.wy, targetWY, ws);
@@ -6293,21 +6342,6 @@ function moveInhibitorToward(inh, targetWX, targetWY, speed, dt, ws) {
   if (dist <= 0.01) return;
   inh.wx = wrapWorldPosition(inh.wx + (dx / dist) * speed * dt, ws);
   inh.wy = wrapWorldPosition(inh.wy + (dy / dist) * speed * dt, ws);
-}
-
-function setSwarmSearchTarget(inh, dt, ws) {
-  const cfg = INHIBITOR_CONFIG;
-  inh.swarmSearchTimer = Math.max(0, (inh.swarmSearchTimer || 0) + dt);
-  inh.swarmSearchAngle = (inh.swarmSearchAngle || 0) + cfg.swarmSearchTurnRate * dt;
-  const searchAge = Math.max(0, inh.swarmSearchTimer - cfg.swarmSearchTimeout);
-  const radius = Math.min(
-    cfg.swarmSearchRadiusMax,
-    cfg.swarmSearchRadiusMin + searchAge * cfg.swarmSearchRadiusRate
-  );
-  const centerX = Number.isFinite(inh.lastNoiseWX) ? inh.lastNoiseWX : inh.swarmTargetX;
-  const centerY = Number.isFinite(inh.lastNoiseWY) ? inh.lastNoiseWY : inh.swarmTargetY;
-  inh.swarmTargetX = wrapWorldPosition(centerX + Math.cos(inh.swarmSearchAngle) * radius, ws);
-  inh.swarmTargetY = wrapWorldPosition(centerY + Math.sin(inh.swarmSearchAngle) * radius, ws);
 }
 
 function updateInhibitorPortalBlocks(inh, ws) {
@@ -6372,73 +6406,19 @@ function tickInhibitor(dt) {
   inh.localTime += dt;
   ensureInhibitorFormTimes(inh);
 
-  const noiseSource = inh.form >= 2
-    ? selectInhibitorNoiseSource({ includeDecoys: inh.form < 3 })
-    : null;
+  const noiseSource = null;
   const vesselTarget = inh.form >= 3
     ? selectInhibitorNoiseSource({ includeDecoys: false, includeZeroPlayers: true })
     : null;
-  const peakNoiseMeters = noiseSource?.radiusMeters || 0;
   inh.noiseListenerState = "QUIET";
   inh.noiseSearchState = "IDLE";
-  if (inh.form >= 2) rememberInhibitorNoiseSource(inh, noiseSource, dt);
   // Conductor time alone advances Inhibitor phases. Noise only affects the
   // already-awake movement/search behavior.
   advanceInhibitorClock({ noiseSource, vesselTarget, ws });
 
-  tickInhibitorEcology(dt);
-
-  if (inh.form === 2) {
-    inh.intensity = Math.min(1, inh.intensity + dt * 0.3);
-    inh.swarmTrackTimer += dt;
-
-    const swarmHearsSource = noiseSource && emitterAudibleFor({
-      radiusMeters: noiseSource.radiusMeters,
-      distanceSimUnits: worldDistance(inh.wx, inh.wy, noiseSource.wx, noiseSource.wy, ws),
-    }).audible;
-    if (swarmHearsSource) {
-      inh.noiseListenerState = "HEARD";
-      inh.noiseSearchState = "LISTENING";
-      inh.swarmSearchTimer = 0;
-      if (inh.swarmTrackTimer >= cfg.swarmTrackInterval) {
-        inh.swarmTargetX = noiseSource.wx;
-        inh.swarmTargetY = noiseSource.wy;
-        inh.swarmTrackTimer = 0;
-        inh.noiseListenerState = "TRACKING";
-        inh.noiseSearchState = "TRACKING";
-      }
-    } else if (inh.swarmSearchTimer >= cfg.swarmSearchTimeout || inh.silenceTimer >= cfg.swarmSearchTimeout) {
-      inh.noiseListenerState = "INVESTIGATING";
-      inh.noiseSearchState = "SEARCHING";
-      setSwarmSearchTarget(inh, dt, ws);
-    } else {
-      inh.noiseSearchState = "LISTENING";
-      inh.swarmSearchTimer = (inh.swarmSearchTimer || 0) + dt;
-    }
-
-    let speed = cfg.swarmSpeedSilent;
-    if (peakNoiseMeters >= NOISE_CONFIG.impulses.forcePulseMeters) speed = cfg.swarmSpeedFlare;
-    else if (peakNoiseMeters >= NOISE_CONFIG.continuous.againstFlowMeters) speed = cfg.swarmSpeedHeavy;
-    else if (peakNoiseMeters > 0) speed = cfg.swarmSpeedLight;
-    moveInhibitorToward(inh, inh.swarmTargetX, inh.swarmTargetY, speed, dt, ws);
-
-    for (const player of runtime.players.values()) {
-      if (player.status !== "alive") continue;
-      const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
-      if (pd < inh.radius * 0.5) {
-        player.controlDebuff = Math.max(player.controlDebuff || 0, cfg.swarmControlDebuffDuration);
-        if (currentRNG('swarmDrain')() < cfg.swarmContactDrain * dt) {
-          for (let i = player.cargo.length - 1; i >= 0; i--) {
-            if (player.cargo[i]) {
-              player.cargo[i] = null;
-              publishEvent("inhibitor.drainCargo", { clientId: player.clientId });
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
+  tickInhibitorEcology(dt, inh.form >= 2
+    ? collectInhibitorNoiseSources({ includeDecoys: inh.form < 3 })
+    : []);
 
   if (inh.form === 3) {
     inh.intensity = Math.min(1, inh.intensity + dt * 0.2);
@@ -6511,21 +6491,14 @@ function tickAuthorityPlayers(dt, relevance) {
 
     const playerDt = dt;
     setForceLedgerDt(forceLedger, playerDt);
-    // Tick control debuff (Swarm contact → sluggish controls)
-    if (player.controlDebuff > 0) {
-      const debuffDecay = player.brain ? player.brain.controlDebuffResist : 1.0;
-      player.controlDebuff = Math.max(0, player.controlDebuff - playerDt * debuffDecay);
-    }
     // Tick hull abilities before physics
     recordForceMutation(forceLedger, "impulse", player, () => tickHullAbilities(player, playerDt));
 
-    const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
     const b = player.brain || BRAIN_DEFAULTS;
     const flowSample = estimateFlowSample(player.wx, player.wy);
     const driveStep = applyPlayerDriveAndFlow(player, input, playerDt, {
       brain: b,
       burnModifiers: getBurnModifiers(player),
-      controlMult,
       flowSample,
     });
     recordForceDeltaV(forceLedger, "thrust", driveStep.thrustDeltaV);
@@ -6542,7 +6515,6 @@ function tickAuthorityPlayers(dt, relevance) {
     const movementStartWY = player.wy;
     const brakeStep = applyPlayerBrakeAndIntegrate(player, input, playerDt, {
       brain: b,
-      controlMult,
       thrustIntensity: driveStep.thrustIntensity,
       worldScale: runtime.session.worldScale,
     });
