@@ -128,6 +128,7 @@ const {
   createGlitchEntity,
   advanceGlitchEntity,
   applyGlitchForcesAndContacts,
+  shouldSpawnGlitch,
 } = require("./sim/inhibitor-ecology.cjs");
 const {
   beginForceLedger,
@@ -6208,9 +6209,13 @@ function tickInhibitorEcology(dt) {
   if (runtime.inhibitor.phase >= 1 && ecology.nextGlitchSpawnAt == null) {
     ecology.nextGlitchSpawnAt = runtime.simTime;
   }
-  if (runtime.inhibitor.phase === 1
-      && runtime.simTime >= ecology.nextGlitchSpawnAt
-      && runtime.inhibitorEntities.length < cfg.populationCap) {
+  if (shouldSpawnGlitch({
+    phase: runtime.inhibitor.phase,
+    simTime: runtime.simTime,
+    nextSpawnAt: ecology.nextGlitchSpawnAt,
+    entities: runtime.inhibitorEntities,
+    config: cfg,
+  })) {
     spawnConductorGlitch();
     ecology.nextGlitchSpawnAt = runtime.simTime + cfg.spawnCadenceSeconds;
   }

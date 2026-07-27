@@ -44,6 +44,18 @@ function toroidalDelta(from, to, worldScale) {
   return delta;
 }
 
+function countLiveGlitches(entities, kind = INHIBITOR_ECOLOGY_CONFIG.glitch.kind) {
+  return Array.from(entities || []).filter((entity) =>
+    entity?.kind === kind && entity.lifecycle !== "expired"
+  ).length;
+}
+
+function shouldSpawnGlitch({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.glitch } = {}) {
+  return Number(phase) >= 1
+    && Number(simTime) >= Number(nextSpawnAt)
+    && countLiveGlitches(entities, config.kind) < config.populationCap;
+}
+
 function createGlitchEntity({
   id,
   wx,
@@ -202,6 +214,8 @@ module.exports = {
   advanceGlitchEntity,
   applyGlitchForcesAndContacts,
   projectGlitchEntity,
+  countLiveGlitches,
+  shouldSpawnGlitch,
   wrap,
   toroidalDelta,
 };

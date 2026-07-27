@@ -10,6 +10,8 @@ const {
   advanceGlitchEntity,
   applyGlitchForcesAndContacts,
   projectGlitchEntity,
+  countLiveGlitches,
+  shouldSpawnGlitch,
 } = require("../scripts/sim/inhibitor-ecology.cjs");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
 
@@ -79,6 +81,24 @@ async function run() {
   assert.strictEqual(second.maxDamage, cfg.maxDamage, "Contact lethality must be entity-owned from centralized config");
   assert.strictEqual(new Set([first.id, second.id]).size, cfg.populationCap, "Glitch ids must be stable and unique at cap");
   assert(new Set([first.id, second.id]).size <= cfg.populationCap, "Glitch population must remain capped");
+
+  const laterPhaseEntities = [
+    { kind: "glitch", lifecycle: "alive" },
+    { kind: "glitch", lifecycle: "expired" },
+    { kind: "swarm", lifecycle: "alive" },
+  ];
+  assert.strictEqual(countLiveGlitches(laterPhaseEntities, cfg.kind), 1,
+    "Expired Glitches and future entity kinds must not consume the Glitch cap");
+  assert(shouldSpawnGlitch({
+    phase: 2,
+    simTime: 8,
+    nextSpawnAt: 8,
+    entities: laterPhaseEntities,
+    config: cfg,
+  }), "Later phases must continue admitting Glitches after earlier ones expire");
+  laterPhaseEntities.push({ kind: "glitch", lifecycle: "spawning" });
+  assert.strictEqual(countLiveGlitches(laterPhaseEntities, cfg.kind), cfg.populationCap,
+    "A replenished later-phase Glitch must consume exactly one Glitch-cap slot");
 
   const before = first.wx;
   advanceGlitchEntity(first, { dt: 0.25, worldScale: 5, config: cfg });
