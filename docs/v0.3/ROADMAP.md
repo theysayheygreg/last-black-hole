@@ -267,6 +267,13 @@ The remaining release gates are intentionally separate:
   inspection and the prioritized runtime copy retunes remain polish follow-up.
 - [ ] Greg explicitly decides when v0.3 promotes to `main`.
 
+## Inhibitor Consequence Follow-Up
+
+- Inhibitors must create real player consequences and be capable of killing
+  the player. Each Inhibitor form needs its own later behavior and design pass;
+  implementation waits for Greg's follow-up notes rather than inventing those
+  behaviors inside unrelated feature work.
+
 ## Deferred Beyond v0.3
 
 - Public multiplayer transport, matchmaking, prediction, and rollback.
