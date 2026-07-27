@@ -337,7 +337,9 @@ async function run() {
 
       const engageStartedAt = Date.now();
       const engageAckCount = (await edgeAcks(page)).length;
-      await tapKey(page, 'KeyF');
+      // Hold the real controller Y action through lock and orbit. Release is
+      // proved by lifting Y, not by sending a second toggle edge.
+      await setPad(page, { x: 1, y: 0, slingshot: true });
       await waitFor(page, (count) => (window.__TEST_API.getNetworkState()?.networkMetrics?.slingshotEdgeAcks || []).length === count + 1,
         { timeout: 5000 }, engageAckCount);
       const lock = await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'lock' && player.slingshot?.engaged === true, 'authoritative lock');
@@ -351,7 +353,6 @@ async function run() {
       const arcScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
       assert(arcScene.slingshot?.telegraph?.ownedArc, 'Owned arc did not reach the visible scene state');
 
-      await setPad(page, { x: 1, y: 0 });
       await waitFor(page, () => {
         const element = document.getElementById('hud-interaction');
         const glyph = element?.querySelector('[data-action-id="slingshot"]');
@@ -374,13 +375,10 @@ async function run() {
         label: 'Y',
         copy: 'release',
       }), `Controller prompt did not expose semantic Y release state: ${JSON.stringify(promptDuring.glyph)}`);
-      const releaseAckCount = (await edgeAcks(page)).length;
       const releaseStartedAt = Date.now();
-      await setPad(page, { x: 1, y: 0, slingshot: true });
-      await sleep(90);
+      // The button-up packet carries slingshot=false through SimClient to the
+      // authority, which owns the release and chosen exit direction.
       await setPad(page, { x: 1, y: 0 });
-      await waitFor(page, (count) => (window.__TEST_API.getNetworkState()?.networkMetrics?.slingshotEdgeAcks || []).length === count + 1,
-        { timeout: 5000 }, releaseAckCount);
       const released = await waitForSlingshotRelease(clientId, baselineSeq);
       assert(released.player.slingshot?.engaged === false, 'Authoritative release event must leave slingshot disengaged');
       assert(released.player.slingshot?.telegraph?.releaseGhost, 'Authoritative snapshot must retain the release ghost payload');
@@ -392,7 +390,7 @@ async function run() {
       const routeEventTypes = routeEvents.map((event) => event.type);
       assert(JSON.stringify(routeEventTypes) === JSON.stringify(['player.slingshotEngaged', 'player.slingshotReleased']),
         `Expected slingshot engage/release order, got ${JSON.stringify(routeEventTypes)}`);
-      assert((await edgeAcks(page)).length === initialAckCount + 3, 'Expected no-anchor, engage, and release edge acknowledgements');
+      assert((await edgeAcks(page)).length === initialAckCount + 2, 'Expected no-anchor and engage edge acknowledgements; release uses held-state transition');
       assert(errors.length === 0, `browser errors: ${errors.join('; ')}`);
       console.log(JSON.stringify({
         edgeAcks: await edgeAcks(page),

@@ -12,9 +12,9 @@
  * (gravity is partially cancelled, tangential velocity is preserved
  * and amplified). The system accumulates orbital energy proportional
  * to tangential alignment × anchor mass × proximity. The player
- * presses ENGAGE again (or flies out of range) to release. Exit
- * velocity = pre-release ship velocity + accumulated energy as a
- * boost in the ship's facing direction.
+ * releases ENGAGE (or flies out of range) to release. Exit velocity =
+ * pre-release ship velocity + accumulated energy as a boost in the ship's
+ * facing direction.
  *
  * Chains: if the player engages a NEW anchor within `chainWindow`
  * seconds of releasing the previous one, release energy gets a

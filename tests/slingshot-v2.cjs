@@ -129,6 +129,7 @@ async function run() {
         moveY: 1,
         thrust: 0,
         brake: 0,
+        slingshot: true,
         slingshotEdges: [1],
         timestamp: Date.now(),
       }, authorityHeaders(authority));
@@ -149,7 +150,8 @@ async function run() {
         moveY: 0,
         thrust: 0,
         brake: 0,
-        slingshotEdges: [2],
+        slingshot: false,
+        slingshotEdges: [],
         timestamp: Date.now(),
       }, authorityHeaders(authority));
       const released = await waitForPlayer("slingshot-v2-test", (player) => player.slingshot?.engaged === false && player.slingshot?.phase === "release-ghost");

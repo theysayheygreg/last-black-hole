@@ -4298,12 +4298,10 @@ function gameLoop(now) {
           ? slingshotSystem.findAffordance(ship, slingshotAnchors)
           : null;
         const hullSlingMods = getHullSlingshotMods();
-        if (slingshotNow && !_prevSlingshot) {
-          if (ship.slingshotEngaged) {
-            slingshotSystem.release(ship, hullSlingMods, totalTime);
-          } else if (slingshotAffordance) {
-            slingshotSystem.engage(ship, slingshotAffordance.anchor, hullSlingMods, totalTime);
-          }
+        if (slingshotNow && !_prevSlingshot && !ship.slingshotEngaged && slingshotAffordance) {
+          slingshotSystem.engage(ship, slingshotAffordance.anchor, hullSlingMods, totalTime);
+        } else if (!slingshotNow && _prevSlingshot && ship.slingshotEngaged) {
+          slingshotSystem.release(ship, hullSlingMods, totalTime);
         }
         if (ship.slingshotEngaged) {
           const dv = slingshotSystem.applyEngagedForces(ship, dt, hullSlingMods);

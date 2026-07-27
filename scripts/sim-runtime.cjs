@@ -5060,17 +5060,24 @@ function tickPlayerSlingshot(player, dt, input) {
   const pendingEdges = Array.isArray(input?.slingshotEdges) ? input.slingshotEdges : [];
   const edgeId = pendingEdges.shift();
   if (edgeId !== undefined) {
-    if (state.engaged) releasePlayerSlingshot(player, runtime.simTime, input);
-    else engagePlayerSlingshot(player, runtime.simTime, dt);
+    // Edges make the rising press reliable across transport. A held action
+    // stays engaged until the authoritative level falls; retain the old
+    // edge-only release shape for older clients that send a release edge.
+    if (!state.engaged) {
+      engagePlayerSlingshot(player, runtime.simTime, dt);
+    } else if (!input?.slingshot) {
+      releasePlayerSlingshot(player, runtime.simTime, input);
+    }
     rememberConsumedSlingshotEdge(state, edgeId);
     state.inputWasDown = Boolean(input?.slingshot);
     if (state.engaged) applyPlayerSlingshotForces(player, dt, input);
     return;
   }
   const down = Boolean(input?.slingshot);
-  if (down && !state.inputWasDown) {
-    if (state.engaged) releasePlayerSlingshot(player, runtime.simTime, input);
-    else engagePlayerSlingshot(player, runtime.simTime, dt);
+  if (state.engaged && state.inputWasDown && !down) {
+    releasePlayerSlingshot(player, runtime.simTime, input);
+  } else if (down && !state.inputWasDown && !state.engaged) {
+    engagePlayerSlingshot(player, runtime.simTime, dt);
   }
   state.inputWasDown = down;
   if (state.engaged) applyPlayerSlingshotForces(player, dt, input);
