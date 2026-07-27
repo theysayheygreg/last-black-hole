@@ -125,6 +125,7 @@ import {
   prioritizeAudibleContacts,
   projectAudibleContact,
 } from './presentation/audible-contact-memory.js';
+import { resolveHeatInstrumentState } from './presentation/heat-instrument.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -3611,10 +3612,14 @@ function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
 }
 
 function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
-  const ratio = Math.max(0, Math.min(1, Number(ship?.getHeatRatio?.()) || 0));
   const heatState = ship?.getHeatState?.() || {};
-  const overheatRemaining = Math.max(0, Number(heatState.overheatRemaining) || 0);
-  if (ratio <= HEAT_DISPLAY_EPSILON && overheatRemaining <= 0) return;
+  const display = resolveHeatInstrumentState({
+    heatRatio: ship?.getHeatRatio?.(),
+    overheatRemaining: heatState.overheatRemaining,
+    epsilon: HEAT_DISPLAY_EPSILON,
+  });
+  if (!display.visible) return;
+  const { ratio, overheatRemaining } = display;
   const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
   const width = 68;
   const left = sx - width / 2;

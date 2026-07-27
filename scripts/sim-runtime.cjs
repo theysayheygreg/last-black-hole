@@ -29,6 +29,7 @@ const {
   resolveContinuousRadius,
   resolveImpulseRadius,
   resolveNoiseSourceProjection,
+  recordNoisePeak,
   enemyListenerStateFor,
 } = require("./sim/noise-radius.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
@@ -1419,6 +1420,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       timeHeardSeconds: 0,
       timeTrackedSeconds: 0,
       continuousRadiusMeters: 0,
+      continuousSource: "IDLE",
+      continuousSourceClass: null,
       impulses: [],
     },
     controlDebuff: 0,
@@ -4213,10 +4216,17 @@ function tickPlayerNoise(player, dt) {
   noise.audibleRadiusMeters = clampMeters(audibleRadius);
   const delta = noise.audibleRadiusMeters - previousRadius;
   noise.trend = delta > 1 ? "rising" : delta < -1 ? "falling" : "steady";
+  if (targetMeters > 0) {
+    noise.continuousSource = activeSource;
+    noise.continuousSourceClass = activeSourceClass;
+  } else if (noise.continuousRadiusMeters <= 0) {
+    noise.continuousSource = "IDLE";
+    noise.continuousSourceClass = null;
+  }
   const sourceProjection = resolveNoiseSourceProjection({
-    continuousActive: targetMeters > 0,
-    continuousSource: activeSource,
-    continuousSourceClass: activeSourceClass,
+    continuousRadiusMeters: noise.continuousRadiusMeters,
+    continuousSource: noise.continuousSource,
+    continuousSourceClass: noise.continuousSourceClass,
     impulseRadiusMeters: impulseRadius,
     impulseSource,
     impulseSourceClass,
@@ -4224,10 +4234,14 @@ function tickPlayerNoise(player, dt) {
   noise.currentSource = noiseSourceLabel(sourceProjection.source);
   noise.sourceClass = sourceProjection.sourceClass;
   if (noise.currentSource !== "IDLE") noise.dominantSource = noise.currentSource;
-  if (noise.audibleRadiusMeters > (noise.maxAudibleRadiusMeters || 0)) {
-    noise.maxAudibleRadiusMeters = noise.audibleRadiusMeters;
-    noise.loudestSource = noise.currentSource;
-  }
+  const peak = recordNoisePeak({
+    previousMaxMeters: noise.maxAudibleRadiusMeters,
+    previousSource: noise.loudestSource,
+    radiusMeters: noise.audibleRadiusMeters,
+    source: noise.currentSource,
+  });
+  noise.maxAudibleRadiusMeters = peak.maxAudibleRadiusMeters;
+  noise.loudestSource = peak.loudestSource;
 }
 
 function emitPlayerNoise(player, radiusMeters, source, options = {}) {

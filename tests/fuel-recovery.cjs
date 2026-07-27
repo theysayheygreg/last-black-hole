@@ -48,6 +48,18 @@ function assertClose(label, actual, expected, epsilon = 1e-12) {
 
 async function run() {
   const runner = new TestRunner('HeatPropulsion');
+  const { resolveHeatInstrumentState } = await import('../src/presentation/heat-instrument.js');
+
+  await runner.run('Heat instrument visibility follows heat and lockout state', async () => {
+    assert(!resolveHeatInstrumentState({ heatRatio: 0, overheatRemaining: 0 }).visible,
+      'fully cooled Heat should hide');
+    assert(resolveHeatInstrumentState({ heatRatio: 0.021, overheatRemaining: 0 }).visible,
+      'Heat above epsilon should show');
+    assert(resolveHeatInstrumentState({ heatRatio: 0.01, overheatRemaining: 3 }).visible,
+      'lockout should show even at cooled ratio');
+    assert(!resolveHeatInstrumentState({ heatRatio: 0.02, overheatRemaining: 0 }).visible,
+      'return to epsilon with no lockout should hide');
+  });
 
   await runner.run('canonical heat rates preserve each hull and item burn/cool ratios', async () => {
     assertClose('base gain', MOVEMENT.player.heat.gainPerSecond, 0.12);

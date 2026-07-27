@@ -52,26 +52,42 @@ function publicSourceClass(value) {
 }
 
 function resolveNoiseSourceProjection({
-  continuousActive = false,
+  continuousRadiusMeters = 0,
   continuousSource = "IDLE",
   continuousSourceClass = null,
   impulseRadiusMeters = 0,
   impulseSource = "IDLE",
   impulseSourceClass = null,
 } = {}) {
-  if (continuousActive) {
+  const continuousRadius = clampMeters(continuousRadiusMeters);
+  const impulseRadius = clampMeters(impulseRadiusMeters);
+  if (continuousRadius >= impulseRadius && continuousRadius > 0) {
     return {
       source: String(continuousSource || "IDLE"),
       sourceClass: publicSourceClass(continuousSourceClass),
     };
   }
-  if (clampMeters(impulseRadiusMeters) > 0) {
+  if (impulseRadius > 0) {
     return {
       source: String(impulseSource || "IDLE"),
       sourceClass: publicSourceClass(impulseSourceClass),
     };
   }
   return { source: "IDLE", sourceClass: null };
+}
+
+function recordNoisePeak({
+  previousMaxMeters = 0,
+  previousSource = "IDLE",
+  radiusMeters = 0,
+  source = "IDLE",
+} = {}) {
+  const previousMax = clampMeters(previousMaxMeters);
+  const radius = clampMeters(radiusMeters);
+  if (radius > previousMax) {
+    return { maxAudibleRadiusMeters: radius, loudestSource: String(source || "IDLE") };
+  }
+  return { maxAudibleRadiusMeters: previousMax, loudestSource: previousSource || "IDLE" };
 }
 
 function enemyListenerStateFor({ radiusMeters, distanceSimUnits, sensitivity = 1 }) {
@@ -96,4 +112,5 @@ module.exports = {
   resolveContinuousRadius,
   resolveImpulseRadius,
   resolveNoiseSourceProjection,
+  recordNoisePeak,
 };

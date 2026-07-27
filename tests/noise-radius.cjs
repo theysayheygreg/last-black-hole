@@ -13,6 +13,7 @@ const {
   resolveContinuousRadius,
   resolveImpulseRadius,
   resolveNoiseSourceProjection,
+  recordNoisePeak,
 } = require('../scripts/sim/noise-radius.cjs');
 const { buildRunEntry } = require('../scripts/control-plane-store.cjs');
 
@@ -67,21 +68,37 @@ async function run() {
   check(enemyListenerStateFor({ radiusMeters: 240, distanceSimUnits: 0.20 }).state === 'HEARD', 'enemy outer listener state');
   check(enemyListenerStateFor({ radiusMeters: 240, distanceSimUnits: 0.241 }).state === 'QUIET', 'enemy listener loses source outside radius');
   const continuousSource = resolveNoiseSourceProjection({
-    continuousActive: true,
+    continuousRadiusMeters: 240,
     continuousSource: 'THRUST AGAINST FLOW',
     continuousSourceClass: 'VESSEL THRUST',
     impulseRadiusMeters: 600,
     impulseSource: 'PULSE',
     impulseSourceClass: 'VESSEL',
   });
-  check(continuousSource.source === 'THRUST AGAINST FLOW' && continuousSource.sourceClass === 'VESSEL THRUST', 'authority projects powered propulsion class');
+  check(continuousSource.source === 'PULSE' && continuousSource.sourceClass === 'VESSEL', 'louder action impulse owns simultaneous envelope');
+  const decayingContinuousSource = resolveNoiseSourceProjection({
+    continuousRadiusMeters: 120,
+    continuousSource: 'THRUST AGAINST FLOW',
+    continuousSourceClass: 'VESSEL THRUST',
+  });
+  check(decayingContinuousSource.source === 'THRUST AGAINST FLOW' && decayingContinuousSource.sourceClass === 'VESSEL THRUST', 'decaying continuous envelope retains source class');
   const impulseSource = resolveNoiseSourceProjection({
+    continuousRadiusMeters: 0,
     impulseRadiusMeters: 600,
     impulseSource: 'PULSE',
     impulseSourceClass: 'VESSEL',
   });
   check(impulseSource.source === 'PULSE' && impulseSource.sourceClass === 'VESSEL', 'authority projects action impulse class');
-  check(resolveNoiseSourceProjection().sourceClass === null, 'authority clears stale source class at idle');
+  check(resolveNoiseSourceProjection({ continuousRadiusMeters: 0, impulseRadiusMeters: 0 }).source === 'IDLE'
+    && resolveNoiseSourceProjection({ continuousRadiusMeters: 0, impulseRadiusMeters: 0 }).sourceClass === null, 'authority clears source at zero envelope');
+  const pulsePeak = recordNoisePeak({ previousMaxMeters: 0, previousSource: 'IDLE', radiusMeters: 600, source: 'PULSE' });
+  const retainedPeak = recordNoisePeak({
+    previousMaxMeters: pulsePeak.maxAudibleRadiusMeters,
+    previousSource: pulsePeak.loudestSource,
+    radiusMeters: 240,
+    source: 'THRUST',
+  });
+  check(pulsePeak.loudestSource === 'PULSE' && retainedPeak.loudestSource === 'PULSE', 'loudestSource follows the radius that set max');
 
   const contactArgs = {
     sourceWX: 1.2,
@@ -231,7 +248,7 @@ async function run() {
   check(snapshotSource.includes('noise: projectNoise(player)'), 'Noise is public snapshot state');
   check(snapshotSource.includes('publicListenerStates') && snapshotSource.includes('listener.state'), 'public Noise projection preserves listener states');
   check(mainSource.includes('HEAT_DISPLAY_EPSILON = 0.02'), 'Heat display epsilon is explicit');
-  check(mainSource.includes('ratio <= HEAT_DISPLAY_EPSILON && overheatRemaining <= 0'), 'cooled Heat hides');
+  check(mainSource.includes('resolveHeatInstrumentState'), 'Heat render uses pure presentation visibility helper');
   check(mainSource.includes('projectAudibleContact') && mainSource.includes('simUnitsToMeters'), 'edge contact projection uses canonical meter conversion');
   check(!mainSource.includes('radiusMeters / 1000') && !mainSource.includes('radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000'), 'Noise presentation has no /1000 conversion folklore');
   check(!mainSource.includes('INHIBITOR EDGE DIM'), 'omniscient Inhibitor edge dim is removed');
