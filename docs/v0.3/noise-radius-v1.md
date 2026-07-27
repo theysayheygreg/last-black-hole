@@ -1,12 +1,19 @@
 # Noise Radius v1
 
-Noise is the player-facing replacement for the historical Signal meter. The
-authority owns one decaying audible envelope in canonical meters; it does not
-simulate audio and it never advances the Inhibitor clock.
+**Status:** locked v0.3 player-facing design owner at source `91e7f105`.
 
-## Emitter contract
+Noise replaces the historical Signal meter. The authority owns one simple,
+decaying emitter/action envelope in canonical meters. It does not simulate
+audio, create a receiver-stat system, or advance the Inhibitor clock. Heat is
+engine stress and remains a separate presentation; it is never mirrored into
+Noise.
 
-| Source | Emitted radius |
+## Emitter Contract
+
+The parked baseline is `0m`. These are deliberately tunable starting values,
+not permanent balance promises:
+
+| Source | Starting emitted radius |
 | --- | ---: |
 | thrust with flow / neutral / against flow | 180m / 240m / 320m |
 | powered brake | 220m |
@@ -16,32 +23,56 @@ simulate audio and it never advances the Inhibitor clock.
 Continuous emission decays at `90m/s` after release. Discrete emissions hold
 for `0.35s`, then decay at `120m/s`. Passive echo proximity is silent. Heat,
 gravity-only slingshot, and Inhibitor contact do not mirror into player Noise.
-The only modifier hooks are data-owned idle floor, radius multiplier, and decay
-multiplier.
+The narrow modifier hooks are data-owned idle floor, radius multiplier, and
+decay multiplier.
 
-## Receiving presentation
+## Player Receiving Contract
 
-A player receives a contact only when toroidal distance is within that source's
-current emitted radius. The outer audible zone shows category and emitted range
-only. At `40%` of the live radius, an event-carried allowlisted public class may
-upgrade the category to `VESSEL` or `VESSEL THRUST`; no private identity,
-equipment, cargo, cooldown, or hidden state is exposed. An identified contact
-keeps that highest public identity while still audible and through its bounded
-`2.5s` last-heard fade. Loss freezes bearing/range/category; expiry removes the
-memory and a later re-entry starts category-only unless re-identified live.
+A player hears a source iff canonical toroidal distance to that source is less
+than or equal to its current live emitted radius. There are no player hearing
+stats, receiver sensitivities, hearing equipment, or ship hearing classes in
+v1.
 
-Enemy listener behavior remains separate authored AI behavior. Signal Blooms are
-local listeners, and Swarm acquisition requires an audible Noise source plus
-its existing search/lock behavior; a shipped lock remains `LOCKED ON` and is
-not disguised as player hearing.
+While live, the edge contact shows the truthful sound category and actual
+range-to-source in meters, for example `THRUST · 620m`. Direction and range
+update while the player remains inside the emitted radius. Outside that radius
+the contact freezes its last-heard bearing, range, category, and highest earned
+identity, then blinks/fades for `2.5s` before expiring. Re-entry or re-emission
+refreshes the same contact; an expired contact starts category-only again.
 
-## Presentation and results
+The outer audible zone is category-only. Within the inner `40%` of the current
+emitted radius, an event-carried allowlisted public class may identify the
+source as `VESSEL` or `VESSEL THRUST`. Identification never exposes private
+identity, equipment, cargo, cooldown, hidden state, or exact position beyond
+the justified bearing/range.
+
+Edge indicators are limited to the stable active exit/extraction marker and a
+small deterministic set of genuinely audible contacts. Wells, wrecks,
+objectives, unheard enemies/Inhibitors, teammates, inactive portals, and other
+entities have no omniscient edge marker. The exit marker is visually distinct
+and does not blink with audible-contact memory.
+
+## Enemy Awareness
+
+Enemy awareness is an authored threat contract, not player hearing. Signal
+Blooms are local listeners. Swarms normally acquire player or decoy Noise and
+search from last-heard state. Existing or future authored extended acquisition,
+sparse strategic knowledge, or `LOCKED ON` behavior is explicit and distinct
+from `HEARD`; a locked enemy clears only on its authored break condition.
+No generalized perception framework or player receiver system is part of v1.
+
+## Presentation And Results
 
 The Deck-safe HUD reads `NOISE Xm · TREND`, source, and actual listener counts.
-The world draws a restrained player radius/ripple through the existing overlay
-loop. Edge indicators contain only the stable exit and capped audible contact
-memory. Results record maximum radius, loudest source, and time heard/tracked.
+A restrained radius/ripple uses the existing presentation loop. Heat is a
+conditional ship-centered instrument beneath the player: hidden at its cooled
+baseline, visible while heating, overheat-locked, or cooling, and hidden again
+after returning to baseline. It is not an enemy health bar.
 
-The old 0-100 Signal fill, GHOST/WHISPER/PRESENCE/BEACON/FLARE/THRESHOLD bands,
-and any threshold-wakes-Inhibitor interpretation are historical only. The
-Conductor remains the sole Inhibitor arrival authority.
+Results record maximum audible radius, loudest source, and truthful heard/
+tracked learning stats. The old peak-zone/time-per-zone accounting is retired.
+
+The `0-100` Signal fill, `GHOST`/`WHISPER`/`PRESENCE`/`BEACON`/`FLARE`/
+`THRESHOLD` bands, Signal pressure/wake thresholds, and any
+threshold-wakes-Inhibitor interpretation are historical only. The Conductor
+alone schedules Inhibitor arrivals.

@@ -247,3 +247,27 @@ Heat remains a separate engine-stress presentation, not a Noise source. Gravity
 only slingshot and Inhibitor contact are quiet. Signal Blooms are local enemy
 listeners, Swarm acquisition uses Noise plus its existing search/lock behavior,
 and the Conductor remains the sole Inhibitor arrival authority.
+
+## Locked Noise Radius And Inhibitor Ecology Ownership
+
+Decision: the current v0.3 design owners are
+[`Noise Radius v1`](noise-radius-v1.md) and
+[`Inhibitor Ecology v2`](inhibitor-ecology-v2.md). The former v0.2 bodies are
+frozen under [`v0.2 history`](../v0.2/history/design/) and stable legacy paths
+are pointers only.
+
+Noise is emitter/action-owned audible radius. Player hearing is binary against
+the live emitted radius with no receiver stats. The current starting radii and
+`90m/s` / `120m/s` decay values remain tunable. Actual source range, category,
+inner-`40%` allowlisted public identity, `2.5s` remembered fade, stable exit,
+and contextual under-ship Heat are the live presentation contract. Authored
+enemy awareness may distinguish `HEARD` from `LOCKED ON`; it is not a player
+hearing system. Noise never schedules or advances Inhibitor phases.
+
+Inhibitor Ecology v2 is an accumulating Conductor-owned cast across the locked
+`0/.15/.30/.45` fronts. It retires the pressure meter, one-creature form morph,
+Glitch dissipation by meter, Swarm cargo/control/recursive-Noise effects, Vessel
+well consumption, and the old post-Vessel portal rule. The ecology document
+separates this locked target from the current scalar-form, portal-block,
+`consumedByInhibitor`, and Swarm cargo/control runtime gaps; those gaps are not
+claims of shipped behavior.

@@ -33,11 +33,15 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 - [`S9`](reviews/v0.3.1-design-review.md#s9--wells--anomaly-catalog-redesign-greg-direction)
 - [`anomaly catalog schema`](ANOMALY-CATALOG.md)
 - [`W2-A completion`](reviews/completions/W2-A-anomaly-catalog.md)
+- [`Inhibitor Ecology v2`](inhibitor-ecology-v2.md) — current locked ecology
+  contract and explicit implementation status.
 
 ## Signal
 
 - [`Noise Radius v1`](noise-radius-v1.md) — current player-facing authority,
   listener, HUD, edge-memory, and result contract.
+- Historical v0.2 Signal and Inhibitor bodies are archived under
+  [`../v0.2/history/design/`](../v0.2/history/design/).
 - [`S10`](reviews/v0.3.1-design-review.md#s10--signalnoise-tabled-backlogged-2026-07-14) — historical Signal/noise design review.
 - [`open decisions`](OPEN-DECISIONS.md) — only for unresolved future design.
 

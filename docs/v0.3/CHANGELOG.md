@@ -2,6 +2,11 @@
 
 ## 2026-07-27
 
+- **Design ownership versioning:** archived the complete v0.2 Signal and
+  Inhibitor design bodies, replaced their stable paths with pointers, and
+  locked the current v0.3 Noise Radius v1 and Inhibitor Ecology v2 owners.
+  The ecology record names the remaining scalar-form, portal-block,
+  `consumedByInhibitor`, and Swarm cargo/control runtime gaps honestly.
 - **Noise Radius v1:** replaced the player-facing Signal meter and bands with
   an authoritative decaying meter-based Noise envelope, local listener state,
   emitter-owned audible contact memory, contextual Heat presentation, and
