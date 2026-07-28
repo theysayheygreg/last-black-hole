@@ -19,6 +19,7 @@ const {
   withQuery,
   stepGameFrames,
 } = require("./helpers.cjs");
+const { NOISE_CONFIG } = require("../scripts/sim/noise-radius.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
 // Agent evals are commonly run beside other authority lanes. A process-local
@@ -544,7 +545,7 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   };
 }
 
-async function collectRouteLootAndRaiseSignal(page, clientId, outputDir, screenshots) {
+async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screenshots) {
   let snapshot = await getSnapshot();
   const before = localPlayer(snapshot, clientId);
   assert(before, "Expected the authoritative player before salvage routing");
@@ -581,20 +582,24 @@ async function collectRouteLootAndRaiseSignal(page, clientId, outputDir, screens
 
   const pulse = await page.evaluate(() => window.__TEST_API?.sendRemoteInput?.({ pulse: true }));
   assert(pulse?.ok === true, "Expected the public protocol-v2 pulse command to be accepted");
-  const escalated = await waitForPlayer(
+  const pulseRadiusMeters = NOISE_CONFIG.impulses.forcePulseMeters;
+  const noisy = await waitForPlayer(
     clientId,
-    (player) => player.signal?.zone !== "ghost" || player.signal?.level > 0.04,
-    { timeout: 6000 },
+    (player) => player.noise?.currentSource === "PULSE"
+      && player.noise.audibleRadiusMeters === pulseRadiusMeters
+      && player.noise.maxAudibleRadiusMeters >= pulseRadiusMeters,
+    { timeout: 6000, label: "authoritative force-pulse Noise radius" },
   );
   await waitForWorld((world) => Number.isInteger(world.inhibitor?.phase) ? world.inhibitor : null, { timeout: 6000 });
-  screenshots.push(await capturePage(page, outputDir, "07-signal-escalated"));
+  screenshots.push(await capturePage(page, outputDir, "07-noise-pulse"));
   return {
     wreckId: wreck.id,
     movement,
     cargoBefore: before.cargoCount || 0,
     cargoAfter: looted.player.cargoCount,
-    signalLevel: escalated.player.signal.level,
-    signalZone: escalated.player.signal.zone,
+    noiseRadiusMeters: noisy.player.noise.audibleRadiusMeters,
+    noiseMaxMeters: noisy.player.noise.maxAudibleRadiusMeters,
+    noiseSource: noisy.player.noise.currentSource,
   };
 }
 
@@ -816,7 +821,7 @@ function writeReport(outputDir, report) {
     `- Fresh authority: sim PID boundary plus a disposable browser profile; protocol ${proof.protocolVersion || "unavailable"}.`,
     `- Route: ${proof.slingshot?.routeId || "not reached"}; slingshot ${proof.slingshot?.anchorType || "n/a"}:${proof.slingshot?.anchorId || "n/a"}.`,
     `- Salvage: ${proof.loot?.wreckId || "not reached"}; cargo ${proof.loot?.cargoBefore ?? "?"} -> ${proof.loot?.cargoAfter ?? "?"}.`,
-    `- Signal: ${proof.loot?.signalZone || "not reached"} at ${Number(proof.loot?.signalLevel || 0).toFixed(3)}.`,
+    `- Noise: ${proof.loot?.noiseSource || "not reached"} at ${Math.round(Number(proof.loot?.noiseRadiusMeters) || 0)}m (max ${Math.round(Number(proof.loot?.noiseMaxMeters) || 0)}m).`,
     `- Extraction: ${proof.portal?.portalId || "not reached"}; ${proof.portal ? "entered ready zone before explicit confirmation" : "portal proof not reached"}.`,
     `- Profile: ${proof.home?.profile?.totalExtractions ?? "?"} extraction(s); ${proof.home?.chronicle?.recordCount ?? "?"} Chronicle record(s).`,
     `- Second run: ${proof.secondRun?.runId || "not reached"}; changed from ${proof.firstRun?.runId || "not reached"}.`,
@@ -866,7 +871,7 @@ async function runJourney(page, outputDir, report, browserErrors) {
     };
     return;
   }
-  const loot = await collectRouteLootAndRaiseSignal(page, network.clientId, outputDir, report.screenshots);
+  const loot = await collectRouteLootAndRaiseNoise(page, network.clientId, outputDir, report.screenshots);
   const portal = await enterAndConfirmPortal(page, network.clientId, outputDir, report.screenshots);
   const firstRun = {
     runId: firstSnapshot.session.runId || firstSnapshot.runId,
