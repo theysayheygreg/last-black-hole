@@ -44,17 +44,12 @@ On the Deck in Desktop Mode:
 3. Run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh
 ```
 
-The installer downloads:
-
-```text
-https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/last-singularity-linux-nightly.zip
-```
-
-The release tag and zip filename still say `nightly` for stable public URLs.
-Treat them as compatibility names for the current weekly playtest build.
+The installer resolves the public `nightly-latest` GitHub prerelease and selects
+its Linux x64 asset. The release tag and zip filename still say `nightly` for
+compatibility; this is the named weekly public playtest channel.
 
 It installs the game to:
 
@@ -101,29 +96,23 @@ First launch flow on Deck:
 Use a specific release/tag:
 
 ```sh
-LBH_RELEASE_TAG=v0.2.2 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --version v0.2.2
 ```
 
 Use a specific zip URL:
 
 ```sh
-LBH_DECK_BUILD_URL=https://example.com/last-singularity-linux.zip \
-  bash scripts/install-steam-deck.sh
+sh scripts/install.sh --install-dir "$HOME/Games/last-singularity"
 ```
 
 Skip Steam library registration and install only the Desktop Mode launcher:
 
 ```sh
-LBH_SKIP_STEAM_SHORTCUT=1 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --no-launcher
 ```
 
-If a Deck has multiple Steam users and the shortcut lands under the wrong user,
-rerun with:
-
-```sh
-LBH_STEAM_USER_ID=<steam-userdata-id> \
-  curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
-```
+The shortcut helper updates the matching **Last Singularity** entry for every
+local Steam user and leaves unrelated entries unchanged.
 
 ## Private Codex Deploy To Greg's Deck
 

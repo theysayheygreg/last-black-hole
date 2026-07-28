@@ -80,9 +80,10 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 
 | Target | Status | How to play |
 |--------|--------|-------------|
+| macOS (Apple silicon) | Installer ready; current release asset needs republishing | Do not install the current broken asset |
+| Windows x64 | Public weekly playtest | Run the PowerShell installer below |
+| Linux x64 / Steam Deck | Public weekly playtest | Run the installer below |
 | Local desktop from source | Primary development target | Clone the repo, install deps, run `npm run play` |
-| Steam Deck | Weekly handheld playtest target | Install the Linux weekly build with the Deck installer below |
-| Packaged desktop | Friend/tester handoff target | Open the platform artifact and read `START-HERE.md` |
 | iPad / iOS | Native Apple-platform bench + controller wrapper target | `npm run build:ipad` for Safari install, `npm run ios:build:sim` for native simulator |
 | Browser sandbox | Debug/demo fallback | `npm run stack:sandbox`; not product play |
 | Cloudflare Drop | Temporary browser-share lane | `npm run release:drop`, then drop the zip or folder on Cloudflare Drop; sandboxed, not full authority |
@@ -91,29 +92,28 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 
 ## How To Play
 
-### Local Desktop From Source
+### Install Latest
 
-Use this path when you are developing the game or playtesting from the repo:
-
-```sh
-git clone https://github.com/theysayheygreg/last-black-hole.git
-cd last-black-hole
-npm install
-npm run play
-```
-
-`npm run play` starts the local authority stack, resets the local sim for a
-fresh run, and opens an Electron game window. When you close the window, the
-stack stays available for debugging; shut it down with:
+Linux or SteamOS/Steam Deck:
 
 ```sh
-npm run stop
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh
 ```
 
-When testing movement, spawning, hazards, or camera feel, treat a fresh process
-as part of the test. If the game has been running for a while and motion feels
-wrong, run `npm run stop` before launching again. A browser refresh is not a
-clean sim reset.
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.ps1 | iex
+```
+
+The installer uses the public `nightly-latest` GitHub prerelease, installs
+user-locally, and preserves saves when updating. The current macOS release zip
+is broken and the installer refuses it until the corrected asset is republished;
+future macOS builds remain ad-hoc signed, not notarized. The Windows build is
+unsigned and may show SmartScreen. Steam Deck users should install from Desktop Mode, then launch
+**Last Singularity** from **Library → Non-Steam** in Gaming Mode. Advanced
+options and Deck troubleshooting are in the
+[Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
 
 First launch flow:
 
@@ -129,46 +129,17 @@ First launch flow:
    extract before portals expire or the universe collapses.
 6. After extraction or death, press `Space` / `A` to return to the pilot flow.
 
-### Steam Deck Weekly Build
-
-On a Steam Deck in Desktop Mode, open Konsole and run:
+### Develop From Source
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+git clone https://github.com/theysayheygreg/last-black-hole.git
+cd last-black-hole
+npm install
+npm run play
 ```
 
-The installer downloads the latest Linux weekly release, installs it to
-`~/Games/last-singularity`, creates Desktop Mode launchers, and registers the
-wrapper as a Steam non-Steam game for Gaming Mode. After it finishes, restart
-Steam or return to Gaming Mode and launch **Last Singularity** from the normal
-library.
-
-Steam Deck operational notes live in the [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
-
-The Deck UI uses controller-first prompts (`A`, `B`, `View`, `L1/R1`, `R2`,
-`L2`) and larger HUD minimums. If you see keyboard-only labels like
-`press space` in a Deck build, treat that as a compatibility regression.
-
-The Deck build is not a networked renderer. It packages the renderer inside the
-Electron app, serves those local assets through the app-owned `lbh://` protocol,
-and launches the control plane and sim as Deck-local child processes on loopback
-ports. The only network dependency in Greg's current workflow is the Tailscale
-copy step used to install a fresh build onto the Deck.
-
-Use Desktop Mode to install or triage boot logs, but use Gaming Mode for real
-controller play. Steam Input may leave non-Steam apps on the Desktop control
-layout in Desktop Mode, so `L1`/`R1` tab navigation is only a reliable acceptance
-check once **Last Singularity** appears under **Library -> Non-Steam**.
-
-### Packaged Desktop Builds
-
-Open `START-HERE.md` in the build zip. The short version:
-
-- macOS: run `Run Last Singularity.command`, or open `Last Singularity.app`.
-- Windows: run `Last Singularity-win32-x64/Last Singularity.exe`.
-- Linux: run `Last Singularity-linux-x64/Last Singularity`.
-- Steam Deck: prefer the installer above so the wrapper and Gaming Mode shortcut
-  are registered correctly.
+`npm run play` starts the local authority stack and opens Electron. Stop the
+debug stack with `npm run stop`.
 
 ### Browser Sandbox
 
