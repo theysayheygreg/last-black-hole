@@ -5,6 +5,66 @@
 
 ## Current Verdict
 
+### `774bd71b` Green Candidate
+
+Exact product source `774bd71bca1f3fb98ad06b7b1ef853e0f61bc7fb`
+closes the current RulerLive and natural optional-portal player paths and
+updates the retired Signal/scalar-Inhibitor test contracts to current Noise and
+ecology truth. Its single provisioned no-retry full gate passed 119/119 suites
+in 393.47 seconds wall time (564.09 seconds summed suite time), with zero
+failures and zero retries.
+
+The normal keyboard F Ruler path engaged authority in 116 ms, remained held,
+and released on button-up. SlingshotV2Live passed all authoritative engage and
+release events. AgentPlay completed slingshot, salvage, Noise, optional portal
+ready at tick 686, explicit confirmation and extraction at tick 693, Chronicle
+continuity, a changed second run, natural well death, and Home recovery.
+
+Deep Field delivered 14.99/15 Hz with 15.24 ms tick p95, 216.83 KiB snapshot
+p95, 0.573 ms Ballpark-sync p95, and zero catch-up or skipped-deadline ticks.
+The runner used four workers, two browser workers, 34 browser launches, and
+119 suite processes.
+
+Evidence:
+
+- full log:
+  `/private/tmp/lbh-v03-rc-774bd71b-receipt/test-full.log`
+  (SHA-256
+  `9682d1e0466f9b641587573cc78f35ab05c6390fe07e1acf844d21493df0eba0`);
+- checksum ledger:
+  `/private/tmp/lbh-v03-rc-774bd71b-receipt/SHA256SUMS`;
+- AgentPlay:
+  `/private/tmp/lbh-v03-rc-774bd71b/tests/screenshots/agent-play-eval-2026-07-28T180713893Z/`;
+- Renderer manifest:
+  `/private/tmp/lbh-v03-rc-774bd71b/tests/screenshots/renderer-2026-07-28T180854461Z/manifest.json`;
+- UI manifest:
+  `/private/tmp/lbh-v03-rc-774bd71b/tests/screenshots/ui-visual-2026-07-28T181106531Z/manifest.json`.
+
+The supported `--skip-tests` release path built all five targets as
+`0.3.1.774bd71b` in 33.07 seconds. `release:status` found the hash-named
+release, and `test:package` passed staged authority boot and package closure
+under protocol `lbh-local-v2` in 46.07 seconds.
+
+- build root:
+  `/private/tmp/lbh-v03-build-774bd71b/builds/v0.3.1.774bd71b`;
+- playtest archive:
+  `/private/tmp/lbh-v03-build-774bd71b/builds/last-singularity-playtest-v0.3.1.774bd71b.zip`
+  (441,885,062 bytes; SHA-256
+  `173a70ab2f812134e217399160ae7a2b99931c5cc199514d981c06f99cdc4e5f`);
+- macOS, Windows, and Linux `app.asar` SHA-256:
+  `03d54c7d86e4eb99071edabf58f035684aaf022ade483fc3fa367910530c7b3b`;
+- executable SHA-256: macOS
+  `a87945154e4011386d014c2e30a5db2e4c4ac0543ed7d58423c32aaa024c504a`,
+  Windows
+  `7ae5b1b73cf3f800a533efe4709f5adc0a2dee4e4113413c8a71d208f323a062`,
+  and Linux
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
+
+This is machine-green source and package evidence. The Linux artifact is ready
+for an explicitly routed Deck deployment; physical controls, readability,
+performance, and feel remain Greg-owned gates. No deployment or promotion was
+performed.
+
 ### `a58b5921` Immutable Candidate
 
 Exact product source `a58b59219303ec18585ae21bca4760bd65fb3338`

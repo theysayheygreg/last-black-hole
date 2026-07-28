@@ -2,6 +2,14 @@
 
 ## 2026-07-28
 
+- **Green `774bd71b` RC and package:** normal keyboard F now uses a true held
+  Ruler input, and portal confirmation resolves against authoritative residence
+  at command receipt before movement can carry the ship out. Retired
+  Signal/scalar-Inhibitor fixtures now assert current Noise/ecology truth. The
+  exact source passed 119/119 suites with zero retries in 393.47 seconds, then
+  built all five targets as `0.3.1.774bd71b`; release status and package
+  authority boot passed. The playtest ZIP SHA-256 is
+  `173a70ab2f812134e217399160ae7a2b99931c5cc199514d981c06f99cdc4e5f`.
 - **Immutable `a58b5921` RC receipt:** the exact provisioned source ran the
   119-suite full gate once with retries disabled: 111 passed, eight failed,
   zero retries, 395.73 seconds wall time, and 576.08 seconds summed suite time.
