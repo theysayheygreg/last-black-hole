@@ -68,6 +68,20 @@ async function run() {
     }
   });
 
+  await runner.run("signal_storm seed presents canonical Noise copy without retired Signal vocabulary", async () => {
+    const briefing = signatures.buildRunBriefing({ id: "test", name: "Test", wells: [], wrecks: [] }, 9);
+    const signature = briefing.signature;
+    const playerFacingCopy = `${signature.name} ${signature.flavor} ${signature.mechanical}`;
+
+    assert(signature.id === "signal_storm", `Seed 9 must force signal_storm, got ${signature.id}`);
+    assert(!/\bsignal\b/i.test(playerFacingCopy), `Retired Signal vocabulary leaked: ${playerFacingCopy}`);
+    assert(signature.name === "noise storm", `Expected canonical Noise name, got ${signature.name}`);
+    assert(signature.mechanical === "larger Noise radius / slower Noise decay",
+      `Expected truthful Noise mechanics, got ${signature.mechanical}`);
+    assert(signature.mods.signalGenMult === 1.5 && signature.mods.signalDecayMult === 0.7,
+      "Compatibility modifier keys or values changed");
+  });
+
   await runner.run("run briefings use real map counts and stable named streams", async () => {
     const shallowDefinition = getMapScaleDefinition("shallows");
     const deepDefinition = getMapScaleDefinition("deep-field");

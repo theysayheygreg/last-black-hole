@@ -202,9 +202,9 @@
     },
     {
       "id": "signal_storm",
-      "name": "signal storm",
-      "flavor": "the dark is listening harder than usual.",
-      "mechanical": "loud thrust / slow signal decay",
+      "name": "noise storm",
+      "flavor": "the dark carries every burn farther than usual.",
+      "mechanical": "larger Noise radius / slower Noise decay",
       "mods": {
         "signalGenMult": 1.5,
         "signalDecayMult": 0.7
