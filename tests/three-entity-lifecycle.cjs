@@ -219,9 +219,9 @@ async function run() {
     assert(backendSource.includes("const diagnosticView = this.getViewMode() === 'scene';")
       && rendererSource.includes('if (diagnosticView)'),
       'Well diagnostics must have an explicit raw-scene gate');
-    assert(portalSource.includes("portal.visualState === 'blocked'")
+    assert(!portalSource.includes("portal.visualState === 'blocked'")
       && portalSource.includes("portal.visualState === 'final'"),
-    'Portal blocked/final state accents must remain family-specific');
+    'Retired portal blocking must stay absent while final-exfil accents remain family-specific');
     assert(rendererSource.includes('wellDebugPrimitiveCount'),
       'Renderer stats must expose well diagnostic primitive counts');
   });
