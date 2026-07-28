@@ -32,6 +32,7 @@ import {
   getAbilityPresentationState,
   getHullPresentationState,
   getInteractionPresentationState,
+  getHUDPresentationState,
   getRouteObjectiveState,
   getTerminalPresentationState,
   isExfilPortal,
@@ -44,6 +45,7 @@ export {
   getHullPresentationState,
   getInventoryActionAtCursor,
   getInteractionPresentationState,
+  getHUDPresentationState,
   getRouteObjectiveState,
   getTerminalPresentationState,
   isExfilPortal,
@@ -280,6 +282,11 @@ function renderAbilitySlot(el, slot) {
  */
 export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, opts = {}) {
   if (!_hudEl) return;
+  const hudPresentation = getHUDPresentationState({
+    terminal: opts.terminal || opts.hullState?.status === 'dead' || opts.ship?.status === 'dead',
+    interaction: opts.interaction,
+    abilityState: opts.abilityState,
+  });
   _promptOptions = { lastInputSource: opts.lastInputSource, deck: opts.deckMode };
   setDeckModeAttribute(_hudEl, _promptOptions);
   const motion = resolveMotionSettings(CONFIG.ui?.motion || {});
@@ -432,7 +439,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
 
   // === CONTEXTUAL INTERACTION ===
   if (_interactionEl) {
-    const interaction = getInteractionPresentationState(opts.interaction, _promptOptions);
+    const interaction = getInteractionPresentationState(hudPresentation.interaction, _promptOptions);
     if (!interaction) {
       _interactionEl.style.display = 'none';
     } else {
@@ -464,9 +471,9 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   _hudEl.style.filter = '';
 
   // === HULL ABILITIES ===
-  if (_ability1El && opts.abilityState) {
+  if (_ability1El && hudPresentation.abilityState) {
     if (_abilitiesEl) _abilitiesEl.style.display = '';
-    const presentation = getAbilityPresentationState(opts.abilityState);
+    const presentation = getAbilityPresentationState(hudPresentation.abilityState);
     _ability1El.dataset.hullType = presentation.hull;
     renderAbilitySlot(_ability1El, presentation.slots[0]);
     if (presentation.slots[1]) {

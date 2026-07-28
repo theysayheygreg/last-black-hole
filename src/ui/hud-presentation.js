@@ -293,6 +293,21 @@ export function getTerminalPresentationState(outcome = 'dead') {
   });
 }
 
+export function getHUDPresentationState({ terminal = false, interaction = null, abilityState = null } = {}) {
+  const isTerminal = Boolean(
+    terminal
+    || abilityState?.terminal
+    || abilityState?.status === 'dead',
+  );
+  return {
+    terminal: isTerminal,
+    interaction: isTerminal ? null : interaction,
+    abilityState: isTerminal
+      ? { ...(abilityState || {}), terminal: true, status: 'dead' }
+      : abilityState,
+  };
+}
+
 export function getSlingshotInteractionState(slingshot) {
   if (!slingshot) return null;
   if (slingshot.engaged) {

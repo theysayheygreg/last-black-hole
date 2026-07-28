@@ -5539,6 +5539,7 @@ function gameLoop(now) {
       }),
     );
     updateHUD(simState.runElapsedTime, portalSystem, cargoItems, simState.growthTimer, {
+      terminal: gamePhase === 'dead' || authoritativePlayer?.status === 'dead' || ship.status === 'dead',
       scavengerSystem,
       combatSystem,
       signature: currentSignature,
