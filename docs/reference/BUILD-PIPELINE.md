@@ -163,6 +163,12 @@ archive SHA-256, GitHub Release URL, and Deck location in
 `docs/project/BUILD-STATUS.md`. Failed builds, mode-suffixed test/dev builds,
 and intermediate RCs may still be pruned normally.
 
+One planned use is a chronological build-history timelapse showing the real
+game at each public version. The historical package therefore needs to remain
+launchable on its own; preserve its launch instructions and any runtime flags
+or compatibility notes needed to capture it later. Do not block promotion on
+recording footage. The future media pass consumes the retained builds.
+
 Before cutting a serious internal playtest build, commit the source, then use:
 
 ```sh

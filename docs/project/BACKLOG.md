@@ -23,6 +23,20 @@
 
 ## Renderer & Visual Identity
 
+### Version-by-Version Build History Timelapse
+- **What:** Capture a chronological progress video from the real final
+  known-good build of each public version, showing how the title, UI, movement,
+  maps, entities, audio, and overall game identity evolved.
+- **Source material:** The playable-version retention contract preserves one
+  independently launchable package per displaced public major/minor line,
+  starting with final v0.2 when v0.3.1 becomes current.
+- **Why backlogged:** Build preservation starts now; producing the edit is a
+  later promo/history project and should not block version promotion.
+- **First revival step:** Define one short repeatable capture route that every
+  retained build can perform, then record the same beats from each version and
+  edit them as a labeled timelapse.
+- **Added:** 2026-07-28
+
 ### Three Entity Visual Language Pass
 - **What:** Replace the current Three bridge primitives with coherent object
   families for ships, rivals/scavengers, wrecks, stars, planetoids/comets,

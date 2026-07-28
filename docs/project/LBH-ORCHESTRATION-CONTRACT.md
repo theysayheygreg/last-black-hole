@@ -118,6 +118,12 @@ Deck install path, and shortcut verification. If the outgoing artifact is
 missing, rebuild it from its pinned source before promotion rather than
 silently losing the playable baseline.
 
+These retained playables are also the source material for a future
+version-by-version progress timelapse. Promotion does not require a new media
+capture, but the archived build must remain independently launchable and carry
+enough identity and launch information that a later capture pass can record
+the real v0.2, v0.3, v0.4, and subsequent experiences in sequence.
+
 `codex/lbh-ci-policy` was created above history that later proved to contain
 v0.3.1 review commits on the v0.4 architecture line. Never merge that source
 branch wholesale into `main`. Its clean process changes were reconstructed on

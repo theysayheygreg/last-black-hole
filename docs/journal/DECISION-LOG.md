@@ -1999,3 +1999,6 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
   not the designated historical playable.
 - The v0.3.1 promotion therefore requires a final v0.2 artifact and Deck entry
   to remain usable after v0.3.1 becomes current.
+- A future promo/history pass will use these real retained builds to create a
+  version-by-version development timelapse. Footage is not a promotion gate;
+  independently launchable build history is the prerequisite.
