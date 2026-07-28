@@ -30,7 +30,9 @@ function latestBuildDir() {
 
 function copyIfExists(from, to) {
   if (!fs.existsSync(from)) return false;
-  fs.cpSync(from, to, { recursive: true, force: true });
+  // Electron's macOS bundle contains relative framework symlinks. Resolving
+  // them here bakes the GitHub runner's absolute path into the public zip.
+  fs.cpSync(from, to, { recursive: true, force: true, verbatimSymlinks: true });
   return true;
 }
 

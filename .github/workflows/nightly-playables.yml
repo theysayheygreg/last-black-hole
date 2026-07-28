@@ -139,7 +139,7 @@ jobs:
             echo 'Steam Deck one-command install from Desktop Mode / Konsole:'
             echo ''
             echo '```sh'
-            echo 'curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install-steam-deck.sh | bash'
+            echo 'curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh'
             echo '```'
             echo ''
             echo 'These automated weekly playtest artifacts only rebuild when the scheduled run sees new commits.'
@@ -169,6 +169,11 @@ jobs:
 
       - name: Install deps
         run: npm ci
+
+      - name: Parse native Windows installer
+        shell: pwsh
+        run: |
+          [void][scriptblock]::Create((Get-Content scripts/install.ps1 -Raw))
 
       - name: Build Windows desktop
         run: npm run build -- --targets=win --mode=release
@@ -297,6 +302,10 @@ jobs:
           name: last-singularity-mac-nightly
           path: release-assets
 
+      - name: Publish SHA-256 checksums
+        working-directory: release-assets
+        run: sha256sum *.zip > SHA256SUMS
+
       - name: Publish weekly release
         uses: ncipollo/release-action@v1
         with:
@@ -308,4 +317,4 @@ jobs:
           replacesArtifacts: true
           prerelease: true
           artifactErrorsFailBuild: true
-          artifacts: "release-assets/*.zip"
+          artifacts: "release-assets/*.zip,release-assets/SHA256SUMS"
