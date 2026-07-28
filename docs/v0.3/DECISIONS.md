@@ -248,6 +248,17 @@ only slingshot and Inhibitor contact are quiet. Signal Blooms are local enemy
 listeners, Swarm acquisition uses Noise plus its existing search/lock behavior,
 and the Conductor remains the sole Inhibitor arrival authority.
 
+## Orrery Route Teaching
+
+The aperture rail is discovery-gated per run. Before the player genuinely hears
+an `EXFIL TONE`, it shows `ROUTE: LISTEN` and no distance. A live EXFIL contact
+unlocks the existing rail with the nearest active aperture's canonical meter or
+kilometer distance; that discovery remains earned until the authority run ID
+changes, even after the two-and-a-half-second contact memory fades. The HUD
+surfaces only non-zero Noise listener counters, and results include the existing
+authoritative heard/tracked seconds. The ruler labels the fixed coyote transport
+allowance separately from the accepted `50 ms` gameplay value.
+
 ## Locked Noise Radius And Inhibitor Ecology Ownership
 
 Decision: the current v0.3 design owners are

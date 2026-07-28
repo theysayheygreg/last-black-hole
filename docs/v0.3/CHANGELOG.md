@@ -2,6 +2,12 @@
 
 ## 2026-07-27
 
+- **Orrery route teaching:** the aperture rail now reads `ROUTE: LISTEN` until
+  the current run genuinely hears an `EXFIL TONE`. Discovery then persists for
+  that run and reveals the nearest aperture in canonical `m`/`km` distance;
+  zero-value Noise listener counters are hidden, existing heard/tracked timing
+  appears in results, and the ruler names fixed coyote transport separately.
+
 - **Selected RC evidence:** exact product source `a958a8c6` ran the full
   no-retry candidate lane once: 86/119 passed, 33 failed, zero retries,
   300.10s wall time. The first red is stale Validation coverage for retired

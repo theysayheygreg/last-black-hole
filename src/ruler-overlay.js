@@ -39,7 +39,7 @@ function fallbackRulerFacts() {
         planetoid: simUnitsToMeters(0.18),
       },
       magnetism: { active: false, entry: { x: 0, y: 0 }, locked: { x: 0, y: 0 }, bendDegrees: 0 },
-      coyoteTime: { implemented: true, durationMs: 50, remainingMs: 0 },
+      coyoteTime: { implemented: true, durationMs: 50, remainingMs: 0, effectiveDurationMs: 50, transportAllowanceMs: 0 },
       payoffCurve: { active: false, entry: { x: 0, y: 0 }, exit: { x: 0, y: 0 }, ratio: 0 },
       chainWindow: { active: false, durationSeconds: 0.5, remainingSeconds: 0 },
     },
@@ -125,7 +125,11 @@ const HANDLERS = {
   'slingshot.coyoteTime': (state, contract) => {
     const value = state.ruler.slingshot.coyoteTime;
     const fraction = value.durationMs > 0 ? value.remainingMs / value.durationMs : 0;
-    return addRow(state, { id: contract.id, color: COLORS.coyote, label: 'coyote', value: value.implemented ? `${Math.round(value.remainingMs)} / ${Math.round(value.durationMs)} ms` : '0 ms · disabled · step 50 ms', fraction });
+    const allowance = Math.max(0, finite(value.transportAllowanceMs, finite(value.effectiveDurationMs) - value.durationMs));
+    const valueLabel = value.implemented
+      ? `${Math.round(value.remainingMs)} / ${Math.round(value.durationMs)} ms + ${Math.round(allowance)} ms transport`
+      : '0 ms · disabled · fixed transport allowance';
+    return addRow(state, { id: contract.id, color: COLORS.coyote, label: 'coyote', value: valueLabel, fraction });
   },
   'slingshot.payoffCurve': (state, contract) => {
     const value = state.ruler.slingshot.payoffCurve;
