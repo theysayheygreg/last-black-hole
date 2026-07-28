@@ -1,4 +1,4 @@
-const { simUnitsToMeters } = require("../content/units.cjs");
+const { simUnitsToMeters, UNIT_SCALE } = require("../content/units.cjs");
 const data = require("../../src/content/noise.data.json");
 
 // Noise is deliberately a small gameplay envelope, not an audio simulation.
@@ -10,6 +10,20 @@ const NOISE_CONFIG = Object.freeze({
   tuning: Object.freeze(Object.fromEntries(Object.entries(data.tuning).map(([key, value]) => [key, Object.freeze({ ...value })]))),
   publicSourceClasses: Object.freeze([...data.publicSourceClasses]),
 });
+
+function minimumOffscreenHearingMeters(
+  widthPx = NOISE_CONFIG.world.offscreenScale.referenceViewport.widthPx,
+  heightPx = NOISE_CONFIG.world.offscreenScale.referenceViewport.heightPx,
+) {
+  const scale = NOISE_CONFIG.world.offscreenScale;
+  const width = Math.max(1, Number(widthPx) || 1);
+  const height = Math.max(1, Number(heightPx) || 1);
+  const view = Math.max(0.001, Number(scale.cameraViewWorldUnits) || 0.001);
+  const margin = Math.max(0, Number(scale.edgeMarginPixels) || 0);
+  const horizontal = ((width / 2 - margin) / (width / view)) * UNIT_SCALE.metersPerSimUnit;
+  const vertical = ((height / 2 - margin) / (height / view)) * UNIT_SCALE.metersPerSimUnit;
+  return Math.max(0, Math.min(horizontal, vertical));
+}
 
 function clampMeters(value) {
   return Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0);
@@ -105,6 +119,7 @@ function enemyListenerStateFor({ radiusMeters, distanceSimUnits, sensitivity = 1
 
 module.exports = {
   NOISE_CONFIG,
+  minimumOffscreenHearingMeters,
   clampMeters,
   emitterAudibleFor,
   identifyPublicSource,

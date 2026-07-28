@@ -22,12 +22,17 @@
   "publicSourceClasses": ["GLITCH", "SWARM", "VESSEL", "VESSEL THRUST", "EXFIL"],
   "world": {
     "contactCap": 5,
-    "inhibitor": {
-      "glitch": { "category": "STATIC", "sourceClass": "GLITCH", "radiusMeters": 260, "cadenceSeconds": 1.5 },
-      "swarm": { "category": "CORRUPTION", "sourceClass": "SWARM", "radiusMeters": 340, "cadenceSeconds": 1.2 },
-      "vessel": { "category": "THRUST", "sourceClass": "VESSEL", "radiusMeters": 620, "cadenceSeconds": 1.0 }
+    "offscreenScale": {
+      "referenceViewport": { "widthPx": 1280, "heightPx": 800 },
+      "cameraViewWorldUnits": 3,
+      "edgeMarginPixels": 20
     },
-    "exfil": { "category": "EXFIL TONE", "sourceClass": "EXFIL", "radiusMeters": 800, "cadenceSeconds": 1.0 }
+    "inhibitor": {
+      "glitch": { "category": "STATIC", "sourceClass": "GLITCH", "radiusMeters": 1600, "cadenceSeconds": 1.5 },
+      "swarm": { "category": "CORRUPTION", "sourceClass": "SWARM", "radiusMeters": 2200, "cadenceSeconds": 1.2 },
+      "vessel": { "category": "THRUST", "sourceClass": "VESSEL", "radiusMeters": 3200, "cadenceSeconds": 1.0 }
+    },
+    "exfil": { "category": "EXFIL TONE", "sourceClass": "EXFIL", "radiusMeters": 4200, "cadenceSeconds": 1.0 }
   },
   "tuning": {
     "idleFloorMeters": { "unit": "m", "min": 0, "max": 120, "step": 10, "startBias": "silent hull" },

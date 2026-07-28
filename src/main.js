@@ -2362,6 +2362,8 @@ function observeAudibleContact(key, observation, nowSeconds) {
     nowSeconds,
     category: noiseCategory(observation.source),
     sourceClass: observation.sourceClass,
+    sourceKind: observation.sourceKind,
+    cadenceSeconds: observation.cadenceSeconds,
     identificationFraction: NOISE_IDENTIFICATION_FRACTION,
     publicSourceClasses: NOISE_PUBLIC_SOURCE_CLASSES,
     fadeSeconds: NOISE_LAST_HEARD_FADE_SECONDS,
@@ -2390,6 +2392,8 @@ function updateAudibleContactMemory(nowSeconds) {
         radiusMeters: noise.audibleRadiusMeters,
         source: noise.currentSource || noise.dominantSource,
         sourceClass: noise.sourceClass,
+        sourceKind: 'player',
+        cadenceSeconds: 0,
       });
     }
   }
@@ -2400,6 +2404,8 @@ function updateAudibleContactMemory(nowSeconds) {
       radiusMeters: emitter.radiusMeters,
       source: emitter.source,
       sourceClass: emitter.sourceClass,
+      sourceKind: emitter.sourceKind,
+      cadenceSeconds: emitter.cadenceSeconds,
     });
   }
   if (!remoteSession.active) {
@@ -2413,6 +2419,8 @@ function updateAudibleContactMemory(nowSeconds) {
         radiusMeters: tuning.radiusMeters,
         source: tuning.category,
         sourceClass: tuning.sourceClass,
+        sourceKind: 'inhibitor',
+        cadenceSeconds: tuning.cadenceSeconds,
       });
     }
     const exfil = NOISE_CONFIG.world?.exfil || {};
@@ -2424,6 +2432,8 @@ function updateAudibleContactMemory(nowSeconds) {
         radiusMeters: exfil.radiusMeters,
         source: exfil.category,
         sourceClass: exfil.sourceClass,
+        sourceKind: 'exfil',
+        cadenceSeconds: exfil.cadenceSeconds,
       });
     }
   }
@@ -5172,12 +5182,21 @@ function gameLoop(now) {
         const alpha = fading
           ? Math.max(0, (contact.expiresAt - simState.runElapsedTime) / NOISE_LAST_HEARD_FADE_SECONDS)
           : 0.9;
-        const edge = drawEdgeArrow(sx, sy, `rgba(100, 220, 220, ${Math.max(0.15, alpha * 0.8).toFixed(2)})`, 7);
+        const cadence = Math.max(0, Number(contact.cadenceSeconds) || 0);
+        const pulse = cadence > 0
+          ? 0.86 + 0.14 * (0.5 + 0.5 * Math.sin((simState.runElapsedTime / cadence) * Math.PI * 2))
+          : 1;
+        const isExfil = contact.sourceKind === 'exfil' || contact.identity === 'EXFIL' || contact.category === 'EXFIL TONE';
+        const isInhibitor = contact.sourceKind === 'inhibitor'
+          || ['GLITCH', 'SWARM', 'VESSEL', 'VESSEL THRUST'].includes(contact.identity);
+        const accent = isExfil ? [100, 220, 220] : isInhibitor ? [255, 70, 150] : [220, 230, 245];
+        const edgeAlpha = Math.max(0.15, alpha * pulse * 0.8);
+        const edge = drawEdgeArrow(sx, sy, `rgba(${accent.join(', ')}, ${edgeAlpha.toFixed(2)})`, 7);
         if (edge) {
           const label = contact.identity || contact.category;
           ctx.font = canvasFont(9, { weight: '700' });
           ctx.textAlign = 'center';
-          ctx.fillStyle = `rgba(160, 235, 235, ${Math.max(0.2, alpha).toFixed(2)})`;
+          ctx.fillStyle = `rgba(${accent.join(', ')}, ${Math.max(0.2, alpha * pulse).toFixed(2)})`;
           ctx.fillText(`${label} · ${Math.round(contact.rangeMeters || 0)}m`, edge.x, edge.y - 10);
         }
       }

@@ -26,6 +26,15 @@ gravity-only slingshot, and Inhibitor contact do not mirror into player Noise.
 The narrow modifier hooks are data-owned idle floor, radius multiplier, and
 decay multiplier.
 
+World contacts use the same meter ruler as the player. The reference Deck
+frame (`1280x800`, `3.0` camera world-units, `20px` edge margin) derives a
+`1425m` minimum distance to the nearest off-screen edge from the canonical
+physical-units scale. The current playable world-emitter starting radii are
+Glitch `1600m`, Swarm `2200m`, Vessel `3200m`, and EXFIL `4200m`, all owned by
+`src/content/noise.data.json`; these are starting biases, not permanent balance.
+Their `cadenceSeconds` values pulse contact presentation emphasis only and
+never toggle the underlying distance-based audibility.
+
 ## Player Receiving Contract
 
 A player hears a source iff canonical toroidal distance to that source is less

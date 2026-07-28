@@ -28,6 +28,7 @@ const {
   countLiveSwarms,
   shouldSpawnGlitch,
   shouldSpawnSwarm,
+  resolveSwarmSpeed,
   summarizeEcologyEncounters,
 } = require("../scripts/sim/inhibitor-ecology.cjs");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
@@ -147,6 +148,12 @@ async function run() {
     contactCooldownSeconds: 0.8,
   };
   const swarm = createSwarmEntity({ id: "inhibitor-swarm-1", wx: 1, wy: 1, config: swarmCfg });
+  assert.deepStrictEqual([
+    resolveSwarmSpeed(0, swarmCfg),
+    resolveSwarmSpeed(100, swarmCfg),
+    resolveSwarmSpeed(220, swarmCfg),
+    resolveSwarmSpeed(400, swarmCfg),
+  ], [0.25, 0.6, 1.1, 1.6], "Swarm pursuit speeds must bracket the player cruise baseline");
   const playerNoise = { kind: "player", wx: 1.05, wy: 1, radiusMeters: 100 };
   advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
   assert.strictEqual(swarm.noiseListenerState, "HEARD", "Swarm must acquire audible player Noise independently");
@@ -208,6 +215,7 @@ async function run() {
     worldScale: 5,
     config: vesselCfg,
   });
+  assert.strictEqual(vesselCfg.speed, 0.5, "Vessel pursuit speed must remain playable against player cruise");
   assert.strictEqual(vessel.lifecycle, "inbound", "Vessels must enter through an explicit inbound lifecycle");
   assert.strictEqual(vessel.edge, "left", "Vessel edge entry must be deterministic and public");
   assert(shouldSpawnVessel({ phase: 3, simTime: 24, nextSpawnAt: 24, entities: [vessel], config: vesselCfg }),
@@ -221,6 +229,9 @@ async function run() {
   advanceVesselEntity(vessel, { dt: 1, worldScale: 5, players: [vesselPilot], config: vesselCfg });
   assert.strictEqual(vessel.awareness, "STRATEGIC", "Vessels must use strategic awareness");
   assert.strictEqual(vessel.targetClientId, vesselPilot.clientId, "Vessel must target the nearest alive player");
+  const vesselStartDistance = Math.hypot(vesselPilot.wx - vessel.prevWX, vesselPilot.wy - vessel.prevWY);
+  assert(vesselStartDistance > Math.hypot(vesselPilot.wx - vessel.wx, vesselPilot.wy - vessel.wy),
+    "Vessel movement must close distance after strategic target selection");
   assert.strictEqual(vessel.noiseListenerState, "NONE", "Vessels must not use audible listener state");
   advanceVesselEntity(vessel, { dt: 2, worldScale: 5, players: [vesselPilot], config: vesselCfg });
   assert.strictEqual(vessel.lifecycle, "alive", "Vessel inbound tell must end at its configured cadence");

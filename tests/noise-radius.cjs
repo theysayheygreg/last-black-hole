@@ -7,6 +7,7 @@ const { pathToFileURL } = require('url');
 const noiseData = require('../src/content/noise.data.json');
 const {
   NOISE_CONFIG,
+  minimumOffscreenHearingMeters,
   emitterAudibleFor,
   enemyListenerStateFor,
   identifyPublicSource,
@@ -57,10 +58,17 @@ async function run() {
   check(NOISE_CONFIG.lastHeardFadeSeconds === 2.5, 'last-heard fade');
   check(JSON.stringify(noiseData) === JSON.stringify(NOISE_CONFIG), 'CJS adapter preserves canonical data');
   check(NOISE_CONFIG.world.contactCap === 5, 'world Noise contact cap is centralized');
-  check(NOISE_CONFIG.world.inhibitor.glitch.radiusMeters === 260
-    && NOISE_CONFIG.world.inhibitor.swarm.radiusMeters === 340
-    && NOISE_CONFIG.world.inhibitor.vessel.radiusMeters === 620, 'ecology Noise radii are data-owned');
-  check(NOISE_CONFIG.world.exfil.radiusMeters === 800
+  const minimumOffscreenMeters = minimumOffscreenHearingMeters();
+  check(Math.round(minimumOffscreenMeters) === 1425, 'reference Deck off-screen hearing threshold derives from camera and units');
+  check(NOISE_CONFIG.world.inhibitor.glitch.radiusMeters === 1600
+    && NOISE_CONFIG.world.inhibitor.swarm.radiusMeters === 2200
+    && NOISE_CONFIG.world.inhibitor.vessel.radiusMeters === 3200
+    && [
+      NOISE_CONFIG.world.inhibitor.glitch.radiusMeters,
+      NOISE_CONFIG.world.inhibitor.swarm.radiusMeters,
+      NOISE_CONFIG.world.inhibitor.vessel.radiusMeters,
+    ].every((radius) => radius >= minimumOffscreenMeters), 'ecology Noise radii clear the reference viewport edge');
+  check(NOISE_CONFIG.world.exfil.radiusMeters === 4200
     && NOISE_CONFIG.world.exfil.category === 'EXFIL TONE', 'exfil Noise emitter is data-owned');
 
   check(resolveContinuousRadius(0, 240, 1) === 240, 'thrust establishes continuous radius');
@@ -194,6 +202,15 @@ async function run() {
     nowSeconds: 7,
   }).contact;
   check(reheard.live && reheard.identity === 'VESSEL THRUST', 're-heard contact starts a fresh identification');
+  const pulsed = projectAudibleContact({
+    ...contactArgs,
+    sourceKind: 'inhibitor',
+    cadenceSeconds: 1.2,
+    distanceSimUnits: 0.5,
+    nowSeconds: 10,
+  }).contact;
+  check(pulsed.live && pulsed.sourceKind === 'inhibitor' && pulsed.cadenceSeconds === 1.2,
+    'world cadence is presentation metadata and does not toggle audibility');
   const exfilContact = projectAudibleContact({
     ...contactArgs,
     distanceSimUnits: 0.2,
@@ -289,6 +306,9 @@ async function run() {
   check(mainSource.includes('projectAudibleContact') && mainSource.includes('simUnitsToMeters'), 'edge contact projection uses canonical meter conversion');
   check(mainSource.includes('world:inhibitor:') && mainSource.includes('NOISE_CONFIG.world?.inhibitor'),
     'local ecology entities use the shared world Noise contact bridge');
+  check(mainSource.includes("contact.sourceKind === 'exfil'")
+    && mainSource.includes("contact.sourceKind === 'inhibitor'"),
+  'edge contact color ownership separates cyan EXFIL from magenta Inhibitors');
   check(!mainSource.includes('radiusMeters / 1000') && !mainSource.includes('radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000'), 'Noise presentation has no /1000 conversion folklore');
   check(!mainSource.includes('INHIBITOR EDGE DIM'), 'omniscient Inhibitor edge dim is removed');
   check(mainSource.includes('finalInhibitor') && mainSource.includes('finalExfil'), 'local portal presentation carries final exit flags');
