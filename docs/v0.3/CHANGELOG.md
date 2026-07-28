@@ -2,6 +2,14 @@
 
 ## 2026-07-28
 
+- **Version scope and v0.3.2 design packets:** moved the authored-soundscape
+  vertical from v0.3.2 into active v0.3.1 scope without invalidating the
+  current contact-audio RC as an intermediate playtest build. Split the later
+  Fabric/Surfing and Camera/Viewport questions into separate E3 Orrery prompts;
+  both require annotated visual concepts grounded in current playable
+  functionality, or an explicit smallest-enabling seam when current truth is
+  too narrow.
+
 - **Pilot Select and audio usability:** highlighted saved pilots can be deleted
   only through an explicit `CANCEL`-first confirmation; remaining pilot
   selection is deterministic and deleting the final pilot opens the existing

@@ -283,21 +283,25 @@ The remaining release gates are intentionally separate:
   implementation waits for Greg's follow-up notes rather than inventing those
   behaviors inside unrelated feature work.
 
+## v0.3.1 Authored Soundscape Follow-Up
+
+- The
+  [Authored Soundscape Plan](reviews/v0.3.1-authored-soundscape-plan.md) is
+  active v0.3.1 scope. The procedural contact/navigation voices and current
+  Hermes/Maestro integration are the functional baseline, not final content.
+- The currently running RC and Deck build remain an intermediate playtest
+  checkpoint. After it lands, continue the authored-audio vertical on the same
+  version line rather than deferring it to v0.3.2.
+- v0.3.1 audio content-complete requires a representative authored mix and
+  Greg's listening verdict. Machine checks own routing, lifecycle, packaging,
+  and performance; they do not grade taste.
+
 ## Deferred Beyond v0.3
 
 - v0.3.2 begins with the gated
   [Fabric, Surfing, and Camera presentation review](reviews/v0.3.2-fabric-surfing-camera-review.md)
   after the settled v0.3.1 Deck baseline. It is a presentation and physical
   readability review, not a simulation or physics redesign.
-- v0.3.2 also owns the
-  [Authored Soundscape Plan](reviews/v0.3.2-authored-soundscape-plan.md).
-  The v0.3.1 RC swarm repair added procedural Web Audio contact/navigation
-  tones and runtime spatial/priority/lifecycle plumbing; it did not create
-  authored WAV/OGG/MP3 assets and is not final audio-content acceptance. The
-  v0.3.2 pass covers direction, asset inventory and creation, integration/mix,
-  representative listening, headphones/speakers, and physical Deck review.
-  Machine hookup evidence remains separate from Greg-owned audio taste and
-  device acceptance.
 - Public multiplayer transport, matchmaking, prediction, and rollback.
 - A full ECS runtime. v0.3 creates stable component-shaped seams but does not
   adopt ECS ceremony without measured need.

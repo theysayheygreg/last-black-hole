@@ -8,6 +8,17 @@
 
 ---
 
+## 2026-07-28 — v0.3.2 visual design prompts separated
+
+- Reclassified the authored-soundscape vertical as v0.3.1 work while keeping
+  the current contact-audio RC useful as an intermediate playtest build.
+- Split the later fabric/surfing and camera/viewport questions into two
+  standalone E3 Orrery prompt packets. Each requires visual concepts grounded
+  in the current top-down ASCII-fluid game and must explicitly name the
+  smallest enabling seam when current functionality is too limited.
+- This is prompt and version-routing work only. No Orrery handoff, renderer,
+  camera, physics, capture, or audio implementation is implied.
+
 ## 2026-07-28 — v0.3 Orrery correction reviews ingested
 
 - Preserved the scale/RC follow-up and slingshot rerun reviews as the durable

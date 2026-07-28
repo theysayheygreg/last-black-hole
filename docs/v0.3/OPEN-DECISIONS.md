@@ -127,17 +127,24 @@ When should `codex/v0.3-sim-harness-simplification` promote to `main` and
 become the public/demo line? A green candidate does not make this decision
 automatically.
 
+### 5. v0.3.1 Authored Soundscape
+
+**Decision owner:** Greg
+
+The functional procedural contact-audio bridge is a useful RC baseline, not
+the final soundscape. The
+[v0.3.1 Authored Soundscape Plan](reviews/v0.3.1-authored-soundscape-plan.md)
+now belongs to this version line. Greg owns the representative direction,
+timbre, mix, fatigue, and physical-device listening verdict before v0.3.1 is
+considered content-complete. The currently running RC/deploy may proceed as an
+intermediate playtest build rather than waiting for the whole authored library.
+
 ## Deferred Product Decisions
 
 These are intentionally beyond the v0.3 release gate:
 
 - choose the v0.3.2 fabric hierarchy and Deck camera baseline after the gated
   [Fabric, Surfing, and Camera motion review](reviews/v0.3.2-fabric-surfing-camera-review.md);
-- choose the v0.3.2 authored soundscape direction and final listening bar
-  through the
-  [Authored Soundscape Plan](reviews/v0.3.2-authored-soundscape-plan.md);
-  procedural Web Audio contact hookups are the functional baseline, not
-  authored-content acceptance;
 - which internal hull graduates next;
 - multiplayer transport, prediction, rollback, and matchmaking shape;
 - whether measured entity/network scale justifies a full ECS;
