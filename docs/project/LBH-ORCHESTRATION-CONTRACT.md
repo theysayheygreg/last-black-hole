@@ -94,6 +94,30 @@ that candidate asynchronously; it does not run on every feature commit. v0.4
 CI and experimental failures do not block a v0.3 RC unless an intentionally
 shared contract is affected.
 
+### Playable Version Retention
+
+A promotion changes which version `main` and the default installer serve; it
+does not erase the displaced version's last known-good playable.
+
+Before promoting a new version, Primary Sol must designate the outgoing
+version's final known-good source SHA and build identity, then preserve:
+
+- its complete repo-local release folder and playtest archive under `builds/`;
+- its checksum/build manifest and public GitHub Release assets;
+- its version-scoped install and non-Steam shortcut on Greg's review Steam
+  Deck.
+
+For the v0.3.1 promotion, this means the final v0.2 package remains available
+and launchable after `main` advances and the v0.3 install becomes current.
+Cleanup may remove intermediate, failed, or superseded builds, but never the
+designated final known-good build for a displaced public version.
+
+Promotion receipts record both sides: the incoming current build and the
+outgoing historical build's source SHA, artifact paths/checksums, release URL,
+Deck install path, and shortcut verification. If the outgoing artifact is
+missing, rebuild it from its pinned source before promotion rather than
+silently losing the playable baseline.
+
 `codex/lbh-ci-policy` was created above history that later proved to contain
 v0.3.1 review commits on the v0.4 architecture line. Never merge that source
 branch wholesale into `main`. Its clean process changes were reconstructed on

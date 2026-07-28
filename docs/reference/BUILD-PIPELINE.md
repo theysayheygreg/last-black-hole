@@ -148,6 +148,21 @@ That folder contains:
 
 The build date now lives inside the manifest and build info files instead of the folder name. The selected runtime mode is recorded in the manifest and per-target build info files.
 
+### Historical playable retention
+
+`builds/` is repo-local and gitignored, but its designated release packages are
+not all disposable. When a newer major/minor version replaces the current
+public line, preserve one final known-good release folder and matching
+`last-singularity-playtest-v<version>.zip` for the displaced version. Preserve
+the same artifacts on the corresponding GitHub Release so the playable does
+not depend on one machine.
+
+Do not reuse that version folder, rename it to the incoming version, or delete
+it during build cleanup. Record its source SHA, build identity, manifest and
+archive SHA-256, GitHub Release URL, and Deck location in
+`docs/project/BUILD-STATUS.md`. Failed builds, mode-suffixed test/dev builds,
+and intermediate RCs may still be pruned normally.
+
 Before cutting a serious internal playtest build, commit the source, then use:
 
 ```sh

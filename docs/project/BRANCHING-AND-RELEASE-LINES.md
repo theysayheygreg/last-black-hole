@@ -120,6 +120,20 @@ the public README/version docs/build status, and performs one intentional
 promotion merge. Promotion is a product call, not the automatic result of a
 green branch.
 
+Promotion also preserves the displaced public version as a playable historical
+baseline. Before `main` advances, pin the outgoing version's final known-good
+source and build, retain its complete repo-local release folder and archive,
+retain or publish its checksum-backed GitHub Release assets, and verify that
+its version-scoped install and shortcut remain on Greg's review Steam Deck.
+Deploy the incoming version beside it; do not overwrite or delete the older
+install.
+
+The promotion receipt and `docs/project/BUILD-STATUS.md` must name both builds,
+their exact source SHAs, artifact paths/checksums, release URLs, and Deck
+locations. Intermediate development packages remain disposable. The protected
+artifact is one designated final known-good build per displaced public
+major/minor line.
+
 ## Recovery
 
 Fix forward. Preserve committed history, do not reset shared work, and use a

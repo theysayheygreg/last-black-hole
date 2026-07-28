@@ -176,6 +176,24 @@ Singularity** non-Steam entry pointed at
 the file is written, then restarted or returned to Gaming Mode so the library
 reloads.
 
+### Version promotion on Greg's review Deck
+
+Keep the final known-good build from each displaced public major/minor line
+installed beside the incoming version. Use version-scoped directories and
+shortcuts for Primary-managed review builds, for example:
+
+```text
+~/Games/last-singularity-v02
+~/Games/last-singularity-v03
+```
+
+Promoting v0.3.1 updates the v0.3 install and shortcut only. It must not delete,
+rename, overwrite, or repoint the final v0.2 install or its existing Steam
+shortcut. Verify both launch entries still exist after deployment and record
+their install paths plus executable/`app.asar` hashes in the promotion receipt.
+This retention rule applies to Greg's review Deck; the public latest-version
+installer may continue to update one normal current install for other players.
+
 ## What The Deck Launcher Does
 
 Always launch through:

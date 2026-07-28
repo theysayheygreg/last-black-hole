@@ -1985,3 +1985,17 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 - Primary Sol owns cross-version execution, RC candidate selection, and the
   resulting merge receipt. Approval applies to one named cross-version
   operation and does not create an automatic synchronization cadence.
+
+## 2026-07-28: Preserve The Displaced Version's Final Playable
+
+- Advancing `main` changes the current public version; it does not erase the
+  outgoing version's last known-good playable.
+- Before promotion, Primary Sol designates one final known-good build for the
+  displaced public major/minor line and preserves its repo-local release
+  folder/archive, checksum-backed GitHub Release assets, and version-scoped
+  install plus shortcut on Greg's review Steam Deck.
+- Promotion deploys the incoming version beside the historical build. Cleanup
+  may remove intermediate, failed, test, dev, and superseded RC artifacts, but
+  not the designated historical playable.
+- The v0.3.1 promotion therefore requires a final v0.2 artifact and Deck entry
+  to remain usable after v0.3.1 becomes current.
