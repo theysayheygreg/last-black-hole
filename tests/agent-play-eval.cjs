@@ -20,6 +20,10 @@ const {
   stepGameFrames,
 } = require("./helpers.cjs");
 const { NOISE_CONFIG } = require("../scripts/sim/noise-radius.cjs");
+const {
+  createPlayerBrain,
+  projectPlayerNoiseModifiers,
+} = require("../scripts/player-brain.cjs");
 const { recordJourneyStage } = require("./agent-play-report.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
@@ -546,7 +550,7 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   };
 }
 
-async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screenshots) {
+async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screenshots, report) {
   let snapshot = await getSnapshot();
   const before = localPlayer(snapshot, clientId);
   assert(before, "Expected the authoritative player before salvage routing");
@@ -580,10 +584,24 @@ async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screensh
   assert(looted.player.cargoCount > 0, "Expected a natural wreck contact to add cargo");
   wreck ||= { id: "natural-route-contact" };
   screenshots.push(await capturePage(page, outputDir, "06-route-wreck-looted"));
+  const salvage = {
+    wreckId: wreck.id,
+    movement,
+    cargoBefore: before.cargoCount || 0,
+    cargoAfter: looted.player.cargoCount,
+  };
+  recordJourneyStage(report, { loot: salvage });
 
   const pulse = await page.evaluate(() => window.__TEST_API?.sendRemoteInput?.({ pulse: true }));
   assert(pulse?.ok === true, "Expected the public protocol-v2 pulse command to be accepted");
-  const pulseRadiusMeters = NOISE_CONFIG.impulses.forcePulseMeters;
+  const pulseBrain = createPlayerBrain({
+    hullType: looted.player.hullType,
+    rigLevels: looted.player.rigLevels,
+    profileUpgrades: looted.player.profileUpgrades,
+    equipped: looted.player.equipped,
+  });
+  const pulseRadiusMeters = NOISE_CONFIG.impulses.forcePulseMeters
+    * projectPlayerNoiseModifiers(pulseBrain).radiusMultiplier;
   const noisy = await waitForPlayer(
     clientId,
     (player) => player.noise?.currentSource === "PULSE"
@@ -594,10 +612,7 @@ async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screensh
   await waitForWorld((world) => Number.isInteger(world.inhibitor?.phase) ? world.inhibitor : null, { timeout: 6000 });
   screenshots.push(await capturePage(page, outputDir, "07-noise-pulse"));
   return {
-    wreckId: wreck.id,
-    movement,
-    cargoBefore: before.cargoCount || 0,
-    cargoAfter: looted.player.cargoCount,
+    ...salvage,
     noiseRadiusMeters: noisy.player.noise.audibleRadiusMeters,
     noiseMaxMeters: noisy.player.noise.maxAudibleRadiusMeters,
     noiseSource: noisy.player.noise.currentSource,
@@ -878,7 +893,7 @@ async function runJourney(page, outputDir, report, browserErrors) {
     });
     return;
   }
-  const loot = await collectRouteLootAndRaiseNoise(page, network.clientId, outputDir, report.screenshots);
+  const loot = await collectRouteLootAndRaiseNoise(page, network.clientId, outputDir, report.screenshots, report);
   recordJourneyStage(report, { loot });
   const portal = await enterAndConfirmPortal(page, network.clientId, outputDir, report.screenshots);
   recordJourneyStage(report, { portal });
