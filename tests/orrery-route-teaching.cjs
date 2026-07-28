@@ -31,15 +31,17 @@ async function run() {
       portals: [
         { id: 'optional-1', type: 'standard', alive: true, wx: 0.8, wy: 0.5 },
         { id: 'exfil-1', type: 'exit', alive: true, wx: 1.7, wy: 0.5 },
+        { id: 'final-1', finalExfil: true, wx: 2.1, wy: 0.5 },
       ],
     },
     waveRings: [],
     getAuthoritativeField: () => null,
   });
-  assert.deepStrictEqual(projectedWorld.noiseEmitters.map((emitter) => emitter.portalId), ['exfil-1'],
+  assert.deepStrictEqual(projectedWorld.noiseEmitters.map((emitter) => emitter.portalId), ['exfil-1', 'final-1'],
     'only a true extraction portal may emit EXFIL TONE');
   assert.strictEqual(hud.isExfilPortal({ type: 'standard', alive: true }), false);
   assert.strictEqual(hud.isExfilPortal({ type: 'exit', alive: true }), true);
+  assert.strictEqual(hud.isExfilPortal({ finalExfil: true }), true);
 
   const listening = hud.getRouteObjectiveState(ship, portalSystem, null, false, { exfilHeard: false });
   assert.strictEqual(listening.label, 'ROUTE: LISTEN');

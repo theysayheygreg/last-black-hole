@@ -162,7 +162,7 @@ export function getAbilityPresentationState(abilityState = {}) {
 }
 
 export function isExfilPortal(portal) {
-  return Boolean(portal?.alive && (
+  return Boolean(portal && portal.alive !== false && (
     portal.type === 'exit'
     || portal.type === 'extraction'
     || portal.finalExfil === true
