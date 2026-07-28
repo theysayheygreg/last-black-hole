@@ -163,6 +163,13 @@ archive SHA-256, GitHub Release URL, and Deck location in
 `docs/project/BUILD-STATUS.md`. Failed builds, mode-suffixed test/dev builds,
 and intermediate RCs may still be pruned normally.
 
+Publish the final build under an immutable GitHub Release tag, then add its
+version-isolated installer commands to `docs/public/OLD-VERSIONS.md`. The
+public README links that archive. Confirm the old-version command resolves,
+verifies the release checksum, and uses a distinct name/slug before promotion;
+`nightly-latest` remains the moving current channel and is never an archival
+identity.
+
 One planned use is a chronological build-history timelapse showing the real
 game at each public version. The historical package therefore needs to remain
 launchable on its own; preserve its launch instructions and any runtime flags

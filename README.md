@@ -114,6 +114,13 @@ unsigned and may show SmartScreen. Steam Deck users should install from Desktop 
 **Last Singularity** from **Library → Non-Steam** in Gaming Mode. Advanced
 options and Deck troubleshooting are in the
 [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
+Downloaded platform packages also include `START-HERE.md` with direct launch
+instructions.
+
+Want a previous final build? Use the version-pinned commands on the
+[Old Versions](docs/public/OLD-VERSIONS.md) page. Historical installs use
+separate folders, saves, logs, launchers, and Steam shortcuts, so they can live
+beside the current game.
 
 First launch flow:
 

@@ -19,6 +19,9 @@ fs.mkdirSync(bin);
 assert.match(windowsInstaller, /OSArchitecture/, 'Windows installer must detect the native architecture');
 assert.match(windowsInstaller, /last-singularity-win-nightly\.zip/, 'Windows x64 must select the Windows release asset');
 assert.match(windowsInstaller, /current public build requires x64 Windows/, 'unsupported Windows architectures must fail clearly');
+assert.match(windowsInstaller, /\$Name\.lnk/, 'Windows historical installs must own a distinct shortcut name');
+assert.match(windowsInstaller, /Programs\\\$folder/, 'Windows historical installs must own a distinct install folder');
+assert.match(windowsInstaller, /--user-data-dir=.*\$Slug/, 'Windows historical installs must own separate user data');
 
 function zipFixture(name, platform) {
   const staging = path.join(temp, `stage-${platform}`);
@@ -108,6 +111,22 @@ let result = run(['--dry-run']);
 assert.strictEqual(result.status, 0, result.stderr);
 assert.match(result.stdout, /Platform: Linux\/x64/);
 assert.match(result.stdout, /Version: nightly-latest/);
+assert.match(result.stdout, /Name: Last Singularity/);
+
+result = run([
+  '--version', 'v0.2.2-final',
+  '--name', 'Last Singularity v0.2',
+  '--slug', 'last-singularity-v02',
+  '--dry-run',
+], { LBH_TEST_STEAMOS: '1' });
+assert.strictEqual(result.status, 0, result.stderr);
+assert.match(result.stdout, /Version: v0\.2\.2-final/);
+assert.match(result.stdout, /Name: Last Singularity v0\.2/);
+assert.match(result.stdout, /Games\/last-singularity-v02/);
+
+result = run(['--slug', '../current', '--dry-run']);
+assert.notStrictEqual(result.status, 0);
+assert.match(result.stderr, /slug must use lowercase letters/);
 
 result = run(['--dry-run'], { LBH_TEST_STEAMOS: '1' });
 assert.strictEqual(result.status, 0, result.stderr);
@@ -137,6 +156,12 @@ result = run(['--no-launcher']);
 assert.notStrictEqual(result.status, 0);
 assert.match(result.stderr, /checksum mismatch/);
 
+writeRelease();
+result = run(['--no-launcher']);
+assert.notStrictEqual(result.status, 0);
+assert.match(result.stderr, /no verifiable SHA-256 metadata/);
+
+writeRelease({ checksums: true });
 writeSums(true);
 const installDir = path.join(temp, 'installed game');
 result = run(['--install-dir', installDir, '--no-launcher']);
@@ -152,5 +177,19 @@ assert.strictEqual(result.status, 0, result.stderr);
 assert.strictEqual(fs.readFileSync(path.join(saveDir, 'save.json'), 'utf8'), 'pilot-save\n');
 assert.ok(!fs.existsSync(path.join(installDir, 'old-app-bit')));
 assert.ok(fs.existsSync(`${installDir}.previous/old-app-bit`));
+
+const historicalDir = path.join(temp, 'home', 'Games', 'last-singularity-v02');
+result = run([
+  '--version', 'v0.2.2-final',
+  '--name', 'Last Singularity v0.2',
+  '--slug', 'last-singularity-v02',
+  '--no-launcher',
+], { LBH_TEST_STEAMOS: '1' });
+assert.strictEqual(result.status, 0, result.stderr);
+assert.ok(fs.existsSync(path.join(historicalDir, 'Last Singularity')));
+const historicalLauncher = fs.readFileSync(path.join(historicalDir, 'run-last-singularity.sh'), 'utf8');
+assert.match(historicalLauncher, /\.local\/state}\/last-singularity-v02/);
+assert.match(historicalLauncher, /--user-data-dir=.*last-singularity-v02/);
+assert.ok(fs.existsSync(installDir), 'historical install must not replace the current install');
 
 console.log('installer contract: passed');

@@ -106,6 +106,8 @@ version's final known-good source SHA and build identity, then preserve:
 - its checksum/build manifest and public GitHub Release assets;
 - its version-scoped install and non-Steam shortcut on Greg's review Steam
   Deck.
+- its immutable-tag entry and version-isolated one-click commands in
+  `docs/public/OLD-VERSIONS.md`, linked from the public README.
 
 For the v0.3.1 promotion, this means the final v0.2 package remains available
 and launchable after `main` advances and the v0.3 install becomes current.
@@ -117,6 +119,11 @@ outgoing historical build's source SHA, artifact paths/checksums, release URL,
 Deck install path, and shortcut verification. If the outgoing artifact is
 missing, rebuild it from its pinned source before promotion rather than
 silently losing the playable baseline.
+
+The historical installer must not reuse the current install slug, save-data
+namespace, logs, launcher name, desktop entry, or Steam shortcut. Publish the
+archive entry and verify its release URL before the promotion merge; a command
+that still resolves to mutable `nightly-latest` is not historical retention.
 
 These retained playables are also the source material for a future
 version-by-version progress timelapse. Promotion does not require a new media

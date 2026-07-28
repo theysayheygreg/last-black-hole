@@ -40,11 +40,13 @@ function run() {
   includes(workflow, "last-singularity-linux-nightly.zip", "Weekly workflow must publish the Linux Deck zip");
   includes(workflow, "START-HERE.md", "Weekly release zips must include playable instructions");
   includes(workflow, "BUILD-MANIFEST.json", "Weekly release zips must include build metadata");
+  includes(workflow, "install-steam-shortcut.py", "Linux release zip must carry its checksum-covered Steam helper");
   includes(workflow, "scripts/ci/package-nightly-assets.cjs", "Weekly workflow must use the checked-in CJS packager");
 
   const readme = fs.readFileSync(readmePath, "utf8");
   includes(readme, "## Playable Targets", "README must expose playable targets");
-  includes(readme, "scripts/install-steam-deck.sh | bash", "README must document the Deck installer command");
+  includes(readme, "scripts/install.sh | sh", "README must document the public Deck installer command");
+  includes(readme, "docs/public/OLD-VERSIONS.md", "README must link the preserved-version installer list");
   includes(readme, "docs/reference/STEAM-DECK-RUNBOOK.md", "README must link the Steam Deck runbook");
 
   console.log("Deck installer public pipeline guard passed.");

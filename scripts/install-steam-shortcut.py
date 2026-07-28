@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-NAME = "Last Singularity"
+DEFAULT_NAME = "Last Singularity"
 T_OBJECT, T_STRING, T_INT, T_UINT64, T_END = 0, 1, 2, 7, 8
 
 
@@ -83,11 +83,11 @@ def encode(shortcuts):
     return bytes([T_OBJECT]) + cstring("shortcuts") + encode_object(shortcuts) + bytes([T_END])
 
 
-def appid(exe):
-    return (binascii.crc32((exe + NAME).encode()) | 0x80000000) & 0xFFFFFFFF
+def appid(exe, name):
+    return (binascii.crc32((exe + name).encode()) | 0x80000000) & 0xFFFFFFFF
 
 
-def upsert(path, launcher, install_dir, desktop, icon):
+def upsert(path, launcher, install_dir, desktop, icon, name):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         shutil.copy2(path, path.with_suffix(".vdf.lbh-backup"))
@@ -99,7 +99,7 @@ def upsert(path, launcher, install_dir, desktop, icon):
             for key, item in shortcuts.items()
             if isinstance(item, dict)
             and (
-                item.get("AppName") == NAME
+                item.get("AppName") == name
                 or str(item.get("Exe", "")).strip('"') == str(launcher)
                 or item.get("ShortcutPath") == str(desktop)
             )
@@ -112,8 +112,8 @@ def upsert(path, launcher, install_dir, desktop, icon):
     existing = shortcuts.get(key, {}) if isinstance(shortcuts.get(key), dict) else {}
     existing.update(
         {
-            "appid": appid(exe),
-            "AppName": NAME,
+            "appid": appid(exe, name),
+            "AppName": name,
             "Exe": exe,
             "StartDir": f'"{install_dir}"',
             "icon": str(icon) if icon.exists() else "",
@@ -127,7 +127,7 @@ def upsert(path, launcher, install_dir, desktop, icon):
             "DevkitGameID": "",
             "LastPlayTime": 0,
             "FlatpakAppID": "",
-            "tags": {"0": NAME, "1": "Deck Playtest"},
+            "tags": {"0": name, "1": "Deck Playtest"},
         }
     )
     shortcuts[key] = existing
@@ -145,9 +145,10 @@ def upsert(path, launcher, install_dir, desktop, icon):
 
 
 def main():
-    if len(sys.argv) != 5:
-        raise SystemExit("usage: install-steam-shortcut.py LAUNCHER INSTALL_DIR DESKTOP ICON")
-    launcher, install_dir, desktop, icon = map(lambda value: Path(value).expanduser(), sys.argv[1:])
+    if len(sys.argv) not in (5, 6):
+        raise SystemExit("usage: install-steam-shortcut.py LAUNCHER INSTALL_DIR DESKTOP ICON [NAME]")
+    launcher, install_dir, desktop, icon = map(lambda value: Path(value).expanduser(), sys.argv[1:5])
+    name = sys.argv[5] if len(sys.argv) == 6 else DEFAULT_NAME
     userdata = Path.home() / ".steam/steam/userdata"
     explicit = os.environ.get("LBH_STEAM_USER_ID", "").strip()
     candidates = sorted(path for path in userdata.glob("*") if path.name.isdigit())
@@ -165,7 +166,7 @@ def main():
             if any(
                 isinstance(item, dict)
                 and (
-                    item.get("AppName") == NAME
+                    item.get("AppName") == name
                     or str(item.get("Exe", "")).strip('"') == str(launcher)
                 )
                 for item in shortcuts.values()
@@ -179,7 +180,7 @@ def main():
         else max(candidates, key=lambda item: (item / "config").stat().st_mtime if (item / "config").exists() else item.stat().st_mtime)
     )
     path = target / "config/shortcuts.vdf"
-    upsert(path, launcher, install_dir, desktop, icon)
+    upsert(path, launcher, install_dir, desktop, icon, name)
     print(f"[Last Singularity] Steam shortcut updated: {path}")
 
 

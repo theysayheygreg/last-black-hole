@@ -218,7 +218,7 @@ jobs:
       - name: Zip Linux artifact
         run: |
           cd dist/nightly
-          zip -rq last-singularity-linux-nightly.zip "Last Singularity-linux-x64" START-HERE.md BUILD-MANIFEST.json nightly-assets.json
+          zip -rq last-singularity-linux-nightly.zip "Last Singularity-linux-x64" START-HERE.md BUILD-MANIFEST.json nightly-assets.json install-steam-shortcut.py
 
       - name: Upload Linux release asset
         uses: actions/upload-artifact@v4

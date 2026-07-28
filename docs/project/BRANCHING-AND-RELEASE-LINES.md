@@ -134,6 +134,12 @@ locations. Intermediate development packages remain disposable. The protected
 artifact is one designated final known-good build per displaced public
 major/minor line.
 
+Before the merge, add the outgoing build to
+`docs/public/OLD-VERSIONS.md` and keep that page linked from the public README.
+Its one-click commands use an immutable release tag plus a version-specific
+display name and slug. They must install beside the current game rather than
+repointing its launcher, save data, logs, or Steam shortcut.
+
 ## Recovery
 
 Fix forward. Preserve committed history, do not reset shared work, and use a

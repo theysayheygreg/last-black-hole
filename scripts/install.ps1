@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
   [string]$Version = $(if ($env:LBH_RELEASE_TAG) { $env:LBH_RELEASE_TAG } else { "nightly-latest" }),
-  [string]$InstallDir = $(if ($env:LBH_INSTALL_DIR) { $env:LBH_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\Last Singularity" }),
+  [string]$Name = $(if ($env:LBH_DISPLAY_NAME) { $env:LBH_DISPLAY_NAME } else { "Last Singularity" }),
+  [string]$Slug = "last-singularity",
+  [string]$InstallDir = $env:LBH_INSTALL_DIR,
   [switch]$NoLauncher,
   [switch]$DryRun
 )
@@ -11,6 +13,16 @@ $repo = if ($env:LBH_REPO) { $env:LBH_REPO } else { "theysayheygreg/last-black-h
 $apiRoot = if ($env:LBH_GITHUB_API) { $env:LBH_GITHUB_API } else { "https://api.github.com" }
 $downloadRoot = if ($env:LBH_GITHUB_DOWNLOAD) { $env:LBH_GITHUB_DOWNLOAD } else { "https://github.com" }
 $asset = "last-singularity-win-nightly.zip"
+
+if ([string]::IsNullOrWhiteSpace($Name)) { throw "Name cannot be empty." }
+if ($Name -match "[\r\n]") { throw "Name must be a single line." }
+if ($Slug -notmatch "^[a-z0-9]+(?:-[a-z0-9]+)*$") {
+  throw "Slug must use lowercase letters, numbers, and internal hyphens."
+}
+if ([string]::IsNullOrWhiteSpace($InstallDir)) {
+  $folder = if ($Slug -eq "last-singularity") { "Last Singularity" } else { $Slug }
+  $InstallDir = Join-Path $env:LOCALAPPDATA "Programs\$folder"
+}
 
 $windowsArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 if ($windowsArch -ne "X64") {
@@ -24,6 +36,7 @@ if (-not $selectedAsset) { throw "Release '$Version' has no Windows x64 asset ($
 
 Write-Host "[Last Singularity] Platform: Windows/x64"
 Write-Host "[Last Singularity] Version: $Version"
+Write-Host "[Last Singularity] Name: $Name"
 Write-Host "[Last Singularity] Destination: $InstallDir"
 $assetUrl = "$downloadRoot/$repo/releases/download/$Version/$asset"
 if ($DryRun) {
@@ -52,7 +65,7 @@ try {
     if ($actual -ne $expected) { throw "Checksum mismatch for $asset." }
     Write-Host "[Last Singularity] SHA-256 verified"
   } else {
-    Write-Host "[Last Singularity] Release metadata does not publish a SHA-256 digest; continuing without verification"
+    throw "Release '$Version' has no verifiable SHA-256 metadata."
   }
 
   $extract = Join-Path $temp "extract"
@@ -78,8 +91,15 @@ try {
   if (-not $NoLauncher) {
     $startMenu = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
     New-Item -ItemType Directory -Path $startMenu -Force | Out-Null
-    $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $startMenu "Last Singularity.lnk"))
-    $shortcut.TargetPath = $exe
+    $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $startMenu "$Name.lnk"))
+    if ($Slug -eq "last-singularity") {
+      $shortcut.TargetPath = $exe
+    } else {
+      $launcher = Join-Path $InstallDir "run-last-singularity.cmd"
+      "@echo off`r`nstart `"`" `"%~dp0Last Singularity.exe`" --user-data-dir=`"%APPDATA%\$Slug`" %*`r`n" |
+        Set-Content -Encoding ASCII $launcher
+      $shortcut.TargetPath = $launcher
+    }
     $shortcut.WorkingDirectory = $InstallDir
     $shortcut.Save()
   }

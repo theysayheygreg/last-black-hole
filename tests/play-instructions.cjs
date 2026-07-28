@@ -25,7 +25,7 @@ function run() {
   includes(readme, "First launch flow:", "README must explain how to get from title screen into a run");
   includes(readme, "Go to `LAUNCH`", "README must describe the home-to-map launch step");
   includes(readme, "follow wormhole arrows", "README must describe the in-run extraction objective");
-  includes(readme, "scripts/install-steam-deck.sh | bash", "README must keep the public Deck install command visible");
+  includes(readme, "scripts/install.sh | sh", "README must keep the public Deck install command visible");
   includes(readme, "START-HERE.md", "README must point packaged-build testers at the generated instructions");
   includes(readme, "npm run stack:remote -- --sim=http://HOST:PORT", "README remote-client example must include the required sim URL");
 

@@ -101,6 +101,11 @@ Use a specific release/tag:
 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --version v0.2.2
 ```
 
+Preserved final releases use the complete version-isolated commands in
+[`docs/public/OLD-VERSIONS.md`](../public/OLD-VERSIONS.md). Those commands set
+both `--name` and `--slug`; do not omit them or the historical install could
+replace the current install's launcher and shortcut identity.
+
 Use a custom install directory from a checked-out copy:
 
 ```sh

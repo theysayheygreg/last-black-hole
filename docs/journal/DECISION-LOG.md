@@ -1999,6 +1999,10 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
   not the designated historical playable.
 - The v0.3.1 promotion therefore requires a final v0.2 artifact and Deck entry
   to remain usable after v0.3.1 becomes current.
+- Every displaced final build also receives an immutable GitHub Release tag
+  and a version-isolated one-click entry in `docs/public/OLD-VERSIONS.md`,
+  linked from the README before promotion. The installer identity includes its
+  own name, slug, install path, saves, logs, desktop entry, and Steam shortcut.
 - A future promo/history pass will use these real retained builds to create a
   version-by-version development timelapse. Footage is not a promotion gate;
   independently launchable build history is the prerequisite.

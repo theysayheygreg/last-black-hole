@@ -2,6 +2,7 @@
 set -eu
 
 PRODUCT="Last Singularity"
+DISPLAY_NAME="${LBH_DISPLAY_NAME:-$PRODUCT}"
 SLUG="last-singularity"
 REPO="${LBH_REPO:-theysayheygreg/last-black-hole}"
 TAG="${LBH_RELEASE_TAG:-nightly-latest}"
@@ -27,13 +28,16 @@ usage() {
   cat <<'EOF'
 Install the latest public Last Singularity weekly build.
 
-Usage: install.sh [--version TAG] [--install-dir PATH] [--no-launcher] [--dry-run]
+Usage: install.sh [--version TAG] [--name NAME] [--slug SLUG]
+                  [--install-dir PATH] [--no-launcher] [--dry-run]
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --version) [ "$#" -ge 2 ] || fail "--version needs a release tag"; TAG="$2"; shift 2 ;;
+    --name) [ "$#" -ge 2 ] || fail "--name needs a display name"; DISPLAY_NAME="$2"; shift 2 ;;
+    --slug) [ "$#" -ge 2 ] || fail "--slug needs an install identity"; SLUG="$2"; shift 2 ;;
     --install-dir) [ "$#" -ge 2 ] || fail "--install-dir needs a path"; INSTALL_DIR="$2"; shift 2 ;;
     --no-launcher) NO_LAUNCHER=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -41,6 +45,16 @@ while [ "$#" -gt 0 ]; do
     *) fail "unknown option: $1" ;;
   esac
 done
+
+[ -n "$DISPLAY_NAME" ] || fail "--name cannot be empty"
+case "$DISPLAY_NAME" in
+  *'
+'*|*'
+'*) fail "--name must be a single line" ;;
+esac
+case "$SLUG" in
+  ""|*[!a-z0-9-]*|-*|*-) fail "--slug must use lowercase letters, numbers, and internal hyphens" ;;
+esac
 
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v unzip >/dev/null 2>&1 || fail "unzip is required"
@@ -58,7 +72,7 @@ case "$kernel" in
     platform="macOS"
     [ "$arch" = arm64 ] || fail "the current public macOS build supports Apple silicon (arm64) only"
     asset="last-singularity-mac-nightly.zip"
-    [ -n "$INSTALL_DIR" ] || INSTALL_DIR="$HOME/Applications/$PRODUCT.app"
+    [ -n "$INSTALL_DIR" ] || INSTALL_DIR="$HOME/Applications/$DISPLAY_NAME.app"
     ;;
   Linux)
     [ "$arch" = x64 ] || fail "the current public Linux build supports x64 only"
@@ -101,6 +115,7 @@ zip="$tmp/$asset"
 asset_url="$DOWNLOAD_ROOT/$REPO/releases/download/$TAG/$asset"
 log "Platform: $platform/$arch"
 log "Version: $TAG"
+log "Name: $DISPLAY_NAME"
 log "Destination: $INSTALL_DIR"
 if [ "$DRY_RUN" = 1 ]; then
   log "Would download $asset_url"
@@ -136,7 +151,7 @@ elif grep -Eq '"name":[[:space:]]*"SHA256SUMS"' "$release_json"; then
   [ "$actual" = "$expected" ] || fail "checksum mismatch for $asset"
   log "SHA-256 verified"
 else
-  log "Release metadata does not publish a SHA-256 digest; continuing without verification"
+  fail "release '$TAG' has no verifiable SHA-256 metadata"
 fi
 
 extract="$tmp/extract"
@@ -169,7 +184,17 @@ fi
 
 if [ "$platform" = macOS ]; then
   log "Installed $PRODUCT.app"
-  log "Launch: open \"$INSTALL_DIR\""
+  if [ "$SLUG" = last-singularity ]; then
+    log "Launch: open \"$INSTALL_DIR\""
+  else
+    mac_launcher="${INSTALL_DIR%.app}.command"
+    cat > "$mac_launcher" <<EOF
+#!/bin/sh
+exec open "$INSTALL_DIR" --args "--user-data-dir=\${HOME}/Library/Application Support/$SLUG"
+EOF
+    chmod +x "$mac_launcher"
+    log "Launch: \"$mac_launcher\""
+  fi
   log "This build is ad-hoc signed, not notarized. If macOS blocks it, Control-click the app and choose Open once."
   exit 0
 fi
@@ -182,7 +207,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export LBH_DECK=1
 export ELECTRON_ENABLE_LOGGING="${ELECTRON_ENABLE_LOGGING:-1}"
-LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/last-singularity"
+LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/__LBH_SLUG__"
 mkdir -p "$LOG_DIR"
 for name in deck-launch electron; do
   if [ -f "$LOG_DIR/$name.log" ]; then
@@ -198,15 +223,29 @@ if [ -n "${LBH_DECK_EXTRA_FLAGS:-}" ]; then
   read -r -a USER_EXTRA_FLAGS <<< "$LBH_DECK_EXTRA_FLAGS"
   EXTRA_FLAGS+=("${USER_EXTRA_FLAGS[@]}")
 fi
+if [ "__LBH_ISOLATED__" = 1 ]; then
+  EXTRA_FLAGS+=("--user-data-dir=${XDG_CONFIG_HOME:-$HOME/.config}/__LBH_SLUG__")
+fi
 exec "./Last Singularity" --no-sandbox --disable-gpu-sandbox --ignore-gpu-blocklist --ozone-platform=x11 --enable-logging=stderr "${EXTRA_FLAGS[@]}" "$@" >>"$LOG_DIR/deck-launch.log" 2>&1
 EOF
+  isolated=1
+  [ "$SLUG" != last-singularity ] || isolated=0
+  sed -e "s/__LBH_SLUG__/$SLUG/g" -e "s/__LBH_ISOLATED__/$isolated/g" "$launcher" > "$launcher.tmp"
+  mv "$launcher.tmp" "$launcher"
 else
   cat > "$launcher" <<'EOF'
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")"
+if [ "__LBH_ISOLATED__" = 1 ]; then
+  exec "./Last Singularity" "--user-data-dir=${XDG_CONFIG_HOME:-$HOME/.config}/__LBH_SLUG__" "$@"
+fi
 exec "./Last Singularity" "$@"
 EOF
+  isolated=1
+  [ "$SLUG" != last-singularity ] || isolated=0
+  sed -e "s/__LBH_SLUG__/$SLUG/g" -e "s/__LBH_ISOLATED__/$isolated/g" "$launcher" > "$launcher.tmp"
+  mv "$launcher.tmp" "$launcher"
 fi
 chmod +x "$launcher"
 
@@ -217,7 +256,7 @@ if [ "$NO_LAUNCHER" = 0 ]; then
   cat > "$desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=$PRODUCT
+Name=$DISPLAY_NAME
 Exec="$launcher"
 Path=$INSTALL_DIR
 Icon=$INSTALL_DIR/last-singularity-icon.png
@@ -234,11 +273,17 @@ EOF
       cp "$desktop" "$deck_desktop/$PRODUCT.desktop"
       chmod +x "$deck_desktop/$PRODUCT.desktop"
     fi
-    helper="${LBH_STEAM_SHORTCUT_HELPER:-}"
+    helper="${LBH_STEAM_SHORTCUT_HELPER:-$extract/install-steam-shortcut.py}"
     if [ -z "$helper" ]; then
+      helper="$extract/install-steam-shortcut.py"
+    fi
+    if [ ! -f "$helper" ] && [ "$TAG" = nightly-latest ]; then
       helper="$tmp/install-steam-shortcut.py"
       curl -fsSL "https://raw.githubusercontent.com/$REPO/main/scripts/install-steam-shortcut.py" -o "$helper" ||
         helper=""
+    elif [ ! -f "$helper" ]; then
+      helper=""
+      log "Historical release has no bundled Steam shortcut helper; Desktop Mode launcher only"
     fi
     steam_closed=1
     if command -v pgrep >/dev/null 2>&1 &&
@@ -259,7 +304,7 @@ EOF
     if [ "$steam_closed" = 0 ]; then
       log "Steam did not exit; Gaming Mode shortcut was left unchanged"
     elif [ -n "$helper" ] && command -v python3 >/dev/null 2>&1; then
-      python3 "$helper" "$launcher" "$INSTALL_DIR" "$desktop" "$INSTALL_DIR/last-singularity-icon.png" ||
+      python3 "$helper" "$launcher" "$INSTALL_DIR" "$desktop" "$INSTALL_DIR/last-singularity-icon.png" "$DISPLAY_NAME" ||
         log "Steam shortcut was not changed; close Steam and rerun to register Gaming Mode"
     else
       log "Steam shortcut helper unavailable; Desktop Mode launcher was installed"
