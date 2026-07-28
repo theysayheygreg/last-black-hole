@@ -30,9 +30,13 @@ const extractedResult = {
     { id: "cargo-b", name: "Quiet Core", value: 80, tier: 3, category: "salvage" },
   ],
   cargoLost: [],
-  signalPeak: 0.82,
-  signalPeakZone: "flare",
-  inhibitorFormReached: 2,
+  noiseMaxMeters: 820,
+  noiseSource: "SALVAGE",
+  noiseTimeHeardSeconds: 52,
+  noiseTimeTrackedSeconds: 18,
+  ecologyPhaseReached: 2,
+  ecologyCounts: { glitch: 2, swarm: 1 },
+  ecologyKindsReached: ["glitch", "swarm"],
   emEarned: 90,
   aiOutcomes: [
     { personality: "raider", hullType: "breacher", outcome: "dead", cargoCount: 1 },
@@ -56,9 +60,13 @@ const deathResult = {
   survivalTime: 64,
   cargoExtracted: [],
   cargoLost: [{ id: "lost-a", name: "Drowned Core", value: 75, tier: 2, category: "artifact" }],
-  signalPeak: 0.91,
-  signalPeakZone: "threshold",
-  inhibitorFormReached: 3,
+  noiseMaxMeters: 640,
+  noiseSource: "IMPACT",
+  noiseTimeHeardSeconds: 30,
+  noiseTimeTrackedSeconds: 8,
+  ecologyPhaseReached: 3,
+  ecologyCounts: { glitch: 2, swarm: 2, vessel: 1 },
+  ecologyKindsReached: ["glitch", "swarm", "vessel"],
   emEarned: 16,
   aiOutcomes: [{ personality: "redline", hullType: "breacher", outcome: "extracted", cargoCount: 4 }],
   notables: [{ type: "death_cause", description: "consumed by Charybdis", value: "well" }],
@@ -81,7 +89,7 @@ async function run() {
     await page.reload({ waitUntil: "domcontentloaded" });
     await sleep(2000);
 
-    await runner.run("Extraction result view exposes cargo, signal, inhibitor, earnings, AI, and notables", async () => {
+    await runner.run("Extraction result view exposes cargo, Noise, ecology, earnings, AI, and notables", async () => {
       const ok = await page.evaluate((result) => window.__TEST_API.showRunResultsFixture(result), extractedResult);
       assert(ok, "Expected fixture injection to succeed");
       await waitFor(page, () => window.__TEST_API.getGamePhase() === "escaped");
@@ -89,8 +97,11 @@ async function run() {
       const view = await page.evaluate(() => window.__TEST_API.getRunResultsView());
       assert(view.status === "EXTRACTED", `Expected extracted status, got ${view.status}`);
       assert(view.survival === "3:43", `Expected survival 3:43, got ${view.survival}`);
-      assert(view.signalPeakLabel === "FLARE (0.82)", `Expected signal peak label, got ${view.signalPeakLabel}`);
-      assert(view.inhibitorLabel === "swarm", `Expected inhibitor swarm, got ${view.inhibitorLabel}`);
+      assert(view.noiseSummary === "820m · SALVAGE", `Expected Noise summary, got ${view.noiseSummary}`);
+      assert(view.noiseTimeSummary === "52s heard · 18s tracked",
+        `Expected Noise timing summary, got ${view.noiseTimeSummary}`);
+      assert(view.ecologyLabel === "PHASE 2 · GLITCH 2 / SWARM 1",
+        `Expected ecology summary, got ${view.ecologyLabel}`);
       assert(view.cargoTitle === "CARGO EXTRACTED", `Expected extracted cargo title, got ${view.cargoTitle}`);
       assert(view.cargoCount === 2, `Expected two extracted cargo items, got ${view.cargoCount}`);
       assert(view.cargoValue === 200, `Expected 200 EM salvage value, got ${view.cargoValue}`);
@@ -107,7 +118,9 @@ async function run() {
       assert(view.status === "CONSUMED BY CHARYBDIS", `Expected well death status, got ${view.status}`);
       assert(view.cargoTitle === "CARGO LOST", `Expected lost cargo title, got ${view.cargoTitle}`);
       assert(view.deathCause === "well: Charybdis", `Expected death cause context, got ${view.deathCause}`);
-      assert(view.inhibitorLabel === "vessel", `Expected vessel form, got ${view.inhibitorLabel}`);
+      assert(view.noiseSummary === "640m · IMPACT", `Expected Noise summary, got ${view.noiseSummary}`);
+      assert(view.ecologyLabel === "PHASE 3 · GLITCH 2 / SWARM 2 / VESSEL 1",
+        `Expected ecology summary, got ${view.ecologyLabel}`);
       assert(view.cargoLabels[0].includes("Drowned Core"), "Expected lost cargo label");
       assert(view.aiLines[0].includes("redline") && view.aiLines[0].includes("4 cargo"), "Expected AI outcome cargo count");
     });

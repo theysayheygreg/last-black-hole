@@ -216,7 +216,6 @@ async function run() {
         signature: !!document.getElementById('hud-signature'),
         warnings: !!document.getElementById('hud-warnings'),
         inventory: !!document.getElementById('hud-inventory-panel'),
-        portalArrow: !!document.getElementById('hud-portal-arrow'),
       }));
       for (const [name, exists] of Object.entries(elements)) {
         assert(exists, `Missing HUD element: ${name}`);

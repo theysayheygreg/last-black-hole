@@ -117,7 +117,10 @@ async function run() {
         { clientId: "local", isAI: false },
         { clientId: "remote", isAI: false },
       ],
-      inhibitor: { form: 2 },
+      inhibitor: {
+        phase: 2,
+        entities: [{ id: "inhibitor-swarm-fixture", kind: "swarm", lifecycle: "alive" }],
+      },
       world: { authoritativeField: { columns: 2 } },
     };
     const classification = classifyRemoteSnapshot({ runId: "run-a", tick: 4, simTime: 2 }, incoming);

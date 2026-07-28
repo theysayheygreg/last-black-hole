@@ -453,30 +453,31 @@ async function run() {
 
     await startFreshRemoteGroup();
 
-    await runner.run("Remote debug can force and reset authoritative inhibitor state", async () => {
-      const snapshot = await getSnapshot();
-      const ws = snapshot.session?.worldScale || 5;
+    await runner.run("Remote debug can force and reset authoritative inhibitor phase and collection state", async () => {
       const forced = await postDebugInhibitorState({
-        form: 2,
-        wx: ws * 0.42,
-        wy: ws * 0.47,
-        radius: 0.25,
-        intensity: 0.85,
-        localTime: 12,
-        swarmTargetX: ws * 0.5,
-        swarmTargetY: ws * 0.5,
+        phase: 2,
       });
       assert(forced.ok === true, "Expected debug inhibitor force to succeed");
-      assert(forced.snapshot?.inhibitor?.form === 2, `Expected forced swarm form, got ${forced.snapshot?.inhibitor?.form}`);
-      assert(forced.snapshot.inhibitor.intensity >= 0.8, "Expected forced inhibitor intensity in snapshot");
+      assert(forced.snapshot?.inhibitor?.phase === 2,
+        `Expected forced Inhibitor phase 2, got ${forced.snapshot?.inhibitor?.phase}`);
+
+      let current = forced.snapshot;
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline
+        && !current.inhibitor?.entities?.some((entity) => entity.kind === "swarm")) {
+        await sleep(100);
+        current = await getSnapshot();
+      }
+      const swarm = current.inhibitor?.entities?.find((entity) => entity.kind === "swarm");
+      assert(swarm?.kind === "swarm" && swarm.lifecycle !== "expired",
+        "Expected phase 2 to publish a live Swarm collection entity");
 
       const reset = await postDebugInhibitorState({
-        form: 0,
-        intensity: 0,
-        radius: 0,
+        phase: 0,
       });
       assert(reset.ok === true, "Expected debug inhibitor reset to succeed");
-      assert(reset.snapshot?.inhibitor?.form === 0, `Expected reset inhibitor form 0, got ${reset.snapshot?.inhibitor?.form}`);
+      assert(reset.snapshot?.inhibitor?.phase === 0,
+        `Expected reset Inhibitor phase 0, got ${reset.snapshot?.inhibitor?.phase}`);
     });
 
     await startFreshSimGroup();
@@ -652,12 +653,11 @@ async function run() {
 
     await startFreshSimGroup();
 
-    await runner.run("Remote signal follows delivered thrust, not empty-tank intent", async () => {
-      const clientId = "remote-signal-output-test";
-      await withDirectClient({ clientId, name: "Signal Output Test" }, async () => {
+    await runner.run("Remote Noise stays quiet for thrust that cannot be delivered", async () => {
+      const clientId = "remote-noise-output-test";
+      await withDirectClient({ clientId, name: "Noise Output Test" }, async () => {
         const snapshot = await getSnapshot();
         const point = chooseSafePoint(snapshot, 2);
-        const baselineSignal = 0.35;
         const placed = await postDebugPlayerState({
           clientId,
           wx: point.wx,
@@ -665,11 +665,11 @@ async function run() {
           vx: 0,
           vy: 0,
           deltaV: 0,
-          signalLevel: baselineSignal,
+          noiseRadiusMeters: 0,
           timeSinceThrust: 0,
           status: "alive",
         });
-        assert(placed.ok === true, "Expected debug player placement before signal output test");
+        assert(placed.ok === true, "Expected debug player placement before Noise output test");
         const beforeTick = placed.snapshot?.tick || snapshot.tick || 0;
 
         await postInput({
@@ -687,11 +687,11 @@ async function run() {
           clientId,
           (remotePlayer, currentSnapshot) =>
             currentSnapshot.tick >= beforeTick + 4 &&
-            remotePlayer.signal?.level <= baselineSignal + 0.02,
+            Number(remotePlayer.noise?.audibleRadiusMeters) <= 1,
           { timeout: 8000 }
         );
-        assert(player.signal.level <= baselineSignal + 0.02,
-          `Expected empty-tank thrust intent not to create thrust signal by tick ${after.tick}, got ${player.signal.level}`);
+        assert(Number(player.noise?.audibleRadiusMeters) <= 1,
+          `Expected empty-tank thrust intent not to create Noise by tick ${after.tick}, got ${player.noise?.audibleRadiusMeters}`);
       });
     });
 

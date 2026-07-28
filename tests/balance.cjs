@@ -90,7 +90,7 @@ async function run() {
     const hulls = HULL_DEFINITIONS;
     assert(hulls.breacher.thrustScale > hulls.drifter.thrustScale, "Breacher should out-thrust Drifter");
     assert(hulls.drifter.currentCoupling > hulls.breacher.currentCoupling, "Drifter should read current better than Breacher");
-    assert(hulls.shroud.signalGenMult < hulls.hauler.signalGenMult, "Shroud should be quieter than Hauler");
+    assert(hulls.shroud.noiseRadiusMultiplier < hulls.hauler.noiseRadiusMultiplier, "Shroud should be quieter than Hauler");
     assert(hulls.hauler.cargoSlots > hulls.shroud.cargoSlots, "Hauler should carry more than Shroud");
     assert(hulls.resonant.pulseRadiusScale > hulls.shroud.pulseRadiusScale, "Resonant should own pulse space");
   });

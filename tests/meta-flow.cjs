@@ -251,7 +251,8 @@ async function run() {
             emEarned: 90,
             cargoCount: 2,
             cargoValue: 200,
-            signalPeakZone: "flare",
+            noiseMaxMeters: 640,
+            noiseSource: "PULSE",
             notable: "new milestone: DEEP DIVE",
           },
           {
@@ -298,9 +299,11 @@ async function run() {
             { id: "em-a", name: "Sungold Core", value: 140, tier: 2, category: "salvage" },
           ],
           emEarned: 75,
-          signalPeakZone: "whisper",
-          signalPeak: 0.22,
-          inhibitorFormReached: 0,
+          noiseMaxMeters: 220,
+          noiseSource: "THRUST",
+          ecologyPhaseReached: 0,
+          ecologyCounts: {},
+          ecologyKindsReached: [],
           notables: [{ type: "cargo", description: "first cargo made it home" }],
         }, "escaped");
       });

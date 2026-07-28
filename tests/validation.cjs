@@ -766,8 +766,8 @@ runner.run('Hull server/client manifests stay in sync', () => {
 runner.run('Hull definitions expose movement, delta-v, and slingshot truth', () => {
   const requiredNumeric = [
     'thrustScale', 'dragScale', 'currentCoupling',
-    'signalGenMult', 'signalDecayMult',
-    'pulseRadiusScale', 'pulseCooldownScale', 'pulseSignalScale',
+    'noiseRadiusMultiplier', 'noiseDecayMultiplier',
+    'pulseRadiusScale', 'pulseCooldownScale', 'pulseNoiseRadiusScale',
     'cargoSlots', 'pickupRadius', 'sensorRange',
     'wellResistScale', 'controlDebuffResist',
     'deltaVMax', 'deltaVBurnEff', 'deltaVRegen', 'deltaVRegenBoost',
