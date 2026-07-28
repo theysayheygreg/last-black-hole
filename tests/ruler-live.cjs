@@ -115,12 +115,25 @@ async function placePlayer(clientId, body) {
       window.__TEST_API.setConfig('ui.motion.reduced', true);
     });
     await sleep(350);
-    await page.keyboard.press('KeyF');
+    // The live contract is a held action: the rising edge queues engagement,
+    // then the authority keeps the orbit until the button-up packet arrives.
+    // BrowserPage.keyboard.press() releases in the same turn and can be
+    // invisible to the 60 Hz input poll, so keep F down through the proof.
+    const engageStartedAt = Date.now();
+    await page.keyboard.down('KeyF');
 
     const slingshotPlayer = await waitFor(
       async () => (await snapshot()).players.find((player) => player.clientId === network.clientId),
       (player) => player?.slingshot?.engaged === true,
       'authoritative slingshot engage',
+    );
+    const engagedAt = Date.now();
+    await sleep(320);
+    const heldPlayer = await waitFor(
+      async () => (await snapshot()).players.find((player) => player.clientId === network.clientId),
+      (player) => player?.slingshot?.engaged === true,
+      'held authoritative slingshot orbit',
+      1500,
     );
     await page.keyboard.down('KeyW');
     const overlay = await waitFor(
@@ -136,12 +149,25 @@ async function placePlayer(clientId, body) {
     const activeForces = activeForceNames(movementPlayer);
     await page.screenshot({ path: CAPTURE_PATH });
     await page.keyboard.up('KeyW');
+    await page.keyboard.up('KeyF');
+    const releasedPlayer = await waitFor(
+      async () => (await snapshot()).players.find((player) => player.clientId === network.clientId),
+      (player) => player?.slingshot?.engaged === false,
+      'authoritative slingshot release after F button-up',
+      5000,
+    );
 
     console.log(JSON.stringify({
       capturePath: CAPTURE_PATH,
       handlers: overlay.handlerCount,
       forceTick: overlay.forceTick,
       slingshotEngaged: slingshotPlayer.slingshot.engaged,
+      heldSlingshotEngaged: heldPlayer.slingshot.engaged,
+      releasedSlingshotEngaged: releasedPlayer.slingshot.engaged,
+      timingsMs: {
+        engage: engagedAt - engageStartedAt,
+        release: Date.now() - engagedAt,
+      },
       speed: Math.hypot(movementPlayer.vx, movementPlayer.vy),
       activeForces,
       geometry: overlay.geometry,
