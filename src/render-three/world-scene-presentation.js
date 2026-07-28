@@ -652,7 +652,6 @@ export class WorldScenePresentation {
         totalTime * 1.3 + index,
         0.055,
       );
-      if (ring) semanticCount += 1;
       const core = addEntity(
         this.entityGeometries.disc,
         this.entityMaterials.inhibitorCore,
@@ -662,7 +661,6 @@ export class WorldScenePresentation {
         0,
         0.065,
       );
-      if (core) entityCount += 1;
       this._recordSpriteState('inhibitors', inhibitor, ring || core ? 'visible' : 'offscreen-cull', radius, inhibitor.kind || 'inhibitor');
     }
     // Wave growth remains authoritative fabric state. Product Three mode does

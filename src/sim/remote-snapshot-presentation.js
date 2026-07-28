@@ -106,6 +106,7 @@ export function projectRemoteWorldPatch(world, {
   const patch = {
     authoritativeField: world.authoritativeField || null,
   };
+  if (Number.isFinite(Number(world.growthTimer))) patch.growthTimer = Math.max(0, Number(world.growthTimer));
   if (Array.isArray(world.waveRings)) {
     patch.waveRings = world.waveRings.map((remote) => ({
       sourceWX: remote.sourceWX,

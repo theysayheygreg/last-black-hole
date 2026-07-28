@@ -179,6 +179,7 @@ function projectWorld({
   waveRings,
   collapseEpochState,
   collapseEpochSchedule,
+  growthTimer,
   getAuthoritativeField,
 }) {
   const worldNoise = NOISE_CONFIG.world || {};
@@ -247,6 +248,7 @@ function projectWorld({
       parameterVector: { ...collapseEpochState.parameterVector },
     } : null,
     collapseEpochSchedule,
+    growthTimer: Math.max(0, Number(growthTimer) || 0),
     authoritativeField: getAuthoritativeField(),
   };
 }

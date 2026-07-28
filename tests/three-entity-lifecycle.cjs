@@ -90,7 +90,7 @@ async function run() {
       },
     };
     presentation.entityMaterials = {};
-    presentation.vfxManager = { geometries: {} };
+    presentation.vfxManager = { geometries: {}, dispose() {} };
     presentation.currentProjection = createWorldProjection({ x: 0, y: 0, worldScale: 3, view: 3 }, 1);
     presentation.lastSceneState = { cameraX: 0, cameraY: 0, worldScale: 3, cameraView: 3 };
     presentation._addContrastBacking = () => {};
@@ -240,9 +240,10 @@ async function run() {
 
     const reset = sceneSource.slice(sceneSource.indexOf('  reset({ phase, runId }'), sceneSource.indexOf('  _buildBackdropLayers'));
     assert(reset.includes('family.reset()') && reset.includes('temporalVisibility.reset')
+      && reset.includes('this.vfxManager.reset()')
       && !reset.includes('prevCamera') && !reset.includes('motion.set')
-      && !reset.includes('Pool.length') && !reset.includes('vfxManager.reset'),
-    'Phase/run reset must not invent broader motion, pool, or VFX clearing');
+      && !reset.includes('Pool.length'),
+    'Phase/run reset must clear owned visual families and VFX without rebuilding pools');
 
     const sync = sceneSource.slice(sceneSource.indexOf('  _syncWorldScene'), sceneSource.indexOf('  _describeWorldLayers'));
     const familyOrder = ['visualFamilies.portal.update', 'visualFamilies.wreck.update',

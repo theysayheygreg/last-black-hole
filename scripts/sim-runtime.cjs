@@ -1849,6 +1849,7 @@ function snapshotBody({ force = false } = {}) {
       waveRings: runtime.waveRings,
       collapseEpochState: runtime.collapseEpochState,
       collapseEpochSchedule: runtime.collapseEpochSchedule,
+      growthTimer: runtime.growthTimer,
       getAuthoritativeField: getAuthorityFieldPacket,
     },
     inhibitor: runtime.inhibitor,

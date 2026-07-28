@@ -111,7 +111,9 @@ function simulateEcology(totalActiveCap, durationSeconds) {
     if (activeCount < totalActiveCap && !reachedCap) timings.before.push(elapsed);
     else if (activeCount === totalActiveCap && !reachedCap) {
       timings.atCap.push(elapsed);
-      reachedCap = true;
+      // Keep a short deterministic window at the exact cap, then classify the
+      // remaining ticks as after-cap steady-state work.
+      if (timings.atCap.length >= 15) reachedCap = true;
     } else if (reachedCap) timings.after.push(elapsed);
   }
   return {
@@ -186,6 +188,9 @@ async function run() {
   assert(rendererSource.includes("this.vfxManager.dispose()"), "Renderer disposal must close the VFX manager lifecycle");
   const { VisualFamilyLifecycle } = await import("../src/render-three/entities/visual-family.js");
   const { VfxManager } = await import("../src/render-three/vfx/vfx-manager.js");
+  const { WorldScenePresentation } = await import("../src/render-three/world-scene-presentation.js");
+  const { createPresentationSceneSource } = await import("../src/presentation/scene-source.js");
+  const { createPresentationFrame } = await import("../src/presentation/presentation-frame.js");
   const THREE = await import("../node_modules/three/build/three.module.js");
   const family = new VisualFamilyLifecycle("reset-probe").create();
   family.reset();
@@ -196,6 +201,49 @@ async function run() {
   vfx.dispose();
   assert.strictEqual(vfx.getStats().resetCount, 2, "VFX manager must count run reset and dispose reset");
   assert.strictEqual(vfx.getStats().disposeCount, 1, "VFX manager must count disposal once");
+
+  const renderer = new WorldScenePresentation({ renderQuality: "minimal" });
+  const renderEntityCount = (counts, runId, totalTime) => {
+    const inhibitors = [];
+    for (const [kind, count] of Object.entries(counts)) {
+      for (let index = 0; index < count; index += 1) {
+        inhibitors.push({
+          id: `renderer-${runId}-${kind}-${index}`,
+          kind,
+          wx: 0.1 + index * 0.01,
+          wy: 0.2 + index * 0.01,
+          radius: 0.1,
+          coreRadius: 0.045,
+          lifecycle: "alive",
+        });
+      }
+    }
+    const scene = createPresentationSceneSource({
+      phase: "playing",
+      localPlayer: { ship: { wx: 0, wy: 0, vx: 0, vy: 0 } },
+      world: { inhibitors },
+    });
+    const frame = createPresentationFrame({
+      phase: "playing",
+      runId,
+      frameId: Math.round(totalTime * 15),
+      scene,
+      timing: { dt: DT, totalTime },
+    });
+    renderer.update(frame);
+    return renderer.getStats().entityCount;
+  };
+  // The focused probe is headless; no player sprite is needed for the
+  // Inhibitor entity count, and avoiding its texture loader keeps this fixture
+  // independent of browser globals.
+  renderer.visualFamilies.player.update = () => {};
+  const rendererEntityCounts = {
+    before: renderEntityCount(baseline.maxCounts, "uncapped", 12),
+    atCap: renderEntityCount(capped.maxCounts, "capped", 24),
+  };
+  renderer.reset({ phase: "playing", runId: "new-run" });
+  rendererEntityCounts.after = renderEntityCount({}, "new-run", 0);
+  renderer.dispose();
 
   await startSimServer(PORT, {
     keepAlive: true,
@@ -280,6 +328,7 @@ async function run() {
     });
     authority = rejoined.authority;
     const afterReset = await waitFor((snapshot) => snapshot.session.runId === reset.session.runId);
+    await new Promise((resolve) => setTimeout(resolve, 400));
     const afterHealth = await get("/health");
     assert.strictEqual(afterReset.session.mapId, "deep-field", "Reset must install the requested new map");
     assert.strictEqual(afterReset.inhibitor.ecology.activeCount, 0, "New run must clear prior Inhibitor entities");
@@ -312,13 +361,26 @@ async function run() {
         suppressedByTotalCap: capped.suppressedByTotalCap,
         tickP95Ms: capped.tickP95Ms,
       },
+      rendererEntityCount: rendererEntityCounts,
       noisePrimed: {
         heardListenerCount: noisePrimed.players.find((entry) => entry.clientId === "cap-reset-pilot")?.noise?.heardListenerCount,
         tick: noisePrimed.tick,
       },
       authority: {
-        before: { pid: beforeHealth.process.pid, runId: oldRunId, sessionId: oldSessionId, tickP95Ms: preResetHealth.timing.tick.p95Ms },
-        after: { pid: afterHealth.process.pid, runId: afterReset.session.runId, sessionId: afterHealth.session.id, tickP95Ms: afterHealth.timing.tick.p95Ms },
+        before: {
+          pid: beforeHealth.process.pid,
+          runId: oldRunId,
+          sessionId: oldSessionId,
+          tickTiming: preResetHealth.timing.tick,
+          scheduler: preResetHealth.scheduler,
+        },
+        after: {
+          pid: afterHealth.process.pid,
+          runId: afterReset.session.runId,
+          sessionId: afterHealth.session.id,
+          tickTiming: afterHealth.timing.tick,
+          scheduler: afterHealth.scheduler,
+        },
         port: PORT,
         ballparkBefore: preResetHealth.ballpark.activeBodyCount,
         ballparkAfter: afterHealth.ballpark.activeBodyCount,

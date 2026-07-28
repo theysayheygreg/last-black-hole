@@ -5538,7 +5538,8 @@ function gameLoop(now) {
           : null,
       }),
     );
-    updateHUD(simState.runElapsedTime, portalSystem, cargoItems, simState.growthTimer, {
+    updateHUD(simState.runElapsedTime, portalSystem, cargoItems,
+      remoteSession.active ? (remoteSession.snapshot?.world?.growthTimer ?? 0) : simState.growthTimer, {
       terminal: gamePhase === 'dead' || authoritativePlayer?.status === 'dead' || ship.status === 'dead',
       scavengerSystem,
       combatSystem,
@@ -5562,6 +5563,9 @@ function gameLoop(now) {
         detail: 'remain inside cyan aperture',
         verb: 'extract',
       } : slingshotInteraction,
+      portalSchedule: remoteSession.active ? remoteSession.snapshot?.portalSchedule : null,
+      runDurationSeconds: remoteSession.active ? remoteSession.snapshot?.session?.runDurationSeconds : null,
+      wellCount: wellSystem?.wells?.length || 1,
       deckMode: isDeckMode(),
       lastInputSource: inputManager.lastInputSource,
       camX, camY,

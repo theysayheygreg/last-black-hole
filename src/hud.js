@@ -34,6 +34,7 @@ import {
   getInteractionPresentationState,
   getHUDPresentationState,
   getRouteObjectiveState,
+  resolveHudTimerState,
   getTerminalPresentationState,
   isExfilPortal,
   formatNoiseDetail,
@@ -47,6 +48,7 @@ export {
   getInteractionPresentationState,
   getHUDPresentationState,
   getRouteObjectiveState,
+  resolveHudTimerState,
   getTerminalPresentationState,
   isExfilPortal,
   formatNoiseDetail,
@@ -293,8 +295,15 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   const reducedMotion = opts.reducedMotion ?? motion.reducedMotion;
   _hudEl.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
 
-  const runDuration = CONFIG.universe.runDuration;
-  const remaining = Math.max(0, runDuration - runElapsedTime);
+  const timerState = resolveHudTimerState({
+    runElapsedTime,
+    runDurationSeconds: opts.runDurationSeconds ?? CONFIG.universe.runDuration,
+    growthTimer,
+    growthIntervalSeconds: CONFIG.events.growthInterval / Math.max(1, Number(opts.wellCount) || 1),
+    portalSchedule: opts.portalSchedule,
+    fallbackWaves: CONFIG.portals.waves,
+  });
+  const remaining = timerState.matchRemainingSeconds;
 
   // === COLLAPSE TIMER ===
   const collapseStr = fmtTime(remaining);
@@ -319,21 +328,10 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   }
 
   // Next event
-  const growthInterval = CONFIG.events.growthInterval;
-  const nextGrowth = growthInterval - (growthTimer % growthInterval);
-
-  const waves = CONFIG.portals.waves;
-  let nextWaveTime = null;
-  let nextWaveLabel = '';
-  let isFinalWave = false;
-  for (let i = 0; i < waves.length; i++) {
-    if (waves[i].time > runElapsedTime) {
-      nextWaveTime = waves[i].time - runElapsedTime;
-      isFinalWave = (i === waves.length - 1);
-      nextWaveLabel = isFinalWave ? 'last wormhole' : 'wormhole wave';
-      break;
-    }
-  }
+  const nextGrowth = timerState.nextGrowthSeconds;
+  const nextWaveTime = timerState.nextApertureSeconds;
+  const isFinalWave = timerState.nextApertureIsFinal;
+  const nextWaveLabel = isFinalWave ? 'final aperture' : 'aperture';
 
   let eventText = '';
   if (nextWaveTime !== null && nextWaveTime < nextGrowth) {

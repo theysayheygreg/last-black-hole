@@ -13,6 +13,36 @@ export function fmtSeconds(seconds) {
   return `${Math.ceil(Math.max(0, seconds || 0))}s`;
 }
 
+export function resolveHudTimerState({
+  runElapsedTime = 0,
+  runDurationSeconds = 0,
+  growthTimer = 0,
+  growthIntervalSeconds = 45,
+  portalSchedule = null,
+  fallbackWaves = [],
+} = {}) {
+  const elapsed = Math.max(0, Number(runElapsedTime) || 0);
+  const duration = Math.max(0, Number(runDurationSeconds) || 0);
+  const interval = Math.max(0.001, Number(growthIntervalSeconds) || 45);
+  const timer = Math.max(0, Number(growthTimer) || 0);
+  const windows = Array.isArray(portalSchedule?.windows) && portalSchedule.windows.length > 0
+    ? portalSchedule.windows.map((window) => ({
+      time: Number(window.openTime) || 0,
+      final: window.metadata?.finalExfil === true,
+    }))
+    : (Array.isArray(fallbackWaves) ? fallbackWaves.map((wave, index, waves) => ({
+      time: Number(wave.time) || 0,
+      final: index === waves.length - 1,
+    })) : []);
+  const nextWindow = windows.find((window) => window.time > elapsed) || null;
+  return {
+    matchRemainingSeconds: Math.max(0, duration - elapsed),
+    nextApertureSeconds: nextWindow ? Math.max(0, nextWindow.time - elapsed) : null,
+    nextApertureIsFinal: Boolean(nextWindow?.final),
+    nextGrowthSeconds: Math.max(0, interval - (timer % interval)),
+  };
+}
+
 export function formatRouteDistance(simUnits) {
   const meters = Math.max(0, simUnitsToMeters(Number(simUnits) || 0));
   if (meters >= 1000) {

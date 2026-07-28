@@ -9,6 +9,9 @@ async function run() {
   const hud = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'hud-presentation.js')).href);
   const layout = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'presentation-layout.js')).href);
   const loadout = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'loadout-presentation.js')).href);
+  const bindings = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'input-bindings.js')).href);
+  const remote = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'sim', 'remote-snapshot-presentation.js')).href);
+  const heat = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'presentation', 'heat-instrument.js')).href);
 
   const optional = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },
@@ -19,6 +22,46 @@ async function run() {
   );
   assert.strictEqual(optional.label, 'OPTIONAL APERTURE');
   assert.strictEqual(optional.detail, 'ROUTE: LISTEN');
+  const optionalPrompt = hud.getInteractionPresentationState({
+    visible: true,
+    action: 'extract',
+    label: 'confirm optional residence',
+    detail: 'remain inside cyan aperture',
+    verb: 'extract',
+  }, { mode: 'controller' });
+  assert.strictEqual(optionalPrompt.action, 'extract');
+  assert(optionalPrompt.caption.includes('data-input-family="controller"')
+    && optionalPrompt.caption.includes('>A</span>'),
+  'Optional residence must publish a ready extract prompt with controller A');
+
+  const finalReady = hud.getRouteObjectiveState(
+    { wx: 0.5, wy: 0.5 },
+    { activeCount: 1, portals: [{ type: 'exit', alive: true, wx: 0.8, wy: 0.5 }] },
+    null,
+    false,
+    { exfilHeard: true, portalInteraction: { portalId: 'final-1', portalType: 'exit', ready: true } },
+  );
+  assert.strictEqual(finalReady.label.startsWith('aperture '), true);
+  assert.strictEqual(finalReady.detail.includes('enter cyan aperture'), true);
+  const finalPrompt = hud.getInteractionPresentationState({
+    visible: true,
+    action: 'extract',
+    label: 'confirm extraction',
+    detail: 'remain inside cyan aperture',
+    verb: 'extract',
+  }, { mode: 'controller' });
+  const finalKeyboardPrompt = hud.getInteractionPresentationState({
+    visible: true,
+    action: 'extract',
+    label: 'confirm extraction',
+    detail: 'remain inside cyan aperture',
+    verb: 'extract',
+  }, { mode: 'keyboard' });
+  assert(finalPrompt.caption.includes('data-input-family="controller"')
+    && finalPrompt.caption.includes('>A</span>'),
+  'Final residence must publish a ready extract prompt with controller A');
+  assert(finalKeyboardPrompt.caption.includes('>Enter</span>'),
+    'Final residence must preserve explicit Enter confirmation');
 
   assert.strictEqual(layout.safeObjectLabel(undefined, 'STAR 1'), 'STAR 1');
   assert.strictEqual(layout.safeObjectLabel('undefined', 'PLANETOID 1'), 'PLANETOID 1');
@@ -52,6 +95,72 @@ async function run() {
   assert.strictEqual(hud.formatNoiseDetail({ currentSource: 'NOISE', heardListenerCount: 3 }), 'HEARD BY 3');
   assert(!hud.formatNoiseDetail({ currentSource: 'NOISE' }).includes('NOISE · NOISE'));
 
+  assert.strictEqual(bindings.ACTION_PROMPT_LABELS.extract.controller, 'A');
+  assert.deepStrictEqual(bindings.GAMEPAD_ACTION_BUTTONS.extract, [0]);
+
+  // Authority snapshots remain the clock source even when presentation is
+  // sampled at 5Hz against a 15Hz run. This deliberately skips two snapshots
+  // between draws so a render accumulator cannot masquerade as gameplay time.
+  const authorityHz = 15;
+  const presentationCadenceHz = 5;
+  const growthIntervalSeconds = 3;
+  const activePortal = { id: 'optional-1', type: 'standard', alive: true, wx: 0.5, wy: 0.5, spawnTime: 57, lifespan: 10 };
+  const portalSchedule = {
+    windows: [
+      { openTime: 60, metadata: { finalExfil: false } },
+      { openTime: 120, metadata: { finalExfil: true } },
+    ],
+  };
+  const displayed = [];
+  for (let tick = 0; tick <= authorityHz * 2; tick += 1) {
+    if (tick % (authorityHz / presentationCadenceHz) !== 0) continue;
+    const simTime = 58 + tick / authorityHz;
+    const growthTimer = (tick * 0.4) % growthIntervalSeconds;
+    const rawWorld = { growthTimer, portals: [activePortal] };
+    const projected = remote.projectRemoteSnapshot({
+      session: { runDurationSeconds: 120 },
+      simTime,
+      players: [],
+      world: rawWorld,
+    }, { elapsedTime: 0 });
+    const world = remote.projectRemoteWorldPatch(rawWorld);
+    const timers = hud.resolveHudTimerState({
+      runElapsedTime: projected.elapsedTime,
+      runDurationSeconds: projected.runDurationSeconds,
+      growthTimer: world.growthTimer,
+      growthIntervalSeconds,
+      portalSchedule,
+    });
+    const apertureSeconds = world.portals[0].timeLeft(projected.elapsedTime);
+    const heatState = heat.resolveHeatInstrumentState({
+      heatRatio: 1,
+      overheatRemaining: Math.max(0, 3 - (simTime - 58)),
+    });
+    displayed.push({
+      simTime: projected.elapsedTime,
+      matchRemaining: timers.matchRemainingSeconds,
+      matchLabel: hud.fmtTime(timers.matchRemainingSeconds),
+      apertureSeconds,
+      nextApertureSeconds: timers.nextApertureSeconds,
+      nextGrowthSeconds: timers.nextGrowthSeconds,
+      heatRemaining: heatState.overheatRemaining,
+    });
+  }
+  assert.strictEqual(displayed.length, 11);
+  for (let index = 1; index < displayed.length; index += 1) {
+    assert(displayed[index].simTime > displayed[index - 1].simTime,
+      'Slow presentation samples must consume newer authority simTime');
+    assert(displayed[index].matchRemaining < displayed[index - 1].matchRemaining,
+      'Displayed match timer must not freeze between slow presentation samples');
+    assert(displayed[index].apertureSeconds < displayed[index - 1].apertureSeconds,
+      'Displayed aperture residence timer must follow authority simTime');
+  }
+  assert(displayed.some((sample) => sample.matchLabel === '1:01'), 'Match timer must visibly cross a second boundary');
+  assert.strictEqual(displayed[0].nextApertureSeconds, 2);
+  assert.strictEqual(displayed[0].nextGrowthSeconds, 3);
+  assert(displayed[displayed.length - 1].heatRemaining < displayed[0].heatRemaining,
+    'Displayed Heat lockout must follow authority cooldown time');
+
   const canonicalNoiseEffects = loadout.formatItemEffects({ coefficients: {
     noiseRadiusMultiplier: 1.2,
     noiseDecayMultiplier: 0.8,
@@ -70,7 +179,7 @@ async function run() {
   assert.deepStrictEqual(report.journey.firstRun, { runId: 'run-1' });
   assert.deepStrictEqual(report.journey.slingshot, { anchorType: 'well' });
 
-  console.log('PresentationEvidence: 6/6 passed');
+  console.log('PresentationEvidence: 7/7 passed');
 }
 
 run().catch((error) => {
