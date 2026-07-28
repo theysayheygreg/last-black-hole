@@ -9,8 +9,8 @@
   },
   "impulses": {
     "salvage": { "1": 180, "2": 320, "3": 480 },
-    "forcePulseMeters": 600,
-    "decoyLaunchMeters": 700,
+    "forcePulseMeters": 1600,
+    "decoyLaunchMeters": 1900,
     "collisionMeters": 300
   },
   "impulseHoldSeconds": 0.35,
@@ -26,10 +26,16 @@
       "referenceViewport": { "widthPx": 1280, "heightPx": 800 },
       "edgeMarginPixels": 20
     },
+    "warningBudgets": {
+      "referenceCornerMeters": 2035,
+      "representativeCruiseMetersPerSecond": 850,
+      "swarm": { "firstHeardSeconds": 3, "closureSeconds": 1.5 },
+      "vessel": { "firstHeardSeconds": 3, "closureSeconds": 2.5 }
+    },
     "inhibitor": {
       "glitch": { "category": "STATIC", "sourceClass": "GLITCH", "radiusMeters": 1600, "cadenceSeconds": 1.5 },
-      "swarm": { "category": "CORRUPTION", "sourceClass": "SWARM", "radiusMeters": 2200, "cadenceSeconds": 1.2 },
-      "vessel": { "category": "THRUST", "sourceClass": "VESSEL", "radiusMeters": 3200, "cadenceSeconds": 1.0 }
+      "swarm": { "category": "CORRUPTION", "sourceClass": "SWARM", "radiusMeters": 4600, "cadenceSeconds": 1.2 },
+      "vessel": { "category": "THRUST", "sourceClass": "VESSEL", "radiusMeters": 4600, "cadenceSeconds": 1.0 }
     },
     "exfil": { "category": "EXFIL TONE", "sourceClass": "EXFIL", "radiusMeters": 4200, "cadenceSeconds": 1.0 }
   },

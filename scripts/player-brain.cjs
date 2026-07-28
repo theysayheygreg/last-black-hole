@@ -5,6 +5,7 @@ const {
 } = require('./content/hulls.cjs');
 const { MOVEMENT } = require('./content/movement.cjs');
 const { profileDragScaleFromUpgradeRank } = require('../src/content/tuning.js');
+const { resolvePlayerNoiseModifiers } = require('./sim/noise-radius.cjs');
 
 // Default rig state: 3 tracks at level 0 for a given hull
 function defaultRigLevels(hullType) {
@@ -34,11 +35,11 @@ const BRAIN_DEFAULTS = {
   thrustScale: 1.0,
   dragScale: 1.0,
   currentCoupling: 1.0,
-  signalGenMult: 1.0,
-  signalDecayMult: 1.0,
+  noiseRadiusMultiplier: 1.0,
+  noiseDecayMultiplier: 1.0,
   pulseRadiusScale: 1.0,
   pulseCooldownScale: 1.0,
-  pulseSignalScale: 1.0,
+  pulseNoiseRadiusScale: 1.0,
   cargoSlots: 4,
   pickupRadius: 1.0,
   sensorRange: 1.0,
@@ -57,11 +58,11 @@ const BRAIN_CAPS = {
   thrustScale: [0.3, 2.5],
   dragScale: [0.5, 1.5],
   currentCoupling: [0.3, 2.5],
-  signalGenMult: [0.2, 3.0],
-  signalDecayMult: [0.3, 3.0],
+  noiseRadiusMultiplier: [0.2, 3.0],
+  noiseDecayMultiplier: [0.3, 3.0],
   pulseRadiusScale: [0.3, 2.5],
   pulseCooldownScale: [0.3, 2.0],
-  pulseSignalScale: [0.2, 2.0],
+  pulseNoiseRadiusScale: [0.2, 2.0],
   pickupRadius: [0.5, 2.0],
   sensorRange: [0.5, 2.5],
   wellResistScale: [0.5, 2.0],
@@ -79,11 +80,17 @@ const ITEM_COEFFICIENT_ALIASES = {
   deltaVCapacityMult: "deltaVMax",
   deltaVRegenMult: ["deltaVRegen", "deltaVRegenBoost"],
   deltaVBurnMult: "deltaVBurnEff",
+  noiseRadiusMultiplier: "noiseRadiusMultiplier",
+  noiseDecayMultiplier: "noiseDecayMultiplier",
+  // Legacy loadout-save aliases only. Canonical content uses Noise names.
+  signalGenMult: "noiseRadiusMultiplier",
+  signalDecayMult: "noiseDecayMultiplier",
+  pulseSignalScale: "pulseNoiseRadiusScale",
 };
 
 const ARTIFACT_COEFFICIENTS = {
   reduceWellPull: { wellResistScale: 1.25 },
-  signalDampen: { signalGenMult: 0.85 },
+  signalDampen: { noiseRadiusMultiplier: 0.85 },
 };
 
 const PROFILE_UPGRADE_DEFAULTS = {
@@ -207,7 +214,7 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
     if (laminar >= 5) { /* flowLock signalMult → 0.05 — applied in ability tick */ }
     // Edgerunner: well navigation
     if (edgerunner >= 1) brain.wellResistScale += 0.1;
-    if (edgerunner >= 2) brain.signalDecayMult *= 1.2; // +20% decay in accretion shadows
+    if (edgerunner >= 2) brain.noiseDecayMultiplier *= 1.2; // +20% decay in accretion shadows
     if (edgerunner >= 3) brain.wellResistScale += 0.1;
     if (edgerunner >= 4) { /* well kill radius visible in HUD — client-only */ }
     if (edgerunner >= 5) { /* eddyBrake cooldown -5s — applied in ability tick */ }
@@ -237,7 +244,7 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
     if (smashgrab >= 2) brain.pickupRadius += 0.1;
     if (smashgrab >= 3) { /* smashGrab: pickup at 70% speed — applied in pickup logic */ }
     if (smashgrab >= 4) { /* cargo eject scatters further — applied in death logic */ }
-    if (smashgrab >= 5) brain.signalGenMult *= 0.7; // loot spikes -30%
+    if (smashgrab >= 5) brain.noiseRadiusMultiplier *= 0.7; // loot spikes -30%
 
   } else if (hullType === 'resonant') {
     const [harmonics, anchor, dampening] = levels;
@@ -263,8 +270,8 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
   } else if (hullType === 'shroud') {
     const [phantom, sensor, decoy] = levels;
     // Phantom: stealth depth
-    if (phantom >= 1) brain.signalDecayMult *= 1.05;
-    if (phantom >= 2) brain.signalDecayMult *= 1.1;
+    if (phantom >= 1) brain.noiseDecayMultiplier *= 1.05;
+    if (phantom >= 2) brain.noiseDecayMultiplier *= 1.1;
     if (phantom >= 3) { /* wakeCloak cooldown -10s — applied in ability tick */ }
     if (phantom >= 4) { /* scavengers never detect — applied in scavenger AI */ }
     if (phantom >= 5) { /* wakeCloak works at THRESHOLD — applied in ability tick */ }
@@ -336,7 +343,24 @@ function createPlayerBrain({ hullType = "drifter", rigLevels = null, profileUpgr
   }
 
   brain.cargoSlots = Math.max(1, Math.round(brain.cargoSlots));
+  // The authority still reads this private field; keep the alias out of the
+  // canonical content contract until that owner migrates its read site.
+  brain.pulseSignalScale = brain.pulseNoiseRadiusScale;
   return brain;
+}
+
+function projectPlayerNoiseModifiers(brain) {
+  return resolvePlayerNoiseModifiers({
+    radiusMultiplier: brain?.noiseRadiusMultiplier,
+    decayMultiplier: brain?.noiseDecayMultiplier,
+  });
+}
+
+function syncPlayerNoiseModifiers(player) {
+  if (!player?.noise) return null;
+  const modifiers = projectPlayerNoiseModifiers(player.brain);
+  player.noise.modifiers = modifiers;
+  return modifiers;
 }
 
 function createAbilityState(hullType, brain = BRAIN_DEFAULTS) {
@@ -388,5 +412,7 @@ module.exports = {
   normalizeHullType,
   normalizeProfileUpgrades,
   createPlayerBrain,
+  projectPlayerNoiseModifiers,
+  syncPlayerNoiseModifiers,
   createAbilityState,
 };

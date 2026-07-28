@@ -14,7 +14,14 @@ const {
   resolveImpulseRadius,
   resolveNoiseSourceProjection,
   recordNoisePeak,
+  resolvePlayerNoiseModifiers,
+  resolveThreatWarningBudget,
 } = require('../scripts/sim/noise-radius.cjs');
+const {
+  createPlayerBrain,
+  projectPlayerNoiseModifiers,
+  syncPlayerNoiseModifiers,
+} = require('../scripts/player-brain.cjs');
 const { buildRunEntry } = require('../scripts/control-plane-store.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -46,8 +53,9 @@ async function run() {
   const { formatNoiseDetail } = await import(
     pathToFileURL(path.join(root, 'src/ui/hud-presentation.js')).href
   );
+  const { InventorySystem } = await import(pathToFileURL(path.join(root, 'src/inventory.js')).href);
   const { CAMERA_VIEW } = await import(pathToFileURL(path.join(root, 'src/coords.js')).href);
-  const { minimumOffscreenHearingMeters } = await import(
+  const { minimumOffscreenHearingMeters, referenceOffscreenCornerMeters } = await import(
     pathToFileURL(path.join(root, 'src/content/noise.js')).href
   );
 
@@ -57,7 +65,7 @@ async function run() {
   check(NOISE_CONFIG.continuous.againstFlowMeters === 320, 'against-flow radius');
   check(NOISE_CONFIG.continuous.brakeMeters === 220, 'brake radius');
   check(NOISE_CONFIG.impulses.salvage['1'] === 180 && NOISE_CONFIG.impulses.salvage['3'] === 480, 'salvage tiers');
-  check(NOISE_CONFIG.impulses.forcePulseMeters === 600 && NOISE_CONFIG.impulses.decoyLaunchMeters === 700, 'action radii');
+  check(NOISE_CONFIG.impulses.forcePulseMeters === 1600 && NOISE_CONFIG.impulses.decoyLaunchMeters === 1900, 'action radii clear the off-screen floor');
   check(NOISE_CONFIG.impulseHoldSeconds === 0.35 && NOISE_CONFIG.impulseDecayMetersPerSecond === 120, 'impulse hold and decay');
   check(NOISE_CONFIG.continuousDecayMetersPerSecond === 90, 'continuous decay');
   check(NOISE_CONFIG.identificationFraction === 0.40, 'identification fraction');
@@ -65,11 +73,13 @@ async function run() {
   check(JSON.stringify(noiseData) === JSON.stringify(NOISE_CONFIG), 'CJS adapter preserves canonical data');
   check(NOISE_CONFIG.world.contactCap === 5, 'world Noise contact cap is centralized');
   const minimumOffscreenMeters = minimumOffscreenHearingMeters(undefined, undefined, CAMERA_VIEW);
+  const referenceCornerMeters = referenceOffscreenCornerMeters(undefined, undefined, CAMERA_VIEW);
   check(CAMERA_VIEW === 3 && Math.round(minimumOffscreenMeters) === 1425,
     'reference Deck off-screen hearing threshold derives from the live camera constant and units');
+  check(Math.round(referenceCornerMeters) === 2035, 'warning budget uses the reference viewport corner');
   check(NOISE_CONFIG.world.inhibitor.glitch.radiusMeters === 1600
-    && NOISE_CONFIG.world.inhibitor.swarm.radiusMeters === 2200
-    && NOISE_CONFIG.world.inhibitor.vessel.radiusMeters === 3200
+    && NOISE_CONFIG.world.inhibitor.swarm.radiusMeters === 4600
+    && NOISE_CONFIG.world.inhibitor.vessel.radiusMeters === 4600
     && [
       NOISE_CONFIG.world.inhibitor.glitch.radiusMeters,
       NOISE_CONFIG.world.inhibitor.swarm.radiusMeters,
@@ -77,6 +87,67 @@ async function run() {
     ].every((radius) => radius >= minimumOffscreenMeters), 'ecology Noise radii clear the reference viewport edge');
   check(NOISE_CONFIG.world.exfil.radiusMeters === 4200
     && NOISE_CONFIG.world.exfil.category === 'EXFIL TONE', 'exfil Noise emitter is data-owned');
+  const swarmWarning = resolveThreatWarningBudget('swarm', {
+    closureSpeedMetersPerSecond: 2450,
+    lethalDistanceMeters: 90,
+  });
+  const vesselWarning = resolveThreatWarningBudget('vessel', {
+    closureSpeedMetersPerSecond: 1350,
+    lethalDistanceMeters: 75,
+  });
+  check(swarmWarning.firstHeardSeconds === 3
+    && swarmWarning.firstHeardRadiusMeters === 4585
+    && swarmWarning.authoredRadiusMeters >= swarmWarning.firstHeardRadiusMeters
+    && swarmWarning.observedClosureSeconds >= swarmWarning.closureSeconds,
+  'Swarm lethal warning is authored from representative cruise and closure seconds');
+  check(vesselWarning.firstHeardSeconds === 3
+    && vesselWarning.firstHeardRadiusMeters === 4585
+    && vesselWarning.authoredRadiusMeters >= vesselWarning.firstHeardRadiusMeters
+    && vesselWarning.observedClosureSeconds >= vesselWarning.closureSeconds,
+  'Vessel lethal warning is authored from representative cruise and closure seconds');
+
+  const shroudBrain = createPlayerBrain({
+    hullType: 'shroud',
+    equipped: [{ coefficients: { noiseRadiusMultiplier: 0.8, noiseDecayMultiplier: 1.2 } }],
+  });
+  const noisePlayer = { brain: shroudBrain, noise: {} };
+  const projectedNoise = projectPlayerNoiseModifiers(shroudBrain);
+  const appliedNoise = syncPlayerNoiseModifiers(noisePlayer);
+  check(Math.abs(projectedNoise.radiusMultiplier - 0.32) < 1e-9
+    && Math.abs(projectedNoise.decayMultiplier - 1.8) < 1e-9,
+    'hull plus equipped loadout projects canonical Noise modifiers');
+  check(appliedNoise.radiusMultiplier === noisePlayer.noise.modifiers.radiusMultiplier
+    && appliedNoise.decayMultiplier === noisePlayer.noise.modifiers.decayMultiplier,
+  'Noise adapter wires projected stats to player.noise.modifiers');
+  noisePlayer.brain = createPlayerBrain({
+    hullType: 'breacher',
+    equipped: [{ coefficients: { noiseRadiusMultiplier: 0.8, noiseDecayMultiplier: 1.1 } }],
+  });
+  const refreshedNoise = syncPlayerNoiseModifiers(noisePlayer);
+  check(Math.abs(refreshedNoise.radiusMultiplier - 1.2) < 1e-9
+    && Math.abs(refreshedNoise.decayMultiplier - 0.88) < 1e-9
+    && noisePlayer.noise.modifiers === refreshedNoise,
+  'refreshing a brain updates the existing player Noise modifiers object');
+  const inventory = new InventorySystem();
+  inventory.equipped[0] = { coefficients: { noiseRadiusMultiplier: 0.8, noiseDecayMultiplier: 1.2 } };
+  check(inventory.getNoiseStats().radiusMultiplier === 0.8
+    && inventory.getNoiseStats().decayMultiplier === 1.2,
+  'loadout adapter exposes direct Noise stat projection');
+  const legacyBrain = createPlayerBrain({
+    hullType: 'drifter',
+    equipped: [{ coefficients: { signalGenMult: 0.9, signalDecayMult: 1.1, pulseSignalScale: 0.7 } }],
+  });
+  check(Math.abs(legacyBrain.noiseRadiusMultiplier - 0.45) < 1e-9
+    && Math.abs(legacyBrain.noiseDecayMultiplier - 1.1) < 1e-9
+    && Math.abs(legacyBrain.pulseNoiseRadiusScale - 0.7) < 1e-9
+    && Math.abs(legacyBrain.pulseSignalScale - 0.7) < 1e-9,
+  'legacy saved coefficients map once into canonical Noise stats');
+  check(resolvePlayerNoiseModifiers({ radiusMultiplier: 0 }).radiusMultiplier === 0,
+    'zero Noise radius is a valid quiet loadout value');
+  check(!JSON.stringify(noiseData).includes('signalGenMult')
+    && !JSON.stringify(noiseData).includes('signalDecayMult')
+    && !JSON.stringify(noiseData).includes('pulseSignalScale'),
+    'canonical Noise data contains no retired Signal stat fields');
 
   check(resolveContinuousRadius(0, 240, 1) === 240, 'thrust establishes continuous radius');
   check(resolveContinuousRadius(240, 0, 1) === 150, 'coast decays per wall second');

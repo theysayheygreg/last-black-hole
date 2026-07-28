@@ -175,6 +175,21 @@ export class InventorySystem {
     return out;
   }
 
+  /** Aggregate the canonical Noise modifiers for the local loadout preview. */
+  getNoiseStats() {
+    const out = { radiusMultiplier: 1, decayMultiplier: 1 };
+    for (const item of this.equipped) {
+      const coefficients = item?.coefficients;
+      if (!coefficients) continue;
+      // Legacy aliases are loadout-save compatibility only.
+      const radius = coefficients.noiseRadiusMultiplier ?? coefficients.signalGenMult;
+      const decay = coefficients.noiseDecayMultiplier ?? coefficients.signalDecayMult;
+      if (Number.isFinite(radius)) out.radiusMultiplier *= radius;
+      if (Number.isFinite(decay)) out.decayMultiplier *= decay;
+    }
+    return out;
+  }
+
   // ---- Consumables ----
 
   /**

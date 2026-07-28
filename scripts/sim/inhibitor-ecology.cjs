@@ -1,6 +1,13 @@
 "use strict";
 
 const { simUnitsToMeters } = require("../content/units.cjs");
+const { NOISE_CONFIG, resolveThreatWarningBudget } = require("./noise-radius.cjs");
+
+const SWARM_NOISE_THRESHOLDS = Object.freeze({
+  lightMeters: NOISE_CONFIG.continuous.withFlowMeters,
+  heavyMeters: NOISE_CONFIG.continuous.againstFlowMeters,
+  flareMeters: NOISE_CONFIG.impulses.forcePulseMeters,
+});
 
 // The ecology owner keeps per-kind tuning and entity behavior together. The
 // Conductor still owns when a kind is admitted; this module owns what lives.
@@ -37,6 +44,10 @@ const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
     searchRadiusMax: 0.65,
     searchRadiusRate: 0.025,
     searchTurnRate: 1.4,
+    warningBudget: Object.freeze(resolveThreatWarningBudget("swarm", {
+      closureSpeedMetersPerSecond: 2450,
+      lethalDistanceMeters: 90,
+    })),
     hullDamage: 0.6,
     contactCooldownSeconds: 0.8,
     maxDamage: 1,
@@ -64,6 +75,10 @@ const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
     overdriveMultiplierPerTier: 1.18,
     massMultiplierPerTier: 1.18,
     forceMultiplierPerTier: 1.18,
+    warningBudget: Object.freeze(resolveThreatWarningBudget("vessel", {
+      closureSpeedMetersPerSecond: 1350,
+      lethalDistanceMeters: 75,
+    })),
     slingshotMultiplierPerTier: 1.18,
     presentation: Object.freeze({
       family: "inhibitor-vessel",
@@ -336,8 +351,10 @@ function setSwarmSearchTarget(entity, dt, worldScale, config = INHIBITOR_ECOLOGY
 
 function resolveSwarmSpeed(noiseRadiusMeters, config = INHIBITOR_ECOLOGY_CONFIG.swarm) {
   const radius = Math.max(0, finite(noiseRadiusMeters));
-  if (radius >= 320) return finite(config.speedFlare);
-  if (radius >= 180) return finite(config.speedHeavy);
+  const thresholds = config.noiseThresholds || SWARM_NOISE_THRESHOLDS;
+  if (radius >= finite(thresholds.flareMeters, SWARM_NOISE_THRESHOLDS.flareMeters)) return finite(config.speedFlare);
+  if (radius >= finite(thresholds.heavyMeters, SWARM_NOISE_THRESHOLDS.heavyMeters)) return finite(config.speedHeavy);
+  if (radius >= finite(thresholds.lightMeters, SWARM_NOISE_THRESHOLDS.lightMeters)) return finite(config.speedLight);
   if (radius > 0) return finite(config.speedLight);
   return finite(config.speedSilent);
 }
@@ -826,6 +843,7 @@ module.exports = {
   shouldSpawnSwarm,
   shouldSpawnVessel,
   resolveSwarmSpeed,
+  SWARM_NOISE_THRESHOLDS,
   resolveVesselEdgeSpawn,
   selectNearestAliveTarget,
   createVesselEntity,

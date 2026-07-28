@@ -15,6 +15,44 @@ function clampMeters(value) {
   return Math.max(0, Number.isFinite(Number(value)) ? Number(value) : 0);
 }
 
+function resolvePlayerNoiseModifiers({ idleFloorMeters = NOISE_CONFIG.idleFloorMeters, radiusMultiplier = 1, decayMultiplier = 1 } = {}) {
+  const radius = Number(radiusMultiplier);
+  const decay = Number(decayMultiplier);
+  return {
+    idleFloorMeters: clampMeters(idleFloorMeters),
+    radiusMultiplier: Number.isFinite(radius) && radius >= 0 ? radius : 1,
+    decayMultiplier: Number.isFinite(decay) && decay >= 0 ? decay : 1,
+  };
+}
+
+function resolveThreatWarningBudget(kind, {
+  radiusMeters = NOISE_CONFIG.world.inhibitor?.[kind]?.radiusMeters,
+  closureSpeedMetersPerSecond = 0,
+  lethalDistanceMeters = 0,
+} = {}) {
+  const budget = NOISE_CONFIG.world.warningBudgets?.[kind];
+  if (!budget) return null;
+  const cruiseMetersPerSecond = Math.max(0, Number(NOISE_CONFIG.world.warningBudgets.representativeCruiseMetersPerSecond) || 0);
+  const firstHeardSeconds = Math.max(0, Number(budget.firstHeardSeconds) || 0);
+  const closureSeconds = Math.max(0, Number(budget.closureSeconds) || 0);
+  const referenceCornerMeters = Math.max(0, Number(NOISE_CONFIG.world.warningBudgets.referenceCornerMeters) || 0);
+  const radius = clampMeters(radiusMeters);
+  const closureSpeed = Math.max(0, Number(closureSpeedMetersPerSecond) || 0);
+  const closureDistanceMeters = Math.max(0, radius - Math.max(0, Number(lethalDistanceMeters) || 0));
+  return {
+    kind,
+    firstHeardSeconds,
+    closureSeconds,
+    cruiseMetersPerSecond,
+    referenceCornerMeters,
+    firstHeardRadiusMeters: referenceCornerMeters + cruiseMetersPerSecond * firstHeardSeconds,
+    authoredRadiusMeters: radius,
+    closureSpeedMetersPerSecond: closureSpeed,
+    observedClosureSeconds: closureSpeed > 0 ? closureDistanceMeters / closureSpeed : null,
+    closureBudgetMet: closureSpeed <= 0 || closureDistanceMeters >= closureSpeed * closureSeconds,
+  };
+}
+
 function emitterAudibleFor({ radiusMeters, distanceSimUnits }) {
   const radius = clampMeters(radiusMeters);
   const distanceMeters = Math.max(0, simUnitsToMeters(distanceSimUnits));
@@ -113,4 +151,6 @@ module.exports = {
   resolveImpulseRadius,
   resolveNoiseSourceProjection,
   recordNoisePeak,
+  resolvePlayerNoiseModifiers,
+  resolveThreatWarningBudget,
 };

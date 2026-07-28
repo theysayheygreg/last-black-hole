@@ -64,11 +64,11 @@
       },
       {
         "id": "signal-baffle",
-        "name": "Signal Baffle",
+        "name": "Noise Baffle",
         "tier": 1,
         "affinity": null,
         "coefficients": {
-          "signalGenMult": 0.93
+          "noiseRadiusMultiplier": 0.93
         },
         "value": [
           18,
@@ -171,7 +171,7 @@
         "tier": 1,
         "affinity": "shroud",
         "coefficients": {
-          "signalGenMult": 0.96,
+          "noiseRadiusMultiplier": 0.96,
           "controlDebuffResist": 1.04
         },
         "value": [
@@ -249,11 +249,11 @@
       },
       {
         "id": "signal-dampener",
-        "name": "Signal Dampener",
+        "name": "Noise Dampener",
         "tier": 2,
         "affinity": null,
         "coefficients": {
-          "signalGenMult": 0.85
+          "noiseRadiusMultiplier": 0.85
         },
         "value": [
           60,
@@ -266,7 +266,7 @@
         "tier": 2,
         "affinity": null,
         "coefficients": {
-          "signalDecayMult": 1.2
+          "noiseDecayMultiplier": 1.2
         },
         "value": [
           55,
@@ -293,7 +293,7 @@
         "affinity": "breacher",
         "coefficients": {
           "thrustScale": 1.12,
-          "signalGenMult": 1.1
+          "noiseRadiusMultiplier": 1.1
         },
         "value": [
           55,
@@ -320,7 +320,7 @@
         "tier": 2,
         "affinity": "shroud",
         "coefficients": {
-          "signalGenMult": 0.82,
+          "noiseRadiusMultiplier": 0.82,
           "sensorRange": 1.12
         },
         "value": [
@@ -348,7 +348,7 @@
         "tier": 2,
         "affinity": null,
         "coefficients": {
-          "pulseSignalScale": 0.8,
+          "pulseNoiseRadiusScale": 0.8,
           "pulseRadiusScale": 0.9
         },
         "value": [
@@ -429,7 +429,7 @@
         "tier": 2,
         "affinity": "shroud",
         "coefficients": {
-          "signalDecayMult": 1.18,
+          "noiseDecayMultiplier": 1.18,
           "sensorRange": 0.92
         },
         "value": [
@@ -444,7 +444,7 @@
         "affinity": "resonant",
         "coefficients": {
           "pulseCooldownScale": 0.88,
-          "pulseSignalScale": 1.1
+          "pulseNoiseRadiusScale": 1.1
         },
         "value": [
           65,
@@ -459,7 +459,7 @@
         "tier": 3,
         "affinity": "drifter",
         "coefficients": {
-          "signalGenMult": 0,
+          "noiseRadiusMultiplier": 0,
           "dragScale": 1.3
         },
         "value": [
@@ -475,8 +475,8 @@
         "affinity": "breacher",
         "coefficients": {
           "thrustScale": 1.3,
-          "signalGenMult": 1.5,
-          "signalDecayMult": 0.7
+          "noiseRadiusMultiplier": 1.5,
+          "noiseDecayMultiplier": 0.7
         },
         "value": [
           220,
@@ -575,12 +575,12 @@
       },
       {
         "id": "signal-siphon",
-        "name": "Signal Siphon",
+        "name": "Noise Siphon",
         "tier": 3,
         "affinity": null,
         "coefficients": {
-          "signalDecayMult": 1.5,
-          "signalGenMult": 1.15
+          "noiseDecayMultiplier": 1.5,
+          "noiseRadiusMultiplier": 1.15
         },
         "value": [
           200,
@@ -594,7 +594,7 @@
         "affinity": null,
         "coefficients": {
           "pulseRadiusScale": 0.6,
-          "pulseSignalScale": 0.4,
+          "pulseNoiseRadiusScale": 0.4,
           "pulseCooldownScale": 0.5
         },
         "value": [
@@ -635,7 +635,7 @@
         "affinity": null,
         "coefficients": {
           "sensorRange": 1.5,
-          "signalGenMult": 1.08
+          "noiseRadiusMultiplier": 1.08
         },
         "value": [
           200,
@@ -664,7 +664,7 @@
         "tier": 3,
         "affinity": "shroud",
         "coefficients": {
-          "signalGenMult": 0.76,
+          "noiseRadiusMultiplier": 0.76,
           "pickupRadius": 0.85
         },
         "value": [
@@ -795,7 +795,7 @@
         "affinity": "breacher",
         "coefficients": {
           "thrustScale": 1.25,
-          "signalGenMult": 1.25
+          "noiseRadiusMultiplier": 1.25
         },
         "value": [
           850,
@@ -810,7 +810,7 @@
         "affinity": null,
         "coefficients": {
           "sensorRange": 1.35,
-          "signalDecayMult": 1.2
+          "noiseDecayMultiplier": 1.2
         },
         "value": [
           900,

@@ -29,6 +29,7 @@ const {
   shouldSpawnGlitch,
   shouldSpawnSwarm,
   resolveSwarmSpeed,
+  SWARM_NOISE_THRESHOLDS,
   summarizeEcologyEncounters,
 } = require("../scripts/sim/inhibitor-ecology.cjs");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
@@ -151,15 +152,22 @@ async function run() {
   assert.deepStrictEqual([
     resolveSwarmSpeed(0, swarmCfg),
     resolveSwarmSpeed(100, swarmCfg),
-    resolveSwarmSpeed(220, swarmCfg),
-    resolveSwarmSpeed(400, swarmCfg),
-  ], [0.25, 0.6, 1.1, 1.6], "Swarm pursuit speeds must bracket the player cruise baseline");
-  const playerNoise = { kind: "player", wx: 1.05, wy: 1, radiusMeters: 100 };
+    resolveSwarmSpeed(SWARM_NOISE_THRESHOLDS.heavyMeters, swarmCfg),
+    resolveSwarmSpeed(SWARM_NOISE_THRESHOLDS.flareMeters, swarmCfg),
+  ], [0.25, 0.6, 1.1, 1.6], "Swarm pursuit speeds must bracket quiet, thrust, and action Noise");
+  assert.strictEqual(swarmCfg.warningBudget.firstHeardSeconds, 3,
+    "Swarm warning budget must begin with a centralized first-heard tell");
+  assert(swarmCfg.warningBudget.observedClosureSeconds >= swarmCfg.warningBudget.closureSeconds,
+    "Swarm warning budget must leave closure time before lethal contact");
+  const playerNoise = { kind: "decoy", wx: 2.8, wy: 1, radiusMeters: 1900 };
+  const initialNoiseDistance = Math.hypot(playerNoise.wx - swarm.wx, playerNoise.wy - swarm.wy);
   advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
   assert.strictEqual(swarm.noiseListenerState, "HEARD", "Swarm must acquire audible player Noise independently");
   advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
   advanceSwarmEntity(swarm, { dt: 1, worldScale: 5, noiseSources: [playerNoise], config: swarmCfg });
   assert.strictEqual(swarm.noiseListenerState, "TRACKING", "Swarm must enter tracking after its configured interval");
+  assert(Math.hypot(playerNoise.wx - swarm.wx, playerNoise.wy - swarm.wy) < initialNoiseDistance,
+    "Swarm must close an off-screen decoy source after tracking it");
   assert.deepStrictEqual({ wx: swarm.targetWX, wy: swarm.targetWY }, { wx: playerNoise.wx, wy: playerNoise.wy },
     "Tracking must move the per-Swarm target to the heard source");
   for (let i = 0; i < 5; i += 1) {
@@ -201,6 +209,8 @@ async function run() {
   assert.strictEqual(swarmProjection.noiseListenerState, "INVESTIGATING", "Swarm projection must expose current search state");
   assert(swarmProjection.lastHeard && Number.isFinite(swarmProjection.lastHeard.wx),
     "Swarm projection must retain last-heard memory");
+  assert.strictEqual(swarmProjection.noiseSearchState, "SEARCHING",
+    "Swarm acquisition smoke must end in an explicit break-contact search state");
 
   const vesselCfg = {
     ...INHIBITOR_ECOLOGY_CONFIG.vessel,
@@ -383,7 +393,7 @@ async function run() {
     const exfilProjection = projectWorld({
       mapState: {
         anomalyCatalog: [], wells: [], stars: [], wrecks: [], planetoids: [],
-        portals: [{ id: "portal-final-exfil", alive: true, wx: 4.2, wy: 1.1 }],
+        portals: [{ id: "portal-final-exfil", alive: true, finalExfil: true, wx: 4.2, wy: 1.1 }],
         scavengers: [], fauna: [], sentries: [], nextPortalWindowIndex: 0, nextPortalWaveIndex: 0,
       },
       inhibitorEntities: [],
