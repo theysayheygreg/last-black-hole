@@ -50,7 +50,7 @@ function fakeQueryRuntime() {
         { id: "pickup-far", wx: 2.4, wy: 2, alive: true, looted: false, pickupCooldown: 0, loot: [{ id: "b" }] },
       ],
       portals: [
-        { id: "blocked", wx: 2.05, wy: 2, alive: true, blockedByInhibitor: true },
+        { id: "closed", wx: 2.05, wy: 2, alive: false },
         { id: "open", wx: 2.2, wy: 2, alive: true },
       ],
       planetoids: [],
@@ -308,7 +308,7 @@ async function run() {
       runtime.mapState.portals,
       2,
       runtime.session.worldScale,
-      (portal) => portal.alive !== false && portal.blockedByInhibitor !== true,
+      (portal) => portal.alive !== false,
     );
     const portalBallpark = collectNearestBodies(mirror, origin, {
       category: "portal",

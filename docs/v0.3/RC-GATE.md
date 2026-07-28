@@ -5,16 +5,15 @@
 
 ## Current Verdict
 
-**Selected v0.3.1 RC source
+**The selected v0.3.1 RC source
 `a958a8c68b6c9f14054fe012882326dcae32f910` is package/boot green but
 candidate-gate red. The one no-retry full run passed 86/119 suites in 300.10 s
 wall time (439.31 s summed suite time), with 33 failures and zero retries. The
-first failure is a stale Validation expectation for the retired
-`u_inhibitorForm`; the remaining red set combines retired pre-Noise and
-portal-block contracts, missing isolated-worktree dependencies, browser
-`__TEST_API` bootstrap cascades, and two host-timing cadence samples. No
-isolated product boot failure was established, but this is not a green RC or a
-promotion claim.**
+failed rows are classified in
+`docs/v0.3/reviews/2026-07-27-orrery-v03-rc-contract-corrections.md` as 8 stale
+contracts, 24 missing-dependency/infrastructure failures, and 1 current source
+defect. No isolated product boot failure was established, but this is not a
+green RC or a promotion claim.**
 
 The same immutable source produced complete all-target internal build
 `0.3.1.a958a8c6` through the release tool's supported `--skip-tests` path after
@@ -68,9 +67,11 @@ residual under final host conditions without restoring map profiles. Heap delta
 remains diagnostic.
 
 The full run recorded 611.61 s summed suite time, 34 browser launches, 18
-static starts, 71 sim starts, and 3 control starts. AgentPlay passed 2/2 in
-117.41 s; Flow 7/7, MetaFlow 8/8, RemoteAuthority 18/18, Renderer 5/5, and
-UIVisual 18/18 passed in that same run.
+static starts, 71 sim starts, and 3 control starts. Its `AgentPlayEval [three]`
+row failed during browser `__TEST_API` bootstrap, so this receipt does not claim
+current AgentPlay, Flow, MetaFlow, RemoteAuthority, Renderer, or UIVisual green.
+The older successful AgentPlay and visual receipts below are historical evidence
+for their exact earlier hashes only.
 
 The earlier `0.3.1.2b93b077` and `dd9e5149` package/Deck receipts below remain
 valid only for their exact historical hashes. They do not certify the current
@@ -170,6 +171,11 @@ Historical completed evidence from the clean 2026-07-14 RC pass:
 
 ## Automated Candidate Gate
 
+The checks and historical green statements below are retained as source-shape
+and prior-evidence references. They are not a current-candidate pass claim. In
+particular, the failed `AgentPlayEval [three]` row above must remain visibly red
+until a later full run proves it from a clean provisioned worktree.
+
 Start from no stale stack:
 
 ```sh
@@ -228,7 +234,7 @@ Requirements:
 ## Product Gate
 
 - [x] Seed preview matches authoritative launch truth.
-- [x] Shallows teaches slingshot, salvage, signal consequence, then confirmed
+- [x] Shallows teaches slingshot, salvage, Noise consequence, then confirmed
   extraction.
 - [x] Portal requires residence plus explicit Enter/A confirmation and aborts
   immediately on exit.
@@ -248,7 +254,7 @@ Requirements:
 - [x] Three and ASCII-fluid identity remain the primary renderer target.
 - [x] 1280x800 HUD rails do not overlap in the focused Deck layout test.
 - [x] Interaction prompts separate the command label from Enter/A affordance.
-- [x] Fuel/hull/signal gauges meet the committed minimum dimensions.
+- [x] Hull/Noise presentation meets the committed minimum dimensions.
 - [x] Reduced-motion and controller prompt contracts are tested.
 - [x] Event-driven audio has a bounded voice budget.
 - [x] All 65 catalog items have stable generated icon ids, and the UI frame kit

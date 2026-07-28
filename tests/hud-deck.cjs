@@ -106,7 +106,7 @@ async function run() {
 
   const route = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },
-    { activeCount: 1, portals: [{ alive: true, wx: 0.8, wy: 0.5 }] },
+    { activeCount: 1, portals: [{ alive: true, type: 'exit', wx: 0.8, wy: 0.5 }] },
     null,
     false
   );
@@ -115,7 +115,7 @@ async function run() {
   assert(route.detail.includes('enter cyan aperture'));
   const wrapped = hud.findNearestActivePortal(
     { wx: 0.05, wy: 0.5 },
-    { portals: [{ alive: true, wx: 2.95, wy: 0.5 }] }
+    { portals: [{ alive: true, type: 'exit', wx: 2.95, wy: 0.5 }] }
   );
   assert(Math.abs(wrapped.distance - 0.1) < 1e-9, 'Portal selection must retain toroidal distance');
 
@@ -154,9 +154,8 @@ async function run() {
         labelSize: px('#hud-vitals .hud-label', 'fontSize'),
         bodySize: px('#hud-portals .hud-value', 'fontSize'),
         captionSize: px('#hud-pulse .hud-action-caption', 'fontSize'),
-        fuelHeight: document.getElementById('hud-fuel-bar').getBoundingClientRect().height,
         hullHeight: document.getElementById('hud-hull-bar').getBoundingClientRect().height,
-        signalHeight: document.getElementById('hud-signal-bar').getBoundingClientRect().height,
+        noiseHeight: document.getElementById('hud-noise').getBoundingClientRect().height,
         actionPaddingX: px('#hud-actions', 'paddingLeft'),
         actionPaddingY: px('#hud-actions', 'paddingTop'),
         commandLabel: document.querySelector('#hud-pulse .hud-command-label')?.textContent || '',
@@ -181,8 +180,8 @@ async function run() {
     assert(layout.labelSize >= 13, `HUD labels too small: ${layout.labelSize}px`);
     assert(layout.bodySize >= 15, `route objective too small: ${layout.bodySize}px`);
     assert(layout.captionSize >= 13, `controller caption too small: ${layout.captionSize}px`);
-    assert(layout.fuelHeight >= 16 && layout.hullHeight >= 16 && layout.signalHeight >= 16,
-      `gauges below 16px: ${layout.fuelHeight}/${layout.hullHeight}/${layout.signalHeight}`);
+    assert(layout.hullHeight >= 16 && layout.noiseHeight >= 16,
+      `gauges below 16px: ${layout.hullHeight}/${layout.noiseHeight}`);
     assert(layout.actionPaddingX >= 12 && layout.actionPaddingY >= 10, 'action rail padding is below Deck minimum');
     assert.strictEqual(layout.commandLabel.toLowerCase(), 'force pulse');
     assert.strictEqual(layout.commandCaption, 'X activate');
@@ -248,12 +247,12 @@ async function run() {
     await page.evaluate(() => window.__TEST_API.setConfig('ui.motion.reduced', true));
     await waitFor(page, () => document.getElementById('hud')?.dataset.reducedMotion === 'true', { timeout: 3000 });
     const reduced = await page.evaluate(() => ({
-      transition: getComputedStyle(document.getElementById('hud-fuel-fill')).transitionDuration,
-      signal: document.getElementById('hud-signal-zone').textContent,
+      transition: getComputedStyle(document.getElementById('hud-hull-fill')).transitionDuration,
+      noise: document.getElementById('hud-noise-readout').textContent,
       route: document.getElementById('hud-portals-status').textContent,
     }));
     assert(['0s', '0.000001s', '1e-06s'].includes(reduced.transition), `motion not suppressed: ${reduced.transition}`);
-    assert(reduced.signal.length > 0 && reduced.route.length > 0, 'reduced motion removed hazard or route communication');
+    assert(reduced.noise.length > 0 && reduced.route.length > 0, 'reduced motion removed Noise or route communication');
 
     await page.screenshot({ path: '/tmp/lbh-v03-hud-deck-1280x800.png' });
     assert.strictEqual(errors.length, 0, `browser errors: ${errors.join('; ')}`);

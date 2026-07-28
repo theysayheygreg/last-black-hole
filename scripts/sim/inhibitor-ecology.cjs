@@ -537,8 +537,13 @@ function resolveVesselEdgeSpawn({ edge = "top", edgeProgress = 0.5, worldScale =
 }
 
 function selectNearestAliveTarget(entity, players, worldScale) {
-  return Array.from(players || [])
+  const alive = Array.from(players || [])
     .filter((player) => player && player.status === "alive")
+  // Vessels are a player-facing strategic threat. In solo sessions, AI pilots
+  // remain ambient traffic and must not steal the Vessel's authored target.
+  const humanTargets = alive.filter((player) => !player.isAI);
+  const targets = humanTargets.length > 0 ? humanTargets : alive;
+  return targets
     .map((player) => ({
       player,
       distance: Math.hypot(

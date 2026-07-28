@@ -31,9 +31,8 @@ const extractedResult = {
     { id: 'cargo-ui-a', name: 'Bright Relic', value: 120, tier: 2, category: 'artifact' },
     { id: 'cargo-ui-b', name: 'Quiet Core', value: 80, tier: 3, category: 'salvage' },
   ],
-  signalPeak: 0.82,
-  signalPeakZone: 'flare',
-  inhibitorFormReached: 2,
+  noiseMaxMeters: 820,
+  noiseSource: 'THRUST',
   emEarned: 90,
   aiOutcomes: [
     { personality: 'raider', hullType: 'breacher', outcome: 'dead', cargoCount: 1 },
@@ -55,9 +54,8 @@ const deathResult = {
   deathEntityId: 'charybdis',
   survivalTime: 64,
   cargoLost: [{ id: 'lost-ui-a', name: 'Drowned Core', value: 75, tier: 2, category: 'artifact' }],
-  signalPeak: 0.91,
-  signalPeakZone: 'threshold',
-  inhibitorFormReached: 3,
+  noiseMaxMeters: 1200,
+  noiseSource: 'IMPACT',
   emEarned: 16,
   aiOutcomes: [{ personality: 'redline', hullType: 'breacher', outcome: 'extracted', cargoCount: 4 }],
   notables: [{ type: 'death_cause', description: 'consumed by Charybdis', value: 'well' }],
@@ -387,9 +385,9 @@ async function run() {
       },
       assertDom: () => {
         const hud = document.getElementById('hud');
-        const fuel = document.getElementById('hud-fuel-readout');
-        const signal = document.getElementById('hud-signal-zone');
-        return !!hud && getComputedStyle(hud).display !== 'none' && !!fuel?.textContent && !!signal?.textContent;
+        const hull = document.getElementById('hud-hull-readout');
+        const noise = document.getElementById('hud-noise-readout');
+        return !!hud && getComputedStyle(hud).display !== 'none' && !!hull?.textContent && !!noise?.textContent;
       },
       thresholds: { minLitPixels: 1200, minRgbMax: 90 },
       regions: [
