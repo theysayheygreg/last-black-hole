@@ -22,6 +22,13 @@
   technical review packet spanning held slingshot, Heat, loadout/results,
   Noise Radius v1, accumulating Inhibitor Ecology v2, well overdrive, and
   audible exfil. Primary owns delivery and intake; no review result is implied.
+- **Orrery scale/contact correction:** the Noise data owner now derives the
+  `1425m` reference `1280x800` off-screen threshold from the locked camera and
+  physical-unit rulers. Glitch/Swarm/Vessel/EXFIL starting radii are
+  `1600/2200/3200/4200m`; Swarm pursuit speeds are `0.25/0.6/1.1/1.6` and
+  Vessel movement starts at `0.5` world-units/s. World cadence now pulses
+  contact presentation without changing audibility, and EXFIL remains cyan
+  while Inhibitor contacts remain magenta/anomaly.
 - **Inhibitor Ecology v2 completion:** finished the player-facing collection
   migration. Glitches, Swarms, Vessels, and active exfils now project as
   deterministic world Noise emitters with `STATIC`/`CORRUPTION`/`THRUST`/

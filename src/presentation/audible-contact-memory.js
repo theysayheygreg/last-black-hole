@@ -39,6 +39,8 @@ export function projectAudibleContact({
   nowSeconds,
   category = 'NOISE',
   sourceClass = null,
+  sourceKind = 'world',
+  cadenceSeconds = null,
   identificationFraction = 0.4,
   publicSourceClasses = [],
   fadeSeconds = 2.5,
@@ -82,6 +84,10 @@ export function projectAudibleContact({
     category,
     identity,
     identified: Boolean(identity),
+    sourceKind: String(sourceKind || current?.sourceKind || 'world'),
+    cadenceSeconds: Math.max(0, cadenceSeconds == null
+      ? finiteOr(current?.cadenceSeconds, 0)
+      : finiteOr(cadenceSeconds, 0)),
     wx: sourceWX,
     wy: sourceWY,
     bearingRadians: finiteOr(bearingRadians, 0),
