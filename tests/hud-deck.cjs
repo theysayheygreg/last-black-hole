@@ -104,11 +104,22 @@ async function run() {
   assert(keyboardSlingshotPrompt.caption.includes('F'), 'Keyboard slingshot affordance must show F');
   assert.strictEqual(hud.getSlingshotInteractionState(null), null, 'No anchor must not expose a false affordance');
 
+  const listeningRoute = hud.getRouteObjectiveState(
+    { wx: 0.5, wy: 0.5 },
+    { activeCount: 1, portals: [{ alive: true, wx: 0.8, wy: 0.5 }] },
+    null,
+    false,
+    { exfilHeard: false },
+  );
+  assert.strictEqual(listeningRoute.label, 'ROUTE: LISTEN');
+  assert(!listeningRoute.detail.includes('0.3'), 'Unheard route must not leak an aperture distance');
+
   const route = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },
     { activeCount: 1, portals: [{ alive: true, wx: 0.8, wy: 0.5 }] },
     null,
-    false
+    false,
+    { exfilHeard: true },
   );
   assert.strictEqual(route.tone, 'active');
   assert(route.label.startsWith('aperture '));

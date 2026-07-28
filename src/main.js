@@ -396,6 +396,7 @@ let noiseState = {
   lockedOnListenerCount: 0,
 };
 const audibleContactMemory = new Map();
+let routeDiscoveryState = { runId: null, exfilHeard: false };
 const noiseRipples = [];
 let inhibitorState = {
   phase: 0,
@@ -2177,6 +2178,7 @@ function resetPhantomForNewSession() {
     lockedOnListenerCount: 0,
   };
   audibleContactMemory.clear();
+  resetRouteDiscovery();
   noiseRipples.length = 0;
 }
 
@@ -2375,6 +2377,20 @@ function observeAudibleContact(key, observation, nowSeconds) {
   return true;
 }
 
+function resetRouteDiscovery(runId = null) {
+  routeDiscoveryState = { runId: runId || null, exfilHeard: false };
+}
+
+function updateRouteDiscovery() {
+  const runId = snapshotRunId(remoteSession.snapshot) || null;
+  if (runId !== routeDiscoveryState.runId) resetRouteDiscovery(runId);
+  if ([...audibleContactMemory.values()].some((contact) => contact.live
+    && (contact.category === 'EXFIL TONE' || contact.category === 'EXFIL' || contact.identity === 'EXFIL'))) {
+    routeDiscoveryState = { ...routeDiscoveryState, exfilHeard: true };
+  }
+  return routeDiscoveryState;
+}
+
 function updateAudibleContactMemory(nowSeconds) {
   const observedKeys = new Set();
   const observe = (key, observation) => {
@@ -2430,6 +2446,7 @@ function updateAudibleContactMemory(nowSeconds) {
   reconcileUnobservedAudibleContacts(audibleContactMemory, observedKeys, nowSeconds, {
     fadeSeconds: NOISE_LAST_HEARD_FADE_SECONDS,
   });
+  updateRouteDiscovery();
 }
 
 function applyRemoteEvents(events) {
@@ -5160,7 +5177,6 @@ function gameLoop(now) {
         return { x: ax, y: ay };
       }
 
-      updateAudibleContactMemory(simState.runElapsedTime);
       const contacts = prioritizeAudibleContacts(
         [...audibleContactMemory.values()]
           .filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt),
@@ -5442,6 +5458,10 @@ function gameLoop(now) {
       scavengerSystem.deathDrops = [];
     }
 
+    // Refresh contact memory before the route rail reads its run-scoped
+    // EXFIL discovery latch.
+    updateAudibleContactMemory(simState.runElapsedTime);
+
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();
     const authoritativePlayer = remoteSession.active
@@ -5463,6 +5483,7 @@ function gameLoop(now) {
       inventorySystem,
       inventoryOpen,
       noise: noiseState,
+      routeDiscovery: routeDiscoveryState,
       abilityState: localAbilityState,
       inhibitorState,
       ship,

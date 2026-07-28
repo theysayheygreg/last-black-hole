@@ -1,4 +1,5 @@
 import { worldDistance } from '../coords.js';
+import { simUnitsToMeters } from '../units.js';
 import { affordanceCaption } from './input-prompts.js';
 
 // Pure HUD projections live here; hud.js owns DOM lifetime and mutation order.
@@ -10,6 +11,28 @@ export function fmtTime(seconds) {
 
 export function fmtSeconds(seconds) {
   return `${Math.ceil(Math.max(0, seconds || 0))}s`;
+}
+
+export function formatRouteDistance(simUnits) {
+  const meters = Math.max(0, simUnitsToMeters(Number(simUnits) || 0));
+  if (meters >= 1000) {
+    const precision = meters >= 10000 ? 0 : 1;
+    return `${(meters / 1000).toFixed(precision)}km`;
+  }
+  return `${Math.round(meters)}m`;
+}
+
+export function formatNoiseDetail(noise = {}) {
+  const source = String(noise.currentSource || noise.dominantSource || 'IDLE').toUpperCase();
+  const parts = [];
+  if (source !== 'IDLE' && source !== 'NOISE') parts.push(`SOURCE ${source}`);
+  const heard = Math.max(0, Math.floor(Number(noise.heardListenerCount) || 0));
+  const tracked = Math.max(0, Math.floor(Number(noise.trackedListenerCount) || 0));
+  const locked = Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0));
+  if (heard > 0) parts.push(`HEARD BY ${heard}`);
+  if (tracked > 0) parts.push(`TRACKED BY ${tracked}`);
+  if (locked > 0) parts.push(`LOCKED ON ${locked}`);
+  return parts.length > 0 ? parts.join(' · ') : 'QUIET';
 }
 
 export function clamp01(value) {
@@ -153,16 +176,38 @@ export function findNearestActivePortal(ship, portalSystem) {
   return nearest;
 }
 
-export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, isFinalWave = false) {
+export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, isFinalWave = false, routeDiscovery = {}) {
   const count = portalSystem?.activeCount || 0;
   const nearest = findNearestActivePortal(ship, portalSystem);
+  const exfilHeard = routeDiscovery?.exfilHeard === true;
   if (nearest) {
+    if (!exfilHeard) {
+      return {
+        count,
+        tone: 'waiting',
+        label: 'ROUTE: LISTEN',
+        detail: 'hear EXFIL TONE to reveal distance',
+        nearest,
+        exfilHeard: false,
+      };
+    }
     return {
       count,
       tone: 'active',
-      label: `aperture ${nearest.distance.toFixed(1)}`,
+      label: `aperture ${formatRouteDistance(nearest.distance)}`,
       detail: `${count} active · enter cyan aperture`,
       nearest,
+      exfilHeard: true,
+    };
+  }
+  if (!exfilHeard) {
+    return {
+      count: 0,
+      tone: 'waiting',
+      label: 'ROUTE: LISTEN',
+      detail: 'hear EXFIL TONE to reveal distance',
+      nearest: null,
+      exfilHeard: false,
     };
   }
   if (nextWaveTime != null) {
@@ -172,9 +217,10 @@ export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, 
       label: isFinalWave ? 'final aperture inbound' : 'aperture inbound',
       detail: `${fmtTime(nextWaveTime)} until route opens`,
       nearest: null,
+      exfilHeard: true,
     };
   }
-  return { count: 0, tone: 'critical', label: 'route closed', detail: 'no extraction aperture', nearest: null };
+  return { count: 0, tone: 'critical', label: 'route closed', detail: 'no extraction aperture', nearest: null, exfilHeard: true };
 }
 
 export function getHullPresentationState(hullState = {}, ship = null) {

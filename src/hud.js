@@ -33,6 +33,7 @@ import {
   getHullPresentationState,
   getInteractionPresentationState,
   getRouteObjectiveState,
+  formatNoiseDetail,
   getSlingshotInteractionState,
 } from './ui/hud-presentation.js';
 
@@ -42,6 +43,7 @@ export {
   getInventoryActionAtCursor,
   getInteractionPresentationState,
   getRouteObjectiveState,
+  formatNoiseDetail,
   getSlingshotInteractionState,
   inventoryConfirm,
   inventoryCursorDown,
@@ -319,7 +321,13 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   _collapseEventEl.textContent = eventText;
 
   // === ROUTE OBJECTIVE ===
-  const route = getRouteObjectiveState(opts.ship, portalSystem, nextWaveTime, isFinalWave);
+  const route = getRouteObjectiveState(
+    opts.ship,
+    portalSystem,
+    nextWaveTime,
+    isFinalWave,
+    opts.routeDiscovery,
+  );
   _portalsStatusEl.textContent = route.label;
   _portalsNextEl.textContent = route.detail;
   _portalsStatusEl.dataset.tone = route.tone;
@@ -380,7 +388,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     const radius = Math.max(0, Number(noise.audibleRadiusMeters) || 0);
     const trend = String(noise.trend || 'steady').toUpperCase();
     _noiseReadoutEl.textContent = `NOISE ${Math.round(radius)}m · ${trend}`;
-    _noiseDetailEl.textContent = `SOURCE ${String(noise.currentSource || noise.dominantSource || 'IDLE').toUpperCase()} · HEARD BY ${Math.max(0, Math.floor(Number(noise.heardListenerCount) || 0))} · TRACKED BY ${Math.max(0, Math.floor(Number(noise.trackedListenerCount) || 0))} · LOCKED ON ${Math.max(0, Math.floor(Number(noise.lockedOnListenerCount) || 0))}`;
+    _noiseDetailEl.textContent = formatNoiseDetail(noise);
     _noiseReadoutEl.style.color = radius > 0 ? 'rgba(80, 220, 220, 0.92)' : 'rgba(120, 160, 180, 0.72)';
   }
 
@@ -422,22 +430,10 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     }
   }
 
-  if (opts.inhibitorState && opts.ship) {
-    const corruption = inhibitorHud.corruption;
-    if (!reducedMotion && corruption > 0.02) {
-      const jitter = 1 + corruption * 2;
-      const jx = Math.sin(runElapsedTime * 41.3) * jitter * corruption;
-      const jy = Math.cos(runElapsedTime * 33.7) * jitter * corruption;
-      _hudEl.style.transform = `translate(${jx.toFixed(1)}px, ${jy.toFixed(1)}px)`;
-      _hudEl.style.filter = `hue-rotate(${(corruption * 16).toFixed(1)}deg) saturate(${(1 + corruption * 0.4).toFixed(2)})`;
-    } else {
-      _hudEl.style.transform = '';
-      _hudEl.style.filter = '';
-    }
-  } else {
-    _hudEl.style.transform = '';
-    _hudEl.style.filter = '';
-  }
+  // Ecology keeps its slower world pulse; the HUD stays still so threat
+  // language remains readable instead of stacking a second global motion.
+  _hudEl.style.transform = '';
+  _hudEl.style.filter = '';
 
   // === HULL ABILITIES ===
   if (_ability1El && opts.abilityState) {

@@ -135,6 +135,7 @@ function rulerFacts(source = null) {
         durationMs: Math.max(0, finite(coyote.duration_ms)),
         remainingMs: Math.max(0, finite(coyote.remaining_ms)),
         effectiveDurationMs: Math.max(0, finite(coyote.effective_duration_ms)),
+        transportAllowanceMs: Math.max(0, finite(coyote.effective_duration_ms) - finite(coyote.duration_ms)),
         effectiveRemainingMs: Math.max(0, finite(coyote.effective_remaining_ms)),
         transportRemainingMs: Math.max(0, finite(coyote.transport_remaining_ms)),
       }),

@@ -84,6 +84,8 @@ export function buildRunResultsViewModel({
   const cargo = cargoForOutcome(runResult, fallbackCargo, outcome);
   const noiseMaxMeters = runResult?.noiseMaxMeters ?? 0;
   const noiseSource = runResult?.noiseSource || 'IDLE';
+  const noiseTimeHeardSeconds = Math.max(0, Number(runResult?.noiseTimeHeardSeconds) || 0);
+  const noiseTimeTrackedSeconds = Math.max(0, Number(runResult?.noiseTimeTrackedSeconds) || 0);
   const ecologyCounts = runResult?.ecologyCounts && typeof runResult.ecologyCounts === 'object'
     ? runResult.ecologyCounts
     : {};
@@ -117,6 +119,9 @@ export function buildRunResultsViewModel({
     survivalSeconds: survivalTime,
     runDurationSeconds,
     noiseSummary: `${formatNoiseMeters(noiseMaxMeters)} · ${String(noiseSource).toUpperCase()}`,
+    noiseTimeHeardSeconds,
+    noiseTimeTrackedSeconds,
+    noiseTimeSummary: `${Math.round(noiseTimeHeardSeconds)}s heard · ${Math.round(noiseTimeTrackedSeconds)}s tracked`,
     ecologyLabel,
     wellsVisited: runResult?.wellsVisited ?? null,
     cargo,
@@ -235,6 +240,8 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawKeyValueRow(ctx, 'survival', view.survival, leftX, y, { alpha: contentAlpha });
   y += 18;
   drawKeyValueRow(ctx, 'noise max', view.noiseSummary, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
+  y += 18;
+  drawKeyValueRow(ctx, 'noise time', view.noiseTimeSummary, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
   y += 18;
   drawKeyValueRow(ctx, 'ecology', view.ecologyLabel, leftX, y, { alpha: contentAlpha, valueRole: 'inhibitor' });
   y += 18;
