@@ -334,6 +334,10 @@ export class InputManager {
     return false;
   }
 
+  get mutePressed() {
+    return Boolean(this._keys['KeyM']);
+  }
+
   /** Seed reroll — S key or gamepad X/Square. Contextual to map select. */
   get rerollPressed() {
     if (this._keys['KeyS']) return true;

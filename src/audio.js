@@ -52,6 +52,7 @@ export class AudioEngine {
       phase: this._audioState,
       movement: { state: this._movementState, persistentVoices: this._movementVoice ? 2 : 0 },
       mixer: this._mixer.snapshot(this.ctx?.currentTime ?? 0),
+      mix: { ...this._mix },
       buses: Object.fromEntries(Object.entries(this.busGains || {}).map(([name, gain]) => [name, gain.gain.value])),
       ducking: Object.fromEntries(Object.entries(this.busDuckGains || {}).map(([name, gain]) => [name, gain.gain.value])),
       trace: this._trace.manifest(),
@@ -235,11 +236,17 @@ export class AudioEngine {
   _effectiveMasterVolume() { return this._mix.muted ? 0 : this._mix.masterVolume; }
   setMixSettings(settings = {}) {
     for (const key of ['masterVolume', 'effectsVolume', 'uiVolume', 'muted']) {
-      if (Object.hasOwn(settings, key)) this._mix[key] = settings[key];
+      if (Object.hasOwn(settings, key)) this._mix[key] = key === 'muted' ? Boolean(settings[key]) : settings[key];
     }
     if (this.master && this._audioState !== 'terminal-linger') {
       this.master.gain.value = this._effectiveMasterVolume();
     }
+  }
+
+  toggleMute() {
+    const muted = !this._mix.muted;
+    this.setMixSettings({ muted });
+    return muted;
   }
 
   /**

@@ -22,6 +22,7 @@ export const ACTION_PROMPT_LABELS = Object.freeze({
   hullNext: { keyboard: 'Right', controller: 'D-pad R', deck: 'D-pad R' },
   reroll: { keyboard: 'S', controller: 'X', deck: 'X' },
   delete: { keyboard: 'X', controller: 'Y', deck: 'Y' },
+  mute: { keyboard: 'M', controller: 'Keyboard M', deck: 'Keyboard M' },
   consumables: { keyboard: '1/2', controller: 'D-pad L/R', deck: 'D-pad L/R' },
   consumable1: { keyboard: '1', controller: 'D-pad L', deck: 'D-pad L' },
   consumable2: { keyboard: '2', controller: 'D-pad R', deck: 'D-pad R' },

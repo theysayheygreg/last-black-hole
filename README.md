@@ -134,7 +134,9 @@ First launch flow:
 1. Press `Space` / `Enter` on keyboard or `A` on Steam Deck/controller at the
    title screen.
 2. Choose an existing pilot or select an empty slot, type a pilot name, and
-   press `Enter`.
+   press `Enter`. On Pilot Select, `X` opens a delete confirmation for the
+   highlighted pilot; `CANCEL` is selected by default and deletion only happens
+   after choosing `DELETE` explicitly.
 3. On the home screen, use `Q/E` on keyboard or `L1/R1` on Deck/controller to
    switch tabs.
 4. Go to `LAUNCH`, confirm with `Space` or `A`, choose a destination, then
@@ -258,6 +260,7 @@ The product path is authority-first. `stack:sandbox` exists for renderer and deb
 | Consumable 1 | 1 |
 | Consumable 2 | 2 |
 | Pause | Escape |
+| Mute / unmute audio | `M` (session-local) |
 | Dev panel | Backtick |
 
 ### Gamepad

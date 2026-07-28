@@ -83,6 +83,13 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
   assert.strictEqual(engine.master.gain.value, 0, 'mute survives reset');
 
   engine.setMixSettings({ muted: false });
+  engine.setMixSettings({ masterVolume: 0.7, effectsVolume: 0.41, uiVolume: 0.37 });
+  assert.strictEqual(engine.toggleMute(), true, 'toggleMute enables the global mute');
+  assert.strictEqual(engine.master.gain.value, 0, 'toggleMute silences the master bus');
+  assert.deepStrictEqual(engine.getDiagnostics().mix, { masterVolume: 0.7, effectsVolume: 0.41, uiVolume: 0.37, muted: true }, 'mute preserves the configured mix');
+  assert.strictEqual(engine.toggleMute(), false, 'toggleMute restores audio');
+  assert.strictEqual(engine.master.gain.value, 0.7, 'unmute restores the prior master volume');
+
   const heldStart = ctx.nodes.length;
   assert.strictEqual(engine.playEvent('portalReady'), true);
   const held = engine._cueSynthesis._portalReadyVoice;

@@ -364,6 +364,16 @@ export function initTestAPI(getState) {
       return state ? JSON.parse(JSON.stringify(state)) : null;
     },
 
+    setProfileCursorForTest(index) {
+      const { setProfileCursorForTest } = getState();
+      return setProfileCursorForTest ? setProfileCursorForTest(index) : null;
+    },
+
+    getProfileCursorForTest() {
+      const { profileCursor } = getState();
+      return profileCursor;
+    },
+
     loadTitleScene() {
       const { loadTitleScene } = getState();
       if (!loadTitleScene) return false;
@@ -544,6 +554,24 @@ export function initTestAPI(getState) {
       const { profileManager } = getState();
       if (!profileManager) return null;
       return profileManager.createProfile(0, name || 'Test Pilot');
+    },
+
+    createTestProfileSlot(slotIndex, name) {
+      const { profileManager } = getState();
+      if (!profileManager) return null;
+      return profileManager.createProfile(Math.max(0, Math.min(2, Math.round(Number(slotIndex) || 0))), name || 'Test Pilot');
+    },
+
+    setActiveProfileSlotForTest(slotIndex) {
+      const { profileManager } = getState();
+      if (!profileManager) return false;
+      profileManager.activeSlot = Math.max(0, Math.min(2, Math.round(Number(slotIndex) || 0)));
+      return true;
+    },
+
+    getProfileSlots() {
+      const { profileManager } = getState();
+      return profileManager?.slots?.map((profile) => profile ? { name: profile.name, id: profile.id } : null) || [];
     },
 
     getProfile() {

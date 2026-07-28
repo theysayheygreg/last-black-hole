@@ -278,11 +278,13 @@ export class ProfileManager {
 
   /** Delete a profile slot. */
   deleteProfile(slotIndex) {
-    if (slotIndex < 0 || slotIndex >= MAX_SLOTS) return;
+    if (slotIndex < 0 || slotIndex >= MAX_SLOTS || !this.slots[slotIndex]) return null;
+    const deleted = this.slots[slotIndex];
     this.slots[slotIndex] = null;
     if (this.activeSlot === slotIndex) this.activeSlot = -1;
     try { localStorage.removeItem(STORAGE_PREFIX + slotIndex); } catch (e) {}
     this._saveIndex();
+    return deleted;
   }
 
   // ---- Profile mutations ----

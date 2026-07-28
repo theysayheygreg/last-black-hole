@@ -2,6 +2,14 @@
 
 ## 2026-07-28
 
+- **Pilot Select and audio usability:** highlighted saved pilots can be deleted
+  only through an explicit `CANCEL`-first confirmation; remaining pilot
+  selection is deterministic and deleting the final pilot opens the existing
+  create flow. Keyboard `M` toggles the existing master audio owner and shows a
+  restrained `MUTED` / `AUDIO ON` acknowledgement while preserving the prior
+  mix. Mute is session-local because no simple persisted audio-settings store
+  exists.
+
 - **Green `774bd71b` RC and package:** normal keyboard F now uses a true held
   Ruler input, and portal confirmation resolves against authoritative residence
   at command receipt before movement can carry the ship out. Retired

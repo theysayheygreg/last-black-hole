@@ -466,6 +466,7 @@ let homePhaseTimer = 0;      // animation timer for home screen
 let nameInputActive = false; // text input mode for new profile
 let nameInputBuffer = '';    // current typed name
 let deleteConfirmSlot = -1;  // which slot is pending delete confirmation (-1 = none)
+let deleteConfirmChoice = 'cancel'; // destructive confirmation defaults to the safe action
 let recentEchoes = [];
 
 const HOME_TABS = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
@@ -709,11 +710,43 @@ function isSalvageReportReady() {
 function profilePromptText() {
   const options = currentPromptOptions();
   if (nameInputActive) return `${promptLabel('confirm', options)} confirm    ${promptLabel('back', options)} cancel`;
-  if (deleteConfirmSlot >= 0) return `${promptLabel('confirm', options)} delete    ${promptLabel('back', options)} cancel`;
+  if (deleteConfirmSlot >= 0) return `${promptLabel('navigate', options)} choose    ${promptLabel('confirm', options)} ${deleteConfirmChoice}    ${promptLabel('back', options)} cancel`;
   const occupied = profileManager.hasProfile(profileCursor);
   return occupied
     ? `${promptLabel('select', options)} select    ${promptLabel('confirm', options)} load    ${promptLabel('delete', options)} delete    ${promptLabel('back', options)} back`
     : `${promptLabel('select', options)} select    ${promptLabel('confirm', options)} create    ${promptLabel('back', options)} back`;
+}
+
+function nextRemainingProfileSlot(afterSlot) {
+  for (let offset = 1; offset <= 3; offset += 1) {
+    const slot = (afterSlot + offset) % 3;
+    if (profileManager.hasProfile(slot)) return slot;
+  }
+  return -1;
+}
+
+function closeDeleteConfirmation() {
+  deleteConfirmSlot = -1;
+  deleteConfirmChoice = 'cancel';
+}
+
+function confirmProfileDeletion() {
+  if (deleteConfirmChoice !== 'delete' || deleteConfirmSlot < 0) {
+    closeDeleteConfirmation();
+    return;
+  }
+  const deletedSlot = deleteConfirmSlot;
+  const deleted = profileManager.deleteProfile(deletedSlot);
+  closeDeleteConfirmation();
+  if (!deleted) return;
+  const nextSlot = nextRemainingProfileSlot(deletedSlot);
+  if (nextSlot >= 0) {
+    profileCursor = nextSlot;
+    return;
+  }
+  profileCursor = deletedSlot;
+  nameInputActive = true;
+  setNameInputBuffer(generatePilotName());
 }
 
 function threePanelLayout(width, height, kind, viewportWidth = width) {
@@ -722,7 +755,7 @@ function threePanelLayout(width, height, kind, viewportWidth = width) {
 }
 
 function currentUiFocusKey() {
-  if (gamePhase === 'profileSelect') return `${gamePhase}:${profileCursor}:${nameInputActive ? 'name' : deleteConfirmSlot >= 0 ? 'delete' : 'list'}`;
+  if (gamePhase === 'profileSelect') return `${gamePhase}:${profileCursor}:${nameInputActive ? 'name' : deleteConfirmSlot >= 0 ? `delete:${deleteConfirmChoice}` : 'list'}`;
   if (gamePhase === 'home') {
     if (homeTab === 0) return `${gamePhase}:${homeTab}:${homeShipCursor}`;
     if (homeTab === 1) return `${gamePhase}:${homeTab}:${homeVaultCursor}`;
@@ -750,6 +783,7 @@ function getUiMotionStateForTest() {
     transition: { active: transitionActive, timer: transitionTimer, ...transitionTiming(), glitchIntensity: getTransitionGlitchIntensity() },
     salvageReport: { timer: metaPhaseTimer, displayTime: salvageReportDisplayTime(), ready: isSalvageReportReady(), ...salvageReportTiming() },
     profilePrompt: gamePhase === 'profileSelect' ? profilePromptText() : null,
+    profileDelete: gamePhase === 'profileSelect' ? { slot: deleteConfirmSlot, choice: deleteConfirmChoice } : null,
     layout: (gamePhase === 'home' || gamePhase === 'mapSelect')
       ? gamePhase === 'mapSelect'
         ? mapSelectSurfaceLayout(overlayCanvas.width, overlayCanvas.height, window.innerWidth, MAP_SELECT_ENTRIES.length)
@@ -2880,6 +2914,7 @@ let _prevRight = false;
 let _prevTabLeft = false;
 let _prevTabRight = false;
 let _prevDelete = false;
+let _prevMute = false;
 let _prevPulse = false;
 let _prevInventory = false;
 let _prevConsumable1 = false;
@@ -4117,6 +4152,13 @@ function gameLoop(now) {
   const inventoryNow = inputManager.inventoryPressed;
   const consumable1Now = inputManager.consumable1Pressed;
   const consumable2Now = inputManager.consumable2Pressed;
+  const muteNow = inputManager.mutePressed;
+
+  if (muteNow && !_prevMute) {
+    audioEngine.init();
+    const muted = audioEngine.toggleMute();
+    showWarning(muted ? 'MUTED' : 'AUDIO ON', muted ? 'rgba(190, 190, 210, 0.95)' : 'rgba(150, 230, 190, 0.95)', 1400);
+  }
 
   // --- Menu input (title, mapSelect) ---
   if (gamePhase === 'title') {
@@ -4146,13 +4188,15 @@ function gameLoop(now) {
       }
       applySceneCamera(dt);
     } else if (deleteConfirmSlot >= 0) {
-      // Delete confirmation — Y/N
+      if ((leftNow && !_prevLeft) || (rightNow && !_prevRight)) {
+        deleteConfirmChoice = deleteConfirmChoice === 'cancel' ? 'delete' : 'cancel';
+        audioEngine.playEvent('menuMove');
+      }
       if (confirmNow && !_prevConfirm) {
-        profileManager.deleteProfile(deleteConfirmSlot);
-        deleteConfirmSlot = -1;
+        confirmProfileDeletion();
       }
       if (backNow && !_prevBack) {
-        deleteConfirmSlot = -1;
+        closeDeleteConfirmation();
       }
       applySceneCamera(dt);
     } else {
@@ -4176,6 +4220,7 @@ function gameLoop(now) {
       // Delete pilot (X key / triangle button)
       if (inputManager.deletePressed && !_prevDelete && profileManager.hasProfile(profileCursor)) {
         deleteConfirmSlot = profileCursor;
+        deleteConfirmChoice = 'cancel';
       }
       if (!transitionActive && backNow && !_prevBack) {
         gamePhase = 'title';
@@ -4367,6 +4412,7 @@ function gameLoop(now) {
           _prevTabLeft = inputManager.tabLeftPressed;
           _prevTabRight = inputManager.tabRightPressed;
           _prevDelete = inputManager.deletePressed;
+          _prevMute = muteNow;
           _prevPulse = pulseNow;
           _prevSlingshot = slingshotNow;
           _prevInventory = inventoryNow;
@@ -4808,6 +4854,7 @@ function gameLoop(now) {
   _prevTabLeft = inputManager.tabLeftPressed;
   _prevTabRight = inputManager.tabRightPressed;
   _prevDelete = inputManager.deletePressed;
+  _prevMute = muteNow;
   _prevPulse = pulseNow;
   _prevSlingshot = slingshotNow;
   _prevInventory = inventoryNow;
@@ -5851,15 +5898,27 @@ function gameLoop(now) {
       ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
       ctx.font = canvasFont(13);
       ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, profileLayout.panel.y + profileLayout.panel.h - 54);
+      ctx.font = canvasFont(12);
+      ctx.fillStyle = deleteConfirmChoice === 'cancel' ? 'rgba(255, 255, 255, 0.98)' : 'rgba(180, 180, 200, 0.62)';
+      ctx.fillText('[ CANCEL ]', cx - 74, profileLayout.panel.y + profileLayout.panel.h - 28);
+      ctx.fillStyle = deleteConfirmChoice === 'delete' ? 'rgba(255, 150, 120, 0.98)' : 'rgba(180, 180, 200, 0.62)';
+      ctx.fillText('[ DELETE ]', cx + 74, profileLayout.panel.y + profileLayout.panel.h - 28);
     }
 
     // Controls hint: glyphs remain separate from the selected action label.
-    drawActionFooter(ctx, profileLayout.panel.x + UI_DECK_GEOMETRY.panel.paddingX, profileLayout.promptY - 12, [
-      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'move' },
-      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'load / create' },
-      { descriptor: actionDescriptor('delete', currentPromptOptions()), verb: 'delete' },
-      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back out' },
-    ], { alpha: 0.76, maxWidth: profileLayout.panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, backing: true, backingRole: 'flow' });
+    const profileFooterActions = deleteConfirmSlot >= 0
+      ? [
+        { descriptor: actionDescriptor('navigate', currentPromptOptions()), verb: 'choose cancel / delete' },
+        { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: deleteConfirmChoice },
+        { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'cancel' },
+      ]
+      : [
+        { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'move' },
+        { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'load / create' },
+        { descriptor: actionDescriptor('delete', currentPromptOptions()), verb: 'delete' },
+        { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back out' },
+      ];
+    drawActionFooter(ctx, profileLayout.panel.x + UI_DECK_GEOMETRY.panel.paddingX, profileLayout.promptY - 12, profileFooterActions, { alpha: 0.76, maxWidth: profileLayout.panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, backing: true, backingRole: 'flow' });
 
     ctx.restore();
   }
