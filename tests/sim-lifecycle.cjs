@@ -144,8 +144,9 @@ async function run() {
       searchAngle: 1.5,
     });
     assert(inhibitor.scheduledTime === 12 && inhibitor.waveBudget === 7
-      && inhibitor.radius === 0.25 && inhibitor.swarmSearchAngle === 1.5,
-      "Expected inhibitor schedule, tuning, and RNG angle to remain explicit inputs");
+      && inhibitor.swarmSearchAngle === 1.5
+      && !('form' in inhibitor) && !('pressure' in inhibitor),
+      "Expected collection-era inhibitor schedule inputs without retired scalar state");
   });
 
   await runner.run("Empty sim auto-stops after the idle grace window", async () => {
@@ -331,10 +332,8 @@ async function run() {
       const snapshot = await fetchJson(MATCH_CAP_PORT, "/snapshot");
       assert(snapshot.body.session?.status === "running",
         `Expected session to remain running through final open, got ${snapshot.body.session?.status}`);
-      assert(snapshot.body.inhibitor?.finalPortalSpawned === true,
-        "Expected main timer to materialize the guaranteed final exfil");
       assert(snapshot.body.world?.portals?.some((portal) => portal.finalInhibitor && portal.alive !== false),
-        "Expected a live guaranteed final portal at the main timer");
+        "Expected the Conductor to materialize a live guaranteed final exfil at the canonical front");
     } finally {
       await stopSimServer(MATCH_CAP_PORT).catch(() => null);
     }

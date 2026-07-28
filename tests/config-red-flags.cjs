@@ -82,8 +82,10 @@ async function run() {
       "duplicated CJS tuning contract must stay deleted");
     assert(source("scripts/sim/well-gravity.cjs").includes('require("../../src/content/tuning.js")'),
       "authority gravity must consume the canonical tuning module");
-    assert(source("scripts/sim-runtime.cjs").includes('require("../src/content/tuning.js")'),
-      "authority signal must consume the canonical tuning module");
+    const runtimeSource = source("scripts/sim-runtime.cjs");
+    assert(runtimeSource.includes('require("./sim/noise-radius.cjs")')
+      && runtimeSource.includes("NOISE_CONFIG"),
+      "authority Noise must consume the canonical Noise source module");
     assert(source("src/dev-panel.js").includes("CLIENT_TUNABLE_CONTRACTS"),
       "dev panel must consume canonical client metadata");
   });

@@ -46,12 +46,11 @@ async function run() {
   const index = read("index-a.html");
   includes(index, "--lbh-couch-body: 15px", "HUD must keep a couch-readable body-size target");
   includes(index, "--lbh-gauge-height: 16px", "HUD gauges must stay at least text-sized on Deck");
-  for (const gaugeId of ["hud-fuel-bar", "hud-hull-bar", "hud-signal-bar"]) {
-    const rule = index.match(new RegExp(`#${gaugeId}\\s*\\{[^}]*width:\\s*100%;\\s*height:\\s*(?:var\\(--lbh-gauge-height\\)|(\\d+)px)`));
-    assert(rule, `${gaugeId} must fill its readable status rail`);
-    if (rule[1]) assert(Number(rule[1]) >= 16, `${gaugeId} must stay at least 16px tall on Deck`);
-  }
-  includes(index, "id=\"hud-hull-bar\" role=\"progressbar\"", "Deck HUD must expose hull state alongside fuel and signal");
+  const hullRule = index.match(/#hud-hull-bar\s*\{[^}]*width:\s*100%;\s*height:\s*(?:var\(--lbh-gauge-height\)|(\d+)px)/);
+  assert(hullRule, "hud-hull-bar must fill its readable status rail");
+  if (hullRule[1]) assert(Number(hullRule[1]) >= 16, "hud-hull-bar must stay at least 16px tall on Deck");
+  includes(index, "id=\"hud-hull-bar\" role=\"progressbar\"", "Deck HUD must expose hull state");
+  includes(index, "id=\"hud-noise-readout\"", "Deck HUD must expose Noise state alongside hull");
   includes(index, "id=\"hud-interaction\"", "Deck HUD must reserve a non-overlapping interaction confirmation surface");
   includes(index, "#hud-abilities", "Deck HUD must keep abilities in an explicit panel");
   includes(index, "backdrop-filter: blur(2px)", "HUD panels need backing separation over dense ASCII fields");

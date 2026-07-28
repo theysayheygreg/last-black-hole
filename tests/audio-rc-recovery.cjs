@@ -96,7 +96,7 @@ function pannersSince(ctx, start) { return ctx.nodes.slice(start).filter((node) 
   ctx.advanceTo(ctx.currentTime + 0.06);
   assert.strictEqual(held.osc.disconnected, true, 'held voice disconnects after its scheduled stop');
 
-  for (const terminalCue of ['portalConfirm', 'portalBlocked', 'portalFinal', 'extract', 'death']) {
+  for (const terminalCue of ['portalConfirm', 'portalFinal', 'extract', 'death']) {
     engine.reset();
     ctx.currentTime += 1;
     assert.strictEqual(engine.playEvent('portalReady'), true, `${terminalCue}: portal-ready starts`);
