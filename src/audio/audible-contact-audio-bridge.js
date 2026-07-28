@@ -12,7 +12,10 @@ function finite(value, fallback = 0) {
 }
 
 function contactClass(contact = {}) {
-  return String(contact.identity || contact.category || '').toUpperCase();
+  const identity = String(contact.identity || '').trim().toUpperCase();
+  if (Object.hasOwn(CATEGORY_PRIORITY, identity)) return identity;
+  const category = String(contact.category || '').trim().toUpperCase();
+  return Object.hasOwn(CATEGORY_PRIORITY, category) ? category : null;
 }
 
 function compareContacts(a, b) {
@@ -45,11 +48,16 @@ export class AudibleContactAudioBridge {
   }
 
   update(contacts = [], { nowSeconds = 0 } = {}) {
-    const admitted = (Array.isArray(contacts) ? contacts : [])
+    const candidates = (Array.isArray(contacts) ? contacts : [])
       .filter((contact) => contact && contact.live !== false && contact.id != null)
+      .filter((contact) => contactClass(contact) !== null)
       .sort(compareContacts)
-      .slice(0, this.maxVoices)
-      .map(voiceFromContact);
+    const unique = new Map();
+    for (const contact of candidates) {
+      const id = String(contact.id);
+      if (!unique.has(id)) unique.set(id, contact);
+    }
+    const admitted = [...unique.values()].slice(0, this.maxVoices).map(voiceFromContact);
     const next = new Map(admitted.map((voice) => [voice.id, voice]));
     const entered = [];
     const updated = [];

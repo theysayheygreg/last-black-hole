@@ -63,6 +63,7 @@ async function run() {
   assert.strictEqual(engine.getDiagnostics().contacts.activeVoices, 0,
     'browser audio remains silent and uninitialized until the existing gesture-gated init');
   engine.init();
+  engine.setContext('gameplay');
 
   const contacts = [
     { id: 'glitch-private-id', live: true, category: 'GLITCH', rangeMeters: 800, emittedRadiusMeters: 1600, bearingRadians: -Math.PI / 2 },
@@ -91,6 +92,15 @@ async function run() {
   assert(contactPanners.some((node) => node.pan.value === 1), 'canonical right bearing updates pan');
   assert(contactGains.every((node) => node.gain.value > 0), 'canonical range/radius updates restrained gain');
 
+  engine.setMixSettings({ masterVolume: 0.63, muted: false });
+  const contactGainBeforeMute = contactGains[0].gain.value;
+  assert.strictEqual(engine.toggleMute(), true, 'M toggles the one master owner into mute');
+  assert.strictEqual(engine.master.gain.value, 0, 'master gain silences contact voices at the shared output owner');
+  assert.strictEqual(engine.getDiagnostics().contacts.activeVoices, 3, 'mute does not tear down held contact voices');
+  assert.strictEqual(contactGains[0].gain.value, contactGainBeforeMute, 'mute leaves the contact mix intact upstream');
+  assert.strictEqual(engine.toggleMute(), false, 'M toggles the shared master owner back on');
+  assert.strictEqual(engine.master.gain.value, 0.63, 'unmute restores the prior master mix');
+
   const oscillatorCount = contactOscillators.length;
   engine.ctx.currentTime = 10.1;
   contacts[3] = { ...contacts[3], bearingRadians: -Math.PI / 2, rangeMeters: 1400 };
@@ -108,7 +118,19 @@ async function run() {
   assert(diagnostics.contacts.trace.some((entry) => entry.event === 'exit' && entry.category === 'SWARM'),
     'trace proves ecology exit lifecycle');
 
+  for (const terminal of ['dead', 'escaped', 'results']) {
+    engine.setContext('gameplay');
+    engine.updateAudibleContacts([contacts[1]], { nowSeconds: 12 });
+    engine.setContext(terminal);
+    assert.strictEqual(engine.getDiagnostics().contacts.activeVoices, 0, `${terminal} clears held contact voices`);
+    assert.strictEqual(engine.updateAudibleContacts([contacts[1]], { nowSeconds: 12 }), false,
+      `${terminal} rejects contact updates from the render loop`);
+    assert.strictEqual(engine.getDiagnostics().contacts.activeVoices, 0,
+      `${terminal} update cannot restart contact voices`);
+  }
+
   for (const terminal of ['portalConfirm', 'extract', 'death']) {
+    engine.setContext('gameplay');
     engine.updateAudibleContacts([contacts[3]], { nowSeconds: engine.ctx.currentTime });
     assert.strictEqual(engine.getDiagnostics().contacts.activeVoices, 1);
     engine.playEvent(terminal);
@@ -127,6 +149,10 @@ async function run() {
   const hudUpdate = mainSource.indexOf('updateHUD(simState.runElapsedTime');
   assert(memoryUpdate >= 0 && audioProjection > memoryUpdate && audioProjection < hudUpdate,
     'the same authoritative live contact memory feeding HUD is projected into audio immediately after refresh');
+  assert(/if \(gamePhase === 'playing'\) \{\s*\/\/ Refresh contact memory/.test(mainSource),
+    'terminal render frames do not refresh or project audible contacts');
+  assert(/if \(portal && extractNow && !_prevExtract\)/.test(mainSource),
+    'local extraction requires the existing extract rising edge while overlap remains abortable');
   assert(/gamePhase === 'escaped'[\s\S]{0,120}authoritativePlayer\?\.status === 'escaped'/.test(mainSource),
     'escaped authority/game phase enters the existing HUD terminal path');
 

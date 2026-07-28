@@ -219,7 +219,7 @@ export class AudioEngine {
   setContext(state) {
     if (!this.initiated) return;
     this._audioState = normalizeBedState(state);
-    if (state === 'results' || state === 'dead' || this._audioState === 'terminal-linger') {
+    if (this._audioState !== 'gameplay-pressure') {
       this._applyAudibleContactPlan(this._audibleContactBridge.terminal(state), state);
     }
     const now = this.ctx.currentTime;
@@ -296,6 +296,10 @@ export class AudioEngine {
    */
   updateAudibleContacts(contacts = [], { nowSeconds = this.ctx?.currentTime ?? 0 } = {}) {
     if (!this.initiated || !CONFIG.audio.enabled) return false;
+    if (this._audioState !== 'gameplay-pressure') {
+      this._applyAudibleContactPlan(this._audibleContactBridge.terminal('context'), 'context');
+      return false;
+    }
     const plan = this._audibleContactBridge.update(contacts, { nowSeconds });
     this._applyAudibleContactPlan(plan);
     return true;

@@ -4776,7 +4776,7 @@ function gameLoop(now) {
 
       if (gamePhase === 'playing') {
         const portal = portalSystem.checkExtraction(ship.wx, ship.wy);
-        if (portal) {
+        if (portal && extractNow && !_prevExtract) {
           gamePhase = 'escaped';
           escapeTimer = 0;
           freezeRunEnd(simState);
@@ -5563,12 +5563,14 @@ function gameLoop(now) {
       scavengerSystem.deathDrops = [];
     }
 
-    // Refresh contact memory before the route rail reads its run-scoped
-    // EXFIL discovery latch.
-    updateAudibleContactMemory(simState.runElapsedTime);
-    audioEngine.updateAudibleContacts([...audibleContactMemory.values()], {
-      nowSeconds: simState.runElapsedTime,
-    });
+    if (gamePhase === 'playing') {
+      // Refresh contact memory before the route rail reads its run-scoped
+      // EXFIL discovery latch.
+      updateAudibleContactMemory(simState.runElapsedTime);
+      audioEngine.updateAudibleContacts([...audibleContactMemory.values()], {
+        nowSeconds: simState.runElapsedTime,
+      });
+    }
 
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();
