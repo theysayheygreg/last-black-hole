@@ -645,6 +645,9 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   const travel = await steerTo(page, clientId, initialPortal, portalApproach);
   const ready = { player: travel.player, snapshot: travel.snapshot };
   assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
+  await page.waitForFunction(() => (
+    document.getElementById('hud-portals-status')?.textContent === 'CONFIRM EXTRACTION'
+  ), { timeout: 5000 });
   screenshots.push(await capturePage(page, outputDir, "08-portal-zone-awaiting-confirm"));
 
   // Capturing the evidence frame can take long enough for strong portal flow

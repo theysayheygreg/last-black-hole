@@ -95,6 +95,17 @@ async function run() {
     'An escaped outcome must enter the existing terminal HUD path');
   assert.strictEqual(escapedFrame.interaction, null,
     'An escaped outcome must suppress active route interaction');
+  const terminalRoute = hud.getRouteObjectiveState(
+    { wx: 0.5, wy: 0.5 },
+    { activeCount: 1, portals: [{ type: 'exit', alive: true, wx: 0.8, wy: 0.5 }] },
+    null,
+    false,
+    { exfilHeard: true, terminal: true },
+  );
+  assert.strictEqual(terminalRoute.label, '',
+    'Terminal HUD state must suppress the active route objective label');
+  assert.strictEqual(terminalRoute.detail, '',
+    'Terminal HUD state must suppress the active route objective detail');
   const terminalAbilities = hud.getAbilityPresentationState(terminalFrame.abilityState);
   assert(terminalAbilities.slots.every((slot) => slot.inert && !slot.active && slot.action === null));
   const inert = hud.getAbilityPresentationState({ hullType: 'breacher', terminal: true, burnFuel: 20 });
@@ -188,6 +199,10 @@ async function run() {
   assert.deepStrictEqual(report.journey.briefing, { mapName: 'The Shallows' });
   assert.deepStrictEqual(report.journey.firstRun, { runId: 'run-1' });
   assert.deepStrictEqual(report.journey.slingshot, { anchorType: 'well' });
+
+  const hudSource = require('fs').readFileSync(path.join(__dirname, '..', 'src', 'hud.js'), 'utf8');
+  assert(/terminal:\s*hudPresentation\.terminal/.test(hudSource),
+    'The live HUD renderer must pass terminal truth into route presentation');
 
   console.log('PresentationEvidence: 7/7 passed');
 }

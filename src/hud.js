@@ -359,7 +359,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     portalSystem,
     nextWaveTime,
     isFinalWave,
-    opts.routeDiscovery,
+    { ...opts.routeDiscovery, terminal: hudPresentation.terminal },
   );
   _portalsStatusEl.textContent = route.label;
   _portalsNextEl.textContent = route.detail;

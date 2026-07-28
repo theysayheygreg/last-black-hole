@@ -231,6 +231,9 @@ export function findNearestActivePortal(ship, portalSystem) {
 
 export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, isFinalWave = false, routeDiscovery = {}, portalInteraction = routeDiscovery?.portalInteraction) {
   const count = portalSystem?.activeCount || 0;
+  if (routeDiscovery?.terminal === true) {
+    return { count, tone: 'terminal', label: '', detail: '', nearest: null, terminal: true };
+  }
   const nearbyPortal = portalInteraction || null;
   const nearbyPortalType = nearbyPortal?.portalType || nearbyPortal?.type || null;
   if (nearbyPortal?.ready === true) {
