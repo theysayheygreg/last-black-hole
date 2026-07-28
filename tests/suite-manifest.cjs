@@ -120,6 +120,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AudioContactRuntime",
+    file: "audio-contact-runtime.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "OverloadState",
     file: "overload-state.cjs",
     lanes: ["core", "static", "full"],

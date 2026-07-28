@@ -21,6 +21,16 @@ import { cueSpec } from './audio/cue-spec.js';
 import { AudioTraceCapture } from './audio/capture.js';
 import { bedTarget, normalizeBedState } from './audio/adaptive-bed.js';
 import { CueSynthesis } from './audio/cue-synthesis.js';
+import { AudibleContactAudioBridge } from './audio/audible-contact-audio-bridge.js';
+
+const CONTACT_VOICE_FREQUENCIES = Object.freeze({
+  'EXFIL TONE': 523.25,
+  EXFIL: 523.25,
+  VESSEL: 82.41,
+  'VESSEL THRUST': 82.41,
+  SWARM: 146.83,
+  GLITCH: 233.08,
+});
 
 export class AudioEngine {
   constructor() {
@@ -44,6 +54,9 @@ export class AudioEngine {
     this._variationSeed = 'local';
     this._trace = new AudioTraceCapture('local');
     this._cueSynthesis = null;
+    this._audibleContactBridge = new AudibleContactAudioBridge({ maxVoices: 3 });
+    this._audibleContactVoices = new Map();
+    this._audibleContactTrace = [];
     this._mix = { masterVolume: CONFIG.audio.masterVolume, effectsVolume: CONFIG.audio.effectsVolume, uiVolume: CONFIG.audio.uiVolume, muted: false };
   }
 
@@ -56,6 +69,11 @@ export class AudioEngine {
       buses: Object.fromEntries(Object.entries(this.busGains || {}).map(([name, gain]) => [name, gain.gain.value])),
       ducking: Object.fromEntries(Object.entries(this.busDuckGains || {}).map(([name, gain]) => [name, gain.gain.value])),
       trace: this._trace.manifest(),
+      contacts: {
+        activeVoices: this._audibleContactVoices.size,
+        categories: [...this._audibleContactVoices.values()].map((voice) => voice.category),
+        trace: this._audibleContactTrace.slice(),
+      },
     };
   }
 
@@ -160,6 +178,7 @@ export class AudioEngine {
   }
 
   reset() {
+    this._applyAudibleContactPlan(this._audibleContactBridge.reset(), 'reset');
     this._eventBudget.reset();
     this._trace.reset(this._variationSeed, this.ctx?.currentTime ?? 0);
     this._mixer.reset();
@@ -200,6 +219,9 @@ export class AudioEngine {
   setContext(state) {
     if (!this.initiated) return;
     this._audioState = normalizeBedState(state);
+    if (state === 'results' || state === 'dead' || this._audioState === 'terminal-linger') {
+      this._applyAudibleContactPlan(this._audibleContactBridge.terminal(state), state);
+    }
     const now = this.ctx.currentTime;
     const target = bedTarget(this._audioState);
     // Death owns a deliberate master fade. Every other phase explicitly
@@ -268,6 +290,17 @@ export class AudioEngine {
     return true;
   }
 
+  /**
+   * Render already-authoritative HUD contact truth as bounded held voices.
+   * This never initializes Web Audio or decides whether a contact is audible.
+   */
+  updateAudibleContacts(contacts = [], { nowSeconds = this.ctx?.currentTime ?? 0 } = {}) {
+    if (!this.initiated || !CONFIG.audio.enabled) return false;
+    const plan = this._audibleContactBridge.update(contacts, { nowSeconds });
+    this._applyAudibleContactPlan(plan);
+    return true;
+  }
+
   // ---- Per-frame update ----
 
   update(dt, wells, ship, camX, camY, canvasW, canvasH, runElapsed, runDuration, inhibitorState = null) {
@@ -315,6 +348,9 @@ export class AudioEngine {
     if (!this.initiated || !CONFIG.audio.enabled) return false;
 
     const now = this.ctx.currentTime;
+    if (['portalConfirm', 'portalFinal', 'extract', 'death'].includes(type)) {
+      this._applyAudibleContactPlan(this._audibleContactBridge.terminal(type, { nowSeconds: now }), type);
+    }
     const spec = cueSpec(type);
     if (!spec) return false;
     const bus = spec.bus;
@@ -342,6 +378,74 @@ export class AudioEngine {
   }
 
   // ---- Init helpers ----
+
+  _contactTrace(event, category, reason = null) {
+    this._audibleContactTrace.push(Object.freeze({
+      event,
+      category,
+      ...(reason ? { reason } : {}),
+    }));
+    if (this._audibleContactTrace.length > 48) this._audibleContactTrace.splice(0, this._audibleContactTrace.length - 48);
+  }
+
+  _contactControls(descriptor) {
+    const radius = Math.max(1, Number(descriptor.emittedRadiusMeters) || 1);
+    const proximity = Math.max(0, Math.min(1, 1 - (Number(descriptor.rangeMeters) || 0) / radius));
+    return {
+      pan: Math.max(-1, Math.min(1, Math.cos(Number(descriptor.bearingRadians) || 0))),
+      gain: 0.012 + proximity * 0.038,
+    };
+  }
+
+  _startAudibleContactVoice(descriptor, now) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const panner = this.ctx.createStereoPanner();
+    osc.contactVoice = gain.contactVoice = panner.contactVoice = true;
+    osc.type = descriptor.category === 'GLITCH' ? 'square' : descriptor.category === 'SWARM' ? 'triangle' : 'sine';
+    osc.frequency.value = CONTACT_VOICE_FREQUENCIES[descriptor.category] || 110;
+    const controls = this._contactControls(descriptor);
+    gain.gain.value = 0;
+    panner.pan.value = controls.pan;
+    osc.connect(gain);
+    gain.connect(panner);
+    panner.connect(this.busGains.world);
+    osc.start();
+    gain.gain.linearRampToValueAtTime(controls.gain, now + 0.08);
+    const voice = { ...descriptor, osc, gain, panner };
+    this._audibleContactVoices.set(descriptor.id, voice);
+    this._contactTrace('enter', descriptor.category);
+  }
+
+  _updateAudibleContactVoice(descriptor, now) {
+    const voice = this._audibleContactVoices.get(descriptor.id);
+    if (!voice) return this._startAudibleContactVoice(descriptor, now);
+    const controls = this._contactControls(descriptor);
+    voice.panner.pan.linearRampToValueAtTime(controls.pan, now + 0.06);
+    voice.gain.gain.linearRampToValueAtTime(controls.gain, now + 0.06);
+    voice.category = descriptor.category;
+    this._contactTrace('update', descriptor.category);
+  }
+
+  _stopAudibleContactVoice(descriptor, now, reason) {
+    const voice = this._audibleContactVoices.get(descriptor.id);
+    if (!voice) return;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.linearRampToValueAtTime(0, now + 0.12);
+    voice.osc.stop(now + 0.13);
+    this._audibleContactVoices.delete(descriptor.id);
+    this._contactTrace('exit', voice.category, reason || descriptor.reason || 'contact-expired');
+  }
+
+  _applyAudibleContactPlan(plan, reason = null) {
+    if (!plan) return;
+    const now = this.ctx?.currentTime ?? 0;
+    for (const descriptor of plan.expired || []) this._stopAudibleContactVoice(descriptor, now, reason);
+    if (!this.initiated) return;
+    for (const descriptor of plan.entered || []) this._startAudibleContactVoice(descriptor, now);
+    for (const descriptor of plan.updated || []) this._updateAudibleContactVoice(descriptor, now);
+  }
 
   _initDrone() {
     // Primary drone — low sine

@@ -5566,6 +5566,9 @@ function gameLoop(now) {
     // Refresh contact memory before the route rail reads its run-scoped
     // EXFIL discovery latch.
     updateAudibleContactMemory(simState.runElapsedTime);
+    audioEngine.updateAudibleContacts([...audibleContactMemory.values()], {
+      nowSeconds: simState.runElapsedTime,
+    });
 
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();
@@ -5587,7 +5590,8 @@ function gameLoop(now) {
     );
     updateHUD(simState.runElapsedTime, portalSystem, cargoItems,
       remoteSession.active ? (remoteSession.snapshot?.world?.growthTimer ?? 0) : simState.growthTimer, {
-      terminal: gamePhase === 'dead' || authoritativePlayer?.status === 'dead' || ship.status === 'dead',
+      terminal: gamePhase === 'dead' || gamePhase === 'escaped' || authoritativePlayer?.status === 'escaped'
+        || authoritativePlayer?.status === 'dead' || ship.status === 'dead',
       scavengerSystem,
       combatSystem,
       signature: currentSignature,
