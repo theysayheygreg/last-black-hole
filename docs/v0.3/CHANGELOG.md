@@ -2,6 +2,26 @@
 
 ## 2026-07-27
 
+- **Selected RC evidence:** exact product source `a958a8c6` ran the full
+  no-retry candidate lane once: 86/119 passed, 33 failed, zero retries,
+  300.10s wall time. The first red is stale Validation coverage for retired
+  scalar Inhibitor shader state; other failures include retired pre-Noise and
+  portal-block expectations, isolated dependency gaps, browser bootstrap
+  cascades, and two host-timing cadence samples. The candidate is therefore
+  full-lane red, not promotion-ready.
+- **Fresh internal package:** the already-gated immutable source built all five
+  targets as `0.3.1.a958a8c6` through the release tool's supported
+  `--skip-tests` artifact path. `release:status` passed and `test:package`
+  passed staged authority boot plus package closure. The playtest ZIP is
+  441,826,786 bytes with SHA-256
+  `3f001bc1ce15dafcdd57af395084a810258c651c8045dc8d44cb3b6b4cac9b31`;
+  desktop `app.asar` payloads share SHA-256
+  `42a6959d5a438ae6d754b653c916239b7d4a01864b2ca6994ed19f2bb0f35374`.
+  No Deck deployment or promotion was performed.
+- **Bundled E3 review packet:** committed one RC-level Orrery creative and
+  technical review packet spanning held slingshot, Heat, loadout/results,
+  Noise Radius v1, accumulating Inhibitor Ecology v2, well overdrive, and
+  audible exfil. Primary owns delivery and intake; no review result is implied.
 - **Inhibitor Ecology v2 completion:** finished the player-facing collection
   migration. Glitches, Swarms, Vessels, and active exfils now project as
   deterministic world Noise emitters with `STATIC`/`CORRUPTION`/`THRUST`/

@@ -8,6 +8,18 @@
 
 ---
 
+## 2026-07-27 — v0.3.1 RC milestone bundled for Orrery
+
+- Selected immutable v0.3 product source `a958a8c6` for one RC evidence pass.
+  The no-retry full lane remained honestly red while all five hash-named
+  internal targets and packaged authority closure completed.
+- Bundled held slingshot, Heat, loadout/results readability, Noise Radius v1,
+  accumulating Inhibitor Ecology v2, persistent well overdrive, and audible
+  exfil into one E3 creative and technical review packet.
+- Kept machine evidence separate from taste. Primary owns the single
+  `#last-black-hole` handoff and review intake; no Deck, promotion, or
+  cross-version action is implied.
+
 ## 2026-07-14 — Maestro specialist lanes joined Primary Sol routing
 
 - Added pinned production and quality-review specialist lanes for coordinated

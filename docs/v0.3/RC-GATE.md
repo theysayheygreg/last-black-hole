@@ -5,17 +5,59 @@
 
 ## Current Verdict
 
-**The v0.3 human-clarity program is complete at source
-`ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844`. Final core passed 87/87 in
-45.36 s and full passed 119/119 in 432.91 s, both with zero retries. The fresh
-AgentPlay journey, product-loop contracts, final cadence/Deep Field sample, and
-LoC receipt are complete. No new package, Deck, RC, or promotion claim exists.**
+**Selected v0.3.1 RC source
+`a958a8c68b6c9f14054fe012882326dcae32f910` is package/boot green but
+candidate-gate red. The one no-retry full run passed 86/119 suites in 300.10 s
+wall time (439.31 s summed suite time), with 33 failures and zero retries. The
+first failure is a stale Validation expectation for the retired
+`u_inhibitorForm`; the remaining red set combines retired pre-Noise and
+portal-block contracts, missing isolated-worktree dependencies, browser
+`__TEST_API` bootstrap cascades, and two host-timing cadence samples. No
+isolated product boot failure was established, but this is not a green RC or a
+promotion claim.**
 
-`codex/v0.3-sim-harness-simplification` contains the current unified 15 Hz
-authority clock, measured Deep Field relevance/transport work, deadline
-delivery, runner isolation, and current-contract proof. It is based on
-`BASELINE_SHA=20184fae84b559abf27717c046811673040d987a`; `main` remains the
-v0.2 public/demo line.
+The same immutable source produced complete all-target internal build
+`0.3.1.a958a8c6` through the release tool's supported `--skip-tests` path after
+the full gate had already run. `release:status` found the hash-named release,
+and `test:package` passed staged desktop authority boot plus release-package
+closure. This proves artifact and packaged-runtime closure; it does not erase
+the full-lane red result.
+
+Current evidence:
+
+- full log:
+  `/private/tmp/lbh-v03-rc-a958a8c6-full-20260727T235200Z/test-full.log`
+  (SHA-256
+  `6ff1aaeb191fe3bb4d10f6b536579539e79876d8ee91c17192d25d49ceed2718`);
+- full summary:
+  `/private/tmp/lbh-v03-rc-a958a8c6-full-20260727T235200Z/summary-lines.txt`;
+- harness artifacts:
+  `/private/tmp/lbh-v03-rc-a958a8c6/tmp/harness-artifacts/1785196327317-8890`;
+- AgentPlay output:
+  `/private/tmp/lbh-v03-rc-a958a8c6/tests/screenshots/agent-play-eval-2026-07-27T235331801Z/`;
+- build root:
+  `/private/tmp/lbh-v03-build-a958a8c6/builds/v0.3.1.a958a8c6`;
+- playtest archive:
+  `/private/tmp/lbh-v03-build-a958a8c6/builds/last-singularity-playtest-v0.3.1.a958a8c6.zip`
+  (441,826,786 bytes; SHA-256
+  `3f001bc1ce15dafcdd57af395084a810258c651c8045dc8d44cb3b6b4cac9b31`);
+- macOS, Windows, and Linux `app.asar` SHA-256:
+  `42a6959d5a438ae6d754b653c916239b7d4a01864b2ca6994ed19f2bb0f35374`;
+- executable SHA-256: macOS
+  `f99a091f985fdf40d0ff56b6c64568b62db488715d96b33bf259bf4b082a9b1f`,
+  Windows
+  `99fc5c1323ced50ead5944158c808e6c239f9d50cd07334aa2cb085bd4b1308b`,
+  and Linux
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
+
+Greg's feel, visual, audio, and physical Deck reviews remain open. No Deck
+deployment or cross-version promotion was performed for this candidate.
+
+The accepted `codex/v0.3-sim-harness-simplification` ancestry remains the
+source of the unified 15 Hz authority clock, measured Deep Field
+relevance/transport work, deadline delivery, runner isolation, and prior
+current-contract proof. The selected RC source above is its later v0.3
+descendant; `main` remains the v0.2 public/demo line.
 
 Compared with the 93.62 s core baseline, final core is 2.064x faster. Compared
 with the 1,028.63 s full baseline, final full is 2.376x faster and consumes
@@ -233,8 +275,9 @@ npm run release:status
 npm run test:package
 ```
 
-- [ ] If Primary selects a final source as an RC, build its hash-named package.
-- [ ] Report and verify that exact source's `app.asar` and playtest ZIP through
+- [x] Primary selected `a958a8c6` as the current RC evidence source and built
+  its hash-named all-target internal package `0.3.1.a958a8c6`.
+- [x] Reported and verified that exact source's `app.asar` and playtest ZIP through
   `release:status` and `test:package`.
 
 Historical package evidence, not certification of the current source:
