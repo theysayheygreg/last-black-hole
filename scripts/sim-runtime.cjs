@@ -2449,13 +2449,16 @@ function closePortalWindow(window) {
 }
 
 function tickPortals(dt) {
+  let lifecycleChanged = false;
   const windows = runtime.portalSchedule?.windows || [];
   for (const window of windows) {
     if (runtime.simTime >= window.openTime && !runtime.portalClock.openedWindowIds.has(window.windowId)) {
       openPortalWindow(window);
+      lifecycleChanged = true;
     }
     if (runtime.simTime >= window.closeTime && !runtime.portalClock.closedWindowIds.has(window.windowId)) {
       closePortalWindow(window);
+      lifecycleChanged = true;
     }
   }
 
@@ -2472,11 +2475,13 @@ function tickPortals(dt) {
         type: portal.type,
         source: "unscheduled",
       });
+      lifecycleChanged = true;
       continue;
     }
     const remaining = portal.scheduledCloseTime - runtime.simTime;
     portal.opacity = remaining < 15 ? Math.max(0, remaining / 15) : 1;
   }
+  return lifecycleChanged;
 }
 
 // --- Wreck Wave Spawning ---
@@ -6428,7 +6433,11 @@ function tickSim() {
   tickWrecks(dt, relevance.wrecks);
   tickPlanetoids(dt, relevance.planetoids);
   tickGrowth(dt);
-  tickPortals(dt);
+  const portalsChanged = tickPortals(dt);
+  // Portal residence is queried by authority in this same tick. Rebuild the
+  // spatial mirror after lifecycle changes so a newly opened aperture cannot
+  // be visible in the world while absent from the interaction query.
+  if (portalsChanged) refreshBallparkMirror("portal-lifecycle");
   if (maybeEnforceMatchLifetime()) return;
   tickWreckWaves(dt);
   tickScavengers(dt, relevance.scavengers);

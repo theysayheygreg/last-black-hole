@@ -306,6 +306,84 @@ async function run() {
     }
   });
 
+  await runner.run("Held slingshot level sustains authority until button-up", async () => {
+    await startSimServer(SIM_PORT, { keepAlive: true });
+    try {
+      const start = await postJson("/session/start", {
+        mapId: "shallows",
+        requesterId: "slingshot-held-level-test",
+        requesterName: "Slingshot Held Level Test",
+        seed: 7416,
+      });
+      assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
+      const join = await postJson("/join", {
+        runId: start.body.session.runId,
+        clientId: "slingshot-held-level-test",
+        joinTicket: start.body.joinTicket,
+        name: "Slingshot Held Level Test",
+      });
+      assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
+      const authority = join.body.authority;
+      const initial = await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-held-level-test"));
+      const well = initial.world?.wells?.[0];
+      assert(well, "Expected a well for held slingshot level test");
+      const ws = initial.session?.worldScale || 3;
+
+      const moved = await postJson("/debug/player-state", {
+        clientId: "slingshot-held-level-test",
+        wx: wrap(well.wx + 0.36, ws),
+        wy: well.wy,
+        vx: 0,
+        vy: -0.35,
+        deltaV: 40,
+        status: "alive",
+        resetSlingshot: true,
+      });
+      assert(moved.status === 200 && moved.body.ok === true, "Expected held slingshot placement");
+      await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-held-level-test" && player.slingshot?.phase === "aim"));
+
+      const engage = await postCommand("/input", authority, 1, {
+        seq: 1,
+        moveX: 0,
+        moveY: 1,
+        thrust: 0,
+        brake: 0,
+        slingshot: true,
+        slingshotEdges: [301],
+        timestamp: Date.now(),
+      });
+      assert(engage.status === 200 && engage.body.ok === true, "Expected held slingshot engage input");
+      await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-held-level-test" && player.slingshot?.engaged === true));
+
+      await sleep(650);
+      const held = await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-held-level-test" && player.slingshot?.engaged === true));
+      assert(held.players.find((player) => player.clientId === "slingshot-held-level-test")?.slingshot?.engaged === true,
+        "Held level must sustain slingshot authority");
+
+      const release = await postCommand("/input", authority, 2, {
+        seq: 2,
+        moveX: 0,
+        moveY: 1,
+        thrust: 0,
+        brake: 0,
+        slingshot: false,
+        slingshotEdges: [],
+        timestamp: Date.now(),
+      });
+      assert(release.status === 200 && release.body.ok === true, "Expected button-up input");
+      const released = await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "slingshot-held-level-test" && player.slingshot?.engaged === false));
+      assert(released.players.find((player) => player.clientId === "slingshot-held-level-test")?.slingshot?.engaged === false,
+        "Button-up must release slingshot authority");
+    } finally {
+      await stopSimServer(SIM_PORT).catch(() => null);
+    }
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }

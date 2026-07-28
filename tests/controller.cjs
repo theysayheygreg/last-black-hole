@@ -318,8 +318,20 @@ async function run() {
             (remotePlayer) => remotePlayer.slingshot?.engaged === true,
             { timeout: 5000, interval: 120 }
           );
+          await sleep(650);
+          const slingshotHeld = await waitForSnapshotPlayer(
+            slingshotNet.clientId,
+            (remotePlayer) => remotePlayer.slingshot?.engaged === true,
+            { timeout: 2000, interval: 120 }
+          );
           await setGamepadButton(pageRemote, 3, false, 0);
           assert(engaged.player.slingshot?.engaged === true, 'Expected controller slingshot to engage remotely');
+          assert(slingshotHeld.player.slingshot?.engaged === true, 'Expected held controller Y to sustain slingshot authority');
+          await waitForSnapshotPlayer(
+            slingshotNet.clientId,
+            (remotePlayer) => remotePlayer.slingshot?.engaged === false,
+            { timeout: 3000, interval: 120 }
+          );
 
           await setGamepadButton(pageRemote, 4, true, 1); // ability1 -> burn for breacher
           const net = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());

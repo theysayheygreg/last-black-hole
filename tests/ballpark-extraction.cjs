@@ -109,26 +109,35 @@ async function run() {
       });
       assert(moved.status === 200 && moved.body.ok === true, `Expected debug player move success, got ${moved.status}`);
 
-      const portal = await postJson("/debug/portal-state", {
-        id: "ballpark-extraction-portal",
+      const finalPortal = await postJson("/debug/portal-state", {
+        id: "portal-final-exfil",
         wx: 2.72,
         wy: 2.72,
         type: "standard",
         lifespan: 60,
         alive: true,
         blockedByInhibitor: false,
+        finalInhibitor: true,
       });
-      assert(portal.status === 200 && portal.body.ok === true, `Expected debug portal placement, got ${portal.status}`);
+      assert(finalPortal.status === 200 && finalPortal.body.ok === true,
+        `Expected final portal placement, got ${finalPortal.status}`);
 
-      const ready = await waitForSnapshot((body) =>
+      const finalReady = await waitForSnapshot((body) =>
         body.players?.some((player) =>
           player.clientId === "ballpark-extraction-test" &&
           player.status === "alive" &&
-          player.portalInteraction?.portalId === "ballpark-extraction-portal"
+          player.portalInteraction?.portalId === "portal-final-exfil" &&
+          player.portalInteraction.ready === true
         )
       );
-      const readyPlayer = ready.players.find((entry) => entry.clientId === "ballpark-extraction-test");
-      assert(readyPlayer?.status === "alive", "Portal proximity must not auto-extract the player");
+      const finalProjected = finalReady.world?.portals?.find((portal) => portal.id === "portal-final-exfil");
+      assert(finalProjected?.finalInhibitor === true,
+        "Final residence must preserve final EXFIL truth");
+      assert(finalReady.world?.noiseEmitters?.some((emitter) =>
+        emitter.portalId === "portal-final-exfil" && emitter.sourceClass === "EXFIL"),
+      "Final portal must remain an EXFIL discovery emitter");
+      const finalReadyPlayer = finalReady.players.find((entry) => entry.clientId === "ballpark-extraction-test");
+      assert(finalReadyPlayer?.status === "alive", "Portal proximity must not auto-extract the player");
 
       await postJson("/debug/player-state", {
         clientId: "ballpark-extraction-test",
@@ -146,6 +155,26 @@ async function run() {
       assert(aborted.players.find((entry) => entry.clientId === "ballpark-extraction-test")?.status === "alive",
         "Leaving the portal zone must abort without extracting");
 
+      const retiredFinal = await postJson("/debug/portal-state", {
+        id: "portal-final-exfil",
+        alive: false,
+      });
+      assert(retiredFinal.status === 200 && retiredFinal.body.ok === true,
+        `Expected final portal retirement, got ${retiredFinal.status}`);
+
+      const optionalPortal = await postJson("/debug/portal-state", {
+        id: "portal-optional-1-1",
+        wx: 2.72,
+        wy: 2.72,
+        type: "standard",
+        lifespan: 60,
+        alive: true,
+        blockedByInhibitor: false,
+        finalInhibitor: false,
+      });
+      assert(optionalPortal.status === 200 && optionalPortal.body.ok === true,
+        `Expected optional portal placement, got ${optionalPortal.status}`);
+
       await postJson("/debug/player-state", {
         clientId: "ballpark-extraction-test",
         wx: 2.72,
@@ -156,8 +185,17 @@ async function run() {
       });
       await waitForSnapshot((body) => body.players?.some((player) =>
         player.clientId === "ballpark-extraction-test" &&
-        player.portalInteraction?.portalId === "ballpark-extraction-portal"
+        player.portalInteraction?.portalId === "portal-optional-1-1" &&
+        player.portalInteraction.ready === true
       ));
+
+      const optionalSnapshot = await getJson("/snapshot");
+      const optionalProjected = optionalSnapshot.body.world?.portals?.find((portal) => portal.id === "portal-optional-1-1");
+      assert(optionalProjected?.finalInhibitor === false,
+        "Optional residence must preserve optional portal truth");
+      assert(!optionalSnapshot.body.world?.noiseEmitters?.some((emitter) =>
+        emitter.portalId === "portal-optional-1-1"),
+      "Optional portal must not publish EXFIL discovery");
 
       const confirmed = await postAuthorizedInput(authority, 1, {
         seq: 1,
@@ -180,7 +218,7 @@ async function run() {
       const events = await waitForEvents(eventWatermark, (allEvents) =>
         allEvents.some((event) =>
           event.type === "player.escaped" &&
-          event.payload?.portalId === "ballpark-extraction-portal"
+          event.payload?.portalId === "portal-optional-1-1"
         )
       );
       assert(events.some((event) => event.type === "player.escaped"), "Expected authoritative player.escaped event");
