@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-28 — immutable old-version installs
+
+- Preserved the final known-good v0.2 playable as the immutable
+  [`v0.2.2-final`](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.2.2-final)
+  GitHub Release, pinned to source `83953aa1`.
+- Added a README-linked old-versions ledger and one-click historical installers
+  whose install, data, log, launcher, and Steam shortcut identities remain
+  separate from the current game.
+- Verified the published Linux installer against GitHub Release SHA-256
+  metadata and matched the installed executable and `app.asar` to the preserved
+  v0.2 build.
+
 ## 2026-07-14 — Exposure-lensed main push gate
 
 - Main pushes now classify the complete Git range and automatically skip the

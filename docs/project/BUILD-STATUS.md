@@ -36,6 +36,30 @@ That command builds `web`, `ipad`, `mac`, `win`, and `linux` release artifacts
 for the current committed `0.2.x.<hash>` build version and verifies the output
 shape.
 
+## Preserved Playable History
+
+The final known-good v0.2 playable is preserved as the immutable
+[`v0.2.2-final`](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.2.2-final)
+GitHub Release:
+
+- Source: `83953aa1f9f7cc7c39cfc2cd84610ee9a3dec104`
+- Build: `0.2.2.83953aa`
+- Combined archive SHA-256:
+  `6dfc0a0f35c400c877bc4fe12b42fc6699365b66c1e3a1468e4fb89d11042ac7`
+- Linux executable SHA-256:
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`
+- Linux `app.asar` SHA-256:
+  `26aa6c59f498b5f8b7a376f435d389ab8c459852c102b6bca02adf7d8d6fd457`
+- Greg's Deck copy remains at
+  `/home/deck/Games/last-singularity-v02` with the separate
+  **Last Singularity v0.2 Demo** Steam shortcut.
+
+The release's one-click installers use version-specific install, save-data,
+log, launcher, and shortcut identities. See
+[`OLD-VERSIONS.md`](../public/OLD-VERSIONS.md) for commands and per-platform
+archive hashes. New public versions must deploy beside this copy rather than
+replace or repoint it.
+
 ## Standing Assessment
 
 **Status update, 2026-07-06 v0.2 main consistency pass:** the current source
