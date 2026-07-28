@@ -2,6 +2,15 @@
 
 ## 2026-07-28
 
+- **Immutable `a58b5921` RC receipt:** the exact provisioned source ran the
+  119-suite full gate once with retries disabled: 111 passed, eight failed,
+  zero retries, 395.73 seconds wall time, and 576.08 seconds summed suite time.
+  Deep Field sustained 14.957/15 Hz with zero skipped deadlines. Stale
+  Signal/portal/result contracts and one host-sensitive Flow FPS sample remain
+  distinct from two current player-path blockers: Ruler live slingshot
+  engagement and AgentPlay optional-portal extraction. The clean build lane was
+  provisioned but intentionally stopped before build/package commands, so no
+  `0.3.1.a58b5921` artifact or package-green claim exists.
 - **Deck entity readability vertical:** Three now owns one bounded presentation
   scale policy with family/subtype pixel minima, retains authority radii as
   untouched inputs, and gives Scavenger Drifter plus Glitch/Swarm/Vessel named

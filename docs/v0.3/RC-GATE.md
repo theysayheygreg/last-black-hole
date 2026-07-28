@@ -5,6 +5,56 @@
 
 ## Current Verdict
 
+### `a58b5921` Immutable Candidate
+
+Exact product source `a58b59219303ec18585ae21bca4760bd65fb3338`
+ran the provisioned full gate once with retries disabled. The result is
+candidate-red: 111/119 suites passed in 395.73 seconds wall time (576.08
+seconds summed suite time), with eight failed suites and zero retries.
+
+The first suite red is a stale Validation assertion for removed
+`signalGenMult`. The first current player-path blocker is `RulerLive`, where
+normal keyboard input times out before authoritative slingshot engagement.
+`AgentPlayEval` later reaches normal slingshot release, natural salvage, and
+the Noise pulse consequence, but optional portal confirmation never produces
+extraction; the final authority state has `portalInteraction: null`.
+
+The other reds are stale contracts for removed Signal/scalar-Inhibitor result
+fields, `portalArrow`, and RemoteAuthority Signal/form debug behavior, plus one
+host-sensitive Flow sample reporting 2 FPS while its transition and gameplay
+checks passed. These classifications do not erase the two current live-path
+failures.
+
+Deep Field remained inside the candidate budgets: Shallows/Expanse/Deep Field
+delivered 15.005/15.005/14.957 Hz; Deep Field recorded 156 ticks, two catch-up
+ticks, zero skipped deadlines, 216.989 KiB p95 snapshots, and 0.892 ms p95
+Ballpark sync. The runner used four workers, two browser workers, 34 browser
+launches, and 119 suite processes; no lane process or assigned port remained
+after completion.
+
+Evidence:
+
+- full log:
+  `/private/tmp/lbh-v03-rc-receipts-a58b5921/test-full.log`
+  (SHA-256
+  `3c23dcaf2b29f7de8fb047b0ecb91ca2df45e878573106dfa0fb26e2debfa017`);
+- checksum ledger:
+  `/private/tmp/lbh-v03-rc-receipts-a58b5921/evidence-sha256.txt`;
+- AgentPlay report:
+  `/private/tmp/lbh-v03-rc-a58b5921/tests/screenshots/agent-play-eval-2026-07-28T173442019Z/report.json`;
+- AgentPlay summary and captures:
+  `/private/tmp/lbh-v03-rc-a58b5921/tests/screenshots/agent-play-eval-2026-07-28T173442019Z/`;
+- Renderer manifest:
+  `/private/tmp/lbh-v03-rc-a58b5921/tests/screenshots/renderer-2026-07-28T173613703Z/manifest.json`;
+- UI manifest:
+  `/private/tmp/lbh-v03-rc-a58b5921/tests/screenshots/ui-visual-2026-07-28T173813031Z/manifest.json`.
+
+The build lane was provisioned cleanly but stopped before
+`release:internal -- --skip-tests`, `release:status`, or `test:package`.
+Therefore no `0.3.1.a58b5921` artifact, checksum, package-green claim, or Deck
+deployment readiness exists. A later candidate must close the current
+slingshot and optional-portal player paths before a fresh RC/build checkpoint.
+
 ### Post-Orrery Playable Correction Checkpoint
 
 Product source `400f601a95863e6eaf31141d9d2e6b33077ad52e`
