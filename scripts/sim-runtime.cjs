@@ -74,6 +74,7 @@ const {
   normalizeHullType,
   normalizeProfileUpgrades,
   createPlayerBrain,
+  syncPlayerNoiseModifiers,
   createAbilityState,
 } = require("./player-brain.cjs");
 const { createControlPlaneClient } = require("./control-plane-client.cjs");
@@ -1328,6 +1329,7 @@ function refreshPlayerBrain(player, durableProfile = null) {
     profileUpgrades,
     equipped: player.equipped,
   });
+  syncPlayerNoiseModifiers(player);
   syncPlayerCargoCapacity(player);
   applyPlayerDeltaVBrain(player, { previousHeatRatio: prevHeatRatio });
   return player.brain;
@@ -1357,7 +1359,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     profileUpgrades,
     equipped: options.equipped,
   });
-  return {
+  const player = {
     clientId,
     profileId: null,
     profileShipType: options.profileShipType || null,
@@ -1473,6 +1475,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     heatRatio: 0,
     overheatRemaining: 0,
   };
+  syncPlayerNoiseModifiers(player);
+  return player;
 }
 
 function getCargoCount(player) {
