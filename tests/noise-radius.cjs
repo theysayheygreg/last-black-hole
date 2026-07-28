@@ -43,6 +43,9 @@ async function run() {
   const { projectRemoteWorldPatch } = await import(
     pathToFileURL(path.join(root, 'src/sim/remote-snapshot-presentation.js')).href
   );
+  const { formatNoiseDetail } = await import(
+    pathToFileURL(path.join(root, 'src/ui/hud-presentation.js')).href
+  );
   const { CAMERA_VIEW } = await import(pathToFileURL(path.join(root, 'src/coords.js')).href);
   const { minimumOffscreenHearingMeters } = await import(
     pathToFileURL(path.join(root, 'src/content/noise.js')).href
@@ -316,7 +319,9 @@ async function run() {
   check(!mainSource.includes('radiusMeters / 1000') && !mainSource.includes('radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000'), 'Noise presentation has no /1000 conversion folklore');
   check(!mainSource.includes('INHIBITOR EDGE DIM'), 'omniscient Inhibitor edge dim is removed');
   check(mainSource.includes('finalInhibitor') && mainSource.includes('finalExfil'), 'local portal presentation carries final exit flags');
-  check(hudSource.includes('TRACKED BY') && hudSource.includes('LOCKED ON'), 'HUD reports tracked and separately authored locks');
+  check(formatNoiseDetail({ trackedListenerCount: 2, lockedOnListenerCount: 1 }) === 'TRACKED BY 2 · LOCKED ON 1'
+    && !formatNoiseDetail({}).includes('TRACKED BY 0'),
+  'HUD reports active tracking/locks without zero-value verbosity');
   check(controlSource.includes('noiseMaxMeters') && controlSource.includes('noiseTimeTrackedSeconds'), 'control plane owns Noise result persistence');
   check(htmlSource.includes('id="hud-noise"') && !htmlSource.includes('id="hud-signal"') && !htmlSource.includes('id="hud-fuel"'), 'Deck HUD has Noise, not legacy meter rails');
 

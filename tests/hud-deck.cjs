@@ -106,7 +106,7 @@ async function run() {
 
   const listeningRoute = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },
-    { activeCount: 1, portals: [{ alive: true, wx: 0.8, wy: 0.5 }] },
+    { activeCount: 1, portals: [{ type: 'extraction', alive: true, wx: 0.8, wy: 0.5 }] },
     null,
     false,
     { exfilHeard: false },
@@ -116,7 +116,7 @@ async function run() {
 
   const route = hud.getRouteObjectiveState(
     { wx: 0.5, wy: 0.5 },
-    { activeCount: 1, portals: [{ alive: true, wx: 0.8, wy: 0.5 }] },
+    { activeCount: 1, portals: [{ type: 'extraction', alive: true, wx: 0.8, wy: 0.5 }] },
     null,
     false,
     { exfilHeard: true },
@@ -126,7 +126,7 @@ async function run() {
   assert(route.detail.includes('enter cyan aperture'));
   const wrapped = hud.findNearestActivePortal(
     { wx: 0.05, wy: 0.5 },
-    { portals: [{ alive: true, wx: 2.95, wy: 0.5 }] }
+    { portals: [{ type: 'extraction', alive: true, wx: 2.95, wy: 0.5 }] }
   );
   assert(Math.abs(wrapped.distance - 0.1) < 1e-9, 'Portal selection must retain toroidal distance');
 
