@@ -4,7 +4,7 @@ import * as THREE from '../../node_modules/three/build/three.module.js';
 import { CAMERA_VIEW } from '../coords.js';
 import { getPresentationPalette, resolvePresentationQuality } from '../presentation/presentation-style.js';
 import { ENTITY_CONTACT_MATTE_TREATMENTS, ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
-import { EntityAssetStore, selectPlayerAsset } from './entity-assets.js';
+import { EntityAssetStore, selectInhibitorAsset, selectPlayerAsset } from './entity-assets.js';
 import { PlayerVisualFamily } from './entities/player-visual-family.js';
 import { PortalVisualFamily } from './entities/portal-visual-family.js';
 import { WreckVisualFamily } from './entities/wreck-visual-family.js';
@@ -12,6 +12,7 @@ import { WorldSpriteVisualFamily } from './entities/world-sprite-visual-family.j
 import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
 import { createWorldProjection, normalizedWorldPhase, wrappedAxisDelta } from './world-projection.js';
+import { resolveEntityPresentationScale, SPRITE_CARD_SCALE } from './entity-presentation-scale.js';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -56,6 +57,8 @@ export class WorldScenePresentation {
     this.worldCamera.position.set(0, 0, 4);
     this.worldCamera.lookAt(0, 0, 0);
     this.worldCameraAspect = 1;
+    this.viewportWidth = 1280;
+    this.viewportHeight = 720;
     this._setWorldCameraAspect(1, 1);
     this.worldScene = new THREE.Scene();
     this.worldScene.name = 'lbh-top-down-3d-scene';
@@ -155,6 +158,8 @@ export class WorldScenePresentation {
   get camera() { return this.worldCamera; }
 
   resize(width, height) {
+    this.viewportWidth = Math.max(1, Number(width) || 1280);
+    this.viewportHeight = Math.max(1, Number(height) || 720);
     this._setWorldCameraAspect(width, height);
   }
 
@@ -390,9 +395,16 @@ export class WorldScenePresentation {
       ? candidate.movement.facing
       : Math.atan2(-(candidate.movement?.velocity?.y || 0), candidate.movement?.velocity?.x || 0);
     const rotation = -facing - Math.PI * 0.5;
-    const radius = candidate.radius || 0.040;
+    const scale = resolveEntityPresentationScale({
+      family: 'shipCandidates',
+      entity: candidate,
+      authorityRadius: candidate.radius || 0,
+      camera: state,
+      cameraView: state.cameraView,
+      canvasHeight: this.viewportHeight,
+    });
     const core = this._addSpriteEntity(this.activeEntityGroup, selectPlayerAsset(candidate),
-      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'player', candidate, 'shipCandidates');
+      candidate.world.x, candidate.world.y, scale.spriteRadius, rotation, 0.18, state, 'player', candidate, 'shipCandidates');
     if (core) this.shipCandidateCount += 1;
     return core;
   }
@@ -428,16 +440,16 @@ export class WorldScenePresentation {
   _addSpriteEntity(group, assetId, wx, wy, radius, rotation, z, state, treatmentId, entity = {}, family = treatmentId) {
     const treatment = ENTITY_CONTACT_MATTE_TREATMENTS[treatmentId] || ENTITY_CONTACT_MATTE_TREATMENTS.fauna;
     this._addContrastBacking(wx, wy, radius, rotation, z, state, 'screen', {
-      radiusScale: treatment.matteRadius,
+      radiusScale: treatment.matteRadius * SPRITE_CARD_SCALE,
       yScale: treatment.matteY,
     });
     const core = this._addMesh(group, this.entityGeometries.spriteCard, this.entityAssets.getMaterial(assetId),
-      wx, wy, radius * 1.65, rotation, z, state, 'screen');
+      wx, wy, radius * SPRITE_CARD_SCALE, rotation, z, state, 'screen');
     if (entity.id) {
       const entityOpacity = clamp(entity.opacity ?? 1, 0, 1);
       const visibleState = core
         ? (entityOpacity <= 0.001 ? 'transparent' : 'visible')
-        : (this._spriteInView(wx, wy, radius * 1.65, state, 'screen') ? 'unknown' : 'offscreen-cull');
+        : (this._spriteInView(wx, wy, radius * SPRITE_CARD_SCALE, state, 'screen') ? 'unknown' : 'offscreen-cull');
       this.temporalVisibility.record({
         id: entity.id,
         family,
@@ -603,14 +615,32 @@ export class WorldScenePresentation {
         if (mesh) entityCount++;
         return mesh;
       },
-      sprite: (group, assetId, wx, wy, radius, rotation, treatmentId, entity = {}) => {
-        const mesh = this._addSpriteEntity(group, assetId, wx, wy, radius, rotation, 0.13,
-          renderState, treatmentId, entity);
+      sprite: (group, assetId, wx, wy, radius, rotation, treatmentId, entity = {}, family = treatmentId) => {
+        const scale = resolveEntityPresentationScale({
+          family,
+          entity,
+          authorityRadius: radius,
+          camera: renderState,
+          cameraView: renderState.cameraView,
+          canvasHeight: this.viewportHeight,
+        });
+        const mesh = this._addSpriteEntity(group, assetId, wx, wy, scale.spriteRadius, rotation, 0.13,
+          renderState, treatmentId, entity, family);
         if (mesh) entityCount++;
         return mesh;
       },
-      budgetCull: (family, entity, radius = 0.04) => this._recordSpriteState(family, entity, 'budget-cull', radius),
-      state: (family, entity, state, radius = 0.04) => this._recordSpriteState(family, entity, state, radius),
+      budgetCull: (family, entity, radius = 0.04) => this._recordSpriteState(
+        family, entity, 'budget-cull', resolveEntityPresentationScale({
+          family, entity, authorityRadius: radius, camera: renderState,
+          cameraView: renderState.cameraView, canvasHeight: this.viewportHeight,
+        }).spriteRadius,
+      ),
+      state: (family, entity, state, radius = 0.04) => this._recordSpriteState(
+        family, entity, state, resolveEntityPresentationScale({
+          family, entity, authorityRadius: radius, camera: renderState,
+          cameraView: renderState.cameraView, canvasHeight: this.viewportHeight,
+        }).spriteRadius,
+      ),
     };
 
     for (const well of sceneState.wells || []) {
@@ -623,17 +653,11 @@ export class WorldScenePresentation {
           well.world.x, well.world.y, Math.max(0.018, well.visual.coreRadius), 0, 0.04)) this.wellDebugPrimitiveCount += 1;
       }
     }
-    // Ecology remains procedural corruption: a bounded magenta core and fabric
-    // ring per authoritative collection entry, with Vessel trajectory carried
-    // as a renderer-neutral strategic tell.
-    const totalTime = Number(frame.timing?.totalTime) || 0;
-    for (const [index, inhibitor] of (sceneState.inhibitors || []).entries()) {
-      const isSwarm = inhibitor.kind === 'swarm';
-      const isVessel = inhibitor.kind === 'vessel';
-      const pulse = 0.88 + 0.12 * Math.sin(totalTime * 4.2 + index * 1.7);
+    // Inhibitor identity belongs to authored silhouettes. Only the Vessel's
+    // named target tell remains a line; generic magenta rings are retired.
+    for (const inhibitor of sceneState.inhibitors || []) {
       const radius = Math.max(0.012, inhibitor.radius || 0.1);
-      const threatScale = isVessel ? 1.08 : isSwarm ? 0.86 : 1;
-      if (isVessel && inhibitor.target && Number.isFinite(inhibitor.target.wx)
+      if (inhibitor.kind === 'vessel' && inhibitor.target && Number.isFinite(inhibitor.target.wx)
           && Number.isFinite(inhibitor.target.wy)) {
         draw.line(
           inhibitor.world.x,
@@ -643,25 +667,18 @@ export class WorldScenePresentation {
           this.entityMaterials.inhibitorRing,
         );
       }
-      const ring = addSemantic(
-        this.entityGeometries.ring,
-        this.entityMaterials.inhibitorRing,
+      const mesh = draw.sprite(
+        this.activeEntityGroup,
+        selectInhibitorAsset(inhibitor),
         inhibitor.world.x,
         inhibitor.world.y,
-        radius * threatScale * (1.55 + pulse * 0.22),
-        totalTime * 1.3 + index,
-        0.055,
-      );
-      const core = addEntity(
-        this.entityGeometries.disc,
-        this.entityMaterials.inhibitorCore,
-        inhibitor.world.x,
-        inhibitor.world.y,
-        Math.max(inhibitor.coreRadius || radius * 0.45, radius * 0.32) * threatScale * pulse,
+        radius,
         0,
-        0.065,
+        'anomaly',
+        inhibitor,
+        'inhibitors',
       );
-      this._recordSpriteState('inhibitors', inhibitor, ring || core ? 'visible' : 'offscreen-cull', radius, inhibitor.kind || 'inhibitor');
+      if (!mesh) this._recordSpriteState('inhibitors', inhibitor, 'offscreen-cull', radius, inhibitor.kind || 'inhibitor');
     }
     // Wave growth remains authoritative fabric state. Product Three mode does
     // not add a generic ring on top; named slingshot/portal state owns the

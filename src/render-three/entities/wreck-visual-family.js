@@ -18,22 +18,13 @@ export class WreckVisualFamily extends VisualFamilyLifecycle {
     // Projection rejection must not spend a density slot needed by a later
     // visible wreck, but every budget skip still gets an explicit ledger row.
     for (const wreck of wrecks) {
-      const looted = wreck.visualState === 'looted' || wreck.looted;
-      const valuable = wreck.visualState === 'valuable' || wreck.valuable || wreck.valueTier === 'valuable';
-      // State reads through silhouette first: intact is a stable hulk, value
-      // is a compact amber beacon, looted is a broken sparse cluster.
-      const size = looted
-        ? (wreck.size === 'large' ? 0.036 : 0.025)
-        : valuable
-          ? (wreck.size === 'large' ? 0.046 : 0.036)
-          : wreck.size === 'large' ? 0.042 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.020 : 0.030;
       if (this.activeObjects >= budget) {
-        draw.budgetCull?.('wrecks', wreck, size * 1.35);
+        draw.budgetCull?.('wrecks', wreck, 0);
         dropped += 1;
         continue;
       }
       const core = draw.sprite(this.group, selectWreckAsset(wreck), wreck.world.x, wreck.world.y,
-        size * 1.35, 0, 'wrecks', wreck);
+        0, 0, 'wrecks', wreck);
       if (core) this.countObject(1);
     }
     this.drop(dropped);

@@ -27,11 +27,11 @@ export class WorldSpriteVisualFamily extends VisualFamilyLifecycle {
     const ecologyBudget = Math.max(0, budgets.ecology ?? 64);
     const faunaBudget = Math.min(world.fauna?.length || 0, ecologyBudget);
     const families = [
-      ['stars', budgets.stars ?? 32, this.landmarkGroup, () => 'starWarm', () => 0.045, () => 0],
-      ['planetoids', budgets.planetoids ?? 48, this.landmarkGroup, selectPlanetoidAsset, () => 0.034, movementHeading],
-      ['scavengers', budgets.scavengers ?? 48, this.activeGroup, selectScavengerAsset, () => 0.038, movementHeading],
-      ['fauna', faunaBudget, this.activeGroup, selectFaunaAsset, (entity) => 0.018 + entity.size * 0.003, () => 0],
-      ['sentries', ecologyBudget - faunaBudget, this.activeGroup, selectSentryAsset, () => 0.027, () => 0],
+      ['stars', budgets.stars ?? 32, this.landmarkGroup, () => 'starWarm', () => 0, () => 0],
+      ['planetoids', budgets.planetoids ?? 48, this.landmarkGroup, selectPlanetoidAsset, () => 0, movementHeading],
+      ['scavengers', budgets.scavengers ?? 48, this.activeGroup, selectScavengerAsset, () => 0, movementHeading],
+      ['fauna', faunaBudget, this.activeGroup, selectFaunaAsset, () => 0, () => 0],
+      ['sentries', ecologyBudget - faunaBudget, this.activeGroup, selectSentryAsset, () => 0, () => 0],
     ];
     this.objectBudget = families.reduce((sum, [, budget]) => sum + Math.max(0, budget), 0);
 

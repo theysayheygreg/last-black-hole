@@ -82,7 +82,7 @@
     "entityCore": {
       "disposition": "forbid_vector_finished_art",
       "productionOwner": "src/render-three/entity-assets.js",
-      "surface": "generated pixel PNG sprite card",
+      "surface": "authored pixel sprite card (PNG/SVG)",
       "allowed": []
     },
     "wellPulseState": {

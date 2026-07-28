@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- **Deck entity readability vertical:** Three now owns one bounded presentation
+  scale policy with family/subtype pixel minima, retains authority radii as
+  untouched inputs, and gives Scavenger Drifter plus Glitch/Swarm/Vessel named
+  sprite cards. Generic Inhibitor rings/cores are retired from product mode;
+  wells remain fabric-first and labels remain secondary.
+
 - **Post-Orrery playable correction:** portal lifecycle changes now refresh the
   Ballpark mirror before same-tick authority residence queries, so optional
   and final apertures publish ready state, abort on exit, and confirm through

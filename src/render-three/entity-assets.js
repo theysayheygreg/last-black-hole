@@ -6,6 +6,7 @@ export const ENTITY_ASSET_MANIFEST = Object.freeze({
   shipRemote: { path: 'assets/visual/entities/ship-remote.png', classification: 'runtime' },
   scavengerRaider: { path: 'assets/visual/entities/scavenger-raider.png', classification: 'runtime' },
   scavengerBreacher: { path: 'assets/visual/entities/scavenger-breacher.png', classification: 'runtime' },
+  scavengerDrifter: { path: 'assets/visual/entities/scavenger-drifter.svg', classification: 'runtime' },
   wreckIntact: { path: 'assets/visual/entities/wreck-intact.png', classification: 'runtime' },
   wreckLooted: { path: 'assets/visual/entities/wreck-looted.png', classification: 'runtime' },
   wreckValuable: { path: 'assets/visual/entities/wreck-valuable.png', classification: 'runtime' },
@@ -17,7 +18,10 @@ export const ENTITY_ASSET_MANIFEST = Object.freeze({
   portalRift: { path: 'assets/visual/entities/portal-rift.png', classification: 'runtime' },
   faunaOrganic: { path: 'assets/visual/entities/sentry-fauna.png', classification: 'runtime' },
   sentryThreat: { path: 'assets/visual/entities/sentry-threat.png', classification: 'runtime' },
-  // Wells and Inhibitors stay procedural; these files are authored references, not runtime textures.
+  inhibitorGlitch: { path: 'assets/visual/entities/inhibitor-glitch.svg', classification: 'runtime' },
+  inhibitorSwarm: { path: 'assets/visual/entities/inhibitor-swarm.svg', classification: 'runtime' },
+  inhibitorVessel: { path: 'assets/visual/entities/inhibitor-vessel.svg', classification: 'runtime' },
+  // Wells stay fabric-first. The old inhibitor shard remains a reference sheet.
   wellInstrument: { path: 'assets/visual/entities/well-instrument.png', classification: 'reference' },
   inhibitorShard: { path: 'assets/visual/entities/inhibitor-shard.png', classification: 'reference' },
 });
@@ -55,7 +59,9 @@ export function selectPlanetoidAsset(entity = {}) {
 }
 
 export function selectScavengerAsset(entity = {}) {
-  return /breach/i.test(entity.variant || '') ? 'scavengerBreacher' : 'scavengerRaider';
+  if (/breach/i.test(entity.variant || '') || /breach/i.test(entity.archetype || '')) return 'scavengerBreacher';
+  if (/drifter/i.test(entity.variant || '') || /drifter/i.test(entity.archetype || '')) return 'scavengerDrifter';
+  return 'scavengerRaider';
 }
 
 export function selectFaunaAsset() {
@@ -64,6 +70,12 @@ export function selectFaunaAsset() {
 
 export function selectSentryAsset() {
   return 'sentryThreat';
+}
+
+export function selectInhibitorAsset(entity = {}) {
+  if (entity.kind === 'vessel') return 'inhibitorVessel';
+  if (entity.kind === 'swarm') return 'inhibitorSwarm';
+  return 'inhibitorGlitch';
 }
 
 function configureTexture(texture, id) {

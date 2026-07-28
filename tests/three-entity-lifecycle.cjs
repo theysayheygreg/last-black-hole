@@ -405,6 +405,10 @@ async function run() {
     assert(assets.selectWreckAsset({ visualState: 'cluster' }) === 'wreckCluster', 'Cluster wreck selection failed');
     assert(assets.selectWreckAsset({ variant: 'vault' }) === 'wreckValuable', 'Vault wreck value selection failed');
     assert(assets.selectPortalAsset({ visualState: 'rift' }) === 'portalRift', 'Rift portal selection failed');
+    assert(assets.selectScavengerAsset({ variant: 'drifter' }) === 'scavengerDrifter', 'Drifter scavenger selection failed');
+    assert(assets.selectInhibitorAsset({ kind: 'glitch' }) === 'inhibitorGlitch', 'Glitch inhibitor selection failed');
+    assert(assets.selectInhibitorAsset({ kind: 'swarm' }) === 'inhibitorSwarm', 'Swarm inhibitor selection failed');
+    assert(assets.selectInhibitorAsset({ kind: 'vessel' }) === 'inhibitorVessel', 'Vessel inhibitor selection failed');
     assert(assets.selectFaunaAsset({ variant: 'jelly' }) === 'faunaOrganic', 'Fauna must retain the organic sprite');
     assert(assets.selectSentryAsset({ status: 'alert' }) === 'sentryThreat', 'Sentries must use the threat sprite');
     for (const relativePath of Object.values(assets.ENTITY_ASSET_PATHS)) {
@@ -414,7 +418,7 @@ async function run() {
 
   await runner.run('Entity asset manifest and runtime usage agree in both directions', async () => {
     const assetDir = path.join(ROOT, 'assets/visual/entities');
-    const diskPaths = fs.readdirSync(assetDir).filter((name) => name.endsWith('.png'))
+    const diskPaths = fs.readdirSync(assetDir).filter((name) => name.endsWith('.png') || name.endsWith('.svg'))
       .map((name) => `assets/visual/entities/${name}`).sort();
     const manifestPaths = Object.values(assets.ENTITY_ASSET_MANIFEST).map((asset) => asset.path).sort();
     assert(JSON.stringify(diskPaths) === JSON.stringify(manifestPaths),

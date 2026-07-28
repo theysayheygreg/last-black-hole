@@ -44,6 +44,7 @@ export const ENTITY_CONTACT_MATTE_TREATMENTS = Object.freeze({
   scavengers: Object.freeze({ matteRadius: 1.55, matteY: 0.78 }),
   fauna: Object.freeze({ matteRadius: 1.55, matteY: 0.9 }),
   sentries: Object.freeze({ matteRadius: 1.6, matteY: 0.9 }),
+  anomaly: Object.freeze({ matteRadius: 1.22, matteY: 0.9 }),
 });
 
 export function createVisualMaterials(palette = PRESENTATION_PALETTE) {

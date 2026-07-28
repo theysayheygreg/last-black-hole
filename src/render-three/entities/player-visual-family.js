@@ -36,12 +36,12 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     const player = frame.localPlayer;
     if (player) {
       if (player.status === 'dead') {
-        draw.state?.('player', player, 'absent', 0.044);
+        draw.state?.('player', player, 'absent', 0);
       } else if (remaining <= 0) {
-        draw.budgetCull?.('player', player, 0.044);
+        draw.budgetCull?.('player', player, 0);
       } else {
         const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
-          0.052, -player.movement.facing - Math.PI * 0.5, 'player', player);
+          0, -player.movement.facing - Math.PI * 0.5, 'player', player);
         if (core) { this.countObject(1); remaining -= 1; }
         // Ports carry propulsion state, not a permanent heading decoration:
         // rear strokes for thrust, forward puffs for braking, nothing while coasting.
@@ -72,7 +72,7 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     let droppedCandidates = 0;
     for (const candidate of candidates) {
       if (remaining <= 0 || visibleCandidates >= 2) {
-        draw.budgetCull?.('shipCandidates', candidate, candidate.radius || 0.040);
+        draw.budgetCull?.('shipCandidates', candidate, candidate.radius || 0);
         droppedCandidates += 1;
         continue;
       }
@@ -87,16 +87,16 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     let droppedRemotes = 0;
     for (const remote of remotePlayers) {
       if (remote.status === 'dead') {
-        draw.state?.('remotePlayers', remote, 'absent', 0.040);
+        draw.state?.('remotePlayers', remote, 'absent', 0);
         continue;
       }
       if (remaining <= 0) {
-        draw.budgetCull?.('remotePlayers', remote, 0.040);
+        draw.budgetCull?.('remotePlayers', remote, 0);
         droppedRemotes += 1;
         continue;
       }
       const core = draw.sprite(this.group, selectPlayerAsset(remote, { remote: true }),
-        remote.world.x, remote.world.y, 0.040, heading(remote) - Math.PI * 0.5, 'remotePlayers', remote);
+        remote.world.x, remote.world.y, 0, heading(remote) - Math.PI * 0.5, 'remotePlayers', remote);
       if (core) { this.countObject(1); remaining -= 1; }
     }
     this.drop(droppedRemotes);

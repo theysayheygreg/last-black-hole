@@ -167,6 +167,40 @@ World scale stays restrained. Ships are small against the universe. When an
 entity is hard to read, improve its local contrast and silhouette before making
 it dramatically larger.
 
+## Deck World-Entity Scale
+
+`src/render-three/entity-presentation-scale.js` is the one presentation-scale
+owner for the Three world. Its values are pixel half-radii on the 1280x720
+render backing used by the 1280x800 Deck capture. The resolver applies a
+screen-space minimum and a bounded distance factor (`0.88..1.0`). It never
+writes, rescales, or substitutes an authority collision, gravity, Noise, or
+interaction radius. Labels remain secondary and are not part of the minimum.
+
+| Family / subtype | Deck min / base / max px radius | Presentation owner | Authority or interaction truth |
+|---|---:|---|---|
+| Rift portal | 29 / 33 / 42 | `portal-rift` sprite | Capture radius: `1.8 x 0.08` |
+| Standard portal | 24 / 27 / 34 | `portal-extraction` sprite | Capture radius: `0.08` (`unstable`: half) |
+| Valuable large wreck | 25 / 30 / 38 | `wreck-valuable` sprite | Pickup radius: `0.08` |
+| Large/intact wreck | 22 / 26 / 34 | `wreck-intact` sprite | Pickup radius: `0.08` |
+| Player Breacher | 21 / 24 / 30 | `ship-breacher` sprite | Ballpark body fallback: `0.035` |
+| Player Drifter / remote ship | 19 / 22 / 28; 16 / 18 / 24 | authored ship sprite | Sim-owned body and heading |
+| Scavenger Breacher / Drifter / Raider | 19 / 22 / 28; 16 / 19 / 24; 17 / 20 / 26 | subtype sprite | Bump radius: `0.04` |
+| Sentry / fauna | 16 / 19 / 24; 13 / 15 / 20 | threat / organic sprite | Ecology state is authoritative |
+| Star | 20 / 23 / 28 | `star-warm` sprite plus fabric rays | Star range: `0.6` max range |
+| Planetoid / comet | 16 / 18 / 24; 18 / 20 / 26 | body / transit sprite | Ship push radius: `0.1` |
+| Glitch / Swarm / Vessel | 18 / 21 / 27; 23 / 27 / 34; 29 / 35 / 44 | authored anomaly sprite | Core/contact/outer radii: `.045` / `.09` / `.18` |
+| Well / fabric | fabric-owned, no sprite minimum | ASCII contour and fluid core | Kill/gravity radii remain sim-owned (`.04` baseline) |
+
+The intended hierarchy is **major landmarks > objectives and large wrecks >
+ships and enemies > pickups and debris**. Wreck state and enemy subtype own
+silhouette, not a label or color swap. The Deck product retires generic
+entity discs, rings, triangles, squares, wireframes, and debug circles as
+finished art. A contact matte is allowed only as local separation beneath a
+named sprite. Fabric wells, named slingshot/portal state accents, the Vessel
+target tell, and explicit raw-scene diagnostics remain the documented semantic
+exceptions. Old canvas/vector fallbacks stay behind the legacy renderer gate;
+they are not Deck presentation ownership and must not be duplicated over Three.
+
 ## Separation And Density Budget
 
 This policy supersedes only the older documents' entity-overlay implications;
