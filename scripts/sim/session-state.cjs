@@ -102,6 +102,7 @@ function createRunState() {
       tick: 0,
       simTime: 0,
       idCounters: Object.create(null),
+      tickTimingsMs: [],
       emptySince: null,
       terminalSince: null,
       terminalShutdownAt: null,
@@ -136,6 +137,7 @@ function createRunState() {
         nextSwarmSpawnAt: null,
         vesselSequence: 0,
         nextVesselSpawnAt: null,
+        suppressedByTotalCap: { glitch: 0, swarm: 0, vessel: 0 },
       },
     },
   };

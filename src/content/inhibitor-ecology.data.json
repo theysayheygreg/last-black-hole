@@ -1,0 +1,10 @@
+{
+  "population": {
+    "totalActiveCap": 11,
+    "kindCaps": {
+      "glitch": 6,
+      "swarm": 4,
+      "vessel": 3
+    }
+  }
+}

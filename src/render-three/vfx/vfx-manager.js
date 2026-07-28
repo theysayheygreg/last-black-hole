@@ -61,6 +61,9 @@ export class VfxManager {
     this.droppedTotal = 0;
     this.expiredTotal = 0;
     this.emittedTotal = 0;
+    this.resetCount = 0;
+    this.disposeCount = 0;
+    this.disposed = false;
     this.geometries = {
       ember: makeDiamondGeometry(),
       splinter: new THREE.PlaneGeometry(1, 1),
@@ -84,16 +87,29 @@ export class VfxManager {
       droppedTotal: this.droppedTotal,
       expiredTotal: this.expiredTotal,
       emittedTotal: this.emittedTotal,
+      resetCount: this.resetCount,
+      disposeCount: this.disposeCount,
+      disposed: this.disposed,
     };
   }
 
   reset() {
+    if (this.disposed) return;
+    this.resetCount += 1;
     for (const particle of this.particles) {
       particle.mesh.visible = false;
       this.meshPool.push(particle.mesh);
     }
     this.particles = [];
     this.recentEvents.clear();
+    this.lastStats = this._emptyStats();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.reset();
+    this.disposed = true;
+    this.disposeCount += 1;
     this.lastStats = this._emptyStats();
   }
 

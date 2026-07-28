@@ -274,6 +274,8 @@ function projectInhibitor(inhibitor, schedule, entities = [], ecology = {}) {
       counts: ecologyCounts,
       reachedKinds: Object.keys(ecologyCounts).sort(),
       activeCount: projectedEntities.length,
+      totalActiveCap: INHIBITOR_ECOLOGY_CONFIG.totalActiveCap,
+      suppressedByTotalCap: { ...(ecology.suppressedByTotalCap || {}) },
     },
     glitchSchedule: {
       phase: 1,

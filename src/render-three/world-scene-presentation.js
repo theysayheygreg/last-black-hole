@@ -174,6 +174,7 @@ export class WorldScenePresentation {
 
   reset({ phase, runId } = {}) {
     for (const family of Object.values(this.visualFamilies)) family.reset();
+    this.vfxManager.reset();
     this.temporalVisibility.reset({ phase, runId });
     this.temporalFrameId = null;
     this.lastPresentationPhase = phase;
@@ -748,6 +749,7 @@ export class WorldScenePresentation {
 
   dispose() {
     for (const family of Object.values(this.visualFamilies)) family.dispose();
+    this.vfxManager.dispose();
     for (const material of this.entitySpriteMaterials) material.dispose();
     this.entitySpriteMaterials.clear();
     this.entityAssets.dispose();

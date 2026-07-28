@@ -293,3 +293,25 @@ well consumption, and the old post-Vessel portal rule. The ecology document
 separates this locked target from the current scalar-form, portal-block,
 `consumedByInhibitor`, and Swarm cargo/control runtime gaps; those gaps are not
 claims of shipped behavior.
+
+## Total Active Inhibitor Cap And Run Reset
+
+Decision: `src/content/inhibitor-ecology.data.json` owns one tunable
+`population.totalActiveCap`, initially `11`, alongside the existing kind caps.
+The authority counts every non-expired Glitch, Swarm, and Vessel before each
+Conductor admission. A blocked scheduled arrival advances its own cadence and
+increments `inhibitor.ecology.suppressedByTotalCap`, so the public snapshot
+reports honest suppression rather than pretending the entity arrived. The
+initial cap is deliberately below the observed uncapped steady density of `12`
+live bodies (`5` Glitches, `4` Swarms, `3` Vessels), while preserving late
+crowding and all three kinds as `5 + 4 + 2`. It is not the sum-of-kind-caps
+value `13`, and it is not a tiny single-digit ecology.
+
+Starting a new run or map creates fresh session-owned players, Noise state,
+ecology entities, map wells, wave rings, event/snapshot lanes, and Ballpark
+identity. The same sim process remains the owner when reused: one PID, one
+port, and one `simInstanceId`, with a new session/run ID and a Ballpark epoch
+reset. Three presentation reset now also clears pooled entity-family state,
+temporal visibility, and VFX particles/event memory; renderer disposal records
+the entity and VFX lifecycle counts. Movement, player speed, map scale,
+ecology behavior, and the shared 15 Hz authority clock are unchanged.

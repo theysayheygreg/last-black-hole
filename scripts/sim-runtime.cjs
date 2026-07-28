@@ -126,6 +126,7 @@ const {
 const { createConductor } = require("./sim/conductor.cjs");
 const {
   INHIBITOR_ECOLOGY_CONFIG,
+  totalCapBlocksSpawn,
   createGlitchEntity,
   advanceGlitchEntity,
   applyGlitchForcesAndContacts,
@@ -1229,6 +1230,7 @@ const runtime = {
     nextSwarmSpawnAt: null,
     vesselSequence: 0,
     nextVesselSpawnAt: null,
+    suppressedByTotalCap: { glitch: 0, swarm: 0, vessel: 0 },
   },
   mapState: {
     id: "shallows",
@@ -1282,6 +1284,24 @@ function refreshBallparkMirror(reason = "runtime") {
     simTime: runtime.simTime,
     reason,
   });
+}
+
+function summarizeTickTimings() {
+  const samples = Array.isArray(runtime.tickTimingsMs) ? runtime.tickTimingsMs : [];
+  if (samples.length === 0) return { sampleCount: 0, p50Ms: 0, p95Ms: 0, maxMs: 0 };
+  const ordered = samples.slice().sort((a, b) => a - b);
+  const percentile = (fraction) => ordered[Math.min(ordered.length - 1, Math.ceil(ordered.length * fraction) - 1)];
+  return {
+    sampleCount: samples.length,
+    p50Ms: Number(percentile(0.50).toFixed(3)),
+    p95Ms: Number(percentile(0.95).toFixed(3)),
+    maxMs: Number(ordered[ordered.length - 1].toFixed(3)),
+  };
+}
+
+function recordTickTiming(tickCostMs) {
+  runtime.tickTimingsMs.push(Math.max(0, Number(tickCostMs) || 0));
+  if (runtime.tickTimingsMs.length > 256) runtime.tickTimingsMs.shift();
 }
 
 function applyOverloadProfile() {
@@ -6124,6 +6144,20 @@ function spawnConductorVessel() {
   return entity;
 }
 
+function recordTotalCapSuppression({ kind, requiredPhase, nextKey, phase, simTime, config }) {
+  if (Number(phase) < requiredPhase || Number(simTime) < Number(runtime.inhibitorEcology[nextKey])) return false;
+  if (!totalCapBlocksSpawn(runtime.inhibitorEntities, config)) return false;
+  const counters = runtime.inhibitorEcology.suppressedByTotalCap || {
+    glitch: 0,
+    swarm: 0,
+    vessel: 0,
+  };
+  counters[kind] = Math.max(0, Math.trunc(Number(counters[kind]) || 0)) + 1;
+  runtime.inhibitorEcology.suppressedByTotalCap = counters;
+  runtime.inhibitorEcology[nextKey] = runtime.simTime + config.spawnCadenceSeconds;
+  return true;
+}
+
 function applyInhibitorContacts(contacts, cause) {
   for (const contact of contacts) {
     const player = runtime.players.get(contact.clientId);
@@ -6175,6 +6209,15 @@ function tickInhibitorEcology(dt, noiseSources = []) {
   })) {
     spawnConductorGlitch();
     ecology.nextGlitchSpawnAt = runtime.simTime + cfg.spawnCadenceSeconds;
+  } else {
+    recordTotalCapSuppression({
+      kind: "glitch",
+      requiredPhase: 1,
+      nextKey: "nextGlitchSpawnAt",
+      phase: runtime.inhibitor.phase,
+      simTime: runtime.simTime,
+      config: cfg,
+    });
   }
 
   if (runtime.inhibitor.phase >= 2 && ecology.nextSwarmSpawnAt == null) {
@@ -6189,6 +6232,15 @@ function tickInhibitorEcology(dt, noiseSources = []) {
   })) {
     spawnConductorSwarm();
     ecology.nextSwarmSpawnAt = runtime.simTime + swarmCfg.spawnCadenceSeconds;
+  } else {
+    recordTotalCapSuppression({
+      kind: "swarm",
+      requiredPhase: 2,
+      nextKey: "nextSwarmSpawnAt",
+      phase: runtime.inhibitor.phase,
+      simTime: runtime.simTime,
+      config: swarmCfg,
+    });
   }
 
   if (runtime.inhibitor.phase >= 3 && ecology.nextVesselSpawnAt == null) {
@@ -6203,6 +6255,15 @@ function tickInhibitorEcology(dt, noiseSources = []) {
   })) {
     spawnConductorVessel();
     ecology.nextVesselSpawnAt = runtime.simTime + vesselCfg.spawnCadenceSeconds;
+  } else {
+    recordTotalCapSuppression({
+      kind: "vessel",
+      requiredPhase: 3,
+      nextKey: "nextVesselSpawnAt",
+      phase: runtime.inhibitor.phase,
+      simTime: runtime.simTime,
+      config: vesselCfg,
+    });
   }
 
   for (const entity of runtime.inhibitorEntities) {
@@ -6463,9 +6524,9 @@ function tickSim() {
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
 
-  const overload = advanceOverload(runtime.overload, {
-    tickCostMs: performance.now() - tickStart,
-  });
+  const tickCostMs = performance.now() - tickStart;
+  recordTickTiming(tickCostMs);
+  const overload = advanceOverload(runtime.overload, { tickCostMs });
   runtime.session.overloadPressure = overload.pressure;
   if (overload.changed) {
     applyOverloadProfile();
@@ -6563,6 +6624,9 @@ async function routeRequest(req, res) {
         pid: process.pid,
         uptimeSec: Number(process.uptime().toFixed(3)),
         memory: process.memoryUsage(),
+      },
+      timing: {
+        tick: summarizeTickTimings(),
       },
       // Keep deadline delivery inspectable without retaining per-tick timing
       // history in the authority process.

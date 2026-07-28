@@ -2,6 +2,9 @@
 
 const { simUnitsToMeters } = require("../content/units.cjs");
 const { NOISE_CONFIG, resolveThreatWarningBudget } = require("./noise-radius.cjs");
+const INHIBITOR_ECOLOGY_DATA = require("../../src/content/inhibitor-ecology.data.json");
+
+const POPULATION_CONFIG = INHIBITOR_ECOLOGY_DATA.population;
 
 const SWARM_NOISE_THRESHOLDS = Object.freeze({
   lightMeters: NOISE_CONFIG.continuous.withFlowMeters,
@@ -12,9 +15,10 @@ const SWARM_NOISE_THRESHOLDS = Object.freeze({
 // The ecology owner keeps per-kind tuning and entity behavior together. The
 // Conductor still owns when a kind is admitted; this module owns what lives.
 const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
+  totalActiveCap: POPULATION_CONFIG.totalActiveCap,
   glitch: Object.freeze({
     kind: "glitch",
-    populationCap: 6,
+    populationCap: POPULATION_CONFIG.kindCaps.glitch,
     spawnCadenceSeconds: 12,
     lifetimeSeconds: 60,
     radius: 0.1,
@@ -29,7 +33,7 @@ const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
   }),
   swarm: Object.freeze({
     kind: "swarm",
-    populationCap: 4,
+    populationCap: POPULATION_CONFIG.kindCaps.swarm,
     spawnCadenceSeconds: 18,
     lifetimeSeconds: 120,
     radius: 0.25,
@@ -59,7 +63,7 @@ const INHIBITOR_ECOLOGY_CONFIG = Object.freeze({
   }),
   vessel: Object.freeze({
     kind: "vessel",
-    populationCap: 3,
+    populationCap: POPULATION_CONFIG.kindCaps.vessel,
     spawnCadenceSeconds: 24,
     inboundTellSeconds: 3,
     radius: 0.3,
@@ -117,16 +121,26 @@ function countLiveGlitches(entities, kind = INHIBITOR_ECOLOGY_CONFIG.glitch.kind
   ).length;
 }
 
-function shouldSpawnGlitch({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.glitch } = {}) {
+function shouldSpawnGlitch({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.glitch, totalActiveCap = INHIBITOR_ECOLOGY_CONFIG.totalActiveCap } = {}) {
   return Number(phase) >= 1
     && Number(simTime) >= Number(nextSpawnAt)
-    && countLiveGlitches(entities, config.kind) < config.populationCap;
+    && countLiveGlitches(entities, config.kind) < config.populationCap
+    && countLiveInhibitors(entities) < totalActiveCap;
 }
 
-function countLiveEntities(entities, kind) {
+function countLiveEntities(entities, kind = null) {
   return Array.from(entities || []).filter((entity) =>
-    entity?.kind === kind && entity.lifecycle !== "expired"
+    (kind == null || entity?.kind === kind) && entity.lifecycle !== "expired"
   ).length;
+}
+
+function countLiveInhibitors(entities) {
+  return countLiveEntities(entities);
+}
+
+function totalCapBlocksSpawn(entities, config = {}, totalActiveCap = INHIBITOR_ECOLOGY_CONFIG.totalActiveCap) {
+  return countLiveInhibitors(entities) >= totalActiveCap
+    && countLiveEntities(entities, config.kind) < config.populationCap;
 }
 
 function countLiveSwarms(entities, kind = INHIBITOR_ECOLOGY_CONFIG.swarm.kind) {
@@ -137,16 +151,18 @@ function countLiveVessels(entities, kind = INHIBITOR_ECOLOGY_CONFIG.vessel.kind)
   return countLiveEntities(entities, kind);
 }
 
-function shouldSpawnSwarm({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.swarm } = {}) {
+function shouldSpawnSwarm({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.swarm, totalActiveCap = INHIBITOR_ECOLOGY_CONFIG.totalActiveCap } = {}) {
   return Number(phase) >= 2
     && Number(simTime) >= Number(nextSpawnAt)
-    && countLiveSwarms(entities, config.kind) < config.populationCap;
+    && countLiveSwarms(entities, config.kind) < config.populationCap
+    && countLiveInhibitors(entities) < totalActiveCap;
 }
 
-function shouldSpawnVessel({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.vessel } = {}) {
+function shouldSpawnVessel({ phase, simTime, nextSpawnAt, entities, config = INHIBITOR_ECOLOGY_CONFIG.vessel, totalActiveCap = INHIBITOR_ECOLOGY_CONFIG.totalActiveCap } = {}) {
   return Number(phase) >= 3
     && Number(simTime) >= Number(nextSpawnAt)
-    && countLiveVessels(entities, config.kind) < config.populationCap;
+    && countLiveVessels(entities, config.kind) < config.populationCap
+    && countLiveInhibitors(entities) < totalActiveCap;
 }
 
 function createGlitchEntity({
@@ -827,6 +843,7 @@ function summarizeEcologyEncounters(ecology = {}) {
 }
 
 module.exports = {
+  INHIBITOR_ECOLOGY_DATA,
   INHIBITOR_ECOLOGY_CONFIG,
   createGlitchEntity,
   advanceGlitchEntity,
@@ -837,8 +854,10 @@ module.exports = {
   applySwarmContacts,
   projectSwarmEntity,
   countLiveGlitches,
+  countLiveInhibitors,
   countLiveSwarms,
   countLiveVessels,
+  totalCapBlocksSpawn,
   shouldSpawnGlitch,
   shouldSpawnSwarm,
   shouldSpawnVessel,
