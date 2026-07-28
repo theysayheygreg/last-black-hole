@@ -170,6 +170,26 @@ verifies the release checksum, and uses a distinct name/slug before promotion;
 `nightly-latest` remains the moving current channel and is never an archival
 identity.
 
+### Rolling latest playtest
+
+The `Latest Playtest` GitHub Action is the public convenience channel. Each
+Monday, or on a manual dispatch, it compares `main` with the commit named by
+the mutable `nightly-latest` tag. A changed source runs the deterministic,
+non-browser fast release-contract suites, builds web, iPad, macOS, Windows, and
+Linux/Steam Deck playables, then replaces that rolling release's assets.
+
+The release is self-describing: it carries `SOURCE.json`,
+`BUILD-MANIFEST.json`, `SHA256SUMS`, the installer/helper scripts, and all five
+platform archives. The publish job verifies every required remote asset, its
+GitHub SHA-256 digest, and the final tag/source match. Browser/playable RC
+evidence remains a version-candidate gate rather than a flaky prerequisite for
+the weekly convenience build.
+
+`nightly-latest` is intentionally mutable and is never an archive. Before a
+public version line is displaced, preserve one known-good build under a new
+immutable release tag and add its isolated one-click commands to
+[`OLD-VERSIONS.md`](../public/OLD-VERSIONS.md).
+
 One planned use is a chronological build-history timelapse showing the real
 game at each public version. The historical package therefore needs to remain
 launchable on its own; preserve its launch instructions and any runtime flags

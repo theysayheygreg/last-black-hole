@@ -38,13 +38,13 @@ The entire game renders through a live ASCII fluid shader - the terminal look is
 Linux, macOS, or SteamOS/Steam Deck:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh
+curl -fsSL https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/install.sh | sh
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.ps1 | iex
+irm https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/install.ps1 | iex
 ```
 
 The installer downloads the current public weekly release, verifies its

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-28 - latest playtest automation
+
+- Retooled the failing weekly Action into a useful rolling latest-playtest
+  channel with deterministic validation and web, iPad, macOS, Windows, and
+  Linux/Steam Deck artifacts.
+- Made each rolling release self-contained with exact source/build metadata,
+  checksums, installer assets, and a post-publish integrity check.
+- Kept `nightly-latest` explicitly mutable while final displaced versions
+  remain immutable through the README-linked Old Versions ledger.
+
 ## 2026-07-28 — immutable old-version installs
 
 - Preserved the final known-good v0.2 playable as the immutable

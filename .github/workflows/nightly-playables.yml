@@ -1,4 +1,4 @@
-name: Weekly Playables
+name: Latest Playtest
 
 on:
   schedule:
@@ -11,310 +11,317 @@ permissions:
   id-token: write
 
 concurrency:
-  group: lbh-weekly-playables
+  group: lbh-latest-playtest
   cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  RELEASE_TAG: nightly-latest
 
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.changes.outputs.should_build }}
-      last_success_sha: ${{ steps.changes.outputs.last_success_sha }}
+      published_sha: ${{ steps.changes.outputs.published_sha }}
     steps:
-      - name: Decide whether weekly build should run
+      - name: Compare source with rolling release
         id: changes
         uses: actions/github-script@v7
         with:
           script: |
             if (context.eventName === 'workflow_dispatch') {
               core.setOutput('should_build', 'true');
-              core.setOutput('last_success_sha', 'manual');
+              core.setOutput('published_sha', 'manual');
               return;
             }
 
             const { owner, repo } = context.repo;
-            const workflowId = 'nightly-playables.yml';
-            const currentSha = context.sha;
-
-            const response = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id: workflowId,
-              status: 'success',
-              per_page: 10,
-            });
-
-            const priorRun = response.data.workflow_runs.find((run) => run.id !== context.runId);
-            if (!priorRun) {
-              core.info('No prior successful weekly build found; building.');
+            try {
+              const ref = await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: 'tags/nightly-latest',
+              });
+              const publishedSha = ref.data.object.sha;
+              core.setOutput('published_sha', publishedSha);
+              core.setOutput('should_build', publishedSha === context.sha ? 'false' : 'true');
+              core.info(
+                publishedSha === context.sha
+                  ? `Rolling release already contains ${context.sha}; skipping.`
+                  : `Rolling release is ${publishedSha}; building ${context.sha}.`,
+              );
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.info('No rolling release tag exists; building.');
+              core.setOutput('published_sha', 'none');
               core.setOutput('should_build', 'true');
-              core.setOutput('last_success_sha', 'none');
-              return;
             }
-
-            core.setOutput('last_success_sha', priorRun.head_sha);
-            if (priorRun.head_sha === currentSha) {
-              core.info(`Current SHA ${currentSha} matches the last successful weekly build; skipping build jobs.`);
-              core.setOutput('should_build', 'false');
-              return;
-            }
-
-            core.info(`Current SHA ${currentSha} differs from last successful weekly SHA ${priorRun.head_sha}; building.`);
-            core.setOutput('should_build', 'true');
 
   validate-source:
     needs: detect-changes
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
+      - run: npm ci
+      - name: Run deterministic release validation
+        run: >-
+          node tests/run-all.cjs
+          --lane=fast
+          --suite=Validation,PushScope,Signatures,Items,Balance,SimProtocol,DesktopPackage,DeckGamingMode,DeckInstaller,SteamDeckCompat,PlayInstructions,CloudflareDrop,TextCorruption,Typography,UIPrimitives,UIMotion,VFX
+          --renderer=three
+          --no-retries
 
-      - name: Install deps
-        run: npm ci
-
-      - name: Run fast validation
-        run: npm run test:fast
-
-  build-web:
+  build-web-ipad:
     needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     env:
       ENABLE_GITHUB_PAGES: ${{ vars.LBH_ENABLE_GITHUB_PAGES == 'true' }}
     runs-on: ubuntu-latest
-    outputs:
-      release_body: ${{ steps.meta.outputs.release_body }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build web
-        run: npm run build:web
-
-      - name: Package release assets
-        run: node scripts/ci/package-nightly-assets.cjs
-
+      - run: npm ci
+      - name: Build web and iPad playables
+        run: node scripts/build.cjs --targets=web,ipad --mode=release
+      - run: node scripts/ci/package-nightly-assets.cjs
+      - name: Package browser playables
+        working-directory: dist/nightly
+        run: |
+          zip -rq last-singularity-web-nightly.zip web START-HERE.md BUILD-MANIFEST.json nightly-assets.json
+          zip -rq last-singularity-ipad-nightly.zip ipad START-HERE.md BUILD-MANIFEST.json nightly-assets.json
+          cp BUILD-MANIFEST.json BUILD-MANIFEST-web-ipad.json
       - name: Upload GitHub Pages artifact
         if: env.ENABLE_GITHUB_PAGES == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist/nightly/web
-
-      - name: Zip web artifact
-        run: |
-          cd dist/nightly
-          zip -rq last-singularity-web-nightly.zip web START-HERE.md BUILD-MANIFEST.json nightly-assets.json
-
-      - name: Build release metadata
-        id: meta
-        run: |
-          {
-            echo 'release_body<<EOF'
-            echo 'Weekly playable builds for Last Singularity.'
-            echo ''
-            if [ "$ENABLE_GITHUB_PAGES" = "true" ]; then
-              WEB_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
-              echo "- Web (GitHub Pages): ${WEB_URL}"
-            fi
-            echo '- Web zip: attached zip asset'
-            echo '- Linux / Steam Deck: attached zip asset'
-            echo '- Windows: attached zip asset'
-            echo '- macOS: attached zip asset'
-            echo ''
-            echo 'Steam Deck one-command install from Desktop Mode / Konsole:'
-            echo ''
-            echo '```sh'
-            echo 'curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | sh'
-            echo '```'
-            echo ''
-            echo 'These automated weekly playtest artifacts only rebuild when the scheduled run sees new commits.'
-            echo 'The release tag and asset filenames still use nightly-latest / *-nightly.zip for stable installer URLs.'
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Upload web release asset
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: last-singularity-web-nightly
-          path: dist/nightly/last-singularity-web-nightly.zip
+          name: latest-browser-playables
+          retention-days: 14
+          path: |
+            dist/nightly/last-singularity-web-nightly.zip
+            dist/nightly/last-singularity-ipad-nightly.zip
+            dist/nightly/BUILD-MANIFEST-web-ipad.json
 
   build-win:
     needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - name: Install deps
-        run: npm ci
-
+      - run: npm ci
       - name: Parse native Windows installer
         shell: pwsh
-        run: |
-          [void][scriptblock]::Create((Get-Content scripts/install.ps1 -Raw))
-
-      - name: Build Windows desktop
-        run: npm run build -- --targets=win --mode=release
-
-      - name: Package release assets
-        run: node scripts/ci/package-nightly-assets.cjs
-
-      - name: Zip Windows artifact
+        run: '[void][scriptblock]::Create((Get-Content scripts/install.ps1 -Raw))'
+      - run: node scripts/build.cjs --targets=win --mode=release
+      - run: node scripts/ci/package-nightly-assets.cjs
+      - name: Package Windows playable
         shell: pwsh
         run: |
           Compress-Archive -Path "dist/nightly/Last Singularity-win32-x64","dist/nightly/START-HERE.md","dist/nightly/BUILD-MANIFEST.json","dist/nightly/nightly-assets.json" -DestinationPath "dist/nightly/last-singularity-win-nightly.zip" -Force
-
-      - name: Upload Windows release asset
-        uses: actions/upload-artifact@v4
+          Copy-Item "dist/nightly/BUILD-MANIFEST.json" "dist/nightly/BUILD-MANIFEST-win.json"
+      - uses: actions/upload-artifact@v4
         with:
-          name: last-singularity-win-nightly
-          path: dist/nightly/last-singularity-win-nightly.zip
+          name: latest-windows-playable
+          retention-days: 14
+          path: |
+            dist/nightly/last-singularity-win-nightly.zip
+            dist/nightly/BUILD-MANIFEST-win.json
 
   build-linux:
     needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build Linux desktop
-        run: npm run build -- --targets=linux --mode=release
-
-      - name: Package release assets
-        run: node scripts/ci/package-nightly-assets.cjs
-
-      - name: Zip Linux artifact
+      - run: npm ci
+      - run: node scripts/build.cjs --targets=linux --mode=release
+      - run: node scripts/ci/package-nightly-assets.cjs
+      - name: Package Linux and Steam Deck playable
+        working-directory: dist/nightly
         run: |
-          cd dist/nightly
           zip -rq last-singularity-linux-nightly.zip "Last Singularity-linux-x64" START-HERE.md BUILD-MANIFEST.json nightly-assets.json install-steam-shortcut.py
-
-      - name: Upload Linux release asset
-        uses: actions/upload-artifact@v4
+          cp BUILD-MANIFEST.json BUILD-MANIFEST-linux.json
+      - uses: actions/upload-artifact@v4
         with:
-          name: last-singularity-linux-nightly
-          path: dist/nightly/last-singularity-linux-nightly.zip
+          name: latest-linux-playable
+          retention-days: 14
+          path: |
+            dist/nightly/last-singularity-linux-nightly.zip
+            dist/nightly/BUILD-MANIFEST-linux.json
 
   build-mac:
     needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: macos-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build macOS desktop
-        run: npm run build -- --targets=mac --mode=release
-
-      - name: Package release assets
-        run: node scripts/ci/package-nightly-assets.cjs
-
-      - name: Zip macOS app
+      - run: npm ci
+      - run: node scripts/build.cjs --targets=mac --mode=release
+      - run: node scripts/ci/package-nightly-assets.cjs
+      - name: Package macOS playable
+        working-directory: dist/nightly
         run: |
-          cd dist/nightly
-          ditto -c -k --sequesterRsrc --keepParent "Last Singularity.app" "last-singularity-mac-nightly.zip"
+          ditto -c -k --sequesterRsrc --keepParent "Last Singularity.app" last-singularity-mac-nightly.zip
           zip -q last-singularity-mac-nightly.zip START-HERE.md BUILD-MANIFEST.json nightly-assets.json
-
-      - name: Upload macOS release asset
-        uses: actions/upload-artifact@v4
+          cp BUILD-MANIFEST.json BUILD-MANIFEST-mac.json
+      - uses: actions/upload-artifact@v4
         with:
-          name: last-singularity-mac-nightly
-          path: dist/nightly/last-singularity-mac-nightly.zip
+          name: latest-macos-playable
+          retention-days: 14
+          path: |
+            dist/nightly/last-singularity-mac-nightly.zip
+            dist/nightly/BUILD-MANIFEST-mac.json
 
   deploy-pages:
     if: needs.detect-changes.outputs.should_build == 'true' && vars.LBH_ENABLE_GITHUB_PAGES == 'true'
-    needs: [detect-changes, build-web]
+    needs: [detect-changes, build-web-ipad]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy web playable
         id: deployment
         uses: actions/deploy-pages@v4
 
   publish-release:
+    needs: [detect-changes, build-web-ipad, build-win, build-linux, build-mac]
     if: needs.detect-changes.outputs.should_build == 'true'
-    needs: [detect-changes, build-web, build-win, build-linux, build-mac]
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Download web asset
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: last-singularity-web-nightly
+          pattern: latest-*-playable*
           path: release-assets
+          merge-multiple: true
+      - name: Add source, installer, and checksum contracts
+        run: |
+          cp scripts/install.sh scripts/install.ps1 scripts/install-steam-shortcut.py release-assets/
+          node -e '
+            const fs = require("fs");
+            const manifestFiles = [
+              "BUILD-MANIFEST-web-ipad.json",
+              "BUILD-MANIFEST-win.json",
+              "BUILD-MANIFEST-linux.json",
+              "BUILD-MANIFEST-mac.json"
+            ];
+            const manifests = manifestFiles.map((name) =>
+              JSON.parse(fs.readFileSync(`release-assets/${name}`, "utf8"))
+            );
+            const versions = new Set(manifests.map((manifest) => manifest.version));
+            if (versions.size !== 1) throw new Error("platform build versions do not match");
+            fs.writeFileSync("release-assets/BUILD-MANIFEST.json", JSON.stringify({
+              sourceSha: process.env.GITHUB_SHA,
+              version: manifests[0].version,
+              mode: "release",
+              targets: ["web", "ipad", "mac", "win", "linux"],
+              platformManifests: manifestFiles
+            }, null, 2) + "\n");
+            fs.writeFileSync("release-assets/SOURCE.json", JSON.stringify({
+              sourceSha: process.env.GITHUB_SHA,
+              repository: process.env.GITHUB_REPOSITORY,
+              workflowRun: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+              channel: "rolling-latest",
+              mutable: true
+            }, null, 2) + "\n");
+          '
+          cd release-assets
+          sha256sum *.zip > SHA256SUMS
+      - name: Write rolling release notes
+        run: |
+          cat > release-notes.md <<EOF
+          # Latest Last Singularity Playtest
 
-      - name: Download win asset
-        uses: actions/download-artifact@v4
-        with:
-          name: last-singularity-win-nightly
-          path: release-assets
+          This is the mutable rolling playtest channel built from \`${GITHUB_SHA}\`.
+          It contains web, iPad, macOS Apple silicon, Windows x64, and Linux x64 / Steam Deck playables.
 
-      - name: Download linux asset
-        uses: actions/download-artifact@v4
-        with:
-          name: last-singularity-linux-nightly
-          path: release-assets
+          Linux, macOS, or Steam Deck:
 
-      - name: Download mac asset
-        uses: actions/download-artifact@v4
-        with:
-          name: last-singularity-mac-nightly
-          path: release-assets
+          \`\`\`sh
+          curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/nightly-latest/install.sh | sh
+          \`\`\`
 
-      - name: Publish SHA-256 checksums
-        working-directory: release-assets
-        run: sha256sum *.zip > SHA256SUMS
+          Windows PowerShell:
 
-      - name: Publish weekly release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: nightly-latest
-          name: Weekly Playables
-          body: ${{ needs.build-web.outputs.release_body }}
-          allowUpdates: true
-          removeArtifacts: true
-          replacesArtifacts: true
-          prerelease: true
-          artifactErrorsFailBuild: true
-          artifacts: "release-assets/*.zip,release-assets/SHA256SUMS"
+          \`\`\`powershell
+          irm https://github.com/${GITHUB_REPOSITORY}/releases/download/nightly-latest/install.ps1 | iex
+          \`\`\`
+
+          This tag moves when a new weekly build is published. Final displaced versions remain immutable on the [Old Versions](https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/public/OLD-VERSIONS.md) page.
+          EOF
+      - name: Move rolling tag and publish assets
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
+              -f sha="${GITHUB_SHA}" -F force=true >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${RELEASE_TAG}" -f sha="${GITHUB_SHA}" >/dev/null
+          fi
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "Latest Playtest" --notes-file release-notes.md --prerelease
+          else
+            gh release create "${RELEASE_TAG}" \
+              --target "${GITHUB_SHA}" --title "Latest Playtest" \
+              --notes-file release-notes.md --prerelease
+          fi
+
+          gh release upload "${RELEASE_TAG}" release-assets/* --clobber
+      - name: Verify published rolling release
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > published-release.json
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" > published-tag.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const assert = require('assert');
+          const release = JSON.parse(fs.readFileSync('published-release.json'));
+          const tag = JSON.parse(fs.readFileSync('published-tag.json'));
+          const required = [
+            'last-singularity-web-nightly.zip',
+            'last-singularity-ipad-nightly.zip',
+            'last-singularity-mac-nightly.zip',
+            'last-singularity-win-nightly.zip',
+            'last-singularity-linux-nightly.zip',
+            'BUILD-MANIFEST.json',
+            'SOURCE.json',
+            'SHA256SUMS',
+            'install.sh',
+            'install.ps1',
+            'install-steam-shortcut.py',
+          ];
+          const assets = new Map(release.assets.map((asset) => [asset.name, asset]));
+          for (const name of required) {
+            assert(assets.has(name), `rolling release is missing ${name}`);
+            assert(/^sha256:[0-9a-f]{64}$/.test(assets.get(name).digest || ''), `${name} has no GitHub SHA-256 digest`);
+          }
+          assert.equal(tag.object.sha, process.env.GITHUB_SHA, 'rolling tag does not match built source');
+          console.log(`Verified ${required.length} rolling release assets at ${process.env.GITHUB_SHA}.`);
+          NODE

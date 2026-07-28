@@ -33,19 +33,27 @@ function run() {
   includes(installer, "+ bytes([TYPE_END])", "Installer VDF writer must include Steam's final root terminator");
 
   const workflow = fs.readFileSync(workflowPath, "utf8");
-  includes(workflow, "name: Weekly Playables", "Regular playable workflow must be labeled weekly");
+  includes(workflow, "name: Latest Playtest", "Rolling playable workflow must describe its actual product");
   includes(workflow, "cron: '17 9 * * 1'", "Regular playable workflow must run weekly");
-  includes(workflow, "priorRun.head_sha === currentSha", "Scheduled playable workflow must skip unchanged commits");
+  includes(workflow, "tags/nightly-latest", "Scheduled playable workflow must compare against the published rolling tag");
+  includes(workflow, "--lane=fast", "Rolling release validation must use the fast release-contract lane");
+  includes(workflow, "--suite=Validation,PushScope", "Rolling release validation must explicitly exclude browser and optional-tool suites");
+  includes(workflow, "--targets=web,ipad", "Rolling release must include both browser playables");
   includes(workflow, "build-linux:", "Weekly workflow must build a Linux artifact for Deck installs");
   includes(workflow, "last-singularity-linux-nightly.zip", "Weekly workflow must publish the Linux Deck zip");
+  includes(workflow, "last-singularity-ipad-nightly.zip", "Weekly workflow must publish the iPad playable");
   includes(workflow, "START-HERE.md", "Weekly release zips must include playable instructions");
   includes(workflow, "BUILD-MANIFEST.json", "Weekly release zips must include build metadata");
+  includes(workflow, "SOURCE.json", "Rolling release must publish its exact source and channel identity");
+  includes(workflow, "SHA256SUMS", "Rolling release must publish portable checksums");
+  includes(workflow, "release-assets/* --clobber", "Only the rolling release may replace its assets");
+  includes(workflow, "Verify published rolling release", "Rolling release must verify its final remote asset contract");
   includes(workflow, "install-steam-shortcut.py", "Linux release zip must carry its checksum-covered Steam helper");
   includes(workflow, "scripts/ci/package-nightly-assets.cjs", "Weekly workflow must use the checked-in CJS packager");
 
   const readme = fs.readFileSync(readmePath, "utf8");
   includes(readme, "## Playable Targets", "README must expose playable targets");
-  includes(readme, "scripts/install.sh | sh", "README must document the public Deck installer command");
+  includes(readme, "releases/download/nightly-latest/install.sh | sh", "README must document the release-owned Deck installer command");
   includes(readme, "docs/public/OLD-VERSIONS.md", "README must link the preserved-version installer list");
   includes(readme, "docs/reference/STEAM-DECK-RUNBOOK.md", "README must link the Steam Deck runbook");
 
