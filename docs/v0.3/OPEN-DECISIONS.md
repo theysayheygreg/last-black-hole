@@ -133,6 +133,11 @@ These are intentionally beyond the v0.3 release gate:
 
 - choose the v0.3.2 fabric hierarchy and Deck camera baseline after the gated
   [Fabric, Surfing, and Camera motion review](reviews/v0.3.2-fabric-surfing-camera-review.md);
+- choose the v0.3.2 authored soundscape direction and final listening bar
+  through the
+  [Authored Soundscape Plan](reviews/v0.3.2-authored-soundscape-plan.md);
+  procedural Web Audio contact hookups are the functional baseline, not
+  authored-content acceptance;
 - which internal hull graduates next;
 - multiplayer transport, prediction, rollback, and matchmaking shape;
 - whether measured entity/network scale justifies a full ECS;

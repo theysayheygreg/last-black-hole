@@ -289,6 +289,15 @@ The remaining release gates are intentionally separate:
   [Fabric, Surfing, and Camera presentation review](reviews/v0.3.2-fabric-surfing-camera-review.md)
   after the settled v0.3.1 Deck baseline. It is a presentation and physical
   readability review, not a simulation or physics redesign.
+- v0.3.2 also owns the
+  [Authored Soundscape Plan](reviews/v0.3.2-authored-soundscape-plan.md).
+  The v0.3.1 RC swarm repair added procedural Web Audio contact/navigation
+  tones and runtime spatial/priority/lifecycle plumbing; it did not create
+  authored WAV/OGG/MP3 assets and is not final audio-content acceptance. The
+  v0.3.2 pass covers direction, asset inventory and creation, integration/mix,
+  representative listening, headphones/speakers, and physical Deck review.
+  Machine hookup evidence remains separate from Greg-owned audio taste and
+  device acceptance.
 - Public multiplayer transport, matchmaking, prediction, and rollback.
 - A full ECS runtime. v0.3 creates stable component-shaped seams but does not
   adopt ECS ceremony without measured need.
