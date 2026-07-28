@@ -8,6 +8,16 @@
 
 ---
 
+## 2026-07-28 — v0.3 Orrery correction reviews ingested
+
+- Preserved the scale/RC follow-up and slingshot rerun reviews as the durable
+  evidence handoff for the next playable v0.3 correction checkpoint.
+- Recorded Greg's accepted direction: slingshot edge-to-engage plus
+  hold-to-orbit and release-to-exit, universal Noise emitters across maps,
+  Shallows as the recognition route, and lethal-warning tuning in seconds.
+- This intake is documentation only. Product corrections and their focused
+  evidence follow as same-version commits.
+
 ## 2026-07-28 — v0.3.1 scale correction bundled for Orrery follow-up
 
 - Corrected the shared movement/perception/threat ruler after Orrery's first RC
