@@ -20,8 +20,8 @@ async function run() {
     false,
     { exfilHeard: false, portalInteraction: { portalId: 'optional-1', portalType: 'standard', ready: true } },
   );
-  assert.strictEqual(optional.label, 'OPTIONAL APERTURE');
-  assert.strictEqual(optional.detail, 'ROUTE: LISTEN');
+  assert.strictEqual(optional.label, 'CONFIRM EXTRACTION');
+  assert.strictEqual(optional.detail, 'remain inside cyan aperture');
   const optionalPrompt = hud.getInteractionPresentationState({
     visible: true,
     action: 'extract',
@@ -41,8 +41,9 @@ async function run() {
     false,
     { exfilHeard: true, portalInteraction: { portalId: 'final-1', portalType: 'exit', ready: true } },
   );
-  assert.strictEqual(finalReady.label.startsWith('aperture '), true);
-  assert.strictEqual(finalReady.detail.includes('enter cyan aperture'), true);
+  assert.strictEqual(finalReady.label, 'CONFIRM EXTRACTION',
+    'A ready extraction interaction must outrank the passive route-listening rail');
+  assert.strictEqual(finalReady.detail, 'remain inside cyan aperture');
   const finalPrompt = hud.getInteractionPresentationState({
     visible: true,
     action: 'extract',
@@ -85,6 +86,15 @@ async function run() {
   });
   assert.strictEqual(terminalFrame.interaction, null);
   assert(terminalFrame.abilityState.terminal);
+  const escapedFrame = hud.getHUDPresentationState({
+    outcome: 'escaped',
+    interaction: { action: 'extract', label: 'confirm extraction' },
+    abilityState: { hullType: 'breacher', burnActive: true, burnFuel: 20 },
+  });
+  assert.strictEqual(escapedFrame.terminal, true,
+    'An escaped outcome must enter the existing terminal HUD path');
+  assert.strictEqual(escapedFrame.interaction, null,
+    'An escaped outcome must suppress active route interaction');
   const terminalAbilities = hud.getAbilityPresentationState(terminalFrame.abilityState);
   assert(terminalAbilities.slots.every((slot) => slot.inert && !slot.active && slot.action === null));
   const inert = hud.getAbilityPresentationState({ hullType: 'breacher', terminal: true, burnFuel: 20 });

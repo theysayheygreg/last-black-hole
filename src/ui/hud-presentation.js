@@ -233,6 +233,17 @@ export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, 
   const count = portalSystem?.activeCount || 0;
   const nearbyPortal = portalInteraction || null;
   const nearbyPortalType = nearbyPortal?.portalType || nearbyPortal?.type || null;
+  if (nearbyPortal?.ready === true) {
+    return {
+      count,
+      tone: 'active',
+      label: 'CONFIRM EXTRACTION',
+      detail: 'remain inside cyan aperture',
+      nearest: null,
+      exfilHeard: routeDiscovery?.exfilHeard === true,
+      ready: true,
+    };
+  }
   if (nearbyPortal && nearbyPortal.ready !== false && !isExfilPortal({
     ...nearbyPortal,
     type: nearbyPortalType,
@@ -323,9 +334,12 @@ export function getTerminalPresentationState(outcome = 'dead') {
   });
 }
 
-export function getHUDPresentationState({ terminal = false, interaction = null, abilityState = null } = {}) {
+export function getHUDPresentationState({ terminal = false, outcome = null, interaction = null, abilityState = null } = {}) {
+  const terminalOutcome = String(outcome || '').toLowerCase();
   const isTerminal = Boolean(
     terminal
+    || terminalOutcome === 'dead'
+    || terminalOutcome === 'escaped'
     || abilityState?.terminal
     || abilityState?.status === 'dead',
   );
