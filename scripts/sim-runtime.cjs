@@ -7084,6 +7084,15 @@ async function routeRequest(req, res) {
           ? player.lastInput.consumeSlot
           : message.consumeSlot,
     };
+    // A confirmation is a discrete authority action, not held movement. If
+    // it arrives while the player is already in a portal, resolve it against
+    // the current authoritative position before the next movement tick can
+    // carry the ship back out of the aperture. The same exact residence check
+    // still rejects a command that arrives after the player has left.
+    if (message.extractConfirm && player.status === "alive" && player.portalInteraction?.ready === true) {
+      player.lastInput = { ...player.lastInput, extractConfirm: false };
+      tickExtraction(player, true);
+    }
     sendJson(res, 200, {
       ok: true,
       acceptedCommandSeq: auth.authority.lastCommandSeq,

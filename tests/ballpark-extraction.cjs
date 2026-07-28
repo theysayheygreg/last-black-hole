@@ -197,10 +197,24 @@ async function run() {
         emitter.portalId === "portal-optional-1-1"),
       "Optional portal must not publish EXFIL discovery");
 
+      // Confirm is a discrete edge. Prove authority resolves it at command
+      // receipt even when the next movement tick would carry the ship out.
+      const edgePosition = await postJson("/debug/player-state", {
+        clientId: "ballpark-extraction-test",
+        wx: 2.79,
+        wy: 2.72,
+        vx: 1.2,
+        vy: 0,
+        status: "alive",
+      });
+      assert(edgePosition.status === 200 && edgePosition.body.ok === true,
+        `Expected edge-position setup success, got ${edgePosition.status}`);
+
       const confirmed = await postAuthorizedInput(authority, 1, {
         seq: 1,
-        moveX: 0,
+        moveX: 1,
         moveY: 0,
+        thrust: 1,
         extractConfirm: true,
       });
       assert(confirmed.status === 200 && confirmed.body.ok === true,
