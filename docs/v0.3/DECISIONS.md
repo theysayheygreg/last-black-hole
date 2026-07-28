@@ -195,12 +195,14 @@ proof.
 ## W1-D Slingshot Input-Path RC Ratification
 
 Decision: accept the v0.3.1 slingshot input path as the packaged local-authority
-contract. Physical F and Deck/controller Y are rising-edge actions owned by
-InputManager and main, queued as `slingshotEdges`, acknowledged by SimClient,
-and consumed only by the authority affordance/engage seam. The client presents
-the authoritative aim ring and device-correct engage/release prompt; a press
-without an eligible anchor reports that no anchor is in range and does not
-invent a local outcome.
+contract. Physical F and Deck/controller Y have complementary edge and level
+semantics: button-down queues the rising edge that initiates authority
+engagement, the held level sustains the owned orbit, and button-up releases at
+the chosen exit angle. InputManager and main own those inputs, SimClient
+acknowledges their transport, and only authority owns the resulting orbit and
+release. The client presents the authoritative aim ring and device-correct
+engage/release prompt; a press without an eligible anchor reports that no
+anchor is in range and does not invent a local outcome.
 
 The five gameplay values remain centralized in
 `scripts/sim/slingshot-contract.cjs` and ratified as:
@@ -258,6 +260,15 @@ changes, even after the two-and-a-half-second contact memory fades. The HUD
 surfaces only non-zero Noise listener counters, and results include the existing
 authoritative heard/tracked seconds. The ruler labels the fixed coyote transport
 allowance separately from the accepted `50 ms` gameplay value.
+
+Noise emitter radii are universal across Shallows, Expanse, and Deep Field; no
+map-specific hearing multiplier exists. Shallows is deliberately the
+recognition route: before an exfil opens it teaches `ROUTE: LISTEN`, and its
+universal tone may become immediately audible when it opens so the player can
+learn sound, cyan identity, and distance. Expanse and Deep Field retain the
+larger navigation-by-ear space. Lethal threat warnings are authored from
+seconds at representative cruise and closure speeds, not only viewport
+multiples.
 
 ## Locked Noise Radius And Inhibitor Ecology Ownership
 

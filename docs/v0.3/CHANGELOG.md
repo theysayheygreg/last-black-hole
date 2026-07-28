@@ -2,6 +2,21 @@
 
 ## 2026-07-28
 
+- **Post-Orrery playable correction:** portal lifecycle changes now refresh the
+  Ballpark mirror before same-tick authority residence queries, so optional
+  and final apertures publish ready state, abort on exit, and confirm through
+  normal input. Slingshot truth is explicit: edge engages, hold sustains, and
+  button-up releases.
+- **First-heard threat and Noise identity:** force pulse is `1600m`, decoy is
+  `1900m`, and Swarm/Vessel warnings are `4600m`, derived from a centralized
+  three-second representative-cruise budget with threat-specific closure
+  margins. Hull and loadout Noise radius/decay modifiers now reach live
+  authority; legacy saved Signal coefficient names map once to the new fields.
+- **Presentation and evidence clarity:** optional residence leads with
+  `OPTIONAL APERTURE`, missing world names receive safe labels, ship-local
+  labels use ordered collision slots, death clears prompts and makes abilities
+  inert in the same frame, and partial AgentPlay stages persist after a later
+  failure.
 - **Normal-input slingshot proof repaired:** the live keyboard F and controller
   Y journeys now keep the button held after transport acknowledgement, observe
   authoritative engagement and held orbit, then release on button-up. No

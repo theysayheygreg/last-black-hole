@@ -47,9 +47,10 @@ Glitch, Swarm, and Vessel may emit their own player-hearable Noise contacts;
 those emissions never add to player Noise. Suggested far categories are
 `STATIC`, `CORRUPTION`, and `THRUST`; close public classes are `GLITCH`,
 `SWARM`, and `VESSEL`. The current playable starting radii are `1600m`,
-`2200m`, and `3200m` for Glitch, Swarm, and Vessel, with `4200m` for EXFIL;
+`4600m`, and `4600m` for Glitch, Swarm, and Vessel, with `4200m` for EXFIL;
 the shared Noise data owner also derives the `1425m` reference Deck
-off-screen threshold. Swarm speeds are `0.25/0.6/1.1/1.6` world-units/s from
+off-screen threshold and checks lethal warning in seconds at representative
+cruise and closure. Swarm speeds are `0.25/0.6/1.1/1.6` world-units/s from
 silent through flare states and Vessel strategic movement starts at `0.5`
 world-units/s, so pursuit can close without becoming unavoidable. These are
 playable starting biases and must avoid late-game marker spam. `cadenceSeconds`

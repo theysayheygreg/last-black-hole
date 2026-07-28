@@ -33,9 +33,12 @@ playtest-tunable.
 
 ### Teaching Route
 
-Shallows is the first-current route: movement/slingshot, salvage, Noise
-consequence, then extraction. Seed preview and authority use the same route
-facts.
+Shallows is the first-current recognition route: movement/slingshot, salvage,
+Noise consequence, then extraction. Before an exfil exists it teaches
+`ROUTE: LISTEN`; once the universal EXFIL tone opens it may be immediately
+audible and teaches sound, cyan identity, and distance. Expanse and Deep Field
+remain the navigation-by-ear routes. Seed preview and authority use the same
+route facts; map-specific hearing profiles are not open.
 
 ### Product-Rate Route Contract
 

@@ -5,8 +5,36 @@
 
 ## Current Verdict
 
-**Product source `61ecc534a0a90bb64d360ee85850ddcb21feb8ef` is
-package/boot green and candidate-gate red.** The one provisioned no-retry full
+### Post-Orrery Playable Correction Checkpoint
+
+Product source `400f601a95863e6eaf31141d9d2e6b33077ad52e`
+contains the portal authority repair, universal time-budgeted Noise/threat
+tuning, live loadout Noise modifiers, and the presentation cleanup. Direct
+focused evidence is green:
+
+- `BallparkExtraction`: 1/1 for final/optional ready, leave-to-abort,
+  confirm-to-escape, and EXFIL discovery truth;
+- `SlingshotEdgeQueue`: 3/3, including edge engagement, held authority orbit,
+  and button-up release;
+- Noise Radius: 87/87; Presentation Evidence: 6/6; UI Layout and route teaching:
+  green;
+- Inhibitor Ecology: green, including heard-to-search Swarm behavior.
+
+The one integrated AgentPlay run from test descendant `2dcbdb30` reached normal
+controller slingshot release and natural salvage, then stopped on a stale
+evidence expectation that compared the pulse against raw `1600m`. Authority
+correctly published `PULSE` with the Drifter's canonical `0.5x` radius:
+`800m` peak, falling to `130m`. The assertion and partial-stage recorder are
+corrected in `2dcbdb30`; AgentPlay was not rerun because this checkpoint
+budgeted exactly one journey. Its report is
+`tests/screenshots/agent-play-eval-2026-07-28T025924550Z/report.json`.
+Natural optional-portal completion is therefore direct-authority green but not
+yet natural-journey green. No full gate, package, or Deck run was performed.
+
+### Historical `61ecc534` Candidate
+
+Product source `61ecc534a0a90bb64d360ee85850ddcb21feb8ef` was
+package/boot green and candidate-gate red. The one provisioned no-retry full
 run passed 112/119 suites in 387.89 s wall time (570.02 s summed suite time),
 with seven failures and zero retries. Three failures expose the same current
 player-path defect: normal slingshot engagement did not become authoritative in
@@ -296,7 +324,8 @@ Requirements:
 - [x] Chronicle shows career totals and newest five runs.
 - [x] Expanse and Deep Field use distinct route/scale identities.
 - [ ] Natural agent journey completes the slingshot/extraction route without
-  debug mutation. The current run stops at authoritative slingshot engagement.
+  debug mutation. The current run clears slingshot and salvage but stops at a
+  corrected stale pulse-radius assertion before portal travel.
 - [x] A fresh natural journey dies to a visible named well and returns Home
   without debug mutation.
 

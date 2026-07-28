@@ -18,7 +18,7 @@ not permanent balance promises:
 | thrust with flow / neutral / against flow | 180m / 240m / 320m |
 | powered brake | 220m |
 | salvage tier 1 / 2 / 3 | 180m / 320m / 480m |
-| force pulse / decoy / contact | 600m / 700m / 300m |
+| force pulse / decoy / contact | 1600m / 1900m / 300m |
 
 Continuous emission decays at `90m/s` after release. Discrete emissions hold
 for `0.35s`, then decay at `120m/s`. Passive echo proximity is silent. Heat,
@@ -30,10 +30,17 @@ World contacts use the same meter ruler as the player. The reference Deck
 frame (`1280x800`, `3.0` camera world-units, `20px` edge margin) derives a
 `1425m` minimum distance to the nearest off-screen edge from the canonical
 physical-units scale. The current playable world-emitter starting radii are
-Glitch `1600m`, Swarm `2200m`, Vessel `3200m`, and EXFIL `4200m`, all owned by
+Glitch `1600m`, Swarm `4600m`, Vessel `4600m`, and EXFIL `4200m`, all owned by
 `src/content/noise.data.json`; these are starting biases, not permanent balance.
 Their `cadenceSeconds` values pulse contact presentation emphasis only and
 never toggle the underlying distance-based audibility.
+
+Swarm and Vessel warning ranges are also checked against a centralized
+time-based starting budget: `3s` at `850m/s` representative cruise, with at
+least `1.5s` Swarm and `2.5s` Vessel closure margin at their authored threat
+speeds. These values are universal across maps. Shallows intentionally teaches
+recognition when those radii saturate its smaller route; larger tiers teach
+hunting and navigation by ear.
 
 ## Player Receiving Contract
 
