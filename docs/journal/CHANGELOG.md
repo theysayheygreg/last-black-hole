@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-07-28 — v0.3.1 scale correction bundled for Orrery follow-up
+
+- Corrected the shared movement/perception/threat ruler after Orrery's first RC
+  memo: camera-derived audible scale, legible world-contact colors, viable
+  pursuit, and heard-EXFIL route discovery now form one reviewable checkpoint.
+- Recorded one provisioned no-retry full lane and fresh all-target package from
+  exact product source `61ecc534`. Package closure is green; three current
+  slingshot player-path rows remain red and are not presented as play
+  acceptance.
+- Bundled one read-only follow-up packet for an opinionated go/no-go Deck
+  recommendation. Primary owns delivery; no Discord post, Deck deploy,
+  promotion, or cross-version action is implied.
+
 ## 2026-07-27 — v0.3.1 RC milestone bundled for Orrery
 
 - Selected immutable v0.3 product source `a958a8c6` for one RC evidence pass.

@@ -2,6 +2,31 @@
 
 ## 2026-07-27
 
+- **Orrery scale correction checkpoint:** product source `61ecc534` now
+  derives the Deck off-screen hearing floor from the live camera ruler, makes
+  world Noise contacts readable before entering view, gives Swarms and Vessels
+  physically relevant pursuit speeds, keeps EXFIL cyan and Inhibitors magenta,
+  and uses cadence only for restrained presentation pulsing.
+- **Heard-route navigation:** the aperture rail shows `ROUTE: LISTEN` without
+  leaking distance until a true active EXFIL emitter is heard. That discovery
+  remains earned for the authority run; optional portals cannot unlock it.
+  Results expose existing heard/tracked time, empty listener counters collapse,
+  and the ruler separates the `50 ms` coyote value from its `267 ms` transport
+  allowance.
+- **Corrected RC evidence:** exact product source `61ecc534` ran the full
+  no-retry lane once: 112/119 passed, 7 failed, zero retries, 387.89 s wall
+  time. Three live rows share a normal-input slingshot engagement timeout;
+  four rows are stale post-Noise/portal/HUD contracts. The AgentPlay death and
+  Home recovery journey passed, but the slingshot route did not, so this is
+  package-green rather than play-green.
+- **Fresh corrected package:** all five targets built as `0.3.1.61ecc534`;
+  `release:status` and `test:package` passed staged authority boot and package
+  closure. The playtest ZIP is 441,835,825 bytes with SHA-256
+  `ad381bb2152b5fa18c8c4226e9a1cbb78acd7b3008904dc4571b024c6ce2b200`;
+  desktop `app.asar` payloads share SHA-256
+  `e6fafc45913d02242a8834f5ca61fe8efd0df39d6fefad466f2a09675cc8bf98`.
+  No Deck deployment or promotion was performed.
+
 - **Orrery route teaching:** the aperture rail now reads `ROUTE: LISTEN` until
   the current run genuinely hears an `EXFIL TONE`. Discovery then persists for
   that run and reveals the nearest aperture in canonical `m`/`km` distance;

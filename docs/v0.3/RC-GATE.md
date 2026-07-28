@@ -1,81 +1,72 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-26. This is branch acceptance
+> Document revision: v0.3. Updated 2026-07-28. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
 
-**The selected v0.3.1 RC source
-`a958a8c68b6c9f14054fe012882326dcae32f910` is package/boot green but
-candidate-gate red. The one no-retry full run passed 86/119 suites in 300.10 s
-wall time (439.31 s summed suite time), with 33 failures and zero retries. The
-failed rows are classified in
-`docs/v0.3/reviews/2026-07-27-orrery-v03-rc-contract-corrections.md` as 8 stale
-contracts, 24 missing-dependency/infrastructure failures, and 1 current source
-defect. No isolated product boot failure was established, but this is not a
-green RC or a promotion claim.**
+**Product source `61ecc534a0a90bb64d360ee85850ddcb21feb8ef` is
+package/boot green and candidate-gate red.** The one provisioned no-retry full
+run passed 112/119 suites in 387.89 s wall time (570.02 s summed suite time),
+with seven failures and zero retries. Three failures expose the same current
+player-path defect: normal slingshot engagement did not become authoritative in
+`RulerLive`, `SlingshotV2Live`, and `AgentPlayEval`. Four are stale contracts:
+the blocked-portal Three lifecycle expectation, old HUD DOM shape, retired
+Signal/scalar-Inhibitor result/debug copy, and old RemoteAuthority Signal
+expectations. The portal lifecycle expectation is corrected in the test-only
+descendant `6f0ca0ec`; the full lane was intentionally not rerun.
 
-The same immutable source produced complete all-target internal build
-`0.3.1.a958a8c6` through the release tool's supported `--skip-tests` path after
-the full gate had already run. `release:status` found the hash-named release,
-and `test:package` passed staged desktop authority boot plus release-package
-closure. This proves artifact and packaged-runtime closure; it does not erase
-the full-lane red result.
+The immutable product source produced complete internal build
+`0.3.1.61ecc534` through the supported `--skip-tests` artifact path after the
+full gate had already run. `release:status` found all five hash-named targets,
+and `test:package` passed staged desktop authority boot and package closure.
+This proves current artifact and packaged-runtime closure. It does not prove
+the normal slingshot player journey, physical Deck feel, or promotion
+readiness.
 
 Current evidence:
 
+- full receipt:
+  `/private/tmp/lbh-v03-orrery-rc-61ecc534-receipt-20260728T011650Z`;
 - full log:
-  `/private/tmp/lbh-v03-rc-a958a8c6-full-20260727T235200Z/test-full.log`
+  `/private/tmp/lbh-v03-orrery-rc-61ecc534-receipt-20260728T011650Z/full-run.log`
   (SHA-256
-  `6ff1aaeb191fe3bb4d10f6b536579539e79876d8ee91c17192d25d49ceed2718`);
-- full summary:
-  `/private/tmp/lbh-v03-rc-a958a8c6-full-20260727T235200Z/summary-lines.txt`;
-- harness artifacts:
-  `/private/tmp/lbh-v03-rc-a958a8c6/tmp/harness-artifacts/1785196327317-8890`;
+  `d674fedec8ec14a946b1a06a92d0c4f9f9128c09440d28f1d1b6d5d2c761b9fd`);
 - AgentPlay output:
-  `/private/tmp/lbh-v03-rc-a958a8c6/tests/screenshots/agent-play-eval-2026-07-27T235331801Z/`;
+  `/private/tmp/lbh-v03-orrery-rc-61ecc534/tests/screenshots/agent-play-eval-2026-07-28T011834914Z/`;
+- controller and keyboard captures:
+  `/private/tmp/lbh-v03-orrery-rc-61ecc534/tmp/harness-artifacts/1785201444718-12395/089-controller-three-a1/`
+  and
+  `/private/tmp/lbh-v03-orrery-rc-61ecc534/tmp/harness-artifacts/1785201444718-12395/090-keyboardmouse-three-a1/`;
 - build root:
-  `/private/tmp/lbh-v03-build-a958a8c6/builds/v0.3.1.a958a8c6`;
+  `/private/tmp/lbh-v03-orrery-build-final-61ecc534/builds/v0.3.1.61ecc534`;
 - playtest archive:
-  `/private/tmp/lbh-v03-build-a958a8c6/builds/last-singularity-playtest-v0.3.1.a958a8c6.zip`
-  (441,826,786 bytes; SHA-256
-  `3f001bc1ce15dafcdd57af395084a810258c651c8045dc8d44cb3b6b4cac9b31`);
+  `/private/tmp/lbh-v03-orrery-build-final-61ecc534/builds/last-singularity-playtest-v0.3.1.61ecc534.zip`
+  (441,835,825 bytes; SHA-256
+  `ad381bb2152b5fa18c8c4226e9a1cbb78acd7b3008904dc4571b024c6ce2b200`);
 - macOS, Windows, and Linux `app.asar` SHA-256:
-  `42a6959d5a438ae6d754b653c916239b7d4a01864b2ca6994ed19f2bb0f35374`;
+  `e6fafc45913d02242a8834f5ca61fe8efd0df39d6fefad466f2a09675cc8bf98`;
 - executable SHA-256: macOS
-  `f99a091f985fdf40d0ff56b6c64568b62db488715d96b33bf259bf4b082a9b1f`,
+  `91914b9b9ab924a9426d5652fbe2e2d4d1d43c6366f30464907a917f142f31b4`,
   Windows
-  `99fc5c1323ced50ead5944158c808e6c239f9d50cd07334aa2cb085bd4b1308b`,
+  `2855e243679ca064b3c9367214b899a1561ebaefd52ad86c165b6b3936f1ebe`,
   and Linux
   `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`.
 
-Greg's feel, visual, audio, and physical Deck reviews remain open. No Deck
-deployment or cross-version promotion was performed for this candidate.
+The AgentPlay run reached title, profile, route briefing, authoritative
+Shallows start, natural well death, and Home recovery. It did not complete the
+extraction route because `player.slingshotEngaged` timed out. Greg's physical
+Deck, feel, visual, and audio reviews therefore remain open. No Deck deployment
+or cross-version promotion was performed.
 
-The accepted `codex/v0.3-sim-harness-simplification` ancestry remains the
-source of the unified 15 Hz authority clock, measured Deep Field
-relevance/transport work, deadline delivery, runner isolation, and prior
-current-contract proof. The selected RC source above is its later v0.3
-descendant; `main` remains the v0.2 public/demo line.
+### Superseded 2026-07-27 Candidate
 
-Compared with the 93.62 s core baseline, final core is 2.064x faster. Compared
-with the 1,028.63 s full baseline, final full is 2.376x faster and consumes
-42.1% of baseline wall time. The direct 5/15/25 receipt delivered 14.981,
-14.998, and 14.996 Hz with zero skipped deadlines. Deep Field separately
-delivered 14.99/15 Hz across 157 ticks, closing the earlier roughly 13.9/15
-residual under final host conditions without restoring map profiles. Heap delta
-remains diagnostic.
-
-The full run recorded 611.61 s summed suite time, 34 browser launches, 18
-static starts, 71 sim starts, and 3 control starts. Its `AgentPlayEval [three]`
-row failed during browser `__TEST_API` bootstrap, so this receipt does not claim
-current AgentPlay, Flow, MetaFlow, RemoteAuthority, Renderer, or UIVisual green.
-The older successful AgentPlay and visual receipts below are historical evidence
-for their exact earlier hashes only.
-
-The earlier `0.3.1.2b93b077` and `dd9e5149` package/Deck receipts below remain
-valid only for their exact historical hashes. They do not certify the current
-source checkpoint.
+The earlier source `a958a8c68b6c9f14054fe012882326dcae32f910`
+passed 86/119 suites in 300.10 s with 33 failures and built
+`0.3.1.a958a8c6`. Its 8 stale-contract, 24 dependency/infrastructure, and 1
+current-source-defect classification remains recorded in
+`docs/v0.3/reviews/2026-07-27-orrery-v03-rc-contract-corrections.md`. Those
+results and artifacts are historical evidence for that exact hash only.
 
 ## Historical Package And Deck Evidence
 
@@ -196,8 +187,8 @@ node scripts/build-health.cjs status
 
 Requirements:
 
-- branch is the selected, clean v0.3 candidate (the current source checkpoint
-  is `codex/v0.3-sim-harness-simplification` until an RC is explicitly chosen);
+- branch is the selected, clean v0.3 candidate (`codex/v0.3-ballpark-roadmap`
+  at exact product source `61ecc534` for this receipt);
 - only known untracked historical screenshot directories may remain;
 - no suite relies on a persistent browser/sim unless persistence is the thing
   being tested;
@@ -245,9 +236,10 @@ Requirements:
 - [x] Result, cargo, loadout, vault, EM, and profile writeback are authoritative.
 - [x] Chronicle shows career totals and newest five runs.
 - [x] Expanse and Deep Field use distinct route/scale identities.
-- [x] Natural agent journey reaches a changed second run without debug mutation.
-- [x] A second fresh controller journey selects Breacher, dies to a visible
-  named well, and returns Home without debug mutation.
+- [ ] Natural agent journey completes the slingshot/extraction route without
+  debug mutation. The current run stops at authoritative slingshot engagement.
+- [x] A fresh natural journey dies to a visible named well and returns Home
+  without debug mutation.
 
 ## Presentation And Accessibility Gate
 
@@ -281,13 +273,14 @@ npm run release:status
 npm run test:package
 ```
 
-- [x] Primary selected `a958a8c6` as the current RC evidence source and built
-  its hash-named all-target internal package `0.3.1.a958a8c6`.
+- [x] Primary selected `61ecc534` as the current RC evidence source and built
+  its hash-named all-target internal package `0.3.1.61ecc534`.
 - [x] Reported and verified that exact source's `app.asar` and playtest ZIP through
   `release:status` and `test:package`.
 
 Historical package evidence, not certification of the current source:
 
+- [x] Build `0.3.1.a958a8c6` passed the historical multi-target package gate.
 - [x] Build `0.3.1.dd9e5149` passed the historical multi-target package gate.
 - [x] Its `app.asar` and playtest ZIP checksums are reported above and were
   verified by `release:status` plus `test:package`.
