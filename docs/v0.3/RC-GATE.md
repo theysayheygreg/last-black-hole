@@ -72,6 +72,43 @@ promotion review. The branch HEAD after this entry is docs-only. Promotion to
 `main` remains a separate explicitly approved operation, and the authored
 soundscape remains an active v0.3.1 content vertical rather than v0.3.2 work.
 
+#### Outgoing v0.2 playable preservation
+
+The designated final known-good v0.2 source is
+`83953aa1f9f7cc7c39cfc2cd84610ee9a3dec104`, build
+`0.2.2.83953aa`. Its complete ignored repo-local release folder and playtest
+archive remain present:
+
+- `builds/v0.2.2.83953aa/` (981 MiB);
+- `builds/last-singularity-playtest-v0.2.2.83953aa.zip`
+  (406,160,392 bytes; SHA-256
+  `6dfc0a0f35c400c877bc4fe12b42fc6699365b66c1e3a1468e4fb89d11042ac7`);
+- `builds/v0.2.2.83953aa/BUILD-MANIFEST.json` (SHA-256
+  `b270a2ea7d0f3e9e1429a5a459a2bf6c8e3c36852f4eeb6236c00ac6d171c601`);
+- Linux executable SHA-256:
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`;
+- Linux `app.asar` SHA-256:
+  `26aa6c59f498b5f8b7a376f435d389ab8c459852c102b6bca02adf7d8d6fd457`.
+
+The Deck copy remains independently launchable as **Last Singularity v0.2
+Demo** at `/home/deck/Games/last-singularity-v02`, using the
+`last-singularity-v02` launcher, data, log, desktop-entry, and shortcut
+namespace. Its executable and `app.asar` hashes match the repo-local
+`0.2.2.83953aa` build. Steam shortcut key 18/app id `2947990413` remains
+separate from v0.3 key 19, and the v0.3.1 deployment did not delete or repoint
+it.
+
+The current GitHub Release is
+`https://github.com/theysayheygreg/last-black-hole/releases/tag/nightly-latest`.
+Its Linux asset has SHA-256
+`f44ba1f1b1baf80cc31eef8b7fe105f87ae940dfb514a023e481be2b063bd3e5`
+and contains an `app.asar` with SHA-256
+`a2db4e153518edef259458d06ae486ee39fa2c5a37be427b4be12fab1bc1f670`;
+it predates and does not match `0.2.2.83953aa`. No dedicated
+`0.2.2.83953aa` GitHub Release was found. Publishing checksum-backed
+`0.2.2.83953aa` assets, while retaining the existing local folder/archive and
+Deck slot, is therefore a required promotion-preparation gap.
+
 ### `774bd71b` Green Candidate
 
 Exact product source `774bd71bca1f3fb98ad06b7b1ef853e0f61bc7fb`
