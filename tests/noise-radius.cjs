@@ -7,7 +7,6 @@ const { pathToFileURL } = require('url');
 const noiseData = require('../src/content/noise.data.json');
 const {
   NOISE_CONFIG,
-  minimumOffscreenHearingMeters,
   emitterAudibleFor,
   enemyListenerStateFor,
   identifyPublicSource,
@@ -44,6 +43,10 @@ async function run() {
   const { projectRemoteWorldPatch } = await import(
     pathToFileURL(path.join(root, 'src/sim/remote-snapshot-presentation.js')).href
   );
+  const { CAMERA_VIEW } = await import(pathToFileURL(path.join(root, 'src/coords.js')).href);
+  const { minimumOffscreenHearingMeters } = await import(
+    pathToFileURL(path.join(root, 'src/content/noise.js')).href
+  );
 
   check(NOISE_CONFIG.unit === 'm', 'noise uses canonical meters');
   check(NOISE_CONFIG.continuous.withFlowMeters === 180, 'with-flow radius');
@@ -58,8 +61,9 @@ async function run() {
   check(NOISE_CONFIG.lastHeardFadeSeconds === 2.5, 'last-heard fade');
   check(JSON.stringify(noiseData) === JSON.stringify(NOISE_CONFIG), 'CJS adapter preserves canonical data');
   check(NOISE_CONFIG.world.contactCap === 5, 'world Noise contact cap is centralized');
-  const minimumOffscreenMeters = minimumOffscreenHearingMeters();
-  check(Math.round(minimumOffscreenMeters) === 1425, 'reference Deck off-screen hearing threshold derives from camera and units');
+  const minimumOffscreenMeters = minimumOffscreenHearingMeters(undefined, undefined, CAMERA_VIEW);
+  check(CAMERA_VIEW === 3 && Math.round(minimumOffscreenMeters) === 1425,
+    'reference Deck off-screen hearing threshold derives from the live camera constant and units');
   check(NOISE_CONFIG.world.inhibitor.glitch.radiusMeters === 1600
     && NOISE_CONFIG.world.inhibitor.swarm.radiusMeters === 2200
     && NOISE_CONFIG.world.inhibitor.vessel.radiusMeters === 3200

@@ -24,7 +24,6 @@
     "contactCap": 5,
     "offscreenScale": {
       "referenceViewport": { "widthPx": 1280, "heightPx": 800 },
-      "cameraViewWorldUnits": 3,
       "edgeMarginPixels": 20
     },
     "inhibitor": {
