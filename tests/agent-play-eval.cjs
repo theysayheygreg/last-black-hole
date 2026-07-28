@@ -82,7 +82,7 @@ async function slingshotEdgeAcks(page) {
   );
 }
 
-async function tapAcknowledgedSlingshotEdge(page, label) {
+async function tapAcknowledgedSlingshotEdge(page, label, { release = true } = {}) {
   const before = await slingshotEdgeAcks(page);
   await setGamepadButton(page, 3, true);
   await stepGameFrames(page, 1, 0.001);
@@ -92,8 +92,10 @@ async function tapAcknowledgedSlingshotEdge(page, label) {
       return acks.length === count + 1;
     }, { timeout: 5000, label: `${label} edge acknowledgement` }, before.length);
   } finally {
-    await setGamepadButton(page, 3, false);
-    await stepGameFrames(page, 1, 0.001);
+    if (release) {
+      await setGamepadButton(page, 3, false);
+      await stepGameFrames(page, 1, 0.001);
+    }
   }
   const after = await slingshotEdgeAcks(page);
   const ack = after[after.length - 1];
@@ -103,6 +105,20 @@ async function tapAcknowledgedSlingshotEdge(page, label) {
   assert(ack.acceptedEdgeIds[0] === ack.requestedEdgeIds[0], `${label} acknowledged a different edge`);
   assert(ack.acknowledgedAtUnixMs >= ack.sentAtUnixMs, `${label} acknowledgement timestamp preceded send`);
   return ack;
+}
+
+async function releaseHeldSlingshot(page, label) {
+  await setGamepadButton(page, 3, false);
+  await stepGameFrames(page, 1, 0.001);
+  await waitFor(page, () => {
+    const local = window.__TEST_API?.getInputState?.();
+    const remote = window.__TEST_API?.getNetworkState?.()?.lastRemoteInput;
+    return {
+      localSlingshot: local?.slingshot,
+      remoteSlingshot: remote?.slingshot,
+    };
+  }, { timeout: 5000, label: `${label} button-up propagation` }, (state) =>
+    state?.localSlingshot === false && state?.remoteSlingshot === false);
 }
 
 async function waitForSlingshotEvent(clientId, since, type, timeout = 6000) {
@@ -490,12 +506,16 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
     `Authored route well did not retain the published command margin: ${JSON.stringify(approach.aim)}`);
 
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
-  const engageAck = await tapAcknowledgedSlingshotEdge(page, "engage");
+  const engageAck = await tapAcknowledgedSlingshotEdge(page, "engage", { release: false });
   let routeEvents = await waitForSlingshotEvent(clientId, baselineSeq, "player.slingshotEngaged");
   assert(routeEvents.length === 1 && routeEvents[0].type === "player.slingshotEngaged",
     `Expected exactly one engage event before release, got ${routeEvents.map((event) => event.type)}`);
   const engagedEvent = routeEvents[0];
-  const releaseAck = await tapAcknowledgedSlingshotEdge(page, "release");
+  await waitForPlayer(clientId, (entry) => entry.slingshot?.engaged === true, {
+    timeout: 6000,
+    label: "slingshot held orbit",
+  });
+  await releaseHeldSlingshot(page, "release");
   routeEvents = await waitForSlingshotEvent(clientId, baselineSeq, "player.slingshotReleased");
   await setGamepadDrive(page);
   screenshots.push(await capturePage(page, outputDir, "05-route-slingshot-release"));
@@ -514,7 +534,7 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
     anchorType: engagedEvent.payload?.anchorType || "well",
     approach,
     releaseSpeed: Math.hypot(released.player.vx || 0, released.player.vy || 0),
-    edges: { engage: engageAck, release: releaseAck },
+    edges: { engage: engageAck },
     events: routeEvents.map((event) => ({
       seq: event.seq,
       tick: event.tick,

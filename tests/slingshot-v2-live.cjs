@@ -199,7 +199,7 @@ async function slingshotEdgeAcks(page) {
     ?.networkMetrics?.slingshotEdgeAcks || []);
 }
 
-async function pressAcknowledgedSlingshotEdge(page, label) {
+async function pressAcknowledgedSlingshotEdge(page, label, { release = true } = {}) {
   const before = await slingshotEdgeAcks(page);
   await page.keyboard.down("KeyF");
   try {
@@ -209,8 +209,23 @@ async function pressAcknowledgedSlingshotEdge(page, label) {
       `${label} edge acknowledgement`,
     );
   } finally {
-    await page.keyboard.up("KeyF");
+    if (release) await page.keyboard.up("KeyF");
   }
+  if (release) await waitForSlingshotKeyUp(page, label);
+  const after = await slingshotEdgeAcks(page);
+  assert.strictEqual(after.length, before.length + 1,
+    `${label} must produce exactly one edge acknowledgement`);
+  const [ack] = after.slice(before.length);
+  assert.strictEqual(ack.requestedEdgeIds.length, 1,
+    `${label} must request exactly one edge ID`);
+  assert.strictEqual(ack.acceptedEdgeIds.length, 1,
+    `${label} must accept exactly one edge ID`);
+  assert.strictEqual(ack.acceptedEdgeIds[0], ack.requestedEdgeIds[0],
+    `${label} must accept the requested edge ID`);
+  return ack;
+}
+
+async function waitForSlingshotKeyUp(page, label) {
   await waitFor(
     () => page.evaluate(() => {
       const local = window.__TEST_API?.getInputState?.();
@@ -223,17 +238,11 @@ async function pressAcknowledgedSlingshotEdge(page, label) {
     (state) => state?.localSlingshot === false && state?.remoteSlingshot === false,
     `${label} key-up propagation`,
   );
-  const after = await slingshotEdgeAcks(page);
-  assert.strictEqual(after.length, before.length + 1,
-    `${label} must produce exactly one edge acknowledgement`);
-  const [ack] = after.slice(before.length);
-  assert.strictEqual(ack.requestedEdgeIds.length, 1,
-    `${label} must request exactly one edge ID`);
-  assert.strictEqual(ack.acceptedEdgeIds.length, 1,
-    `${label} must accept exactly one edge ID`);
-  assert.strictEqual(ack.acceptedEdgeIds[0], ack.requestedEdgeIds[0],
-    `${label} must accept the requested edge ID`);
-  return ack;
+}
+
+async function releaseHeldSlingshot(page, label) {
+  await page.keyboard.up("KeyF");
+  await waitForSlingshotKeyUp(page, label);
 }
 
 async function main() {
@@ -319,7 +328,7 @@ async function main() {
     const eventWatermark = Math.max(0, ...(await events()).map((event) => event.seq || 0));
     const ackWatermark = (await slingshotEdgeAcks(page)).length;
 
-    const lockEngageAck = await pressAcknowledgedSlingshotEdge(page, "lock leg engage");
+    const lockEngageAck = await pressAcknowledgedSlingshotEdge(page, "lock leg engage", { release: false });
     const lockEngaged = assertSelectedWellEvent(
       await nextPlayerSlingshotEvent(
         network.clientId,
@@ -341,6 +350,7 @@ async function main() {
       1500,
     );
     await capture("02-lock");
+    await releaseHeldSlingshot(page, "lock leg release");
     const lockReleased = assertSelectedWellEvent(
       await nextPlayerSlingshotEvent(
         network.clientId,
@@ -351,7 +361,7 @@ async function main() {
       "player.slingshotReleased",
       network.clientId,
       well,
-      "range-break",
+      "release",
     );
 
     const arcArm = await armAndWaitForSelectedWell(
@@ -361,7 +371,7 @@ async function main() {
       worldScale,
     );
     arming.push(arcArm.receipt);
-    const arcEngageAck = await pressAcknowledgedSlingshotEdge(page, "arc leg engage");
+    const arcEngageAck = await pressAcknowledgedSlingshotEdge(page, "arc leg engage", { release: false });
     const arcEngaged = assertSelectedWellEvent(
       await nextPlayerSlingshotEvent(
         network.clientId,
@@ -393,6 +403,7 @@ async function main() {
       1500,
     );
     await capture("03-owned-arc-ruler-force");
+    await releaseHeldSlingshot(page, "arc leg release");
     const arcReleased = assertSelectedWellEvent(
       await nextPlayerSlingshotEvent(
         network.clientId,
@@ -403,7 +414,7 @@ async function main() {
       "player.slingshotReleased",
       network.clientId,
       well,
-      "range-break",
+      "release",
     );
 
     const releaseArm = await armAndWaitForSelectedWell(
@@ -413,7 +424,7 @@ async function main() {
       worldScale,
     );
     arming.push(releaseArm.receipt);
-    const releaseEngageAck = await pressAcknowledgedSlingshotEdge(page, "release leg engage");
+    const releaseEngageAck = await pressAcknowledgedSlingshotEdge(page, "release leg engage", { release: false });
     const releaseEngaged = assertSelectedWellEvent(
       await nextPlayerSlingshotEvent(
         network.clientId,
@@ -434,7 +445,7 @@ async function main() {
       "release leg authoritative and visible selected-well arc",
       1500,
     );
-    const releaseCommandAck = await pressAcknowledgedSlingshotEdge(page, "release leg command");
+    await releaseHeldSlingshot(page, "release leg command");
     const releaseReleased = assertSelectedWellEvent(
       await nextPlayerSlingshotEvent(
         network.clientId,
@@ -485,8 +496,8 @@ async function main() {
     })), "Expected the complete ordered three-leg slingshot event stream");
 
     const finalAcks = await slingshotEdgeAcks(page);
-    assert.strictEqual(finalAcks.length, ackWatermark + 4,
-      "The three proof legs must add exactly four slingshot edge acknowledgements");
+    assert.strictEqual(finalAcks.length, ackWatermark + 3,
+      "The three proof legs must add exactly three slingshot edge acknowledgements");
 
     const result = {
       outputDir: OUTPUT_DIR,
@@ -514,7 +525,6 @@ async function main() {
         lockEngage: compactAck(lockEngageAck),
         arcEngage: compactAck(arcEngageAck),
         releaseEngage: compactAck(releaseEngageAck),
-        releaseCommand: compactAck(releaseCommandAck),
       },
       events: eventRecords,
       browserErrors: launched.errors,
