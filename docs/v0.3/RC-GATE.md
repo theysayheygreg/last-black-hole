@@ -5,6 +5,73 @@
 
 ## Current Verdict
 
+### `29997fb7` Playable Audio Candidate
+
+Exact product source `29997fb7d3eaa62dd62b2966c100f132204e9eb6`
+integrates the reviewed audible-contact sound bridge with Pilot Delete and the
+session-local `M` master-mute path. A bounded correction prevents terminal and
+post-run contact cues from being re-admitted, rejects non-public contact
+identity, deduplicates contact ids before the cap, and preserves explicit local
+extraction confirmation.
+
+The immutable no-retry full lane selected 121 suite processes: 120 passed and
+one failed, with 487 passing assertions, zero retries, 389.70 seconds harness
+wall time (389.86 seconds externally), and 565.70 seconds summed suite time.
+The only red is a stale `MetaFlow` expectation that requires the word
+`delete` on the intentionally `CANCEL`-first Pilot Delete confirmation. Direct
+Pilot Delete/mute evidence passed 2/2 and `UIVisual` passed 18/18, so this is a
+test-contract red rather than a current player-path defect. AgentPlay passed
+2/2; audio-contact bridge/runtime, audio recovery, extraction, presentation,
+and mute/unmute focused proofs are green.
+
+Deep Field delivered 15 Hz authority with 0 skipped deadlines. The authority
+budget sample recorded 156 ticks, 20.41 ms snapshot p95 latency, 216.83 KiB
+snapshot p95 size, 0.74 ms Ballpark p95, and 12 queries per tick. The cadence
+sample measured 14.965 Hz, 25.453 ms snapshot p95 latency, 217.004 KiB
+snapshot p95 size, and 0.48 ms Ballpark p95. The runner used four workers, two
+browser workers, 34 browser launches, and 121 suite processes.
+
+Evidence:
+
+- immutable RC receipt:
+  `/private/tmp/lbh-v03-rc-29997fb7-receipt/RECEIPT.txt`
+  (SHA-256
+  `204b46b906a5a08abaa79c3614c5d5929c5a3ce51725fc34aa3d243b5291713d`);
+- AgentPlay report:
+  `/private/tmp/lbh-v03-rc-29997fb7/tests/screenshots/agent-play-eval-2026-07-28T210604157Z/report.json`
+  (SHA-256
+  `31a70ba21d2907b0b0b094b5d237e5e71623ca34ddf382f327a47ea293b3f12f`);
+- Renderer manifest:
+  `/private/tmp/lbh-v03-rc-29997fb7/tests/screenshots/renderer-2026-07-28T210757821Z/manifest.json`;
+- UI manifest:
+  `/private/tmp/lbh-v03-rc-29997fb7/tests/screenshots/ui-visual-2026-07-28T210953466Z/manifest.json`.
+
+The supported `--skip-tests` release path built all five targets as
+`0.3.1.29997fb7`; `release:status` passed and `test:package` passed desktop and
+extracted Linux authority boot under `lbh-local-v2`.
+
+- build root:
+  `/private/tmp/lbh-v03-build-deploy-29997fb7/builds/v0.3.1.29997fb7`;
+- playtest archive:
+  `/private/tmp/lbh-v03-build-deploy-29997fb7/builds/last-singularity-playtest-v0.3.1.29997fb7.zip`
+  (441,902,709 bytes; SHA-256
+  `11e3b8b6cdf56dec983fef1d28fd92932c63997c43a7c645f32914211aadf892`);
+- Linux executable SHA-256:
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`;
+- Linux `app.asar` SHA-256:
+  `a405dd15dd5b0df23da190527664fd48b0b20d1a1167500f782da4ba014ecd57`.
+
+That exact Linux artifact is installed at
+`deck@steamdeck.tail1ac9cf.ts.net:/home/deck/Games/last-singularity-v03`.
+Remote hashes match local. Steam shortcut key 19 points to the v0.3.1 preview;
+v0.2 key 18 and `/home/deck/Games/last-singularity-v02` remain intact. No stale
+Last Singularity process was present after deployment.
+
+This is the accepted v0.3.1 product/build identity for physical play and
+promotion review. The branch HEAD after this entry is docs-only. Promotion to
+`main` remains a separate explicitly approved operation, and the authored
+soundscape remains an active v0.3.1 content vertical rather than v0.3.2 work.
+
 ### `774bd71b` Green Candidate
 
 Exact product source `774bd71bca1f3fb98ad06b7b1ef853e0f61bc7fb`

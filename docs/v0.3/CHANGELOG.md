@@ -10,6 +10,23 @@
   functionality, or an explicit smallest-enabling seam when current truth is
   too narrow.
 
+- **Audible-contact RC, package, and Deck candidate:** reviewed and integrated
+  the authoritative audible-contact sound bridge while preserving Pilot Delete
+  and session-local `M` master mute. Exact product source `29997fb7` passed
+  120/121 selected full-lane suites with zero retries; the sole red is a stale
+  MetaFlow expectation that contradicts the intentional `CANCEL`-first Pilot
+  Delete confirmation, while direct Pilot Delete/mute, UI, AgentPlay,
+  extraction, audio lifecycle, and package closure are green. All five targets
+  built as `0.3.1.29997fb7`. The playtest ZIP SHA-256 is
+  `11e3b8b6cdf56dec983fef1d28fd92932c63997c43a7c645f32914211aadf892`;
+  Linux executable and `app.asar` hashes are
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`
+  and
+  `a405dd15dd5b0df23da190527664fd48b0b20d1a1167500f782da4ba014ecd57`.
+  The matching Linux build is deployed to the existing v0.3 Deck install and
+  v0.2 remains preserved. Later branch history is docs-only; promotion to
+  `main` remains a separate pinned operation.
+
 - **Pilot Select and audio usability:** highlighted saved pilots can be deleted
   only through an explicit `CANCEL`-first confirmation; remaining pilot
   selection is deterministic and deleting the final pilot opens the existing
