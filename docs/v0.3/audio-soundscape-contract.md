@@ -12,6 +12,12 @@ Spatial projection uses `src/coords.js` only. New audio code must call its helpe
 
 The router maps a server event to at most one cue. The downstream UI switch may show warnings/VFX but must not independently re-sound that event. Snapshot/presentation state can operate continuous ambience only; it cannot manufacture an outcome.
 
+## Audible-contact bridge
+
+`src/audio/audible-contact-audio-bridge.js` consumes only the already-authoritative audible-contact records published for the HUD. Its input is an array of contacts with stable `id`, `live`, canonical `bearingRadians`, canonical `rangeMeters`, and `emittedRadiusMeters`; it never receives raw world entities or evaluates a hearing radius. `update(contacts, { nowSeconds })` deterministically retains a capped held-voice set in this order: EXFIL/`EXFIL TONE`, then Vessel/`VESSEL THRUST` and Swarm, then Glitch. It returns `entered`, `updated`, and `expired` voice descriptors so a Web Audio owner can start, control, and fade persistent voices without per-frame one-shots. `terminal(reason, { nowSeconds })` clears every held voice for portal confirmation, death, extraction/results, or run reset.
+
+The bridge is presentation admission only. `main.js` must pass the same authoritative contact lifecycle that feeds the HUD, and must map its returned descriptors to bounded synthesis voices; it must not derive contacts from entities, grant EXFIL discovery, or reintroduce a receiver/perception path.
+
 ## Bus and priority policy
 
 Buses: `ambient`, `world`, `player`, `ui`, `critical`. Initial caps: 6, 6, 4, 2, 5; global scheduled transient cap: 16. Cue costs count the actual scheduled oscillator/noise sources, not merely one recipe call. Priority order: `critical > action > warning > navigation > ui > world-detail > ambience`.

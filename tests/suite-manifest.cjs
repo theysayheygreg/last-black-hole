@@ -114,6 +114,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AudioContactBridge",
+    file: "audio-contact-bridge.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "OverloadState",
     file: "overload-state.cjs",
     lanes: ["core", "static", "full"],
