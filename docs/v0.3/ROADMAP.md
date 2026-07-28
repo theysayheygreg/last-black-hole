@@ -285,6 +285,10 @@ The remaining release gates are intentionally separate:
 
 ## Deferred Beyond v0.3
 
+- v0.3.2 begins with the gated
+  [Fabric, Surfing, and Camera presentation review](reviews/v0.3.2-fabric-surfing-camera-review.md)
+  after the settled v0.3.1 Deck baseline. It is a presentation and physical
+  readability review, not a simulation or physics redesign.
 - Public multiplayer transport, matchmaking, prediction, and rollback.
 - A full ECS runtime. v0.3 creates stable component-shaped seams but does not
   adopt ECS ceremony without measured need.

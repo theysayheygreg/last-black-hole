@@ -7,6 +7,20 @@
   untouched inputs, and gives Scavenger Drifter plus Glitch/Swarm/Vessel named
   sprite cards. Generic Inhibitor rings/cores are retired from product mode;
   wells remain fabric-first and labels remain secondary.
+- **Inhibitor population and run reset:** `src/content/inhibitor-ecology.data.json`
+  now owns a conservative total active cap of `11`. Accelerated full-length
+  ecology measured an uncapped steady `5 Glitch + 4 Swarm + 3 Vessel` density;
+  the cap preserves late crowding and type mix as `5 + 4 + 2` while recording
+  suppressed Vessel arrivals. Same-process new-map reset proof clears Inhibitor,
+  Ballpark wave, Noise-contact, and well-overdrive state under a new run ID,
+  while retaining one PID/port owner. Renderer run reset now clears VFX memory
+  and reports reset/dispose counts. The focused probe records compact ecology
+  and authority tick timing; no movement, map scale, ecology speed, or 15 Hz
+  clock change is included.
+- **Deferred v0.3.2 visual review:** queued a gated Fabric, Surfing, and Camera
+  presentation review after v0.3.1 RC work. It will compare settled low-to-capped
+  scenes and three Deck camera models before Greg chooses a direction; no
+  renderer, camera, simulation, capture, or tuning work starts in v0.3.1.
 
 - **Post-Orrery playable correction:** portal lifecycle changes now refresh the
   Ballpark mirror before same-tick authority residence queries, so optional
@@ -37,17 +51,6 @@
   and the full RC was not rerun.
 
 ## 2026-07-27
-
-- **Inhibitor population and run reset:** `src/content/inhibitor-ecology.data.json`
-  now owns a conservative total active cap of `11`. Accelerated full-length
-  ecology measured an uncapped steady `5 Glitch + 4 Swarm + 3 Vessel` density;
-  the cap preserves late crowding and type mix as `5 + 4 + 2` while recording
-  suppressed Vessel arrivals. Same-process new-map reset proof clears Inhibitor,
-  Ballpark wave, Noise-contact, and well-overdrive state under a new run ID,
-  while retaining one PID/port owner. Renderer run reset now clears VFX memory
-  and reports reset/dispose counts. The focused probe records compact ecology
-  and authority tick timing; no movement, map scale, ecology speed, or 15 Hz
-  clock change is included.
 
 - **Orrery scale correction checkpoint:** product source `61ecc534` now
   derives the Deck off-screen hearing floor from the live camera ruler, makes

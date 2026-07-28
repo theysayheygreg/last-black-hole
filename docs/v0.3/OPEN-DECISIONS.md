@@ -131,6 +131,8 @@ automatically.
 
 These are intentionally beyond the v0.3 release gate:
 
+- choose the v0.3.2 fabric hierarchy and Deck camera baseline after the gated
+  [Fabric, Surfing, and Camera motion review](reviews/v0.3.2-fabric-surfing-camera-review.md);
 - which internal hull graduates next;
 - multiplayer transport, prediction, rollback, and matchmaking shape;
 - whether measured entity/network scale justifies a full ECS;
