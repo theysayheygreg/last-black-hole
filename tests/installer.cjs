@@ -9,11 +9,16 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const installer = path.join(root, 'scripts', 'install.sh');
+const windowsInstaller = fs.readFileSync(path.join(root, 'scripts', 'install.ps1'), 'utf8');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'lbh-installer-'));
 const fixtures = path.join(temp, 'fixtures');
 const bin = path.join(temp, 'bin');
 fs.mkdirSync(fixtures);
 fs.mkdirSync(bin);
+
+assert.match(windowsInstaller, /OSArchitecture/, 'Windows installer must detect the native architecture');
+assert.match(windowsInstaller, /last-singularity-win-nightly\.zip/, 'Windows x64 must select the Windows release asset');
+assert.match(windowsInstaller, /current public build requires x64 Windows/, 'unsupported Windows architectures must fail clearly');
 
 function zipFixture(name, platform) {
   const staging = path.join(temp, `stage-${platform}`);

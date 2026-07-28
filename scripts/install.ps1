@@ -12,8 +12,9 @@ $apiRoot = if ($env:LBH_GITHUB_API) { $env:LBH_GITHUB_API } else { "https://api.
 $downloadRoot = if ($env:LBH_GITHUB_DOWNLOAD) { $env:LBH_GITHUB_DOWNLOAD } else { "https://github.com" }
 $asset = "last-singularity-win-nightly.zip"
 
-if (-not [Environment]::Is64BitOperatingSystem) {
-  throw "Last Singularity's current public Windows build requires 64-bit Windows."
+$windowsArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+if ($windowsArch -ne "X64") {
+  throw "Unsupported Windows architecture '$windowsArch'; the current public build requires x64 Windows."
 }
 
 $release = Invoke-RestMethod -Headers @{ Accept = "application/vnd.github+json" } -Uri "$apiRoot/repos/$repo/releases/tags/$Version"

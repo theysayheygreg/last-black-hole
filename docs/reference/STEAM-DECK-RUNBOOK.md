@@ -66,8 +66,10 @@ It creates Desktop Mode launchers at:
 ~/Desktop/Last Singularity.desktop
 ```
 
-It also closes Steam if needed, backs up `shortcuts.vdf`, and adds **Last
-Singularity** as a non-Steam shortcut so it appears in Gaming Mode.
+The `~/Desktop` copy is created when that directory exists. The installer also
+closes Steam if needed, backs up `shortcuts.vdf`, and adds **Last Singularity**
+as a non-Steam shortcut for the matching existing entry or most recently used
+local Steam account so it appears in Gaming Mode.
 
 The installed folder also contains `last-singularity-icon.png`. Desktop entries
 and Steam shortcut metadata point at that icon so the build appears as a real
@@ -99,7 +101,7 @@ Use a specific release/tag:
 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --version v0.2.2
 ```
 
-Use a specific zip URL:
+Use a custom install directory from a checked-out copy:
 
 ```sh
 sh scripts/install.sh --install-dir "$HOME/Games/last-singularity"
@@ -111,8 +113,10 @@ Skip Steam library registration and install only the Desktop Mode launcher:
 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --no-launcher
 ```
 
-The shortcut helper updates the matching **Last Singularity** entry for every
-local Steam user and leaves unrelated entries unchanged.
+The shortcut helper updates one matching **Last Singularity** entry and leaves
+other users and unrelated shortcuts unchanged. Set `LBH_STEAM_USER_ID` when a
+Deck has multiple local Steam users and the most recently used account is not
+the intended one.
 
 ## Private Codex Deploy To Greg's Deck
 
@@ -358,13 +362,13 @@ Codex cannot inspect or rewrite the shortcut until the device wakes.
 Backups are written next to `shortcuts.vdf`:
 
 ```text
-~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup-YYYYMMDDHHMMSS
+~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup
 ```
 
 Close Steam, then restore:
 
 ```sh
-cp ~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup-YYYYMMDDHHMMSS \
+cp ~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup \
    ~/.steam/steam/userdata/<id>/config/shortcuts.vdf
 ```
 
@@ -391,7 +395,9 @@ when the repository SHA has not changed since the last successful run.
 
 If this contract changes, update all of these together:
 
-- `scripts/install-steam-deck.sh`
+- `scripts/install.sh`
+- `scripts/install.ps1`
+- `scripts/install-steam-shortcut.py`
 - `.github/workflows/nightly-playables.yml`
 - `docs/reference/STEAM-DECK-RUNBOOK.md`
 - `README.md`

@@ -228,6 +228,12 @@ EOF
   chmod +x "$desktop"
 
   if [ "$platform" = SteamOS ]; then
+    cp "$desktop" "$INSTALL_DIR/$SLUG.desktop"
+    deck_desktop="${XDG_DESKTOP_DIR:-$HOME/Desktop}"
+    if [ -d "$deck_desktop" ]; then
+      cp "$desktop" "$deck_desktop/$PRODUCT.desktop"
+      chmod +x "$deck_desktop/$PRODUCT.desktop"
+    fi
     helper="${LBH_STEAM_SHORTCUT_HELPER:-}"
     if [ -z "$helper" ]; then
       helper="$tmp/install-steam-shortcut.py"
