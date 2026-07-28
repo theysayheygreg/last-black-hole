@@ -1,5 +1,15 @@
 # v0.3 Changelog
 
+## 2026-07-28
+
+- **Normal-input slingshot proof repaired:** the live keyboard F and controller
+  Y journeys now keep the button held after transport acknowledgement, observe
+  authoritative engagement and held orbit, then release on button-up. No
+  product movement, authority, tuning, Heat, or Noise source changed.
+  `RulerLive` and `SlingshotV2Live` pass; AgentPlay reaches and captures the
+  slingshot release before exposing an unrelated retired
+  `player.signal.level` assertion. The full RC was not rerun.
+
 ## 2026-07-27
 
 - **Orrery scale correction checkpoint:** product source `61ecc534` now

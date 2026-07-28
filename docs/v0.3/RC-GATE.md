@@ -59,6 +59,36 @@ extraction route because `player.slingshotEngaged` timed out. Greg's physical
 Deck, feel, visual, and audio reviews therefore remain open. No Deck deployment
 or cross-version promotion was performed.
 
+### Post-RC Slingshot Player-Path Correction
+
+Canonical descendant `88e0006172ad5987072103b86b26bb4701a04673`
+corrects the live evidence action, not product movement. The prior fixtures
+released keyboard F or controller Y as soon as the transport acknowledged the
+press edge, before the authority lock was observable. They now hold the normal
+input through `player.slingshotEngaged`, prove the held orbit, and release on
+button-up.
+
+Focused evidence from that exact commit:
+
+- `RulerLive`: green through keyboard F, with authoritative engagement,
+  11 ruler handlers, force tick 8, and no browser errors;
+- `SlingshotV2Live`: green through keyboard F across
+  `aim -> lock -> arc -> release-ghost`, with three accepted press edges and
+  six ordered engage/release events;
+- `AgentPlayEval`: the controller Y path now engages, holds, releases, and
+  captures
+  `/private/tmp/lbh-v03-slingshot-player-path-fix/tests/screenshots/agent-play-eval-2026-07-28T015804813Z/05-route-slingshot-release.png`.
+  The journey then stops at the unrelated retired
+  `player.signal.level` assertion in `tests/agent-play-eval.cjs`;
+- `SlingshotInputFeedback`: 3/3;
+- `SlingshotEdgeQueue`: 2/2;
+- changed-file syntax and diff checks: green.
+
+No production source or tuning changed, so build `0.3.1.61ecc534` remains the
+product binary evidence. The 119-suite full lane was not rerun. A later
+candidate checkpoint should classify or retire the exposed pre-Noise AgentPlay
+assertion before making a play-green claim.
+
 ### Superseded 2026-07-27 Candidate
 
 The earlier source `a958a8c68b6c9f14054fe012882326dcae32f910`
