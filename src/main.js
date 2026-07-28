@@ -41,7 +41,7 @@ import { initDevPanel } from './dev-panel.js';
 import { initBenchUi } from './bench/ui.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
-         getSlingshotInteractionState, isExfilPortal } from './hud.js';
+         getSlingshotInteractionState, isExfilPortal, clearHUDForTerminal } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -127,6 +127,12 @@ import {
   reconcileUnobservedAudibleContacts,
 } from './presentation/audible-contact-memory.js';
 import { resolveHeatInstrumentState } from './presentation/heat-instrument.js';
+import {
+  getRulerReadoutBounds,
+  getShipLocalLabelSlots,
+  placePresentationLabels,
+  safeObjectLabel,
+} from './ui/presentation-layout.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
@@ -480,6 +486,10 @@ function currentPromptOptions() {
     deck: isDeckMode(),
     lastInputSource: inputManager?.lastInputSource,
   };
+}
+
+function markTerminalPresentation(outcome = 'dead') {
+  if (outcome === 'dead') clearHUDForTerminal('dead');
 }
 
 function requestPackagedQuit() {
@@ -1914,6 +1924,7 @@ function applyRemoteSnapshot(snapshot) {
       deathTimer = 0;
       freezeRunEnd(simState);
       ship.setThrust(false);
+      markTerminalPresentation('dead');
       // The event stream normally owns the death cue. Snapshot phase is still
       // sufficient to stop the gameplay bed when that event was missed.
       audioRouter?.setPhase('dead');
@@ -2966,6 +2977,7 @@ function applyPauseResumeDecision(decision) {
     deathTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+    markTerminalPresentation('dead');
     audioRouter?.setPhase('dead');
     return;
   }
@@ -3626,6 +3638,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
  */
 function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
   const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
+  const slot = getShipLocalLabelSlots({ shipX: sx, shipY: sy, canvasW, canvasH }).velocity;
   const speed = Math.hypot(ship.vx, ship.vy);
   let tierLabel;
   let color;
@@ -3641,7 +3654,7 @@ function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
   // Speed line directly below ship — far enough not to overlap the
   // ship sprite at typical sizes.
   const speedTxt = `${speed.toFixed(2)} · ${tierLabel}`;
-  ctx.fillText(speedTxt, sx, sy + 28);
+  ctx.fillText(speedTxt, slot.textX, slot.textY);
 
   // Tiny direction arrow above the readout. Useful at high speed when
   // the ship icon's facing might not match velocity direction (drift,
@@ -3650,7 +3663,7 @@ function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
     const ang = Math.atan2(ship.vy, ship.vx);
     const arrowLen = 10;
     const aX = sx;
-    const aY = sy + 18;
+    const aY = slot.bounds.y + 4;
     const tipX = aX + Math.cos(ang) * arrowLen;
     const tipY = aY + Math.sin(ang) * arrowLen;
     ctx.strokeStyle = color;
@@ -3684,9 +3697,10 @@ function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
   if (!display.visible) return;
   const { ratio, overheatRemaining } = display;
   const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
-  const width = 68;
-  const left = sx - width / 2;
-  const top = sy + 35;
+  const slot = getShipLocalLabelSlots({ shipX: sx, shipY: sy, canvasW, canvasH }).heat;
+  const width = Math.min(68, slot.barW);
+  const left = slot.barX + (slot.barW - width) / 2;
+  const top = slot.textY;
   const color = overheatRemaining > 0
     ? 'rgba(255, 80, 70, 0.95)'
     : ratio >= 0.75 ? 'rgba(255, 170, 70, 0.95)' : 'rgba(255, 220, 100, 0.9)';
@@ -3696,9 +3710,9 @@ function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
   ctx.fillStyle = color;
   ctx.fillText(overheatRemaining > 0 ? `HEAT LOCK ${overheatRemaining.toFixed(1)}s` : `HEAT ${Math.round(ratio * 100)}%`, sx, top);
   ctx.fillStyle = 'rgba(5, 12, 24, 0.76)';
-  ctx.fillRect(left, top + 5, width, 4);
+  ctx.fillRect(left, slot.barY, width, 4);
   ctx.fillStyle = color;
-  ctx.fillRect(left, top + 5, width * ratio, 4);
+  ctx.fillRect(left, slot.barY, width * ratio, 4);
   ctx.restore();
 }
 
@@ -4694,6 +4708,7 @@ function gameLoop(now) {
             deathTimer = 0;
             freezeRunEnd(simState);
             ship.setThrust(false);
+            markTerminalPresentation('dead');
             audioEngine.playEvent('death');
           }
         } else {
@@ -4702,6 +4717,7 @@ function gameLoop(now) {
           deathTimer = 0;
           freezeRunEnd(simState);
           ship.setThrust(false);
+          markTerminalPresentation('dead');
           audioEngine.playEvent('death');
         }
       } else {
@@ -4734,6 +4750,7 @@ function gameLoop(now) {
         deathTimer = 0;
         freezeRunEnd(simState);
         ship.setThrust(false);
+        markTerminalPresentation('dead');
         audioEngine.playEvent('death');
       }
     } else if (gamePhase === 'dead') {
@@ -5239,110 +5256,132 @@ function gameLoop(now) {
         return 1.0 - (dist - fadeNear) / (fadeFar - fadeNear);
       }
 
-      // Wells — foreboding names, dark red, allcaps, below center
-      for (const well of wellSystem.wells) {
+      // World labels use one ordered stack. The ship instruments and debug
+      // ruler reserve collision bounds before nearby objects claim slots.
+      const labelEntries = [];
+      const labelObstacles = Object.values(getShipLocalLabelSlots({
+        shipX: worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height)[0],
+        shipY: worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height)[1],
+        canvasW: overlayCanvas.width,
+        canvasH: overlayCanvas.height,
+      })).map((slot) => slot.bounds);
+      if (CONFIG.debug?.showRulerOverlay) {
+        labelObstacles.push(getRulerReadoutBounds(overlayCanvas.width, overlayCanvas.height, 11));
+      }
+      const addLabel = ({ id, order, x, y, text, color, fontSize = 10, weight, backing = false, offsets }) => {
+        ctx.font = canvasFont(fontSize, weight ? { weight } : undefined);
+        const labelWidth = Math.min(240, ctx.measureText(text).width + (backing ? 14 : 4));
+        labelEntries.push({
+          id,
+          order,
+          anchorX: x,
+          anchorY: y,
+          width: labelWidth,
+          height: backing ? 18 : 16,
+          text,
+          color,
+          fontSize,
+          weight,
+          backing,
+          offsets,
+        });
+      };
+
+      // Wells — foreboding names, dark red, below center.
+      for (let index = 0; index < wellSystem.wells.length; index++) {
+        const well = wellSystem.wells[index];
         const dist = worldDistance(ship.wx, ship.wy, well.wx, well.wy);
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        ctx.font = canvasFont(10, { weight: 'bold' });
+        const label = safeObjectLabel(well.name, `WELL ${index + 1}`).toUpperCase();
         const labelY = sy + worldRadiusToScreen(well.killRadius, overlayCanvas.width, overlayCanvas.height).ry + 18;
-        // Dark outline for readability on red accretion background
-        ctx.strokeStyle = `rgba(0, 0, 0, ${a * 0.9})`;
-        ctx.lineWidth = 3;
-        ctx.strokeText(well.name.toUpperCase(), sx, labelY);
-        ctx.fillStyle = `rgba(255, 180, 160, ${a * 0.9})`;
-        ctx.fillText(well.name.toUpperCase(), sx, labelY);
+        addLabel({ id: `well-${index}`, order: 10 + index, x: sx, y: labelY, text: label,
+          color: `rgba(255, 180, 160, ${a * 0.9})`, weight: 'bold', offsets: [0, 22, -22, 44, -44] });
       }
 
-      // Stars — scientific designation, type-colored
-      for (const star of starSystem.stars) {
+      // Stars — scientific designation, type-colored.
+      for (let index = 0; index < starSystem.stars.length; index++) {
+        const star = starSystem.stars[index];
         if (!star.alive) continue;
         const dist = worldDistance(ship.wx, ship.wy, star.wx, star.wy);
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        const [cr, cg, cb] = star.typeDef.color;
-        ctx.font = canvasFont(10);
-        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${a * 0.6})`;
-        const haloR = (60 + 20 * star.mass) * star.typeDef.sizeMult;
-        ctx.fillText(star.name, sx, sy + haloR + 10);
+        const [cr, cg, cb] = star.typeDef?.color || [220, 220, 180];
+        const haloR = (60 + 20 * (Number(star.mass) || 1)) * (Number(star.typeDef?.sizeMult) || 1);
+        addLabel({ id: `star-${index}`, order: 100 + index, x: sx, y: sy + haloR + 10,
+          text: safeObjectLabel(star.name, `STAR ${index + 1}`), color: `rgba(${cr}, ${cg}, ${cb}, ${a * 0.6})`,
+          offsets: [0, 18, -18, 36, -36] });
       }
 
-      // Comets — names, ice blue, trailing behind body
-      for (const p of planetoidSystem.planetoids) {
-        if (!p.alive) continue;
-        const dist = worldDistance(ship.wx, ship.wy, p.wx, p.wy);
+      // Planetoids — names, ice blue, trailing behind body.
+      for (let index = 0; index < planetoidSystem.planetoids.length; index++) {
+        const planetoid = planetoidSystem.planetoids[index];
+        if (!planetoid.alive) continue;
+        const dist = worldDistance(ship.wx, ship.wy, planetoid.wx, planetoid.wy);
         const a = labelAlpha(dist);
         if (a <= 0) continue;
-        const [sx, sy] = worldToScreen(p.wx, p.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        ctx.font = canvasFont(9);
-        ctx.fillStyle = `rgba(180, 210, 240, ${a * 0.6})`;
-        ctx.fillText(p.name, sx, sy + 16);
+        const [sx, sy] = worldToScreen(planetoid.wx, planetoid.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        addLabel({ id: `planetoid-${index}`, order: 200 + index, x: sx, y: sy + 16,
+          text: safeObjectLabel(planetoid.name, `PLANETOID ${index + 1}`), color: `rgba(180, 210, 240, ${a * 0.6})`,
+          fontSize: 9, offsets: [0, 18, -18, 36, -36] });
       }
 
-      // Wrecks — cluster labels dedupe nearby fragments and choose a free
-      // presentation slot so adjacent salvage names never stack into noise.
+      // Wrecks — dedupe nearby fragments before the shared slot pass.
       const renderedWreckLabels = [];
-      for (const wreck of wreckSystem.wrecks) {
+      for (let index = 0; index < wreckSystem.wrecks.length; index++) {
+        const wreck = wreckSystem.wrecks[index];
         if (!wreck.alive) continue;
         const dist = worldDistance(ship.wx, ship.wy, wreck.wx, wreck.wy);
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(wreck.wx, wreck.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        const label = wreck.name || (wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
+        const label = safeObjectLabel(wreck.name, wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
         const labelKey = label.toLowerCase();
-        const duplicateNearbyLabel = renderedWreckLabels.some((rendered) => (
-          rendered.key === labelKey && Math.hypot(rendered.sx - sx, rendered.sy - sy) < 170
-        ));
-        if (duplicateNearbyLabel) continue;
-        let color;
-        if (wreck.type === 'vault') color = `rgba(255, 215, 60, ${a * 0.7})`;
-        else if (wreck.type === 'debris') color = `rgba(180, 140, 80, ${a * 0.6})`;
-        else color = `rgba(160, 180, 200, ${a * 0.6})`;
-        ctx.font = canvasFont(10);
-        const itemText = wreck.looted ? '' : ` (${wreck.loot.length})`;
-        const labelText = label + itemText;
-        const labelWidth = Math.min(220, ctx.measureText(labelText).width + 14);
-        const candidates = [18, -18, 42, -42, 66, -66];
-        let chosen = null;
-        for (const offset of candidates) {
-          const centerX = Math.max(labelWidth / 2 + 8, Math.min(overlayCanvas.width - labelWidth / 2 - 8, sx));
-          const centerY = sy + offset;
-          const box = { x: centerX - labelWidth / 2, y: centerY - 13, w: labelWidth, h: 18 };
-          const overlaps = renderedWreckLabels.some((rendered) => (
-            box.x < rendered.x + rendered.w + 6 && box.x + box.w + 6 > rendered.x
-            && box.y < rendered.y + rendered.h + 4 && box.y + box.h + 4 > rendered.y
-          ));
-          if (!overlaps) {
-            chosen = { ...box, centerX, centerY };
-            break;
-          }
-        }
-        if (!chosen) continue;
-        renderedWreckLabels.push({ key: labelKey, sx, sy, ...chosen });
-        ctx.fillStyle = 'rgba(0, 0, 8, 0.62)';
-        ctx.fillRect(chosen.x, chosen.y, chosen.w, chosen.h);
-        ctx.strokeStyle = color.replace(/,\s*[^,)]+\)$/, ', 0.28)');
-        ctx.strokeRect(chosen.x, chosen.y, chosen.w, chosen.h);
-        ctx.fillStyle = color;
-        ctx.fillText(labelText, chosen.centerX, chosen.centerY);
+        if (renderedWreckLabels.some((rendered) => rendered.key === labelKey && Math.hypot(rendered.sx - sx, rendered.sy - sy) < 170)) continue;
+        renderedWreckLabels.push({ key: labelKey, sx, sy });
+        const itemText = wreck.looted ? '' : ` (${Array.isArray(wreck.loot) ? wreck.loot.length : 0})`;
+        const color = wreck.type === 'vault'
+          ? `rgba(255, 215, 60, ${a * 0.7})`
+          : wreck.type === 'debris' ? `rgba(180, 140, 80, ${a * 0.6})` : `rgba(160, 180, 200, ${a * 0.6})`;
+        addLabel({ id: `wreck-${index}`, order: 300 + index, x: sx, y: sy + 18, text: label + itemText,
+          color, backing: true, offsets: [0, 24, -24, 48, -48, 72, -72] });
       }
 
-      // Scavengers — faction + callsign, archetype-colored
-      for (const scav of scavengerSystem.scavengers) {
+      // Scavengers — faction + callsign, archetype-colored.
+      for (let index = 0; index < scavengerSystem.scavengers.length; index++) {
+        const scav = scavengerSystem.scavengers[index];
         if (!scav.alive) continue;
         const dist = worldDistance(ship.wx, ship.wy, scav.wx, scav.wy);
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(scav.wx, scav.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         const color = scav.archetype === 'vulture'
-          ? `rgba(212, 160, 96, ${a * 0.7})`
-          : `rgba(138, 174, 196, ${a * 0.7})`;
-        ctx.font = canvasFont(9);
-        ctx.fillStyle = color;
-        ctx.fillText(scav.name, sx, sy - 14);
+          ? `rgba(212, 160, 96, ${a * 0.7})` : `rgba(138, 174, 196, ${a * 0.7})`;
+        addLabel({ id: `scavenger-${index}`, order: 400 + index, x: sx, y: sy - 14,
+          text: safeObjectLabel(scav.name, `SCAVENGER ${index + 1}`), color, fontSize: 9,
+          offsets: [0, -18, 18, -36, 36] });
       }
+
+      const labelLayout = placePresentationLabels(labelEntries, {
+        canvasW: overlayCanvas.width,
+        canvasH: overlayCanvas.height,
+        obstacles: labelObstacles,
+      });
+      ctx.textBaseline = 'middle';
+      for (const label of labelLayout.placed) {
+        ctx.font = canvasFont(label.fontSize, label.weight ? { weight: label.weight } : undefined);
+        if (label.backing) {
+          ctx.fillStyle = 'rgba(0, 0, 8, 0.62)';
+          ctx.fillRect(label.bounds.x, label.bounds.y, label.bounds.w, label.bounds.h);
+          ctx.strokeStyle = label.color.replace(/,\s*[^,)]+\)$/, ', 0.28)');
+          ctx.strokeRect(label.bounds.x, label.bounds.y, label.bounds.w, label.bounds.h);
+        }
+        ctx.fillStyle = label.color;
+        ctx.fillText(label.text, label.x, label.y);
+      }
+      ctx.textBaseline = 'alphabetic';
 
       ctx.restore();
     }
@@ -5486,7 +5525,11 @@ function gameLoop(now) {
     const authoritativePlayer = remoteSession.active
       ? remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)
       : null;
-    const portalInteraction = authoritativePlayer?.portalInteraction;
+    const portalInteraction = authoritativePlayer?.portalInteraction || (() => {
+      if (remoteSession.active) return null;
+      const portal = portalSystem.checkExtraction(ship.wx, ship.wy);
+      return portal ? { portalId: portal.id, portalType: portal.type, ready: true } : null;
+    })();
     const slingshotInteraction = getSlingshotInteractionState(
       authoritativePlayer?.slingshot || (remoteSession.active ? null : {
         engaged: ship.slingshotEngaged,
@@ -5502,7 +5545,7 @@ function gameLoop(now) {
       inventorySystem,
       inventoryOpen,
       noise: noiseState,
-      routeDiscovery: routeDiscoveryState,
+      routeDiscovery: { ...routeDiscoveryState, portalInteraction },
       abilityState: localAbilityState,
       inhibitorState,
       ship,

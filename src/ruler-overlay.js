@@ -7,6 +7,7 @@ import {
   simUnitsToMeters,
 } from './units.js';
 import { canvasFont } from './ui/typography.js';
+import { getRulerReadoutBounds } from './ui/presentation-layout.js';
 
 const COLORS = Object.freeze({
   capture: '#f7d774',
@@ -189,11 +190,10 @@ function drawScaleBar(state) {
 }
 
 function drawReadout(state) {
-  const panelW = Math.min(330, state.canvasW - 28);
   const rowH = 17;
-  const panelH = 27 + state.rows.length * rowH;
-  const x = state.canvasW - panelW - 14;
-  const y = Math.min(280, state.canvasH - panelH - 16);
+  const bounds = getRulerReadoutBounds(state.canvasW, state.canvasH, state.rows.length);
+  const { x, y, w: panelW, h: panelH } = bounds;
+  state.geometry.readoutBounds = bounds;
   state.ctx.fillStyle = 'rgba(0, 5, 14, 0.82)';
   state.ctx.fillRect(x, y, panelW, panelH);
   state.ctx.strokeStyle = 'rgba(210, 230, 245, 0.32)';

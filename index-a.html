@@ -421,6 +421,15 @@
     .hud-ability.cooldown .hud-ability-status {
       color: rgba(200, 160, 80, 0.6);
     }
+    .hud-ability.inert {
+      color: rgba(140, 150, 165, 0.42);
+      opacity: 0.72;
+      filter: saturate(0.25);
+    }
+    .hud-ability.inert .hud-ability-name,
+    .hud-ability.inert .hud-ability-status {
+      color: rgba(160, 170, 185, 0.48);
+    }
     .hud-ability.ready .hud-ability-name {
       color: rgba(180, 200, 220, 0.8);
     }
@@ -712,7 +721,7 @@
         <div id="hud-hull-bar" role="progressbar" aria-label="hull condition" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="hud-hull-fill"></div></div>
       </div>
       <div id="hud-noise" class="hud-vital">
-        <div class="hud-vital-head"><div class="hud-label">noise radius</div><div id="hud-noise-readout" class="hud-vital-readout">NOISE 0m · STEADY</div></div>
+        <div class="hud-vital-head"><div class="hud-label">audible radius</div><div id="hud-noise-readout" class="hud-vital-readout">NOISE 0m · STEADY</div></div>
         <div id="hud-noise-detail">SOURCE IDLE · HEARD BY 0 · TRACKED BY 0</div>
       </div>
     </div>

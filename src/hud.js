@@ -33,6 +33,7 @@ import {
   getHullPresentationState,
   getInteractionPresentationState,
   getRouteObjectiveState,
+  getTerminalPresentationState,
   isExfilPortal,
   formatNoiseDetail,
   getSlingshotInteractionState,
@@ -44,6 +45,7 @@ export {
   getInventoryActionAtCursor,
   getInteractionPresentationState,
   getRouteObjectiveState,
+  getTerminalPresentationState,
   isExfilPortal,
   formatNoiseDetail,
   getSlingshotInteractionState,
@@ -166,6 +168,7 @@ export function showHUD() {
     _hudEl.style.display = '';
     _hudEl.style.opacity = '';
     _hudEl.style.transition = '';
+    delete _hudEl.dataset.terminalPhase;
   }
 }
 
@@ -176,6 +179,26 @@ export function hideHUD() {
     _hudEl.style.transition = '';
   }
   if (_warningsEl) _warningsEl.innerHTML = '';
+}
+
+export function clearHUDForTerminal(outcome = 'dead') {
+  if (!_hudEl) return;
+  const terminal = getTerminalPresentationState(outcome);
+  _hudEl.dataset.terminalPhase = terminal.outcome;
+  if (_interactionEl) {
+    _interactionEl.style.display = 'none';
+    _interactionActionEl.textContent = '';
+    _interactionDetailEl.textContent = '';
+    _interactionCaptionEl.innerHTML = '';
+  }
+  if (terminal.abilities && _ability1El) {
+    if (_abilitiesEl) _abilitiesEl.style.display = '';
+    const hullType = _ability1El.dataset.hullType || 'drifter';
+    const presentation = getAbilityPresentationState({ hullType, inert: true, terminal: true });
+    renderAbilitySlot(_ability1El, presentation.slots[0]);
+    if (presentation.slots[1]) renderAbilitySlot(_ability2El, presentation.slots[1]);
+    else if (_ability2El) _ability2El.style.display = 'none';
+  }
 }
 
 /**
@@ -210,7 +233,7 @@ function abilityResourceMarkup(slot) {
 
 function renderAbilitySlot(el, slot) {
   if (!el || !slot) return;
-  const fillColor = slot.active ? 'rgba(100, 255, 200, 0.72)'
+  const fillColor = slot.inert ? 'rgba(120, 135, 150, 0.28)' : slot.active ? 'rgba(100, 255, 200, 0.72)'
     : slot.ready ? 'rgba(180, 200, 220, 0.52)'
     : 'rgba(200, 160, 80, 0.48)';
   const className = `hud-ability ${slot.tone}`;
@@ -223,12 +246,15 @@ function renderAbilitySlot(el, slot) {
     <div class="hud-ability-meter">
       <div class="hud-ability-meter-fill" style="width:${Math.round(slot.meter * 100)}%;background:${fillColor};box-shadow:0 0 5px ${fillColor};"></div>
     </div>
-    <div class="hud-action-caption">${affordanceCaption(slot.action, slot.active ? 'release' : 'activate', _promptOptions)}</div>
+    <div class="hud-action-caption">${slot.inert ? 'inert' : affordanceCaption(slot.action, slot.active ? 'release' : 'activate', _promptOptions)}</div>
     ${abilityResourceMarkup(slot)}
   `;
 
   if (el.style.display === 'none') el.style.display = '';
   if (el.className !== className) el.className = className;
+  el.toggleAttribute('aria-disabled', Boolean(slot.inert));
+  if (slot.inert) el.dataset.inert = 'true';
+  else delete el.dataset.inert;
   if (el.dataset.renderKey !== html) {
     el.innerHTML = html;
     el.dataset.renderKey = html;
@@ -441,6 +467,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   if (_ability1El && opts.abilityState) {
     if (_abilitiesEl) _abilitiesEl.style.display = '';
     const presentation = getAbilityPresentationState(opts.abilityState);
+    _ability1El.dataset.hullType = presentation.hull;
     renderAbilitySlot(_ability1El, presentation.slots[0]);
     if (presentation.slots[1]) {
       renderAbilitySlot(_ability2El, presentation.slots[1]);

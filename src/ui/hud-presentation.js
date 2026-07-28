@@ -48,7 +48,7 @@ function cooldownMeter(cooldown, max) {
 export function createAbilitySlot(key, name, state) {
   return {
     key,
-    action: state.action || (key === 'R' ? 'ability2' : 'ability1'),
+    action: state.inert ? null : state.action || (key === 'R' ? 'ability2' : 'ability1'),
     name,
     status: state.status || '',
     ready: Boolean(state.ready),
@@ -59,7 +59,8 @@ export function createAbilitySlot(key, name, state) {
     resource: state.resource ?? null,
     charges: state.charges ?? null,
     meter: clamp01(state.meter ?? (state.ready || state.active ? 1 : 0)),
-    tone: state.active ? 'active' : state.ready ? 'ready' : 'cooldown',
+    inert: Boolean(state.inert),
+    tone: state.inert ? 'inert' : state.active ? 'active' : state.ready ? 'ready' : 'cooldown',
   };
 }
 
@@ -67,6 +68,22 @@ export function getAbilityPresentationState(abilityState = {}) {
   const state = abilityState || {};
   const hull = state.hullType || 'drifter';
   const slots = [];
+
+  if (state.inert || state.terminal || state.status === 'dead') {
+    slots.push(createAbilitySlot('Q', 'offline', {
+      status: 'run ended',
+      detail: 'no action available',
+      inert: true,
+    }));
+    if (state.abilityCount > 1 || ['resonant', 'shroud', 'hauler'].includes(hull)) {
+      slots.push(createAbilitySlot('R', 'offline', {
+        status: 'run ended',
+        detail: 'no action available',
+        inert: true,
+      }));
+    }
+    return { hull, slots };
+  }
 
   if (hull === 'drifter') {
     const active = Boolean(state.flowLockActive);
@@ -182,8 +199,25 @@ export function findNearestActivePortal(ship, portalSystem) {
   return nearest;
 }
 
-export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, isFinalWave = false, routeDiscovery = {}) {
+export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, isFinalWave = false, routeDiscovery = {}, portalInteraction = routeDiscovery?.portalInteraction) {
   const count = portalSystem?.activeCount || 0;
+  const nearbyPortal = portalInteraction || null;
+  const nearbyPortalType = nearbyPortal?.portalType || nearbyPortal?.type || null;
+  if (nearbyPortal && nearbyPortal.ready !== false && !isExfilPortal({
+    ...nearbyPortal,
+    type: nearbyPortalType,
+    alive: true,
+  })) {
+    return {
+      count,
+      tone: 'waiting',
+      label: 'OPTIONAL APERTURE',
+      detail: 'ROUTE: LISTEN',
+      nearest: null,
+      exfilHeard: routeDiscovery?.exfilHeard === true,
+      optional: true,
+    };
+  }
   const nearest = findNearestActivePortal(ship, portalSystem);
   const exfilHeard = routeDiscovery?.exfilHeard === true;
   if (nearest) {
@@ -248,6 +282,15 @@ export function getInteractionPresentationState(interaction, promptOptions = {})
   const action = interaction.action || 'confirm';
   const verb = String(interaction.verb || 'confirm');
   return { action, label, detail, caption: affordanceCaption(action, verb, promptOptions) };
+}
+
+export function getTerminalPresentationState(outcome = 'dead') {
+  const dead = String(outcome).toLowerCase() === 'dead';
+  return Object.freeze({
+    outcome: dead ? 'dead' : 'escaped',
+    interaction: null,
+    abilities: dead ? { inert: true, terminal: true } : null,
+  });
 }
 
 export function getSlingshotInteractionState(slingshot) {

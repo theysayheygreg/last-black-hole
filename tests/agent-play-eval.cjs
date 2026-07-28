@@ -20,6 +20,7 @@ const {
   stepGameFrames,
 } = require("./helpers.cjs");
 const { NOISE_CONFIG } = require("../scripts/sim/noise-radius.cjs");
+const { recordJourneyStage } = require("./agent-play-report.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
 // Agent evals are commonly run beside other authority lanes. A process-local
@@ -851,6 +852,10 @@ function writeReport(outputDir, report) {
 async function runJourney(page, outputDir, report, browserErrors) {
   await configureEvidenceView(page);
   const entry = await enterFirstRunThroughMenus(page, outputDir, report.screenshots, browserErrors);
+  recordJourneyStage(report, {
+    profileAtEntry: entry.profile,
+    briefing: entry.briefing,
+  });
   const network = await page.evaluate(() => window.__TEST_API?.getNetworkState?.() || null);
   assert(network?.clientId, "Expected a server-issued protocol-v2 player identity");
   const firstSnapshot = await getSnapshot();
@@ -858,37 +863,30 @@ async function runJourney(page, outputDir, report, browserErrors) {
   assert(firstPlayer?.status === "alive", "Expected a live authoritative player after launch");
   assert(firstSnapshot.protocolVersion === "lbh-local-v2", `Expected lbh-local-v2, got ${firstSnapshot.protocolVersion}`);
   report.screenshots.push(await capturePage(page, outputDir, "04-shallows-authoritative-start"));
-
-  const slingshot = await performRouteSlingshot(page, network.clientId, outputDir, report.screenshots);
-  if (process.env.LBH_AGENT_EVAL_SLINGSHOT_ONLY === "1") {
-    report.journey = {
-      protocolVersion: firstSnapshot.protocolVersion,
-      firstRun: {
-        runId: firstSnapshot.session.runId || firstSnapshot.runId,
-        seed: firstSnapshot.session.seed,
-      },
-      slingshot,
-    };
-    return;
-  }
-  const loot = await collectRouteLootAndRaiseNoise(page, network.clientId, outputDir, report.screenshots);
-  const portal = await enterAndConfirmPortal(page, network.clientId, outputDir, report.screenshots);
   const firstRun = {
     runId: firstSnapshot.session.runId || firstSnapshot.runId,
     seed: firstSnapshot.session.seed,
     start: { wx: firstPlayer.wx, wy: firstPlayer.wy },
   };
+  recordJourneyStage(report, { firstRun });
+
+  const slingshot = await performRouteSlingshot(page, network.clientId, outputDir, report.screenshots);
+  recordJourneyStage(report, { slingshot });
+  if (process.env.LBH_AGENT_EVAL_SLINGSHOT_ONLY === "1") {
+    recordJourneyStage(report, {
+      protocolVersion: firstSnapshot.protocolVersion,
+    });
+    return;
+  }
+  const loot = await collectRouteLootAndRaiseNoise(page, network.clientId, outputDir, report.screenshots);
+  recordJourneyStage(report, { loot });
+  const portal = await enterAndConfirmPortal(page, network.clientId, outputDir, report.screenshots);
+  recordJourneyStage(report, { portal });
   const homeAndSecond = await proveHomeAndSecondRun(page, firstRun, outputDir, report.screenshots);
 
   const errors = await page.evaluate(() => ({ phase: window.__TEST_API?.getGamePhase?.() || null }));
-  report.journey = {
+  recordJourneyStage(report, {
     protocolVersion: firstSnapshot.protocolVersion,
-    profileAtEntry: entry.profile,
-    briefing: entry.briefing,
-    firstRun,
-    slingshot,
-    loot,
-    portal,
     home: {
       profile: homeAndSecond.profile,
       rig: homeAndSecond.rig,
@@ -901,7 +899,7 @@ async function runJourney(page, outputDir, report, browserErrors) {
       movement: homeAndSecond.movement,
       phase: errors.phase,
     },
-  };
+  });
 }
 
 async function enterFreshDeathRun(page, browserErrors) {
@@ -941,8 +939,7 @@ async function runDeathJourney(page, outputDir, report, browserErrors) {
   const clientId = await enterFreshDeathRun(page, browserErrors);
   report.screenshots.push(await capturePage(page, outputDir, "15-natural-death-run-start"));
   const death = await proveNaturalWellDeath(page, clientId, outputDir, report.screenshots);
-  report.journey ||= {};
-  report.journey.death = death;
+  recordJourneyStage(report, { death });
   assertNoBrowserErrors(browserErrors, "Natural death recovery");
 }
 
@@ -960,7 +957,7 @@ async function run() {
     outputDir,
     verdict: "pending",
     screenshots: [],
-    journey: null,
+    journey: {},
     failure: null,
   };
 
