@@ -85,9 +85,38 @@ Focused evidence from that exact commit:
 - changed-file syntax and diff checks: green.
 
 No production source or tuning changed, so build `0.3.1.61ecc534` remains the
-product binary evidence. The 119-suite full lane was not rerun. A later
-candidate checkpoint should classify or retire the exposed pre-Noise AgentPlay
-assertion before making a play-green claim.
+product binary evidence. The 119-suite full lane was not rerun.
+
+### Post-RC AgentPlay Noise Contract
+
+Canonical descendant `7370f2cf` retires the exposed pre-Noise assertion. The
+same natural force-pulse action now proves the authoritative Noise DTO:
+
+- `noise.currentSource === "PULSE"`;
+- `noise.audibleRadiusMeters === 600`, from the canonical
+  `NOISE_CONFIG.impulses.forcePulseMeters`;
+- `noise.maxAudibleRadiusMeters >= 600`.
+
+The directly coupled Noise fixture passes 77/77. One AgentPlay run from the
+current provisioned worktree passed held slingshot, natural salvage, the
+`PULSE · 600m` Noise consequence, and the natural death/Home journey. It then
+stopped at the next distinct boundary: optional portal `portal-optional-1-1`
+never exposed authoritative `portalInteraction.ready` before timeout.
+
+Evidence:
+
+- report:
+  `/private/tmp/lbh-v03-ballpark-roadmap-current/tests/screenshots/agent-play-eval-2026-07-28T021551195Z/report.json`;
+- summary:
+  `/private/tmp/lbh-v03-ballpark-roadmap-current/tests/screenshots/agent-play-eval-2026-07-28T021551195Z/summary.md`;
+- Noise capture:
+  `/private/tmp/lbh-v03-ballpark-roadmap-current/tests/screenshots/agent-play-eval-2026-07-28T021551195Z/07-noise-pulse.png`;
+- portal boundary:
+  `/private/tmp/lbh-v03-ballpark-roadmap-current/tests/screenshots/agent-play-eval-2026-07-28T021551195Z/08-portal-zone-awaiting-confirm.png`.
+
+The portal-ready timeout is not classified or repaired by this cleanup.
+AgentPlay remains red at that later boundary, so this evidence is ready for
+Primary/Orrery handoff but is not a play-green claim.
 
 ### Superseded 2026-07-27 Candidate
 

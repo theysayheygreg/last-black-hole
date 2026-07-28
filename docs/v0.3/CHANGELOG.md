@@ -6,9 +6,14 @@
   Y journeys now keep the button held after transport acknowledgement, observe
   authoritative engagement and held orbit, then release on button-up. No
   product movement, authority, tuning, Heat, or Noise source changed.
-  `RulerLive` and `SlingshotV2Live` pass; AgentPlay reaches and captures the
-  slingshot release before exposing an unrelated retired
-  `player.signal.level` assertion. The full RC was not rerun.
+  `RulerLive` and `SlingshotV2Live` pass.
+- **AgentPlay Noise truth:** replaced the retired `player.signal.level`
+  assertion with the canonical force-pulse contract: source `PULSE`, live
+  radius `600m`, and peak at least `600m`. The focused Noise fixture passes
+  77/77. The one natural AgentPlay run passed slingshot, salvage, Noise, and
+  death/Home recovery before exposing a later optional-portal
+  `portalInteraction.ready` timeout. No gameplay or portal code was changed,
+  and the full RC was not rerun.
 
 ## 2026-07-27
 
