@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const assert = require('assert');
+const { projectWorld } = require('../scripts/sim/public-snapshot.cjs');
 
 function fakeContext() {
   const calls = [];
@@ -25,6 +26,20 @@ async function run() {
     portals: [{ id: 'exfil-1', type: 'extraction', alive: true, wx: 1.7, wy: 0.5 }],
   };
   const ship = { wx: 0.5, wy: 0.5 };
+  const projectedWorld = projectWorld({
+    mapState: {
+      portals: [
+        { id: 'optional-1', type: 'standard', alive: true, wx: 0.8, wy: 0.5 },
+        { id: 'exfil-1', type: 'exit', alive: true, wx: 1.7, wy: 0.5 },
+      ],
+    },
+    waveRings: [],
+    getAuthoritativeField: () => null,
+  });
+  assert.deepStrictEqual(projectedWorld.noiseEmitters.map((emitter) => emitter.portalId), ['exfil-1'],
+    'only a true extraction portal may emit EXFIL TONE');
+  assert.strictEqual(hud.isExfilPortal({ type: 'standard', alive: true }), false);
+  assert.strictEqual(hud.isExfilPortal({ type: 'exit', alive: true }), true);
 
   const listening = hud.getRouteObjectiveState(ship, portalSystem, null, false, { exfilHeard: false });
   assert.strictEqual(listening.label, 'ROUTE: LISTEN');

@@ -41,7 +41,7 @@ import { initDevPanel } from './dev-panel.js';
 import { initBenchUi } from './bench/ui.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
-         getSlingshotInteractionState } from './hud.js';
+         getSlingshotInteractionState, isExfilPortal } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -2441,7 +2441,7 @@ function updateAudibleContactMemory(nowSeconds) {
     }
     const exfil = NOISE_CONFIG.world?.exfil || {};
     for (const portal of portalSystem?.portals || []) {
-      if (!portal || portal.alive === false) continue;
+      if (!isExfilPortal(portal)) continue;
       observe(`world:exfil:${portal.id}`, {
         wx: portal.wx,
         wy: portal.wy,

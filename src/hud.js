@@ -33,6 +33,7 @@ import {
   getHullPresentationState,
   getInteractionPresentationState,
   getRouteObjectiveState,
+  isExfilPortal,
   formatNoiseDetail,
   getSlingshotInteractionState,
 } from './ui/hud-presentation.js';
@@ -43,6 +44,7 @@ export {
   getInventoryActionAtCursor,
   getInteractionPresentationState,
   getRouteObjectiveState,
+  isExfilPortal,
   formatNoiseDetail,
   getSlingshotInteractionState,
   inventoryConfirm,

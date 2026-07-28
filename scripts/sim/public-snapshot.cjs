@@ -162,6 +162,16 @@ function projectPlayer(player, facts) {
   };
 }
 
+function isExfilPortal(portal) {
+  return Boolean(portal && portal.alive !== false && (
+    portal.type === "exit"
+    || portal.type === "extraction"
+    || portal.finalExfil === true
+    || portal.guaranteedFinalExfil === true
+    || portal.finalInhibitor === true
+  ));
+}
+
 function projectWorld({
   mapState,
   inhibitorEntities = [],
@@ -190,7 +200,7 @@ function projectWorld({
       };
     });
   for (const portal of mapState.portals || []) {
-    if (!portal || portal.alive === false) continue;
+    if (!isExfilPortal(portal)) continue;
     const tuning = worldNoise.exfil || {};
     noiseEmitters.push({
       id: `exfil:${portal.id}`,
@@ -317,6 +327,7 @@ function buildPublicSnapshot(state, facts) {
 
 module.exports = {
   buildPublicSnapshot,
+  isExfilPortal,
   projectWorld,
   projectPublicSession,
 };

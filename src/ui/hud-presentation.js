@@ -161,15 +161,21 @@ export function getAbilityPresentationState(abilityState = {}) {
   return { hull, slots };
 }
 
+export function isExfilPortal(portal) {
+  return Boolean(portal?.alive && (
+    portal.type === 'exit'
+    || portal.type === 'extraction'
+    || portal.finalExfil === true
+    || portal.guaranteedFinalExfil === true
+    || portal.finalInhibitor === true
+  ));
+}
+
 export function findNearestActivePortal(ship, portalSystem) {
   if (!ship || !portalSystem?.portals) return null;
   let nearest = null;
   for (const portal of portalSystem.portals) {
-    if (!portal?.alive) continue;
-    const isExit = portal.type === 'exit' || portal.type === 'extraction'
-      || portal.finalExfil === true || portal.guaranteedFinalExfil === true
-      || portal.finalInhibitor === true;
-    if (!isExit) continue;
+    if (!isExfilPortal(portal)) continue;
     const distance = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
     if (!nearest || distance < nearest.distance) nearest = { portal, distance };
   }
