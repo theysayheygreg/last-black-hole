@@ -179,9 +179,17 @@ async function run() {
 
       await dispatchKey(page, "KeyX", "x");
       await sleep(120);
-      const deletePrompt = await page.evaluate(() => window.__TEST_API.getUiMotionState().profilePrompt);
-      assert(deletePrompt.includes("delete") && deletePrompt.includes("cancel") && !deletePrompt.includes("select"),
-        `Expected delete modal prompt, got ${deletePrompt}`);
+      const deleteState = await page.evaluate(() => {
+        const motion = window.__TEST_API.getUiMotionState();
+        return {
+          prompt: motion.profilePrompt,
+          modal: motion.profileDelete,
+        };
+      });
+      assert(deleteState.modal?.slot === 0 && deleteState.modal?.choice === "cancel",
+        `Expected delete confirmation to open safely on CANCEL, got ${JSON.stringify(deleteState.modal)}`);
+      assert(deleteState.prompt.includes("cancel") && !deleteState.prompt.includes("delete") && !deleteState.prompt.includes("select"),
+        `Expected CANCEL-first confirmation prompt, got ${deleteState.prompt}`);
     });
 
     await runner.run("Real launch flow reaches authority-backed gameplay from home", async () => {

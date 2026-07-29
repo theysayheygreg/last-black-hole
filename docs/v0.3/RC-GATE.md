@@ -17,12 +17,13 @@ extraction confirmation.
 The immutable no-retry full lane selected 121 suite processes: 120 passed and
 one failed, with 487 passing assertions, zero retries, 389.70 seconds harness
 wall time (389.86 seconds externally), and 565.70 seconds summed suite time.
-The only red is a stale `MetaFlow` expectation that requires the word
-`delete` on the intentionally `CANCEL`-first Pilot Delete confirmation. Direct
-Pilot Delete/mute evidence passed 2/2 and `UIVisual` passed 18/18, so this is a
-test-contract red rather than a current player-path defect. AgentPlay passed
-2/2; audio-contact bridge/runtime, audio recovery, extraction, presentation,
-and mute/unmute focused proofs are green.
+That sole red was a stale `MetaFlow` expectation requiring the word `delete`
+on the intentionally `CANCEL`-first Pilot Delete confirmation. The current
+branch now asserts the actual safe modal state (`slot: 0`, `choice: cancel`)
+and the focused MetaFlow suite is green without changing production behavior.
+Direct Pilot Delete/mute evidence passed 2/2 and `UIVisual` passed 18/18.
+AgentPlay passed 2/2; audio-contact bridge/runtime, audio recovery, extraction,
+presentation, and mute/unmute focused proofs are green.
 
 Deep Field delivered 15 Hz authority with 0 skipped deadlines. The authority
 budget sample recorded 156 ticks, 20.41 ms snapshot p95 latency, 216.83 KiB

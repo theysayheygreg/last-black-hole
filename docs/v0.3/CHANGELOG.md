@@ -2,6 +2,12 @@
 
 ## 2026-07-28
 
+- **CANCEL-first RC contract correction:** updated MetaFlow to read the
+  authoritative Pilot Delete modal state and require the safe initial
+  `choice: cancel` rather than demanding destructive `delete` copy before the
+  player deliberately changes the choice. Focused MetaFlow is green; no
+  production UI, input, profile, or deletion behavior changed.
+
 - **Version scope and v0.3.2 design packets:** moved the authored-soundscape
   vertical from v0.3.2 into active v0.3.1 scope without invalidating the
   current contact-audio RC as an intermediate playtest build. Split the later
