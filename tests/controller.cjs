@@ -131,6 +131,37 @@ async function tapGamepadButton(page, buttonIndex, { holdMs = 90, value = null }
   await sleep(140);
 }
 
+async function rerollMapSeedWithGamepad(page, beforeSeed, { timeout = 3000 } = {}) {
+  await setGamepadButton(page, 2, true);
+  try {
+    await waitFor(page, (oldSeed) => {
+      return window.__TEST_API?.getMapSelectState?.().seed !== oldSeed;
+    }, { timeout }, beforeSeed);
+  } catch (err) {
+    let debug = null;
+    try {
+      debug = await page.evaluate(() => {
+        const mapSelect = window.__TEST_API?.getMapSelectState?.() || null;
+        const button = window.__TEST_GAMEPAD?.buttons?.[2] || null;
+        return {
+          phase: mapSelect?.phase ?? window.__TEST_API?.getGamePhase?.() ?? null,
+          seed: mapSelect?.seed ?? null,
+          button: button ? {
+            pressed: Boolean(button.pressed),
+            touched: Boolean(button.touched),
+            value: Number.isFinite(Number(button.value)) ? Number(button.value) : null,
+          } : null,
+        };
+      });
+    } catch {}
+    const suffix = debug ? ` state=${JSON.stringify(debug)}` : '';
+    throw new Error(`controller map-select reroll: ${err.message}; beforeSeed=${beforeSeed}${suffix}`);
+  } finally {
+    await setGamepadButton(page, 2, false, 0);
+    await sleep(140);
+  }
+}
+
 async function moveHomeTabWithGamepad(page, tabName) {
   const tabOrder = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
   const targetIndex = tabOrder.indexOf(tabName);
@@ -221,8 +252,7 @@ async function run() {
         await installVirtualGamepad(page);
         await enterMapSelectWithGamepad(page);
         const before = await page.evaluate(() => window.__TEST_API.getMapSelectState());
-        await tapGamepadButton(page, 2); // reroll seed
-        await waitFor(page, (oldSeed) => window.__TEST_API.getMapSelectState().seed !== oldSeed, { timeout: 3000 }, before.seed);
+        await rerollMapSeedWithGamepad(page, before.seed);
         const after = await page.evaluate(() => window.__TEST_API.getMapSelectState());
         assert(after.phase === 'mapSelect', `Expected to remain in mapSelect, got ${after.phase}`);
         assert(after.seed !== before.seed, `Expected controller reroll to change seed ${before.seed}`);
