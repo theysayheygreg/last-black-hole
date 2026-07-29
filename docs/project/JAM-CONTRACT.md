@@ -354,8 +354,9 @@ For a v0.2 demo fix:
 2. Make the smallest useful fix.
 3. Run the risk-matched validation lane.
 4. Commit to `main`.
-5. If the fix still matters to v0.3, merge `main` into the v0.3 branch or
-   cherry-pick the single commit if the branch is intentionally isolated.
+5. If the fix still matters to v0.3, report the exact forward-port source and
+   target to Primary Sol. Merge or cherry-pick it only after Greg approves that
+   cross-version operation.
 
 For v0.3 structural work:
 
@@ -595,8 +596,9 @@ The remote repo must stay current. This is a shared workspace — other agents, 
   handoff blocker before push.
 - **Use the pre-push guard for public publication.** The tracked hook invokes
   release preparation only for an `origin/main` update. Version-branch pushes
-  stay cheap. For an intentional main-line docs/process push that does not
-  publish a build, use `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
+  stay cheap. Main-line docs, tests, and process-only ranges are detected from
+  the pushed Git diff and skip release preparation automatically. Runtime,
+  content, dependency, build, and unrecognized paths require the release gate.
 - **Public version bumps are Greg calls.** `npm run release:public` advances the
   active train's third number. Commit that bump, then build. Large decisive
   minor/major train moves remain Greg's explicit call.

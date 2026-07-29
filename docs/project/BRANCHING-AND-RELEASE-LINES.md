@@ -48,8 +48,8 @@ all workstreams operate today. Route to v0.3 for next-version features and
 architecture. Route to v0.4 only for experimental multiplayer product work.
 
 When a later line exposes a current-version bug, fix it on `main` first when
-practical, then merge forward. Do not backport scaffolding that does not
-independently help the current line.
+practical, then report the exact forward-port operation for Greg's approval.
+Do not backport scaffolding that does not independently help the current line.
 
 Every delegated task names its branch/base SHA, owned write scope, avoided
 high-conflict files, focused proof, committed deliverable, and stop conditions.
@@ -57,21 +57,28 @@ Chat or agent memory is not a handoff.
 
 ## Merge Ownership And Cadence
 
-Workstream Sols integrate child commits inside their own version. Primary Sol
-alone performs cross-version merges and release-candidate selection.
+Workstream Sols integrate accepted child commits inside their own version after
+focused proof and pinned-SHA review. These same-version development operations
+do not require Greg to approve each merge, rebase, or cherry-pick. Primary Sol
+still owns release-candidate selection.
 
-At the next clean checkpoint:
+Every cross-version merge, cherry-pick, rebase, or promotion requires Greg to
+approve the specific source, target, and intent. This includes `main`/v0.2 and
+v0.3 in either direction, v0.3 and v0.4 in either direction, and any v0.4
+backflow into a lower line. A settled checkpoint, RC/release candidate, or
+concrete shared dependency is a reason for Primary Sol to ask; it is never
+automatic permission. Until approval, let version lines advance independently
+and record handoffs in commits.
 
-1. Commit and push the main governance checkpoint.
-2. Let the v0.3 Workstream Sol finish and integrate its accepted child slice.
-3. Primary Sol merges current `main` into `codex/v0.3-ballpark-roadmap` and
-   resolves conflicts on v0.3.
-4. After that v0.3 checkpoint is coherent, Primary Sol merges the compatible
-   v0.3/main lineage forward into `codex/v0.4-multiplayer-product` and resolves
-   conflicts on v0.4.
+After cross-version approval, execute the operation as a dedicated high-effort bounded task
+using the Primary Sol skill or a high-effort merge subagent. Pin source and
+target SHAs, preserve branch direction, review conflicts as product contracts,
+validate the resulting candidate asynchronously, and return one merge receipt.
+Do not fold merge work into routine orchestration or run speculative merge CI.
 
-Never resolve next-version conflict noise by editing `main`. Never merge all of
-v0.4 into v0.3 or all of v0.3 into `main` without Greg's promotion call.
+Never resolve next-version conflict noise by editing `main`. Greg's approval of
+one cross-version operation does not authorize later synchronization or
+promotion.
 
 ## Validation By Checkpoint
 
@@ -94,8 +101,10 @@ The tracked `.githooks/pre-push` policy is ref-aware:
 
 - an `origin/main` update runs `node scripts/release.cjs prepush` once;
 - a v0.3/v0.4 or other non-main branch push skips release preparation;
-- a deliberate docs/process-only main push may use
-  `LBH_SKIP_RELEASE_PREP=1 git push origin main`;
+- a main push whose full changed-path range is recognized docs, tests, or
+  process-only skips release preparation automatically;
+- any runtime, content, dependency, build, or unrecognized path fails closed
+  into the release-build gate;
 - a candidate/release push never uses that skip.
 
 This is a release-build gate, not CI for every branch commit. GitHub branch
@@ -110,6 +119,26 @@ gates asynchronously, obtains Greg's required taste/device acceptance, updates
 the public README/version docs/build status, and performs one intentional
 promotion merge. Promotion is a product call, not the automatic result of a
 green branch.
+
+Promotion also preserves the displaced public version as a playable historical
+baseline. Before `main` advances, pin the outgoing version's final known-good
+source and build, retain its complete repo-local release folder and archive,
+retain or publish its checksum-backed GitHub Release assets, and verify that
+its version-scoped install and shortcut remain on Greg's review Steam Deck.
+Deploy the incoming version beside it; do not overwrite or delete the older
+install.
+
+The promotion receipt and `docs/project/BUILD-STATUS.md` must name both builds,
+their exact source SHAs, artifact paths/checksums, release URLs, and Deck
+locations. Intermediate development packages remain disposable. The protected
+artifact is one designated final known-good build per displaced public
+major/minor line.
+
+Before the merge, add the outgoing build to
+`docs/public/OLD-VERSIONS.md` and keep that page linked from the public README.
+Its one-click commands use an immutable release tag plus a version-specific
+display name and slug. They must install beside the current game rather than
+repointing its launcher, save data, logs, or Steam shortcut.
 
 ## Recovery
 

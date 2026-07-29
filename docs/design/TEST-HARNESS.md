@@ -19,6 +19,11 @@ Only failure to boot, a direct changed-contract regression, or project-state
 corruption blocks ordinary feature work. Unrelated, flaky, harness, and
 release-only failures are recorded for separate fix-forward work.
 
+The tracked main pre-push hook applies the same exposure rule: a pushed range
+containing only recognized docs, tests, or process files skips release artifact
+preparation automatically. Runtime, content, dependency, build, and unknown
+paths fail closed into the release gate.
+
 Agent ownership, immutable-SHA CI dispatch, receipts, and GregBot concurrency
 limits are defined in `docs/project/LBH-ORCHESTRATION-CONTRACT.md`.
 

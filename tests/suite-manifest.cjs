@@ -12,6 +12,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "PushScope",
+    file: "push-scope.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "Installer",
+    file: "installer.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "Signatures",
     file: "signatures.cjs",
     lanes: ["fast", "core", "static", "full"],

@@ -2541,3 +2541,38 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 2. Wreck pickup and portal extraction are now the first two Ballpark-backed consequence adapters. Death/contact remain the next high-risk migration family.
 **Door status:** Open — continue one family at a time with parity/outcome tests before replacing old inline helpers.
+
+## 2026-07-15: Same-Version Integration And Cross-Version Merge Authority
+
+- Workstream Sols may integrate accepted child branches into their named
+  version integration branch after focused proof and pinned-SHA review. Normal
+  development inside v0.3 or inside v0.4 does not require Greg to approve each
+  merge, rebase, or cherry-pick.
+- Every operation that crosses a version line still requires Greg to approve
+  the exact source, target, and intent. This includes `main`/v0.2 and v0.3 in
+  either direction, v0.3 and v0.4 in either direction, every promotion into
+  `main`, and every v0.4 backflow into a lower version.
+- Primary Sol owns cross-version execution, RC candidate selection, and the
+  resulting merge receipt. Approval applies to one named cross-version
+  operation and does not create an automatic synchronization cadence.
+
+## 2026-07-28: Preserve The Displaced Version's Final Playable
+
+- Advancing `main` changes the current public version; it does not erase the
+  outgoing version's last known-good playable.
+- Before promotion, Primary Sol designates one final known-good build for the
+  displaced public major/minor line and preserves its repo-local release
+  folder/archive, checksum-backed GitHub Release assets, and version-scoped
+  install plus shortcut on Greg's review Steam Deck.
+- Promotion deploys the incoming version beside the historical build. Cleanup
+  may remove intermediate, failed, test, dev, and superseded RC artifacts, but
+  not the designated historical playable.
+- The v0.3.1 promotion therefore requires a final v0.2 artifact and Deck entry
+  to remain usable after v0.3.1 becomes current.
+- Every displaced final build also receives an immutable GitHub Release tag
+  and a version-isolated one-click entry in `docs/public/OLD-VERSIONS.md`,
+  linked from the README before promotion. The installer identity includes its
+  own name, slug, install path, saves, logs, desktop entry, and Steam shortcut.
+- A future promo/history pass will use these real retained builds to create a
+  version-by-version development timelapse. Footage is not a promotion gate;
+  independently launchable build history is the prerequisite.

@@ -80,8 +80,11 @@ main (v0.2 current/live public)
   the next release-candidate lineage.
 - v0.4 owns experimental multiplayer authority, networking, crew flow, and
   multiplayer product work. It is not a shortcut into v0.3 or `main`.
-- Primary Sol merges v0.2 fixes forward into v0.3 and compatible v0.3 progress
-  forward into v0.4 at explicit checkpoints.
+- No actor merges, cherry-picks, rebases, or promotes work across version lines
+  without Greg's explicit approval for that specific operation. Primary Sol
+  may report readiness and propose exact source/target SHAs, but approval is
+  the merge trigger. Settled branches, RC selection, or a shared dependency
+  are reasons to ask Greg, not implied authorization.
 - Never merge v0.4 backward into v0.3 or `main` for convenience. Promotion of
   any version requires Greg's explicit call.
 
@@ -91,12 +94,49 @@ that candidate asynchronously; it does not run on every feature commit. v0.4
 CI and experimental failures do not block a v0.3 RC unless an intentionally
 shared contract is affected.
 
+### Playable Version Retention
+
+A promotion changes which version `main` and the default installer serve; it
+does not erase the displaced version's last known-good playable.
+
+Before promoting a new version, Primary Sol must designate the outgoing
+version's final known-good source SHA and build identity, then preserve:
+
+- its complete repo-local release folder and playtest archive under `builds/`;
+- its checksum/build manifest and public GitHub Release assets;
+- its version-scoped install and non-Steam shortcut on Greg's review Steam
+  Deck.
+- its immutable-tag entry and version-isolated one-click commands in
+  `docs/public/OLD-VERSIONS.md`, linked from the public README.
+
+For the v0.3.1 promotion, this means the final v0.2 package remains available
+and launchable after `main` advances and the v0.3 install becomes current.
+Cleanup may remove intermediate, failed, or superseded builds, but never the
+designated final known-good build for a displaced public version.
+
+Promotion receipts record both sides: the incoming current build and the
+outgoing historical build's source SHA, artifact paths/checksums, release URL,
+Deck install path, and shortcut verification. If the outgoing artifact is
+missing, rebuild it from its pinned source before promotion rather than
+silently losing the playable baseline.
+
+The historical installer must not reuse the current install slug, save-data
+namespace, logs, launcher name, desktop entry, or Steam shortcut. Publish the
+archive entry and verify its release URL before the promotion merge; a command
+that still resolves to mutable `nightly-latest` is not historical retention.
+
+These retained playables are also the source material for a future
+version-by-version progress timelapse. Promotion does not require a new media
+capture, but the archived build must remain independently launchable and carry
+enough identity and launch information that a later capture pass can record
+the real v0.2, v0.3, v0.4, and subsequent experiences in sequence.
+
 `codex/lbh-ci-policy` was created above history that later proved to contain
 v0.3.1 review commits on the v0.4 architecture line. Never merge that source
 branch wholesale into `main`. Its clean process changes were reconstructed on
 `codex/lbh-ci-policy-main` and accepted onto `main`; both policy branches are
-now historical anchors. New shared governance changes land on `main`, then
-merge forward through v0.3 and v0.4 in hierarchy order.
+now historical anchors. New shared governance changes land on `main`; they
+remain there until Greg explicitly approves a hierarchy-ordered forward merge.
 
 ## Live Assignment Register
 
@@ -105,10 +145,9 @@ progress belongs in commits and task receipts, not status churn here.
 
 | Role | Codex task | Owned line | Current assignment |
 |---|---|---|---|
-| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `main` governance, cross-workstream routing, forward merges, and RC selection | Keep the project moving; preserve both policy branches as history only |
-| v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Integrate bounded multiplayer product slices on the v0.4 line |
-| v0.4 P5 Feature Luna | `019f6364-bcc2-7d70-8cc6-9bc22454bb6d` | `codex/v0.4-p5b-feature-luna` from the stable product branch | Complete the bounded rematch/product slice and return a committed receipt |
-| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3.1-movement-truth` in `/private/tmp/lbh-v031-movement-truth` | Integrate bounded movement-truth slices and return committed receipts |
+| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `main` governance, cross-workstream routing, merge readiness, and RC selection | Route the v0.3.1 design-review sequence; hold the completed v0.4 P5 milestone before broad P6 evidence |
+| v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Hold accepted P5E commit `40b5f26` on `codex/v0.4-p5e-controls`; no integration or P6 until Primary routes it |
+| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3-w1f2-inhibitor-clock` in `/private/tmp/lbh-v03-w1f2-inhibitor-clock` | Build the bounded W1-F2 Inhibitor Conductor clock from accepted W1-F1 commit `80ebbef` |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
 | Maestro Specialist Intake | Primary Sol routes; Maestro executes | Pinned player-facing slices across version lines | Production and quality-review lanes are available from `#orb-assistant` message `1526773577079328930`; invoke only when a coherent slice warrants multi-craft judgment |
 

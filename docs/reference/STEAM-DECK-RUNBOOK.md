@@ -46,17 +46,12 @@ On the Deck in Desktop Mode:
 3. Run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh
 ```
 
-The installer downloads:
-
-```text
-https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/last-singularity-linux-nightly.zip
-```
-
-The release tag and zip filename still say `nightly` for stable public URLs.
-Treat them as compatibility names for the current weekly playtest build.
+The installer resolves the public `nightly-latest` GitHub prerelease and selects
+its Linux x64 asset. The release tag and zip filename still say `nightly` for
+compatibility; this is the named weekly public playtest channel.
 
 It installs the game to:
 
@@ -73,8 +68,10 @@ It creates Desktop Mode launchers at:
 ~/Desktop/Last Singularity.desktop
 ```
 
-It also closes Steam if needed, backs up `shortcuts.vdf`, and adds **Last
-Singularity** as a non-Steam shortcut so it appears in Gaming Mode.
+The `~/Desktop` copy is created when that directory exists. The installer also
+closes Steam if needed, backs up `shortcuts.vdf`, and adds **Last Singularity**
+as a non-Steam shortcut for the matching existing entry or most recently used
+local Steam account so it appears in Gaming Mode.
 
 The installed folder also contains `last-singularity-icon.png`. Desktop entries
 and Steam shortcut metadata point at that icon so the build appears as a real
@@ -106,29 +103,30 @@ First launch flow on Deck:
 Use a specific release/tag:
 
 ```sh
-LBH_RELEASE_TAG=v0.2.2 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --version v0.2.2
 ```
 
-Use a specific zip URL:
+Preserved final releases use the complete version-isolated commands in
+[`docs/public/OLD-VERSIONS.md`](../public/OLD-VERSIONS.md). Those commands set
+both `--name` and `--slug`; do not omit them or the historical install could
+replace the current install's launcher and shortcut identity.
+
+Use a custom install directory from a checked-out copy:
 
 ```sh
-LBH_DECK_BUILD_URL=https://example.com/last-singularity-linux.zip \
-  bash scripts/install-steam-deck.sh
+sh scripts/install.sh --install-dir "$HOME/Games/last-singularity"
 ```
 
 Skip Steam library registration and install only the Desktop Mode launcher:
 
 ```sh
-LBH_SKIP_STEAM_SHORTCUT=1 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh -s -- --no-launcher
 ```
 
-If a Deck has multiple Steam users and the shortcut lands under the wrong user,
-rerun with:
-
-```sh
-LBH_STEAM_USER_ID=<steam-userdata-id> \
-  curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
-```
+The shortcut helper updates one matching **Last Singularity** entry and leaves
+other users and unrelated shortcuts unchanged. Set `LBH_STEAM_USER_ID` when a
+Deck has multiple local Steam users and the most recently used account is not
+the intended one.
 
 ## Private Codex Deploy To Greg's Deck
 
@@ -180,6 +178,24 @@ Singularity** non-Steam entry pointed at
 `~/Games/last-singularity/run-last-singularity.sh`. Steam must be closed while
 the file is written, then restarted or returned to Gaming Mode so the library
 reloads.
+
+### Version promotion on Greg's review Deck
+
+Keep the final known-good build from each displaced public major/minor line
+installed beside the incoming version. Use version-scoped directories and
+shortcuts for Primary-managed review builds, for example:
+
+```text
+~/Games/last-singularity-v02
+~/Games/last-singularity-v03
+```
+
+Promoting v0.3.1 updates the v0.3 install and shortcut only. It must not delete,
+rename, overwrite, or repoint the final v0.2 install or its existing Steam
+shortcut. Verify both launch entries still exist after deployment and record
+their install paths plus executable/`app.asar` hashes in the promotion receipt.
+This retention rule applies to Greg's review Deck; the public latest-version
+installer may continue to update one normal current install for other players.
 
 ## What The Deck Launcher Does
 
@@ -356,13 +372,13 @@ Codex cannot inspect or rewrite the shortcut until the device wakes.
 Backups are written next to `shortcuts.vdf`:
 
 ```text
-~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup-YYYYMMDDHHMMSS
+~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup
 ```
 
 Close Steam, then restore:
 
 ```sh
-cp ~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup-YYYYMMDDHHMMSS \
+cp ~/.steam/steam/userdata/<id>/config/shortcuts.vdf.lbh-backup \
    ~/.steam/steam/userdata/<id>/config/shortcuts.vdf
 ```
 
@@ -389,7 +405,9 @@ when the repository SHA has not changed since the last successful run.
 
 If this contract changes, update all of these together:
 
-- `scripts/install-steam-deck.sh`
+- `scripts/install.sh`
+- `scripts/install.ps1`
+- `scripts/install-steam-shortcut.py`
 - `.github/workflows/nightly-playables.yml`
 - `docs/reference/STEAM-DECK-RUNBOOK.md`
 - `README.md`

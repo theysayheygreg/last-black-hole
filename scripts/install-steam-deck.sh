@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# Compatibility entrypoint. New installs use scripts/install.sh, which detects
+# SteamOS and preserves the Deck launcher/Gaming Mode behavior.
+if [ -z "${LBH_USE_LEGACY_DECK_INSTALLER:-}" ]; then
+  set -euo pipefail
+  exec bash -c "$(curl -fsSL "https://raw.githubusercontent.com/${LBH_REPO:-theysayheygreg/last-black-hole}/main/scripts/install.sh")" -- "$@"
+fi
+
 set -euo pipefail
 
 PRODUCT_NAME="Last Singularity"

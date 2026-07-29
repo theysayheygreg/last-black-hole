@@ -8,7 +8,7 @@
 | Line | Branch | Meaning |
 |---|---|---|
 | Current public/demo | `main` | v0.2 build line for weekend demos, small fixes, and existing Deck deploys |
-| Current v0.3 source checkpoint | `codex/v0.3-sim-harness-simplification` | v0.3 authority/Ballpark/product source refactor; do not merge backward until Greg promotes it |
+| Current v0.3 source checkpoint | `codex/v0.3-ballpark-roadmap` | v0.3.1 integration and release-candidate lineage; do not promote to `main` until Greg approves it |
 
 When someone asks “what is the build status,” name the branch and evidence.
 Git activity alone is not a playability verdict, and an old build-health ledger
@@ -16,15 +16,15 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
-**Source status:** `codex/v0.3-sim-harness-simplification` is the current
-v0.3 source-only checkpoint, based on behavioral baseline
-`20184fae84b559abf27717c046811673040d987a`. It has one 15 Hz authoritative
-movement clock across Shallows, Expanse, and Deep Field, plus measured
-relevance, compact transport, deadline-delivery, harness work, and explicit
-authority/client/presentation/script owners. Current source is
-`ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844`; its exact-head core, full,
-natural journey, product-loop, cadence/Deep Field, and LoC receipts complete
-the human-clarity program. This is not a newly packaged or deployed RC.
+**Source status:** `codex/v0.3-ballpark-roadmap` is the current v0.3.1
+integration and release-candidate lineage. Exact product source `29997fb7`
+integrates audible-contact audio with Pilot Delete and session-local master
+mute; later commits through pre-merge checkpoint `e48ecabd` are review,
+version-routing, and outgoing-v0.2 preservation documentation. It retains one
+15 Hz authoritative movement clock across Shallows, Expanse, and Deep Field,
+plus the accepted Ballpark, Noise, Heat, slingshot, Inhibitor ecology,
+readability, extraction, and package work. Promotion to `main` remains a
+separate explicitly approved operation.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
@@ -235,6 +235,30 @@ npm run stack -- --no-open
 ```
 
 Open the printed Three client URL. A page reload is not a clean sim reset.
+
+## Preserved Playable History
+
+The final known-good v0.2 playable is preserved as the immutable
+[`v0.2.2-final`](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.2.2-final)
+GitHub Release:
+
+- Source: `83953aa1f9f7cc7c39cfc2cd84610ee9a3dec104`
+- Build: `0.2.2.83953aa`
+- Combined archive SHA-256:
+  `6dfc0a0f35c400c877bc4fe12b42fc6699365b66c1e3a1468e4fb89d11042ac7`
+- Linux executable SHA-256:
+  `b0d127772d2983a93771055a93b673d5fdd1726d6e47db8e269b204e665972d6`
+- Linux `app.asar` SHA-256:
+  `26aa6c59f498b5f8b7a376f435d389ab8c459852c102b6bca02adf7d8d6fd457`
+- Greg's Deck copy remains at
+  `/home/deck/Games/last-singularity-v02` with the separate
+  **Last Singularity v0.2 Demo** Steam shortcut.
+
+The release's one-click installers use version-specific install, save-data,
+log, launcher, and shortcut identities. See
+[`OLD-VERSIONS.md`](../public/OLD-VERSIONS.md) for commands and per-platform
+archive hashes. New public versions must deploy beside this copy rather than
+replace or repoint it.
 
 ## Update Triggers
 

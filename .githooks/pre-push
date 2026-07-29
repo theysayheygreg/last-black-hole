@@ -7,20 +7,23 @@ if [[ -n "$remote" && "$remote" != "origin" ]]; then
   exit 0
 fi
 
-pushes_main=0
+main_local_sha=""
+main_remote_sha=""
 while read -r local_ref local_sha remote_ref remote_sha; do
   if [[ "$remote_ref" == "refs/heads/main" && ! "$local_sha" =~ ^0+$ ]]; then
-    pushes_main=1
+    main_local_sha="$local_sha"
+    main_remote_sha="$remote_sha"
   fi
 done
 
-if [[ "$pushes_main" != "1" ]]; then
+if [[ -z "$main_local_sha" ]]; then
   echo "LBH release pre-push check skipped: origin/main is not being updated."
   exit 0
 fi
 
-if [[ "${LBH_SKIP_RELEASE_PREP:-}" == "1" || "${LBH_SKIP_RELEASE_PREP:-}" == "true" ]]; then
-  echo "LBH release pre-push check skipped by LBH_SKIP_RELEASE_PREP."
+scope="$(node scripts/push-scope.cjs "$main_remote_sha" "$main_local_sha")"
+if [[ "$scope" == "process-only" ]]; then
+  echo "LBH release pre-push check skipped: pushed range is docs, tests, or process only."
   exit 0
 fi
 

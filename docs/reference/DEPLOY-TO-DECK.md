@@ -21,7 +21,7 @@ The Windows build is still a valid fallback through Proton:
 For public weekly testers, the easiest path is the installer:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install.sh | sh
 ```
 
 It downloads the latest Linux weekly release, installs it under
@@ -119,7 +119,7 @@ For this project, the safe assumption is:
 
 ## Automated local deploy
 
-For public weekly installs, use `scripts/install-steam-deck.sh` as described in
+For public weekly installs, use `scripts/install.sh` as described in
 the [Steam Deck runbook](STEAM-DECK-RUNBOOK.md).
 
 For Codex pushing a local build to Greg's Deck over Tailscale:

@@ -1,5 +1,69 @@
 # Changelog
 
+## 2026-07-28 - latest playtest automation
+
+- Retooled the failing weekly Action into a useful rolling latest-playtest
+  channel with deterministic validation and web, iPad, macOS, Windows, and
+  Linux/Steam Deck artifacts.
+- Made each rolling release self-contained with exact source/build metadata,
+  checksums, installer assets, and a post-publish integrity check.
+- Kept `nightly-latest` explicitly mutable while final displaced versions
+  remain immutable through the README-linked Old Versions ledger.
+
+## 2026-07-28 — immutable old-version installs
+
+- Preserved the final known-good v0.2 playable as the immutable
+  [`v0.2.2-final`](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.2.2-final)
+  GitHub Release, pinned to source `83953aa1`.
+- Added a README-linked old-versions ledger and one-click historical installers
+  whose install, data, log, launcher, and Steam shortcut identities remain
+  separate from the current game.
+- Verified the published Linux installer against GitHub Release SHA-256
+  metadata and matched the installed executable and `app.asar` to the preserved
+  v0.2 build.
+
+## 2026-07-14 — Exposure-lensed main push gate
+
+- Main pushes now classify the complete Git range and automatically skip the
+  all-platform release build for recognized docs, tests, and process-only work.
+- Runtime, content, dependency, build, non-fast-forward, and unknown ranges
+  still fail closed into the release artifact gate.
+- Added a cheap static PushScope contract to the fast/core/static lanes.
+
+## 2026-07-28 — v0.3.1 audio and v0.3.2 visual routing
+
+- Reclassified the authored-soundscape vertical as v0.3.1 work while keeping
+  the current audible-contact RC useful as an intermediate playtest build.
+- Split the later Fabric/Surfing and Camera/Viewport questions into separate
+  E3 Orrery prompt packets grounded in the current top-down ASCII-fluid game.
+
+## 2026-07-28 — v0.3.1 audible-contact candidate
+
+- Integrated authoritative audible-contact voices with Pilot Delete and the
+  session-local `M` master-mute path.
+- Built all five targets from exact product source `29997fb7`; package
+  authority boot passed and the matching Linux artifact was deployed beside
+  the preserved v0.2 Deck build.
+- Kept the one stale `MetaFlow` CANCEL-first assertion visible rather than
+  treating it as a player-path failure or hiding it in the release receipt.
+
+## 2026-07-28 — v0.3.1 scale correction checkpoint
+
+- Corrected the shared movement, perception, and threat ruler around
+  camera-derived audible scale, legible world-contact colors, viable pursuit,
+  and heard-EXFIL route discovery.
+- Recorded the accepted slingshot contract as edge-to-engage, hold-to-orbit,
+  and release-to-exit, with universal Noise emitters and Shallows as the
+  recognition route.
+
+## 2026-07-27 — v0.3.1 RC milestone
+
+- Bundled held slingshot, Heat, loadout/results readability, Noise Radius v1,
+  accumulating Inhibitor Ecology v2, persistent well overdrive, and audible
+  exfil into one creative and technical review milestone.
+- Kept machine evidence separate from Greg's movement, visual, audio, and
+  physical Deck gates.
+
 > **Journal policy from 2026-07-14:** this file records project-wide releases,
 > version promotions, and large revisions merged between version lines.
 > Detailed branch work belongs in that version line's changelog. Existing
@@ -8,51 +72,13 @@
 
 ---
 
-## 2026-07-28 — v0.3.2 visual design prompts separated
+## 2026-07-14 — cross-version merges require Greg's approval
 
-- Reclassified the authored-soundscape vertical as v0.3.1 work while keeping
-  the current contact-audio RC useful as an intermediate playtest build.
-- Split the later fabric/surfing and camera/viewport questions into two
-  standalone E3 Orrery prompt packets. Each requires visual concepts grounded
-  in the current top-down ASCII-fluid game and must explicitly name the
-  smallest enabling seam when current functionality is too limited.
-- This is prompt and version-routing work only. No Orrery handoff, renderer,
-  camera, physics, capture, or audio implementation is implied.
-
-## 2026-07-28 — v0.3 Orrery correction reviews ingested
-
-- Preserved the scale/RC follow-up and slingshot rerun reviews as the durable
-  evidence handoff for the next playable v0.3 correction checkpoint.
-- Recorded Greg's accepted direction: slingshot edge-to-engage plus
-  hold-to-orbit and release-to-exit, universal Noise emitters across maps,
-  Shallows as the recognition route, and lethal-warning tuning in seconds.
-- This intake is documentation only. Product corrections and their focused
-  evidence follow as same-version commits.
-
-## 2026-07-28 — v0.3.1 scale correction bundled for Orrery follow-up
-
-- Corrected the shared movement/perception/threat ruler after Orrery's first RC
-  memo: camera-derived audible scale, legible world-contact colors, viable
-  pursuit, and heard-EXFIL route discovery now form one reviewable checkpoint.
-- Recorded one provisioned no-retry full lane and fresh all-target package from
-  exact product source `61ecc534`. Package closure is green; three current
-  slingshot player-path rows remain red and are not presented as play
-  acceptance.
-- Bundled one read-only follow-up packet for an opinionated go/no-go Deck
-  recommendation. Primary owns delivery; no Discord post, Deck deploy,
-  promotion, or cross-version action is implied.
-
-## 2026-07-27 — v0.3.1 RC milestone bundled for Orrery
-
-- Selected immutable v0.3 product source `a958a8c6` for one RC evidence pass.
-  The no-retry full lane remained honestly red while all five hash-named
-  internal targets and packaged authority closure completed.
-- Bundled held slingshot, Heat, loadout/results readability, Noise Radius v1,
-  accumulating Inhibitor Ecology v2, persistent well overdrive, and audible
-  exfil into one E3 creative and technical review packet.
-- Kept machine evidence separate from taste. Primary owns the single
-  `#last-black-hole` handoff and review intake; no Deck, promotion, or
-  cross-version action is implied.
+- Primary no longer maintains continuous `main -> v0.3 -> v0.4` ancestry while
+  feature workstreams are moving.
+- Every merge, cross-version cherry-pick, rebase, or promotion now requires
+  Greg to approve the exact operation. Approved merges run as dedicated
+  high-effort tasks; post-merge validation remains asynchronous.
 
 ## 2026-07-14 — Maestro specialist lanes joined Primary Sol routing
 
@@ -82,263 +108,6 @@
 - Main now owns the cross-version README, roadmap, durable decision journal,
   branch/release contract, and push policy. The pre-push release gate runs only
   for `origin/main`; v0.3/v0.4 pushes no longer trigger release preparation.
-
-## 2026-07-14 — Orrery RC findings fixed and review path hardened
-
-- Fixed finite well-contact grace so upgraded hulls receive one protection
-  window, emit one event, and then die if they remain inside the well.
-- Replaced the split `1.7`/`2.5` movement baselines with one shared movement
-  data contract consumed by browser fallback physics and authoritative sim.
-- Corrected the browser gravity proof so lethal contact cannot count as
-  evidence of inward pull.
-- Verified the Shallows slingshot/extraction route ten times from fresh sim and
-  browser processes; the reported failure was a too-precise harness waypoint,
-  not fuel exhaustion, so production movement/fuel tuning was left alone.
-- Made title corruption honor reduced motion and removed duplicate remote
-  star/scavenger audio cues.
-- Kept every remote-authority phase presentation-only until the session is
-  released, preventing results transitions from locally advancing snapshot
-  entities and crashing on server-only scavenger death state.
-- Added a portable visible agent-eval lane and exposed structural audio
-  diagnostics for hosts where a reviewer cannot see an unlocked desktop or
-  hear the audio device.
-- Recorded Orrery's complete review under `docs/project/reviews/` and routed
-  sentry identity, palette hygiene, continuous propulsion audio, and future
-  Ballpark/network scaling work without pretending they were release blockers.
-
-## 2026-07-14 — v0.3 clean RC evidence and visual harness closure
-
-- Re-ran the complete v0.3 automated lane from a stopped stack with timing
-  retries disabled. Authority, protocol, Ballpark, movement, product flow,
-  controller, keyboard/mouse, natural agent play, renderer, and UI evidence
-  remained green.
-- Raised the UI visual suite budget from six to ten minutes. Its sixteen
-  settled animation/layout captures had outgrown the old wrapper timeout; the
-  captured states themselves were passing.
-- Refreshed the RC, roadmap, build-status, and visual-evidence ledgers around
-  current no-retry proof and removed a stale pointer to ignored promo media.
-- Kept physical Steam Deck Gaming Mode, Greg's feel/visual/audio review, browser
-  audio-graph inspection, and prioritized runtime copy retunes explicit rather
-  than folding them into automated acceptance.
-
-> Human-readable version history of design docs.
-> Git is authoritative. This is for quick scanning without `git log`.
-
----
-
-## 2026-07-11 — v0.3 overnight specialist integration review
-
-- Confirmed Palette, Timbre, Troubadorb, and Orrery work is contained to the
-  v0.3 branch; the active v0.4 multiplayer worktree remained untouched.
-- Removed an accidental 925 MiB promo-media archive from current source and
-  made generated journal captures ignored by default.
-- Fixed duplicate and stale-run authoritative audio, bounded router history,
-  ownerless private-event leakage, undercounted oscillator costs, failed
-  admission rollback, continuous control rate, and nearest-well layer count.
-- Removed internal hull names from generated public copy and added regression
-  coverage for the v0.3 Drifter/Breacher roster boundary.
-- Corrected plan-versus-runtime claims: Palette's shared presentation schema and
-  Troubadorb's broad copy retune remain reviewed v0.3 work, not shipped code.
-- Added a review record under `docs/project/reviews/` with remaining visual,
-  listening, Git-history, and runtime-copy acceptance gaps.
-
-## 2026-07-10 — Orrery review of the v0.3 specialist plans
-
-- Reviewed the palette and timbre overnight plans against branch source;
-  verified every cited file/line claim, corrected two (the `test:visual`
-  failure was overnight-worktree provisioning, not a product defect;
-  `EVENT_AUDIO_SPECS` declares ten cue specs, not seven).
-- Found the troubadorb theme/text overnight lane produced no plan (zero
-  commits); wrote an Orrery reconstruction at
-  `docs/v0.3/plans/2026-07-10-troubadorb-theme-text.md`, pending ratification.
-- Established lane ownership and sequencing: palette owns the presentation
-  boundary via a shared Task 0 fact schema, timbre's audio router lands first
-  in `main.js`, troubadorb strings land last, RC-GATE edits go through the
-  integrator, and code waves wait for Greg's feel/taste verdict.
-- Full review: `docs/v0.3/reviews/2026-07-10-orrery-specialist-plan-review.md`;
-  accepted amendments and rejected items integrated into all three plans.
-
-## 2026-07-10 — v0.3 visual Forge review and promo truth pass
-
-- Fixed Three entity budgets so offscreen candidates do not hide later visible
-  entities, honored explicit zero budgets, and removed canvas context listeners
-  when a renderer backend is disposed.
-- Classified every generated entity asset as runtime or explicit reference art;
-  procedural well and Inhibitor systems remain intentional exclusions rather
-  than silent integration drift.
-- Unified screen transition timing under `CONFIG.ui.motion`, removed shader
-  corruption under reduced motion, synchronized salvage-report input with its
-  visible CTA, added compact Home/map layouts, and made profile prompts reflect
-  empty, occupied, naming, and delete-confirm states.
-- Replaced AgentPlayEval's whole-journey retry with one acknowledged slingshot
-  engage edge and one acknowledged release edge, including sequence, timing,
-  tick, RTT, and event-order evidence.
-- Made generated art builds deterministic and self-cleaning. Fixed shield-cell
-  and foam-anchor icon-family precedence and added manifest/source checks.
-- Moved the retired ship asset bake-off to the deep visual lane and added
-  catastrophic Three call, pooled-mesh, and asset-load ceilings to the
-  production performance probe.
-- Audited the promo pipeline so player-reachable product captures, fixture
-  beauty shots, and reference scenes cannot be mislabeled as one another.
-- Captured a fresh authority-backed promo batch with ten 4K stills and two
-  validated 30 fps MP4/GIF pairs, then mirrored the shareable media to iCloud.
-- Generalized private Deck deployment for side-by-side version comparisons:
-  external artifacts can now install under distinct names, directories, logs,
-  user-data namespaces, desktop entries, and Steam shortcut app ids.
-- Built clean all-target releases from `main` (`0.2.2.83953aa`) and the v0.3
-  branch (`0.3.0.fb2432a`), deployed them as **v0.2 Demo** and **v0.3 Preview**,
-  registered both in Gaming Mode, and checksum-verified both remote packages.
-
-## 2026-07-10 — v0.3 visual production system
-
-- Turned the recent visual concepts into a production style guide covering
-  scene depth, silhouette, palette roles, contrast, typography, panel backing,
-  pixel treatment, and screen-space post-processing.
-- Added a reproducible generated-asset pipeline and committed source atlases,
-  transparent top-down entity sprites, all 67 catalog item icons, and sliced
-  UI frame parts. Wells, the ASCII fabric, and Inhibitor corruption remain
-  procedural because motion and simulation state are part of their identity.
-- Replaced placeholder Three entity marks with hull-aware player sprites,
-  state-aware wrecks and portals, and lifecycle-owned star, planetoid,
-  scavenger, fauna, and sentry sprites. Texture ownership, nearest filtering,
-  disposal, and object budgets remain centralized in the Three lifecycle.
-- Applied the new frame kit, stronger local occlusion, restrained shadows,
-  item icons, and controller-readable hierarchy to Profile, Home, route select,
-  pause, results, and in-match surfaces.
-- Added a deterministic UI-motion vocabulary for terminal frame construction,
-  content reveal, focus movement, stagger, directional transitions, and
-  reduced-motion equivalents. Motion remains presentation-only and never
-  delays or owns gameplay state.
-- Expanded UI and renderer evidence to check named regions, local contrast,
-  multiple resolutions, transition progression, reduced motion, generated
-  asset loading, and texture-cache cleanup.
-- Moved screenshot pixel analysis out of the live game page and into the local
-  Sharp pipeline, removing an intermittent late-suite browser-canvas failure
-  without relaxing any readability threshold.
-- Re-ran both natural AgentPlayEval journeys. The current report shows a live
-  route, populated salvage report, new sprites against the ASCII fabric,
-  authoritative extraction, and visible-well death from fresh processes.
-- Ran the complete v0.3 manifest after integration. Every selected static,
-  authority, gameplay, input, Three, UI, and visual suite passed. AgentPlayEval
-  required its declared timing retry before both natural journeys passed; that
-  variability remains visible rather than being reported as a clean first run.
-
-## 2026-07-10 — v0.3 authority journey and release-candidate closure
-
-- Promoted Ballpark from optional per-tick query fallback to persistent,
-  epoch-aware lifecycle identity with stable handles, incarnation history,
-  stale-reference rejection, and required relevance/pickup/portal queries.
-- Replaced touch-to-win portal behavior with cyan zone-plus-confirm extraction:
-  Enter/A confirms while resident, leaving aborts immediately, and swept
-  fly-throughs cannot extract.
-- Enforced Drifter/Breacher at the human authority boundary, replaced the Ship
-  screen's legacy global-upgrade grid with public hull and rig truth, and made
-  rig effect copy player-readable from the canonical hull track manifest.
-- Connected authoritative recent runs to the Chronicle career strip and newest
-  five records.
-- Rebuilt AgentPlayEval around a fresh protocol-v2 sim/browser and normal
-  controller play. The passing 1280x800 journey proves slingshot, natural
-  salvage, signal/Inhibitor pressure, confirmed extraction, results, rig,
-  Chronicle, and a changed second run without debug mutation.
-- Updated v0.3 roadmap, RC gate, open decisions, build status, local protocol,
-  and harness docs to replace July 4 scaffold claims with current branch truth.
-- Revalidated the authority lane and recorded the latest Deep Field budget:
-  7.68/8 Hz, 2.73 ms snapshot p95, 107.88 KiB snapshot p95, 0.33 MB/s,
-  4.16 MiB heap growth, and 0.652 ms Ballpark sync p95.
-- Built the all-target v0.3 internal release and booted the embedded control
-  plane and `lbh-local-v2` sim directly from the generated Linux `app.asar`.
-- Split playable proof into extraction/continuity and death/recovery journeys;
-  the fresh agent report now carries eighteen 1280x800 frames without debug
-  state mutation.
-- Added a real release-package gate that checks the exact HEAD artifact,
-  extracts its Linux `app.asar`, boots embedded authority, and drives the macOS
-  package from a rendered Three title into a live authoritative run.
-- Kept packaged authority resident but idle on the title screen so a player who
-  waits longer than 30 seconds can still launch.
-- Carried authored well names through run results so death screens say
-  `CONSUMED BY XIBALBA`, not `CONSUMED BY WELL-1`.
-- Re-ran the complete Three source lane after integration; all selected
-  authority, gameplay, renderer, UI, package-staging, and agent-eval suites
-  passed.
-
-## 2026-07-09 — Protocol-v2, route, presentation, and Deck HUD integration
-
-- Replaced raw client-id mutations with protocol-v2 run/player authority,
-  server-issued command credentials, monotonic commands, private event
-  filtering, reconnect continuity, and stale-run rejection. AI-only ghost
-  sessions are replaced instead of silently reused.
-- Made seeded map briefings match launched signatures, named wells, initial
-  loot, and route anchors. Shallows now declares a teaching sequence, while
-  Expanse and Deep Field carry distinct route identities.
-- Added a renderer-neutral presentation frame and lifecycle-owned player,
-  wreck, and portal Three families with centralized projection, palette, and
-  quality budgets. Route portals are cyan; magenta remains Inhibitor language.
-- Rebuilt the 1280x800 HUD rails and controller captions, added reduced-motion
-  behavior, and added bounded event-audio cues for loot, slingshot, portals,
-  scavenger contact, extraction, and Inhibitor escalation.
-- Registered every new contract in the manifest-driven harness.
-
-## 2026-07-09 — Deep Field authority budget gate
-
-- Added a short product-shaped authority probe that measures observed tick
-  cadence, snapshot latency/size/bandwidth, heap growth, Ballpark sync time,
-  and bounded event/snapshot retention with a live Deep Field player.
-- Recorded the first v0.3 local baseline: 7.66/8 Hz, 46.41 ms snapshot p95,
-  107.75 KiB snapshot p95, 0.33 MB/s estimated stream, 6.08 MiB heap growth,
-  and 4.81 ms Ballpark sync p95.
-- Kept physical 1280x800 Deck frame evidence as a separate hardware gate;
-  this probe measures the authority process, not presentation FPS.
-
-## 2026-07-09 — Honest v0.3 public hull roster
-
-- Added a shared `PUBLIC_HULL_IDS` contract containing Drifter and Breacher.
-- Local profiles now normalize unsupported public hull choices back to
-  Drifter, while unfinished hull definitions remain available to AI, internal
-  fixtures, and continued development.
-- Added fast/static coverage so player-facing code cannot accidentally expose
-  Resonant, Shroud, or Hauler as finished choices.
-
-## 2026-07-09 — v0.3 version train activated
-
-- Advanced the v0.3 branch public base to `0.3.0`; internal and release builds
-  now identify as `0.3.0.<commit-hash>`.
-- Generalized release validation to follow the active semantic version train
-  instead of hard-coding v0.2, while public patch bumps still change only the
-  third field.
-- Added fast coverage for the four-part version contract.
-
-## 2026-07-09 — Remote Chronicle five-run bridge
-
-- Added a bounded newest-first recent-run query to the durable control-plane
-  store and exposed it through local and remote control-plane clients.
-- Extended the profile endpoint with the last five authoritative run records,
-  while lifetime extraction/death/earnings totals remain the compact career
-  strip.
-- Added coverage for ordering, retention, and career totals across seven runs.
-
-## 2026-07-09 — Swept authoritative gameplay contacts
-
-- Routed well hazards, wreck pickup, portal extraction, and scavenger bumps
-  through the shared toroidal sweep primitive after player integration.
-- Centralized well protection and death consequences so point and swept
-  contacts share shield, grace, reinforced-hull, event, and result behavior.
-- Added live consequence tests that cross each interaction between snapshots,
-  including seam-safe high-speed geometry coverage.
-- Added authoritative item-shape, world-geometry, and swept-contact suites to
-  the authority and structural harness lanes.
-
-## 2026-07-09 — Live snapshot rebase and event recovery
-
-- Promoted the bounded snapshot ring from a test scaffold into the live sim,
-  with run-stamped snapshot ids, schema metadata, health diagnostics, and a
-  `/snapshots` recovery window.
-- Changed the remote client to consume the authoritative event journal instead
-  of replaying the snapshot compatibility tail. Event gaps now rebase at a
-  full-snapshot watermark instead of mixing partial history with current state.
-- Forced mutation responses to publish a fresh snapshot so inventory and debug
-  actions cannot return a cached pre-mutation view.
-- Extended live protocol coverage for snapshot identity, bounded windows, and
-  stale-run reset behavior.
 
 ## 2026-07-08 — Cloudflare Drop share build target
 
@@ -389,173 +158,6 @@
 - Updated balance, control-plane, run-results, meta-flow, and UI visual tests to
   prove displayed EM matches durable profile deltas.
 
-## 2026-07-05 — Fable/Orrery feedback triage
-
-- Added a synthesis memo for Orrery's three Fable review returns, separating
-  immediate fixes, roadmap items, Greg decisions, and explicit deferrals.
-- Expanded the v0.3 open-decision queue with the new product choices from the
-  movement, visual-hybrid, and loop/meta reviews: death economy, portal entry,
-  Shallows route teaching, progression grammar, chronicle scope, and cosmic
-  signature truth.
-
-## 2026-07-05 — Fable/Orrery weekend prompt packets
-
-- Added three targeted delegation prompts for Fable through Orrery: movement
-  feel and route design, entity visual hybrid direction, and loop/meta clarity.
-- Each prompt names current source docs, context, review questions, guardrails,
-  and expected deliverables so weekend exploration can return actionable
-  recommendations instead of a broad unfocused review.
-
-## 2026-07-05 — Agent play eval lane and harness north star
-
-- Added `tests/agent-play-eval.cjs` and `npm run test:agent-eval`, a fresh
-  browser/sim playable-evidence lane for Shallows, Expanse, and Deep Field.
-- The new lane primes authoritative map sessions, drives real remote movement,
-  captures screenshots, verifies scene presence, and spot-checks sim-owned
-  extraction before writing a human-readable report.
-- Updated the harness and process docs with the north star that agents should
-  prove features work before Greg spends playtest time on feel and polish.
-- Refreshed the v0.3 RC gate and build-status snapshot with the 2026-07-05
-  automated validation pass.
-
-## 2026-07-04 — LBH public update skill
-
-- Added the local `$lbh-public-update-pass` Codex skill for turning checkpoint
-  work, screenshots, clips, and build-status truth into public-facing devlog,
-  Discord, Twitter/X, Feature Friday, and teaser copy.
-- Updated the checkpoint/process docs so major v0.2/v0.3 milestones run the
-  public update pass after build evidence and media capture are available.
-
-## 2026-07-04 — Public-friendly devlog and social update pack
-
-- Added a narrative `DEVLOG.md` entry that translates the recent visual, UI,
-  Steam Deck, and v0.3 authority work into a human-facing story.
-- Expanded `docs/public/TWITTER-POST-OPPORTUNITIES.md` with a current Discord
-  update, short Discord version, Twitter/X singles, mini-threads, translation
-  bank, and public-claim guardrails.
-
-## 2026-07-04 — v0.3 input edges and portal extraction
-
-- Added queued remote slingshot press edges to the input protocol so quick
-  engage/release taps survive client POST cadence and are consumed one per
-  authority tick.
-- Added server acks for accepted slingshot edge ids and a structural
-  `SlingshotEdgeQueue` test that sends two edges in one input packet and
-  verifies engage plus release events.
-- Exposed remote input/presentation timing through `SimClient.getMetrics()` and
-  `__TEST_API.getNetworkState().networkMetrics`, and taught controller coverage
-  to assert finite remote input timing after gameplay input.
-- Migrated portal extraction candidate selection onto Ballpark nearest queries
-  while leaving final availability, exact capture radius, outcome mutation, and
-  `player.escaped` events on the authoritative sim path.
-- Added `tests/ballpark-extraction.cjs` and included it in the authority and
-  sim-structure lanes.
-- Updated `BUILD-STATUS.md`, the v0.3 roadmap/RC gate, the project roadmap, and
-  the harness guide with the new source evidence and remaining human/Deck
-  verification gaps.
-
-## 2026-07-04 — v0.3 S0/S1 review fixes
-
-- Fixed the Ballpark `SpatialIndex` toroidal seam bug by snapping requested
-  cell sizes to an exact world-period grid and added non-divisible seam/corner
-  regression coverage.
-- Made Ballpark query tie-breaks independent of host locale.
-- Added structural mirror canaries for duplicate ids and rebuild cost in the
-  mirror/deep-field harness lanes.
-- Added remote-authority tests for portal extraction, star-or-planetoid push,
-  scavenger contact, and empty-tank thrust signal behavior.
-- Normalized server input move vectors to unit length without losing brake-only
-  facing intent.
-- Fixed server scavenger contact by adding missing bump radius/force config.
-- Changed held ability input to edge-trigger active abilities, including
-  Breacher Burn, and extended controller coverage so holding L1 does not
-  tick-toggle burn off.
-- Fixed AI player thrust input so facing is unit length and personality thrust
-  stays scalar.
-- Changed thrust signal generation to use delivered thrust after delta-v gates.
-- Changed shield/grace/reinforced-hull well contact handling so one consumed
-  protection does not skip every remaining overlapping well that tick.
-- Moved Map Select controller reroll to X/Square and made host reset
-  keyboard-only until it gets a hold-confirm controller path.
-- Restored the desktop package closure by adding the event-journal and
-  replication-lane dependencies to the server bundle list.
-- Added `docs/v0.3/OPEN-DECISIONS.md` and updated the v0.3 roadmap/RC gate with
-  S0/S1 integrated status, deferred items, and Greg-decision items.
-
-## 2026-07-04 — v0.3 Ballpark nearest parity gate
-
-- Added old-vs-Ballpark parity coverage for nearest well, unlooted wreck, and
-  available portal selection, including toroidal world-wrap cases.
-- Added passive wreck `pickupCooldown` metadata to the Ballpark mirror so the
-  next pickup migration can filter the same eligibility facts as the legacy
-  sim path without reaching back into bespoke array scans.
-- Moved wreck pickup candidate selection onto Ballpark nearest queries while
-  keeping cargo mutation, looted state, signal spikes, and `player.loot` events
-  in the existing authoritative sim path.
-- Added `tests/ballpark-pickup.cjs` to prove a fresh sim can loot a real wreck
-  through the migrated candidate path and still publish the same authoritative
-  consequence.
-- Extracted the deterministic server movement drive/brake/integrate phases into
-  `scripts/sim/player-movement-step.cjs` and added `tests/movement-golden.cjs`
-  with fixed numeric fixtures for thrust, braking, current coupling, speed
-  clamp, wrapping, and non-default brain coefficients.
-- Wired the live sim event stream through `SimEventJournal`, preserving
-  snapshot `recentEvents` compatibility while adding run ids, tick stamps,
-  lane-filtered `/events`, health retention stats, and snapshot `lastEventSeq`.
-- Added `tests/protocol-runtime.cjs` to prove the live `/events` endpoint,
-  snapshot watermark, reset/future windows, and health journal stats agree.
-- Surfaced the v0.3 Three render-plan descriptor through live backend stats and
-  taught the renderer fixture suite to assert the contract id, quality tier,
-  canonical surface, and required pass ids.
-- Added `tests/sim-bounded-growth.cjs`, a short deep-field soak that verifies
-  Ballpark body counts, event journal retention, snapshot payload size, and
-  post-timeout tick/body/event stability stay bounded.
-- Added `docs/v0.3/RC-GATE.md` so the final v0.3 staircase step has concrete
-  automated, local playtest, Steam Deck, and architecture-promotion evidence
-  instead of a vague "ready" label.
-- Raised the manifest timeout for the expanded UI visual capture suite so
-  combined `test:three` runs stop killing a healthy 13-state screenshot pass.
-- Kept extraction, death, movement, and other consequence families on the
-  existing runtime paths until their family-specific outcome tests pass.
-
-## 2026-07-03 — v0.3 Ballpark relevance query slice
-
-- Added `scripts/sim/sim-queries.cjs` as the first shared Ballpark query helper,
-  starting with center-distance relevance selection over mirrored bodies.
-- Routed live sim relevance for stars, wrecks, planetoids, and non-dying
-  scavengers through Ballpark queries while keeping dying scavengers, snapshots,
-  movement, pickups, extraction, death, and renderer projection on the existing
-  authoritative paths.
-- Added mirror-level query usage counters so `/health.ballpark` remains useful
-  even though the mirror still rebuilds its spatial index every tick.
-- Exposed `ballparkRelevance` in `/health` and `/debug/ballpark`, but kept the
-  normal `/snapshot` payload free of Ballpark diagnostics.
-- Added `tests/ballpark-queries.cjs` to the `sim-structure` and `authority`
-  lanes to prove the query helper behavior and live sim relevance routing.
-- Added a tested `collectNearestBodies()` helper as prep for the next nearest
-  well/portal/wreck migration, but kept those live runtime helpers on the
-  legacy path until their full parity/perf slice is ready.
-- Hardened the remote-authority slingshot fixture so release validation waits
-  on sim ticks, the authoritative event journal, and final snapshot state
-  instead of a brittle frame-local speed delta.
-
-## 2026-07-02 — v0.3 Ballpark runtime mirror slice
-
-- Added `scripts/sim/ballpark-mirror.cjs`, an observational adapter that
-  rebuilds the v0.3 `BodyRegistry` + `SpatialIndex` from live runtime players,
-  wells, stars, wrecks, portals, planetoids, scavengers, sentries, fauna, wave
-  emitters, and active Inhibitor state.
-- Wired the mirror into `scripts/sim-runtime.cjs` at session start, joins,
-  leaves, debug mutations, echo hydration, inventory actions, and authority
-  ticks without changing the normal `/snapshot` payload.
-- Exposed Ballpark stats through `/health.ballpark` and `/debug/ballpark` so
-  agents/tests can inspect body counts, categories, broadphase stats, duplicate
-  ids, skipped bodies, and rebuild cost.
-- Added `tests/ballpark-mirror.cjs` plus a `sim-structure` harness lane and
-  `npm run test:sim-structure` for v0.3 body/query/event/snapshot contracts.
-- Hardened the remote-authority slingshot fixture so it stays above the
-  server-side tangential-speed gate after the first authority integration step.
-
 ## 2026-07-01 — Version-line branching process added
 
 - Added `docs/project/BRANCHING-AND-RELEASE-LINES.md` as the tracked process
@@ -564,17 +166,6 @@
   promotion rules to `docs/project/JAM-CONTRACT.md`.
 - Logged the branch-by-version-line decision so future agents keep big
   next-version work off the demo line until Greg calls promotion.
-
-## 2026-07-01 — v0.3 Ballpark roadmap planned
-
-- Added `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md` as the new
-  branch-first planning home for the v0.3 line.
-- Reframed v0.3 around Ballpark Lite sim authority, ECS-ready data shape,
-  multiplayer-minded events/snapshots/relevance, renderer contracts, and
-  structural harness gates.
-- Updated the v0.2 roadmap and project roadmap so `main` stays focused on
-  v0.2 demo fixes while v0.3 architectural work lives on a dedicated branch.
-- Logged the branch decision in the decision log.
 
 ## 2026-07-01 — Carbon Engine research added
 

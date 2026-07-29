@@ -48,8 +48,9 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
   build must exist
 - `npm run release:status` — print the current public train, hash build version,
   and whether the matching all-target release artifact already exists
-- `LBH_SKIP_RELEASE_PREP=1 git push origin main` — intentional docs/process-only
-  push that does not publish a new build
+- `git push origin main` — the tracked hook automatically skips release
+  preparation when the complete pushed range is recognized docs, tests, or
+  process-only; runtime/build/content changes still require the release build
 
 `npm run build` currently defaults to `release` mode.
 
@@ -149,6 +150,54 @@ That folder contains:
 
 The build date now lives inside the manifest and build info files instead of the folder name. The selected runtime mode is recorded in the manifest and per-target build info files.
 
+### Historical playable retention
+
+`builds/` is repo-local and gitignored, but its designated release packages are
+not all disposable. When a newer major/minor version replaces the current
+public line, preserve one final known-good release folder and matching
+`last-singularity-playtest-v<version>.zip` for the displaced version. Preserve
+the same artifacts on the corresponding GitHub Release so the playable does
+not depend on one machine.
+
+Do not reuse that version folder, rename it to the incoming version, or delete
+it during build cleanup. Record its source SHA, build identity, manifest and
+archive SHA-256, GitHub Release URL, and Deck location in
+`docs/project/BUILD-STATUS.md`. Failed builds, mode-suffixed test/dev builds,
+and intermediate RCs may still be pruned normally.
+
+Publish the final build under an immutable GitHub Release tag, then add its
+version-isolated installer commands to `docs/public/OLD-VERSIONS.md`. The
+public README links that archive. Confirm the old-version command resolves,
+verifies the release checksum, and uses a distinct name/slug before promotion;
+`nightly-latest` remains the moving current channel and is never an archival
+identity.
+
+### Rolling latest playtest
+
+The `Latest Playtest` GitHub Action is the public convenience channel. Each
+Monday, or on a manual dispatch, it compares `main` with the commit named by
+the mutable `nightly-latest` tag. A changed source runs the deterministic,
+non-browser fast release-contract suites, builds web, iPad, macOS, Windows, and
+Linux/Steam Deck playables, then replaces that rolling release's assets.
+
+The release is self-describing: it carries `SOURCE.json`,
+`BUILD-MANIFEST.json`, `SHA256SUMS`, the installer/helper scripts, and all five
+platform archives. The publish job verifies every required remote asset, its
+GitHub SHA-256 digest, and the final tag/source match. Browser/playable RC
+evidence remains a version-candidate gate rather than a flaky prerequisite for
+the weekly convenience build.
+
+`nightly-latest` is intentionally mutable and is never an archive. Before a
+public version line is displaced, preserve one known-good build under a new
+immutable release tag and add its isolated one-click commands to
+[`OLD-VERSIONS.md`](../public/OLD-VERSIONS.md).
+
+One planned use is a chronological build-history timelapse showing the real
+game at each public version. The historical package therefore needs to remain
+launchable on its own; preserve its launch instructions and any runtime flags
+or compatibility notes needed to capture it later. Do not block promotion on
+recording footage. The future media pass consumes the retained builds.
+
 Before cutting a serious internal playtest build, commit the source, then use:
 
 ```sh
@@ -176,7 +225,7 @@ If you are only pushing docs/process cleanup with no new build handoff, skip the
 guard explicitly instead of manufacturing a new patch:
 
 ```sh
-LBH_SKIP_RELEASE_PREP=1 git push origin main
+git push origin main
 ```
 
 The underlying lightweight verification lane should be green:

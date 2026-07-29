@@ -228,7 +228,7 @@ function prepushCheck() {
     throw new Error([
       `Current public version ${publicVersion} is behind ${upstream.upstream} (${upstream.version}).`,
       'Ask Greg before changing the major/minor train; otherwise bump the current public patch and commit it.',
-      'For an intentional docs/process-only push that does not publish a build, set `LBH_SKIP_RELEASE_PREP=1`.',
+      'The tracked pre-push hook skips recognized docs, tests, and process-only ranges automatically.',
     ].join('\n'));
   }
   checkReleaseBuild();
@@ -252,7 +252,7 @@ function usage() {
     'Options:',
     '  --skip-tests  For build/drop only: build without running the matching fast gate.',
     '',
-    'Set LBH_SKIP_RELEASE_PREP=1 for intentional docs/process-only pushes that do not publish a build.',
+    'The tracked pre-push hook classifies docs, tests, and process-only ranges before calling this command.',
   ].join('\n'));
 }
 
