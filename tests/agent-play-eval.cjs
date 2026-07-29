@@ -18,6 +18,7 @@ const {
   waitFor,
   withQuery,
   stepGameFrames,
+  simLogFile,
 } = require("./helpers.cjs");
 const { NOISE_CONFIG } = require("../scripts/sim/noise-radius.cjs");
 const {
@@ -86,6 +87,60 @@ async function slingshotEdgeAcks(page) {
   return page.evaluate(() =>
     window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || []
   );
+}
+
+async function extractConfirmAcks(page) {
+  return page.evaluate(() =>
+    window.__TEST_API?.getNetworkState?.()?.networkMetrics?.extractConfirmAcks || []
+  );
+}
+
+async function holdAcknowledgedPortalConfirm(page, clientId, portalId, label, timeout = 5000) {
+  const before = await extractConfirmAcks(page);
+  let ack = null;
+  let lastPlayer = null;
+  const deadline = Date.now() + timeout;
+
+  await setGamepadButton(page, 0, true);
+  await stepGameFrames(page, 1, 0.001);
+  try {
+    while (Date.now() < deadline) {
+      const after = await extractConfirmAcks(page);
+      if (after.length > before.length) {
+        ack = after[after.length - 1];
+        break;
+      }
+
+      const snapshot = await getSnapshot();
+      lastPlayer = localPlayer(snapshot, clientId);
+      if (
+        lastPlayer?.status === "alive"
+        && (
+          lastPlayer.portalInteraction?.portalId !== portalId
+          || lastPlayer.portalInteraction?.ready !== true
+        )
+      ) {
+        return { ack: null, lostReadiness: true, player: lastPlayer };
+      }
+      if (lastPlayer?.status !== "alive" && lastPlayer?.status !== "escaped") {
+        throw new Error(`${label} left the live route before acknowledgement; last=${JSON.stringify(lastPlayer)}`);
+      }
+
+      // Keep the real product loop polling the held Deck edge even if the
+      // ambient headless animation frame cadence is throttled.
+      await stepGameFrames(page, 1, 0.001);
+      await sleep(16);
+    }
+  } finally {
+    await setGamepadButton(page, 0, false);
+    await stepGameFrames(page, 1, 0.001);
+  }
+
+  assert(ack, `Timed out waiting for ${label}; last=${JSON.stringify(lastPlayer)}`);
+  assert(ack.inputSeq > 0 && ack.commandSeq > 0, `${label} lacked input sequence diagnostics`);
+  assert(ack.acceptedSeq === ack.inputSeq, `${label} acknowledged input ${ack.acceptedSeq}, expected ${ack.inputSeq}`);
+  assert(ack.acknowledgedAtUnixMs >= ack.sentAtUnixMs, `${label} acknowledgement timestamp preceded send`);
+  return { ack, lostReadiness: false, player: lastPlayer };
 }
 
 async function tapAcknowledgedSlingshotEdge(page, label, { release = true } = {}) {
@@ -656,7 +711,25 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   await steerTo(page, clientId, initialPortal, portalApproach);
   await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready state`);
   // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
-  await tapGamepadButton(page, 0, 100);
+  // Keep the edge held until the existing client diagnostics prove authority
+  // acknowledged it. A pre-ack drift-out may reacquire once; an acknowledged
+  // confirm must either extract or fail as a product defect below.
+  let confirmation = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    confirmation = await holdAcknowledgedPortalConfirm(
+      page,
+      clientId,
+      initialPortal.id,
+      `portal ${initialPortal.id} confirmation acknowledgement`,
+    );
+    if (confirmation.ack) {
+      confirmation.attempt = attempt;
+      break;
+    }
+    assert(attempt === 1, `Portal ${initialPortal.id} lost readiness twice before confirmation acknowledgement`);
+    await steerTo(page, clientId, initialPortal, portalApproach);
+    await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready reacquire`);
+  }
   const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
     timeout: 8000,
     label: `portal ${initialPortal.id} extraction consequence`,
@@ -669,6 +742,10 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     portalType: initialPortal.type,
     readyTick: ready.snapshot.tick,
     escapedTick: escaped.snapshot.tick,
+    confirmAck: {
+      ...confirmation.ack,
+      attempt: confirmation.attempt,
+    },
     travel,
   };
 }
@@ -849,6 +926,7 @@ function writeReport(outputDir, report) {
     "## Evidence",
     "",
     ...(report.screenshots || []).map((shot) => `- ${shot}`),
+    ...(report.simLogs || []).map((log) => `- ${log}`),
     "",
     "## Human Review Still Required",
     "",
@@ -975,6 +1053,7 @@ async function run() {
     outputDir,
     verdict: "pending",
     screenshots: [],
+    simLogs: [],
     journey: {},
     failure: null,
   };
@@ -984,14 +1063,23 @@ async function run() {
     if (process.env.LBH_AGENT_EVAL_DEATH_ONLY !== "1") {
       await runner.run("fresh protocol-v2 Shallows journey reaches a changed second run", async () => {
         await withFreshSimServer(SIM_PORT, async () => {
-          await withFreshGame(
-            withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
-            async ({ page, errors }) => {
-              await runJourney(page, outputDir, report, errors);
-              assertNoBrowserErrors(errors, "Journey complete");
-            },
-            { resetState: true },
-          );
+          try {
+            await withFreshGame(
+              withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
+              async ({ page, errors }) => {
+                await runJourney(page, outputDir, report, errors);
+                assertNoBrowserErrors(errors, "Journey complete");
+              },
+              { resetState: true },
+            );
+          } finally {
+            const sourceLog = simLogFile(SIM_PORT);
+            if (fs.existsSync(sourceLog)) {
+              const preservedLog = "sim-first-journey.log";
+              fs.copyFileSync(sourceLog, path.join(outputDir, preservedLog));
+              report.simLogs.push(preservedLog);
+            }
+          }
         }, { idleShutdownMs: 30000 });
       });
     }

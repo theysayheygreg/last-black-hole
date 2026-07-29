@@ -33,6 +33,7 @@ export class SimClient {
       lastEventSeq: 0,
       eventGapRecoveries: 0,
       slingshotEdgeAcks: [],
+      extractConfirmAcks: [],
       lastRecoveryReason: null,
     };
   }
@@ -345,6 +346,7 @@ export class SimClient {
         requestedEdgeIds: [...entry.requestedEdgeIds],
         acceptedEdgeIds: [...entry.acceptedEdgeIds],
       })),
+      extractConfirmAcks: this.metrics.extractConfirmAcks.map((entry) => ({ ...entry })),
       pendingInputCount: this.pendingInputs.length,
       pollIntervalMs: this.pollIntervalMs,
     };
@@ -408,6 +410,20 @@ export class SimClient {
       });
       if (this.metrics.slingshotEdgeAcks.length > 16) {
         this.metrics.slingshotEdgeAcks.splice(0, this.metrics.slingshotEdgeAcks.length - 16);
+      }
+    }
+    if (inputPayload.extractConfirm) {
+      this.metrics.extractConfirmAcks.push({
+        inputSeq: inputPayload.seq,
+        commandSeq: inputPayload.commandSeq,
+        acceptedSeq: response.acceptedSeq ?? null,
+        sentAtUnixMs: inputPayload.timestamp,
+        acknowledgedAtUnixMs: Date.now(),
+        ackRttMs: this.metrics.lastInputAckRttMs,
+        serverTick: response.tick ?? null,
+      });
+      if (this.metrics.extractConfirmAcks.length > 16) {
+        this.metrics.extractConfirmAcks.splice(0, this.metrics.extractConfirmAcks.length - 16);
       }
     }
     return response;
