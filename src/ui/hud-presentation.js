@@ -360,8 +360,8 @@ export function getSlingshotInteractionState(slingshot) {
   if (slingshot.engaged) {
     return {
       action: 'slingshot',
-      label: 'slingshot locked',
-      detail: 'release the orbit',
+      label: 'grapple locked',
+      detail: 'release the arc',
       verb: 'release',
     };
   }
@@ -373,13 +373,13 @@ export function getSlingshotInteractionState(slingshot) {
     return {
       actionable: false,
       label: `${anchorType} in range`,
-      detail: 'align with current',
+      detail: 'build some speed',
     };
   }
   return {
     action: 'slingshot',
     label: `${anchorType} in range`,
-    detail: 'ride the current',
+    detail: 'catch the arc',
     verb: 'engage',
   };
 }

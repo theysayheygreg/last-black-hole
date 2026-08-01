@@ -3856,43 +3856,8 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
     ctx.lineTo(ax, ay);
     ctx.stroke();
     ctx.setLineDash([]);
-    // Energy banked indicator — small arc of the ring filled, brighter
-    // as energy grows. Scales loosely so a player can see "I've been
-    // banking a lot" without needing exact numbers.
-    const energyFraction = Math.min(1, ship.slingshotEnergy / 4.0);
-    if (energyFraction > 0.05) {
-      ctx.strokeStyle = palette.engaged.replace(/[\d.]+\)$/, '1)');
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.ellipse(ax, ay, radiusPx.rx + 4, radiusPx.ry + 4, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * energyFraction);
-      ctx.stroke();
-    }
-    // Chain count badge if chained.
-    if (ship.slingshotChainCount > 1) {
-      ctx.fillStyle = palette.engaged;
-      ctx.font = canvasFont(11);
-      ctx.textAlign = 'center';
-      ctx.fillText(`x${ship.slingshotChainCount} chain`, ax, ay - radiusPx.ry - 8);
-    }
     ctx.restore();
   }
-}
-
-/**
- * Slingshot per-hull modifiers. Read at engage / release / per-frame
- * by SlingshotSystem so each hull has its own route-style identity
- * (see docs/design/SLINGSHOT-NETWORK.md "Hull Integration"). Defaults
- * are identity multipliers; hull-specific values come from the JSON.
- */
-function getHullSlingshotMods() {
-  const hullType = profileManager.active?.hullType
-    || profileManager.active?.shipType
-    || 'drifter';
-  const hullDef = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
-  return {
-    energyMult: hullDef.slingshotEnergyMult ?? 1.0,
-    chainWindowMult: hullDef.slingshotChainWindowMult ?? 1.0,
-  };
 }
 
 function collectPresentationSceneSource() {
@@ -4588,28 +4553,6 @@ function gameLoop(now) {
       // 6. Ship update
       if (gamePhase === 'playing') {
       ship.update(dt, flowField, wellSystem, fluid);
-
-      // Local-only slingshot resolution. In remote-authority mode the same
-      // input is sent to the sim server, and snapshots drive presentation.
-      if (!remoteSession.active) {
-        const slingshotAnchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
-        const slingshotAffordance = !ship.slingshotEngaged
-          ? slingshotSystem.findAffordance(ship, slingshotAnchors)
-          : null;
-        const hullSlingMods = getHullSlingshotMods();
-        if (slingshotNow && !_prevSlingshot && !ship.slingshotEngaged && slingshotAffordance) {
-          slingshotSystem.engage(ship, slingshotAffordance.anchor, hullSlingMods, totalTime);
-        } else if (!slingshotNow && _prevSlingshot && ship.slingshotEngaged) {
-          slingshotSystem.release(ship, hullSlingMods, totalTime);
-        }
-        if (ship.slingshotEngaged) {
-          const dv = slingshotSystem.applyEngagedForces(ship, dt, hullSlingMods);
-          if (dv) {
-            ship.vx += dv.vx;
-            ship.vy += dv.vy;
-          }
-        }
-      }
 
       starSystem.applyToShip(ship, dt);
       planetoidSystem.applyToShip(ship, dt);

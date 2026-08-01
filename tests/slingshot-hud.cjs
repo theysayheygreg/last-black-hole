@@ -11,18 +11,18 @@ async function run() {
   const facade = await import(pathToFileURL(path.join(ROOT, 'src', 'hud.js')).href);
   assert.strictEqual(facade.getSlingshotInteractionState, hud.getSlingshotInteractionState,
     'HUD facade must preserve getSlingshotInteractionState');
-  const misaligned = hud.getSlingshotInteractionState({
-    aim: { type: 'well', tangentialSpeed: 0.02, engageEligible: false },
+  const stationary = hud.getSlingshotInteractionState({
+    aim: { type: 'well', tangentialSpeed: 0, engageEligible: false },
     engaged: false,
   });
-  const misalignedPrompt = hud.getInteractionPresentationState(misaligned, { deck: true });
-  assert.strictEqual(misaligned.actionable, false);
-  assert.strictEqual(misaligned.detail, 'align with current');
-  assert.strictEqual(misalignedPrompt.action, null);
-  assert.strictEqual(misalignedPrompt.caption, null, 'Misaligned aim must not expose an actionable glyph');
+  const stationaryPrompt = hud.getInteractionPresentationState(stationary, { deck: true });
+  assert.strictEqual(stationary.actionable, false);
+  assert.strictEqual(stationary.detail, 'build some speed');
+  assert.strictEqual(stationaryPrompt.action, null);
+  assert.strictEqual(stationaryPrompt.caption, null, 'Stationary aim must not expose an actionable glyph');
 
   const eligible = hud.getSlingshotInteractionState({
-    aim: { type: 'well', tangentialSpeed: 0.05, engageEligible: true },
+    aim: { type: 'well', tangentialSpeed: 0.01, engageEligible: true },
     engaged: false,
   });
   const eligiblePrompt = hud.getInteractionPresentationState(eligible, { deck: true });

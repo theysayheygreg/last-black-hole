@@ -10,7 +10,7 @@ function fakeContext() {
   };
 }
 
-function presentationFixture(captureRadius) {
+function presentationFixture() {
   const zero = { x: 0, y: 0, magnitude: 0 };
   return {
     camera: { x: 0, y: 0 },
@@ -24,11 +24,10 @@ function presentationFixture(captureRadius) {
       ruler: {
         source: 'authority',
         slingshot: {
-          captureRadius,
-          magnetism: { active: true, entry: { x: 1, y: 0 }, locked: { x: 0.8, y: 0.4 }, bendDegrees: 26.6 },
-          coyoteTime: { implemented: true, durationMs: 150, remainingMs: 75 },
-          payoffCurve: { active: true, entry: { x: 1, y: 0 }, exit: { x: 1.2, y: 0.2 }, ratio: 1.22 },
-          chainWindow: { active: true, durationSeconds: 1.5, remainingSeconds: 0.75 },
+          radii: { hookMeters: 450, swingMeters: 300 },
+          reel: { active: true, entry: { x: 1, y: 0 }, locked: { x: 0.8, y: 0.4 }, bendDegrees: 26.6, configuredMs: 150 },
+          flatBoost: { active: true, entry: { x: 1, y: 0 }, exit: { x: 1.2, y: 0.2 }, amount: 0.2 },
+          releaseAssist: { degrees: 10 },
         },
       },
       forceLedger: {
@@ -45,42 +44,25 @@ function presentationFixture(captureRadius) {
 
 (async () => {
   const { CONFIG } = await import('../src/config.js');
-  const { snapControlValue } = await import('../src/dev-panel.js');
   const { REQUIRED_RULER_HANDLER_IDS } = await import('../src/ruler-contract.js');
   const { drawRulerOverlay } = await import('../src/ruler-overlay.js');
-  const { simUnitsToMeters, RULER_SCALE_BAR_METERS } = await import('../src/units.js');
-  const captureRadius = {
-    well: simUnitsToMeters(0.45),
-    star: simUnitsToMeters(0.30),
-    planetoid: simUnitsToMeters(0.18),
-  };
+  const { RULER_SCALE_BAR_METERS } = await import('../src/units.js');
 
   assert.strictEqual(CONFIG.debug.showRulerOverlay, false, 'overlay must be production-disabled');
   CONFIG.debug.showRulerOverlay = true;
-  CONFIG.debug.ruler.captureRadiusPreview_m = 0;
 
   const initial = drawRulerOverlay(fakeContext(), {
-    presentation: presentationFixture(captureRadius), canvasW: 1200, canvasH: 900, reducedMotion: true,
+    presentation: presentationFixture(), canvasW: 1200, canvasH: 900, reducedMotion: true,
   });
-  assert.strictEqual(initial.handlerCount, 11);
+  assert.strictEqual(initial.handlerCount, 10);
   assert.deepStrictEqual(initial.handlerIds, REQUIRED_RULER_HANDLER_IDS);
   assert.strictEqual(initial.geometry.scaleBarPx, RULER_SCALE_BAR_METERS * 1200 / 3000);
   assert.strictEqual(initial.geometry.captureRadiusPx, 180);
   assert.strictEqual(initial.forceTick, 42);
   assert.strictEqual(initial.reducedMotion, true);
 
-  CONFIG.debug.ruler.captureRadiusPreview_m = snapControlValue(
-    'debug.ruler.captureRadiusPreview_m', 463,
-  );
-  const sameFrame = drawRulerOverlay(fakeContext(), {
-    presentation: presentationFixture(captureRadius), canvasW: 1200, canvasH: 900,
-  });
-  assert.strictEqual(CONFIG.debug.ruler.captureRadiusPreview_m, 475);
-  assert.strictEqual(sameFrame.geometry.captureRadiusPx, 190);
-
   CONFIG.debug.showRulerOverlay = false;
-  CONFIG.debug.ruler.captureRadiusPreview_m = 0;
-  console.log('RulerOverlay: 8/8 passed');
+  console.log('RulerOverlay: 6/6 passed');
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exit(1);

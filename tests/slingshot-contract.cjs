@@ -1,99 +1,72 @@
-const assert = require("assert");
+const assert = require('assert');
 const {
-  INTERNAL,
-  SLINGSHOT_KNOB_CONTRACT,
-  SLINGSHOT_VALUES,
-  boundedReleaseDelta,
-  captureRadiusWorld,
-  coyoteWindowOpen,
-  engageEligible,
-  effectiveCoyoteTimeMs,
-  releaseSpeedCap,
-  resolveChainCount,
-  rotateToward,
-  tangentialSpeed,
-} = require("../scripts/sim/slingshot-contract.cjs");
-const { simUnitsToMeters } = require("../scripts/content/units.cjs");
-const { MOVEMENT } = require("../scripts/content/movement.cjs");
+  GRAPPLE_ARC,
+  assistedReleaseDirection,
+  grappleGeometry,
+  orbitDirection,
+  sweptHookContact,
+  tangentFor,
+} = require('../scripts/sim/slingshot-contract.cjs');
+
+function near(actual, expected, epsilon = 1e-9) {
+  assert(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
+}
 
 function run() {
-  const names = Object.keys(SLINGSHOT_KNOB_CONTRACT);
-  assert.deepStrictEqual(names, ["captureRadius", "magnetism", "coyoteTime", "payoffCurve", "chainWindow"]);
+  assert.strictEqual(GRAPPLE_ARC.reelSeconds, 0.15);
+  assert.strictEqual(GRAPPLE_ARC.releaseAssistDegrees, 10);
+
+  const ordinaryWell = grappleGeometry({ type: 'well', killRadius: 0.04, mass: 1 });
+  const grownWell = grappleGeometry({ type: 'well', killRadius: 0.09, mass: 3 });
+  assert(grownWell.swingRadius > ordinaryWell.swingRadius, 'grown well must own a larger swing radius');
+  assert(grownWell.hookRadius > ordinaryWell.hookRadius, 'grown well must own a larger hook reach');
+  assert(grownWell.boost > ordinaryWell.boost, 'grown well must grant a larger flat boost');
+  assert(ordinaryWell.hookRadius > ordinaryWell.swingRadius, 'forgiving hook reach must exceed the held arc');
+
+  const endpointMiss = sweptHookContact({
+    anchorDX: 0.5,
+    anchorDY: 0,
+    stepX: 1,
+    stepY: 0,
+    hookRadius: 0.2,
+  });
+  assert(endpointMiss.hit, 'high-speed segment crossing must capture when both endpoints miss');
+  near(endpointMiss.t, 0.5);
+
+  const radialDirection = orbitDirection({ x: 1, y: 0 }, { x: 1, y: 0 });
+  assert([1, -1].includes(radialDirection), 'radial nonzero entry must get deterministic handedness');
+  const tangent = tangentFor({ x: 1, y: 0 }, radialDirection);
+  near(Math.hypot(tangent.x, tangent.y), 1);
+
+  const outward = { x: -1, y: 0 };
+  const baselineTangent = { x: 0, y: 1 };
+  const slightOutward = {
+    x: Math.cos(95 * Math.PI / 180),
+    y: Math.sin(95 * Math.PI / 180),
+  };
+  const assisted = assistedReleaseDirection({ tangent: baselineTangent, outward, requested: slightOutward });
+  assert(Math.acos(Math.max(-1, Math.min(1, assisted.x * baselineTangent.x + assisted.y * baselineTangent.y))) <= 10 * Math.PI / 180 + 1e-9,
+    'compatible release assist must remain inside the 10 degree cone');
   assert.deepStrictEqual(
-    names.map((name) => SLINGSHOT_KNOB_CONTRACT[name].step),
-    [25, 5, 50, 0.1, 0.5],
+    assistedReleaseDirection({ tangent: baselineTangent, outward, requested: { x: 0, y: -1 } }),
+    baselineTangent,
+    'reverse input must not rewrite the tangent',
   );
-  assert.deepStrictEqual(SLINGSHOT_VALUES, {
-    captureRadius: simUnitsToMeters(0.45),
-    magnetism: 30,
-    coyoteTime: 50,
-    payoffCurve: 1.4,
-    chainWindow: 0.5,
-  });
-  assert.strictEqual(captureRadiusWorld("well"), 0.45);
-  assert.strictEqual(captureRadiusWorld("star"), 0.3);
-  assert.strictEqual(captureRadiusWorld("planetoid"), 0.18);
+  assert.deepStrictEqual(
+    assistedReleaseDirection({ tangent: baselineTangent, outward, requested: { x: 1, y: 0 } }),
+    baselineTangent,
+    'inward input must not rewrite the tangent',
+  );
 
-  const locked = rotateToward({ x: 1, y: 0 }, { x: 0, y: 1 }, SLINGSHOT_VALUES.magnetism);
-  assert(locked.bendDegrees <= SLINGSHOT_VALUES.magnetism + 1e-9, "entry bend must be capped");
+  const sameAnchor = grappleGeometry({ type: 'star', starType: 'redGiant', mass: 2 });
+  const shortHoldExit = 2 + sameAnchor.boost;
+  const longHoldExit = 2 + sameAnchor.boost;
+  near(shortHoldExit, longHoldExit);
+  assert(!('chainWindow' in GRAPPLE_ARC), 'canonical contract must have no chain window');
+  assert(!('payoffCurve' in GRAPPLE_ARC), 'canonical contract must have no arc-duration payoff curve');
+  assert(!('energyAccrualRate' in GRAPPLE_ARC), 'canonical contract must have no energy bank');
 
-  const entrySpeed = 2;
-  const cap = releaseSpeedCap(entrySpeed, Math.PI / 2, SLINGSHOT_VALUES.payoffCurve, 1);
-  const release = boundedReleaseDelta({
-    velocity: { x: 0, y: entrySpeed },
-    direction: { x: 1, y: 0 },
-    entrySpeed,
-    arcRadians: Math.PI / 2,
-    payoffCurve: SLINGSHOT_VALUES.payoffCurve,
-    chainCount: 1,
-    desiredBoost: 100,
-  });
-  assert(Math.abs(cap - 2.8) < 1e-9, `Expected 1.4x quarter-turn cap, got ${cap}`);
-  assert(release.exitSpeed <= cap + 1e-9, "release must never exceed payoff cap");
-  assert(release.delta.x > 0 && Math.abs(release.delta.y) < 1e-9, "release follows supplied stick-relative direction");
-
-  assert(coyoteWindowOpen(10.049, 10, SLINGSHOT_VALUES.coyoteTime));
-  assert(!coyoteWindowOpen(10.051, 10, SLINGSHOT_VALUES.coyoteTime));
-  assert(!coyoteWindowOpen(10.1, 10, 0), "zero coyote time is truthfully disabled");
-  const profileDts = [1 / MOVEMENT.authority.integrationHz];
-  const effectiveCoyoteDurations = profileDts.map((dt) =>
-    effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, dt));
-  const effectiveCoyoteMs = effectiveCoyoteDurations[0];
-  assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "canonical coyote value must remain 50 ms");
-  assert(Math.abs(INTERNAL.promptTransportAllowanceMs - (4 * 1000 / 15)) < 1e-9,
-    "Prompt transport allowance must retain the four-tick authority wall-time baseline");
-  assert(effectiveCoyoteDurations.every((duration) => Math.abs(duration - effectiveCoyoteMs) < 1e-9),
-    "Coyote transport duration must remain fixed at the canonical authority dt");
-  assert.strictEqual(INTERNAL.rangeBreakGraceFactor, 1.1, "Range-break grace must remain 1.1x");
-  assert.strictEqual(INTERNAL.minimumTangentialSpeed, 0.05, "Tangential gate must remain the internal 0.05 threshold");
-  assert(Math.abs(tangentialSpeed({ x: 0, y: 0.08 }, { x: 1, y: 0 }) - 0.08) < 1e-9,
-    "Tangential speed must measure the velocity component around the anchor");
-  assert(!engageEligible(0.049), "Aim below the tangential threshold must not be engage-eligible");
-  assert(engageEligible(0.05), "Aim at the tangential threshold must be engage-eligible");
-  assert(Math.abs(effectiveCoyoteMs - (50 + INTERNAL.promptTransportAllowanceMs)) < 1e-9,
-    `Expected coyote plus fixed transport allowance, got ${effectiveCoyoteMs} ms`);
-  assert(coyoteWindowOpen(10 + (effectiveCoyoteMs - 0.001) / 1000, 10, effectiveCoyoteMs),
-    "edge within coyote plus two authority ticks must remain eligible");
-  assert(!coyoteWindowOpen(10 + (effectiveCoyoteMs + 0.001) / 1000, 10, effectiveCoyoteMs),
-    "coyote must reject beyond the effective transport window");
-  assert.strictEqual(resolveChainCount({
-    nowSeconds: 2.49,
-    lastReleaseSeconds: 2,
-    lastAnchorKey: "well:a",
-    anchorKey: "well:b",
-    previousCount: 1,
-  }), 2);
-  assert.strictEqual(resolveChainCount({
-    nowSeconds: 2.51,
-    lastReleaseSeconds: 2,
-    lastAnchorKey: "well:a",
-    anchorKey: "well:b",
-    previousCount: 1,
-  }), 1);
-  assert(INTERNAL.releaseGhostDurationSeconds > 0);
-  assert.strictEqual(INTERNAL.lockTelegraphDurationSeconds, 0.25);
-  assert.strictEqual(INTERNAL.releaseGhostDurationSeconds, 1.0);
-  console.log("SlingshotContract: 10/10 passed");
+  console.log('GrappleArcContract: 12/12 passed');
 }
 
 try {

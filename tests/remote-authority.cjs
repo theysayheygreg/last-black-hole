@@ -853,9 +853,7 @@ async function run() {
         wx: startX,
         wy: startY,
         vx: 0,
-        // The server applies flow/current coupling before the edge-triggered
-        // slingshot check, so the fixture needs enough tangential speed to
-        // remain above the authoritative gate after that first integration.
+        // Any nonzero approach is eligible in Grapple Arc v3.
         vy: -1.2,
         deltaV: 40,
         status: "alive",
@@ -885,22 +883,23 @@ async function run() {
       const engaged = await waitForSnapshotPlayerLabel(
         "slingshot engage",
         net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy >= 0,
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.arcSpeed > 0,
         { timeout: 10000 }
       );
       assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
         `Expected authoritative slingshot anchor, got ${engaged.player.slingshot.anchorType}`);
 
       const readyToRelease = await waitForSnapshotPlayerLabel(
-        "slingshot energy accrual",
+        "grapple flat boost",
         net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy > 0,
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true
+          && remotePlayer.slingshot.arcSpeed > remotePlayer.slingshot.entrySpeed,
         { timeout: 10000 }
       );
       const playerBeforeRelease = readyToRelease.player;
       const releaseReadyTick = readyToRelease.snapshot.tick;
       assert(Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy) > 0.01,
-        "Expected slingshotting player to have orbital speed before release");
+        "Expected grappled player to have arc speed before release");
 
       await sendBrowserInput(page, {
         seq: engageSeq + 1,
@@ -954,7 +953,7 @@ async function run() {
       );
       assert(released.player.slingshot.engaged === false, "Expected authoritative slingshot release");
       assert(releaseEvent?.payload?.totalEnergyAwarded > 0,
-        `Expected positive authoritative release energy, got ${JSON.stringify(releaseEvent)}`);
+        `Expected positive authoritative flat grapple bonus, got ${JSON.stringify(releaseEvent)}`);
     });
 
     await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {

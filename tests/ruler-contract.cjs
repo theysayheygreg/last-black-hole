@@ -34,8 +34,13 @@ async function test(name, fn) {
     assert.strictEqual(radius.ry, 30);
   });
 
-  await test('all five S4 tunables and six S5 force classes require handlers', () => {
-    assert.strictEqual(ruler.S4_RULER_CONTRACTS.length, 5);
+  await test('all four Grapple Arc rows and six S5 force classes require handlers', () => {
+    assert.deepStrictEqual(ruler.S4_RULER_CONTRACTS.map((contract) => contract.id), [
+      'slingshot.radii',
+      'slingshot.reel',
+      'slingshot.flatBoost',
+      'slingshot.releaseAssist',
+    ]);
     assert.strictEqual(ruler.S5_RULER_CONTRACTS.length, 6);
     const handlers = Object.fromEntries(ruler.REQUIRED_RULER_HANDLER_IDS.map((id) => [id, () => true]));
     const registry = ruler.createRulerRegistry(handlers);

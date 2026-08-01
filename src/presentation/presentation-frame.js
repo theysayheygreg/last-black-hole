@@ -111,44 +111,32 @@ function normalizeCollapseEpochSchedule(source = []) {
 function rulerFacts(source = null) {
   const sling = source?.slingshot;
   if (!sling) return null;
-  const capture = sling.captureRadius_m || {};
-  const magnetism = sling.magnetism || {};
-  const coyote = sling.coyoteTime || {};
-  const payoff = sling.payoffCurve || {};
-  const chain = sling.chainWindow || {};
+  const radii = sling.radii || {};
+  const reel = sling.reel || {};
+  const boost = sling.flatBoost || {};
+  const assist = sling.releaseAssist || {};
   return Object.freeze({
     source: text(source.source, 'authority'),
     slingshot: Object.freeze({
-      captureRadius: Object.freeze({
-        well: Math.max(0, finite(capture.well)),
-        star: Math.max(0, finite(capture.star)),
-        planetoid: Math.max(0, finite(capture.planetoid)),
+      radii: Object.freeze({
+        hookMeters: Math.max(0, finite(radii.hook_m)),
+        swingMeters: Math.max(0, finite(radii.swing_m)),
       }),
-      magnetism: Object.freeze({
-        active: magnetism.active === true,
-        entry: forceVector(magnetism.entry),
-        locked: forceVector(magnetism.locked),
-        bendDegrees: Math.max(0, finite(magnetism.bend_deg)),
+      reel: Object.freeze({
+        active: reel.active === true,
+        entry: forceVector(reel.entry),
+        locked: forceVector(reel.locked),
+        bendDegrees: Math.max(0, finite(reel.bend_deg)),
+        configuredMs: Math.max(0, finite(reel.configured_ms)),
       }),
-      coyoteTime: Object.freeze({
-        implemented: coyote.implemented === true,
-        durationMs: Math.max(0, finite(coyote.duration_ms)),
-        remainingMs: Math.max(0, finite(coyote.remaining_ms)),
-        effectiveDurationMs: Math.max(0, finite(coyote.effective_duration_ms)),
-        transportAllowanceMs: Math.max(0, finite(coyote.effective_duration_ms) - finite(coyote.duration_ms)),
-        effectiveRemainingMs: Math.max(0, finite(coyote.effective_remaining_ms)),
-        transportRemainingMs: Math.max(0, finite(coyote.transport_remaining_ms)),
+      flatBoost: Object.freeze({
+        active: boost.active === true,
+        entry: forceVector(boost.entry),
+        exit: forceVector(boost.exit),
+        amount: Math.max(0, finite(boost.amount)),
       }),
-      payoffCurve: Object.freeze({
-        active: payoff.active === true,
-        entry: forceVector(payoff.entry),
-        exit: forceVector(payoff.exit),
-        ratio: Math.max(0, finite(payoff.ratio)),
-      }),
-      chainWindow: Object.freeze({
-        active: chain.active === true,
-        durationSeconds: Math.max(0, finite(chain.duration_s)),
-        remainingSeconds: Math.max(0, finite(chain.remaining_s)),
+      releaseAssist: Object.freeze({
+        degrees: Math.max(0, finite(assist.degrees)),
       }),
     }),
   });
@@ -223,9 +211,11 @@ function telegraph(source = null) {
       anchor: normalizeAnchor(ownedArc.anchor),
       orbitDir: finite(ownedArc.orbitDir),
       arcRadians: finite(ownedArc.arcRadians),
-      quarterTurns: Math.max(0, finite(ownedArc.quarterTurns)),
-      energy: Math.max(0, finite(ownedArc.energy)),
-      chainCount: Math.max(0, Math.floor(finite(ownedArc.chainCount))),
+      swingRadius: Math.max(0, finite(ownedArc.swingRadius)),
+      hookRadius: Math.max(0, finite(ownedArc.hookRadius)),
+      reelProgress: Math.max(0, Math.min(1, finite(ownedArc.reelProgress))),
+      speed: Math.max(0, finite(ownedArc.speed)),
+      boost: Math.max(0, finite(ownedArc.boost)),
     }) : null,
     releaseGhost: ghost ? Object.freeze({
       anchor: normalizeAnchor(ghost.anchor),
@@ -233,8 +223,8 @@ function telegraph(source = null) {
       exit: forceVector(ghost.exit),
       direction: forceVector(ghost.direction),
       speedCap: Math.max(0, finite(ghost.speedCap)),
-      quarterTurns: Math.max(0, finite(ghost.quarterTurns)),
       remainingMs: Math.max(0, finite(ghost.remainingMs)),
+      unspoolSeconds: Math.max(0, finite(ghost.unspoolSeconds)),
     }) : null,
   });
 }

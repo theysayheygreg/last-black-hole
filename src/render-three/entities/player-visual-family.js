@@ -127,7 +127,9 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     if (ghost && player) {
       const direction = ghost.direction || { x: 1, y: 0 };
       const magnitude = Math.hypot(direction.x, direction.y) || 1;
-      const ghostDistance = 0.20;
+      const unspoolMs = Math.max(1, (ghost.unspoolSeconds || 0.125) * 1000);
+      const elapsedMs = Math.max(0, 1000 - (ghost.remainingMs || 0));
+      const ghostDistance = 0.20 * Math.min(1, elapsedMs / unspoolMs);
       if (draw.line(
         player.world.x,
         player.world.y,

@@ -10,11 +10,7 @@ const {
 const { getSessionProfile } = require("../scripts/content/session-profiles.cjs");
 const { MOVEMENT } = require("../scripts/content/movement.cjs");
 const { stepPlayerMovementCore } = require("../scripts/sim/player-movement-step.cjs");
-const {
-  INTERNAL,
-  SLINGSHOT_VALUES,
-  effectiveCoyoteTimeMs,
-} = require("../scripts/sim/slingshot-contract.cjs");
+const { GRAPPLE_ARC } = require("../scripts/sim/slingshot-contract.cjs");
 
 const maps = loadPlayableMaps();
 
@@ -132,13 +128,10 @@ async function run() {
       `${mapId}: product route total drifted`);
   }
 
-  const coyoteDurations = [MOVEMENT.authority.integrationHz].map((hz) =>
-    effectiveCoyoteTimeMs(SLINGSHOT_VALUES.coyoteTime, 1 / hz));
-  assert(coyoteDurations.every((value) => Math.abs(value - coyoteDurations[0]) < 1e-9),
-    "Slingshot transport window must be fixed wall time across map rates");
-  assert.strictEqual(SLINGSHOT_VALUES.coyoteTime, 50, "Gameplay coyote must remain 50 ms");
-  assert(Math.abs(coyoteDurations[0] - (50 + INTERNAL.promptTransportAllowanceMs)) < 1e-9,
-    "Transport window must be canonical coyote plus the fixed allowance");
+  assert.strictEqual(GRAPPLE_ARC.reelSeconds, 0.15,
+    "Grapple reel duration must be one fixed wall-time feel contract");
+  assert(!("coyoteTime" in GRAPPLE_ARC),
+    "Grapple Arc v3 uses swept hook reach instead of a transport coyote window");
 
   const expectedBands = {
     shallows: { standard: [0.45, 1.25], finalExfil: [0.7, 1.35] },
@@ -158,7 +151,7 @@ async function run() {
     }
   }
 
-  console.log("MapRateMovementContract: product route, fixed coyote, and portal policy checks passed");
+  console.log("MapRateMovementContract: product route, grapple wall time, and portal policy checks passed");
 }
 
 run().catch((error) => {

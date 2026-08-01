@@ -1,109 +1,16 @@
-// W1-D is intentionally a five-knob contract. Everything under INTERNAL is
-// implementation detail: it has no dev-panel registration or player-facing
-// tuning surface.
-const { UNIT_SCALE, simUnitsToMeters } = require('../content/units.cjs');
-const { MOVEMENT } = require('../content/movement.cjs');
-
-const SLINGSHOT_KNOB_CONTRACT = Object.freeze({
-  captureRadius: Object.freeze({
-    unit: "m",
-    min: UNIT_SCALE.rulerPresentationDefaultMeters,
-    max: UNIT_SCALE.metersPerSimUnit,
-    step: 25,
-    value: simUnitsToMeters(0.45),
-    startBias: "medium",
-  }),
-  magnetism: Object.freeze({
-    unit: "deg",
-    min: 0,
-    max: 90,
-    step: 5,
-    value: 30,
-    startBias: "large",
-  }),
-  coyoteTime: Object.freeze({
-    unit: "ms",
-    min: 0,
-    max: 500,
-    step: 50,
-    value: 50,
-    startBias: "small",
-  }),
-  payoffCurve: Object.freeze({
-    unit: "x/quarter-turn",
-    min: 1,
-    max: 3,
-    step: 0.1,
-    value: 1.4,
-    startBias: "medium",
-  }),
-  chainWindow: Object.freeze({
-    unit: "s",
-    min: 0,
-    max: 3,
-    step: 0.5,
-    value: 0.5,
-    startBias: "disabled-or-small",
-  }),
-});
-
-const SLINGSHOT_VALUES = Object.freeze(Object.fromEntries(
-  Object.entries(SLINGSHOT_KNOB_CONTRACT).map(([name, contract]) => [name, contract.value])
-));
-
-// Anchor-family scaling keeps the accepted W1-E rings readable while leaving
-// one capture-radius knob. These factors are not tunables.
-const ANCHOR_RANGE_FACTORS = Object.freeze({ well: 1, star: 2 / 3, planetoid: 0.4 });
-const INTERNAL = Object.freeze({
-  minimumTangentialSpeed: 0.05,
-  energyAccrualRate: 3.5,
-  releaseFillMultiplier: 4.5,
-  gravityCancelFraction: 0.95,
-  tangentialForce: 1.5,
-  chainQuarterTurnBonus: 0.5,
-  maxChainCount: 6,
-  lockTelegraphDurationSeconds: 0.25,
-  releaseGhostDurationSeconds: 1.0,
-  rangeBreakGraceFactor: 1.1,
-  // Four authority steps, stored as wall time so transport cannot change the
-  // player's window.
-  promptTransportAllowanceMs: (4 * 1000) / MOVEMENT.authority.integrationHz,
-});
-
-const QUARTER_TURN_RADIANS = Math.PI / 2;
+const GRAPPLE_ARC = require('../../src/content/grapple-arc.data.json');
 
 function finite(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
 
-function vector(value, fallback = { x: 1, y: 0 }) {
+function normalized(value, fallback = { x: 1, y: 0 }) {
   const x = finite(value?.x, fallback.x);
   const y = finite(value?.y, fallback.y);
   const magnitude = Math.hypot(x, y);
-  if (magnitude <= 1e-9) return { x: fallback.x, y: fallback.y };
-  return { x, y };
-}
-
-function normalized(value, fallback = { x: 1, y: 0 }) {
-  const source = vector(value, fallback);
-  const magnitude = Math.hypot(source.x, source.y) || 1;
-  return { x: source.x / magnitude, y: source.y / magnitude };
-}
-
-function tangentialSpeed(velocity, radial) {
-  const dx = finite(radial?.x);
-  const dy = finite(radial?.y);
-  const distance = Math.hypot(dx, dy);
-  if (distance <= 1e-9) return 0;
-  return Math.abs(
-    finite(velocity?.x) * (-dy / distance)
-      + finite(velocity?.y) * (dx / distance),
-  );
-}
-
-function engageEligible(speed, minimum = INTERNAL.minimumTangentialSpeed) {
-  return finite(speed) >= Math.max(0, finite(minimum));
+  if (magnitude <= 1e-9) return { ...fallback };
+  return { x: x / magnitude, y: y / magnitude };
 }
 
 function signedAngle(from, to) {
@@ -113,112 +20,97 @@ function signedAngle(from, to) {
 }
 
 function rotate(value, radians) {
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
   return {
-    x: value.x * Math.cos(radians) - value.y * Math.sin(radians),
-    y: value.x * Math.sin(radians) + value.y * Math.cos(radians),
+    x: value.x * cosine - value.y * sine,
+    y: value.x * sine + value.y * cosine,
   };
 }
 
-function rotateToward(value, target, maxDegrees) {
-  const source = vector(value);
-  const sourceSpeed = Math.hypot(source.x, source.y);
-  if (sourceSpeed <= 1e-9) return { vector: normalized(target), bendDegrees: 0 };
-  const angle = signedAngle(source, target);
-  const maxRadians = Math.max(0, finite(maxDegrees)) * Math.PI / 180;
-  const applied = Math.max(-maxRadians, Math.min(maxRadians, angle));
-  const result = rotate(source, applied);
-  return {
-    vector: result,
-    bendDegrees: Math.abs(applied) * 180 / Math.PI,
-  };
-}
-
-function captureRadiusWorld(anchorType, captureRadiusMeters = SLINGSHOT_VALUES.captureRadius) {
-  const factor = ANCHOR_RANGE_FACTORS[anchorType] ?? 1;
-  return Math.max(0, finite(captureRadiusMeters) * factor / UNIT_SCALE.metersPerSimUnit);
-}
-
-function coyoteWindowOpen(nowSeconds, lastAimSeenSeconds, coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime) {
-  const duration = Math.max(0, finite(coyoteTimeMs)) / 1000;
-  return duration > 0 && finite(nowSeconds) - finite(lastAimSeenSeconds, -Infinity) <= duration;
-}
-
-// Prompt presentation and command delivery each cross an authority tick. The
-// allowance is internal wall time, not a sixth gameplay knob or a per-tier tick
-// count. The optional second argument remains accepted for old callers but is
-// deliberately ignored so profile dt cannot change the player's window.
-function effectiveCoyoteTimeMs(coyoteTimeMs = SLINGSHOT_VALUES.coyoteTime, _fixedStepSeconds = 0) {
-  const duration = Math.max(0, finite(coyoteTimeMs));
-  if (duration <= 0) return 0;
-  return duration + INTERNAL.promptTransportAllowanceMs;
-}
-
-function resolveChainCount({
-  nowSeconds,
-  lastReleaseSeconds,
-  chainWindowSeconds = SLINGSHOT_VALUES.chainWindow,
-  lastAnchorKey,
-  anchorKey,
-  previousCount = 0,
-}) {
-  const withinWindow = finite(nowSeconds) - finite(lastReleaseSeconds, -Infinity)
-    <= Math.max(0, finite(chainWindowSeconds));
-  if (withinWindow && lastAnchorKey && lastAnchorKey !== anchorKey) {
-    return Math.min(Math.max(1, Math.floor(previousCount) + 1), INTERNAL.maxChainCount);
+function anchorPhysicalRadius(anchor) {
+  const family = GRAPPLE_ARC.anchorFamilies[anchor?.type] || GRAPPLE_ARC.anchorFamilies.planetoid;
+  if (anchor?.type === 'well') {
+    return Math.max(family.minimumPhysicalRadius, finite(anchor.killRadius, family.minimumPhysicalRadius));
   }
-  return 1;
+  if (anchor?.type === 'star') {
+    const sizeMultiplier = GRAPPLE_ARC.starSizeMultipliers[anchor.starType] || 1;
+    return Math.max(
+      family.minimumPhysicalRadius,
+      family.minimumPhysicalRadius * sizeMultiplier * Math.sqrt(Math.max(0.25, finite(anchor.mass, 1))),
+    );
+  }
+  return Math.max(family.minimumPhysicalRadius, finite(anchor.radius, family.minimumPhysicalRadius));
 }
 
-function quarterTurnsFromArc(arcRadians, chainCount = 1) {
-  const arcTurns = Math.max(0, finite(arcRadians)) / QUARTER_TURN_RADIANS;
-  const chainBonus = Math.max(0, Math.floor(chainCount) - 1) * INTERNAL.chainQuarterTurnBonus;
-  return arcTurns + chainBonus;
-}
-
-function releaseSpeedCap(entrySpeed, arcRadians, payoffCurve = SLINGSHOT_VALUES.payoffCurve, chainCount = 1) {
-  const speed = Math.max(0, finite(entrySpeed));
-  const curve = Math.max(1, finite(payoffCurve));
-  return speed * Math.pow(curve, quarterTurnsFromArc(arcRadians, chainCount));
-}
-
-function boundedReleaseDelta({ velocity, direction, entrySpeed, arcRadians, payoffCurve, chainCount, desiredBoost }) {
-  const current = vector(velocity, { x: 0, y: 0 });
-  const currentSpeed = Math.hypot(current.x, current.y);
-  const exitDirection = normalized(direction, normalized(current, { x: 1, y: 0 }));
-  const capSpeed = releaseSpeedCap(entrySpeed, arcRadians, payoffCurve, chainCount);
-  const requested = Math.max(0, finite(desiredBoost));
-  const projection = current.x * exitDirection.x + current.y * exitDirection.y;
-  const discriminant = Math.max(0, projection * projection + capSpeed * capSpeed - currentSpeed * currentSpeed);
-  const capDelta = Math.max(0, -projection + Math.sqrt(discriminant));
-  const deltaMagnitude = Math.min(requested, capDelta);
-  const delta = { x: exitDirection.x * deltaMagnitude, y: exitDirection.y * deltaMagnitude };
-  const exit = { x: current.x + delta.x, y: current.y + delta.y };
+function grappleGeometry(anchor) {
+  const family = GRAPPLE_ARC.anchorFamilies[anchor?.type] || GRAPPLE_ARC.anchorFamilies.planetoid;
+  const physicalRadius = anchorPhysicalRadius(anchor);
+  const swingRadius = family.swingClearance + physicalRadius * family.swingRadiusScale;
   return Object.freeze({
-    delta,
-    exit,
-    capSpeed,
-    exitSpeed: Math.hypot(exit.x, exit.y),
-    ratio: Math.max(0, finite(entrySpeed)) > 1e-9
-      ? Math.hypot(exit.x, exit.y) / Math.max(0, finite(entrySpeed))
-      : 0,
+    physicalRadius,
+    swingRadius,
+    hookRadius: swingRadius * GRAPPLE_ARC.hookReachMultiplier,
+    boost: family.baseBoost + physicalRadius * family.sizeBoostScale,
   });
 }
 
+// The ship is at the local origin; anchorDX/DY is the shortest toroidal
+// displacement from ship to anchor. The segment is the next authority step.
+function sweptHookContact({ anchorDX, anchorDY, stepX = 0, stepY = 0, hookRadius }) {
+  const lengthSquared = stepX * stepX + stepY * stepY;
+  const t = lengthSquared > 1e-12
+    ? Math.max(0, Math.min(1, (anchorDX * stepX + anchorDY * stepY) / lengthSquared))
+    : 0;
+  const closestX = stepX * t;
+  const closestY = stepY * t;
+  const distance = Math.hypot(anchorDX - closestX, anchorDY - closestY);
+  return Object.freeze({ hit: distance <= Math.max(0, finite(hookRadius)), t, distance });
+}
+
+function orbitDirection(velocity, shipToAnchor) {
+  const outward = normalized({ x: -shipToAnchor.x, y: -shipToAnchor.y });
+  const ccw = { x: -outward.y, y: outward.x };
+  const projection = finite(velocity?.x) * ccw.x + finite(velocity?.y) * ccw.y;
+  if (Math.abs(projection) > 1e-9) return projection >= 0 ? 1 : -1;
+  // A radial approach has no physical handedness. This deterministic
+  // cross-axis fallback keeps identical inputs identical across authority.
+  const velocityDirection = normalized(velocity);
+  return velocityDirection.x * outward.y - velocityDirection.y * outward.x >= 0 ? 1 : -1;
+}
+
+function tangentFor(shipToAnchor, direction = 1) {
+  const outward = normalized({ x: -shipToAnchor.x, y: -shipToAnchor.y });
+  return { x: -outward.y * direction, y: outward.x * direction };
+}
+
+function assistedReleaseDirection({ tangent, outward, requested, maxDegrees = GRAPPLE_ARC.releaseAssistDegrees }) {
+  const base = normalized(tangent);
+  const wishMagnitude = Math.hypot(finite(requested?.x), finite(requested?.y));
+  if (wishMagnitude <= 1e-9) return base;
+  const wish = normalized(requested);
+  // Backward, inward, and wild release inputs do not rewrite the earned line.
+  if (wish.x * base.x + wish.y * base.y <= 0 || wish.x * outward.x + wish.y * outward.y < 0) return base;
+  const maxRadians = Math.max(0, finite(maxDegrees)) * Math.PI / 180;
+  const angle = signedAngle(base, wish);
+  if (Math.abs(angle) > maxRadians) return base;
+  return normalized(rotate(base, angle));
+}
+
+function lerp(from, to, t) {
+  const progress = Math.max(0, Math.min(1, finite(t)));
+  return finite(from) + (finite(to) - finite(from)) * progress;
+}
+
 module.exports = {
-  ANCHOR_RANGE_FACTORS,
-  INTERNAL,
-  QUARTER_TURN_RADIANS,
-  SLINGSHOT_KNOB_CONTRACT,
-  SLINGSHOT_VALUES,
-  boundedReleaseDelta,
-  captureRadiusWorld,
-  coyoteWindowOpen,
-  effectiveCoyoteTimeMs,
-  engageEligible,
-  quarterTurnsFromArc,
-  releaseSpeedCap,
-  resolveChainCount,
-  rotateToward,
+  GRAPPLE_ARC,
+  anchorPhysicalRadius,
+  assistedReleaseDirection,
+  grappleGeometry,
+  lerp,
+  normalized,
+  orbitDirection,
   signedAngle,
-  tangentialSpeed,
+  sweptHookContact,
+  tangentFor,
 };

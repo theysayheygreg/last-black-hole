@@ -25,8 +25,12 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 
 ## Slingshot
 
-- [`S4`](reviews/v0.3.1-design-review.md#s4--slingshot-v2-goal-locked--debug-handler-design)
-- [`W1-D completion`](reviews/completions/W1-D-slingshot-v2.md)
+- [`Grapple Arc v3`](GRAPPLE-ARC-v3.md) — current locked arcade movement
+  contract: swept size-relative capture, short reel, exclusive held arc, flat
+  bonus, and tangent release.
+- [`S4 Slingshot v2`](reviews/v0.3.1-design-review.md#s4--slingshot-v2-goal-locked--debug-handler-design)
+  and the [`W1-D completion`](reviews/completions/W1-D-slingshot-v2.md) are
+  retained as superseded implementation history.
 
 ## Anomalies And Collapse
 

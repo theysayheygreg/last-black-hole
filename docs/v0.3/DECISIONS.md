@@ -1,5 +1,23 @@
 # v0.3 Decisions
 
+## Grapple Arc v3 Replaces Slingshot v2
+
+Decision (2026-08-01): replace W1-D's orbital-energy assist with the simple
+server-authoritative arcade contract in [`GRAPPLE-ARC-v3.md`](GRAPPLE-ARC-v3.md).
+Capture and swing radii now derive from current anchor size; swept reach and a
+150 ms reel forgive fast near-misses; any nonzero approach can engage. A held
+grapple exclusively owns one fixed-radius arc at entry speed plus one flat
+size-based bonus. Button-up exits tangent with at most 10 degrees of compatible
+outward assist; brake aborts without the bonus.
+
+Retire tangential gating, energy accumulation, arc-length payoff, mechanical
+chains, coyote/transport windows, gravity cancellation, range-break clamps, and
+fractional hull coupling modifiers. Preserve authority, reliable held/edge
+input, toroidal coordinates, contact/extraction truth, reconciliation, and
+presentation telegraphs. Consecutive grapples compound only through their real
+entry velocity. All feel constants are centralized in
+`src/content/grapple-arc.data.json`.
+
 > Document revision: v0.3. Updated 2026-07-26. This file records accepted
 > implementation decisions for the current source line. Remaining Greg-owned
 > decisions stay in `OPEN-DECISIONS.md`.

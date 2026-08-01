@@ -1,0 +1,38 @@
+{
+  "minimumEntrySpeed": 0.01,
+  "reelSeconds": 0.15,
+  "hookReachMultiplier": 1.5,
+  "releaseAssistDegrees": 10,
+  "releaseUnspoolSeconds": 0.125,
+  "releaseGhostSeconds": 1,
+  "brakeAbortThreshold": 0.1,
+  "anchorFamilies": {
+    "well": {
+      "minimumPhysicalRadius": 0.04,
+      "swingClearance": 0.08,
+      "swingRadiusScale": 4,
+      "baseBoost": 0.55,
+      "sizeBoostScale": 1.5
+    },
+    "star": {
+      "minimumPhysicalRadius": 0.035,
+      "swingClearance": 0.06,
+      "swingRadiusScale": 3,
+      "baseBoost": 0.45,
+      "sizeBoostScale": 1.25
+    },
+    "planetoid": {
+      "minimumPhysicalRadius": 0.025,
+      "swingClearance": 0.04,
+      "swingRadiusScale": 3,
+      "baseBoost": 0.3,
+      "sizeBoostScale": 1
+    }
+  },
+  "starSizeMultipliers": {
+    "yellowDwarf": 1,
+    "redGiant": 1.8,
+    "whiteDwarf": 0.5,
+    "neutronStar": 0.3
+  }
+}

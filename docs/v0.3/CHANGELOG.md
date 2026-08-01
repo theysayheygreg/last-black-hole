@@ -1,5 +1,15 @@
 # v0.3 Changelog
 
+- **Grapple Arc v3:** replaced the layered Slingshot v2 orbital-energy model
+  with a forgiving arcade grapple. Anchor scale now owns hook/swing radii and
+  flat boost; swept capture catches fast fly-bys; a 150 ms reel enters one
+  exclusive held arc; release is tangent with a bounded outward assist; brake
+  aborts without bonus. Energy banking, arc payoff, mechanical chains,
+  tangential gate, coyote transport, gravity cancellation, range-break clamps,
+  and the divergent local simulator are retired. Current design truth is
+  `GRAPPLE-ARC-v3.md`; constants are centralized in
+  `src/content/grapple-arc.data.json`.
+
 ## 2026-08-01
 
 - **Movement continuity correction:** fixed the post-RC held-slingshot range

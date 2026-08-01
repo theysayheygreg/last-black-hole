@@ -1,5 +1,11 @@
 # W1-D Slingshot v2 Completion
 
+> **Historical / superseded 2026-08-01.** This accurately records the W1-D
+> implementation at the time, but its five-knob orbital-energy mechanic is no
+> longer current. [`Grapple Arc v3`](../../GRAPPLE-ARC-v3.md) replaces it with
+> the locked size-relative arcade grapple contract. Do not restore v2 chain,
+> coyote, tangential gate, energy bank, or payoff behavior from this receipt.
+
 Date: 2026-07-14
 Branch: `codex/v0.3-w1d-slingshot-v2`
 Base: `765baa224b3456b7f1a082b192affa8e65c19249`
