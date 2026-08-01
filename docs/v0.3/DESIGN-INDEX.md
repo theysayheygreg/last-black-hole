@@ -12,6 +12,9 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 
 ## Movement
 
+- [`Movement + Fabric Simplification`](MOVEMENT-FABRIC-SIMPLIFICATION.md) —
+  current v0.3.1 implementation contract for exclusive movement modes, one
+  ordered FREE step, and one authoritative fabric sample.
 - [`S5 / velocity ledger`](reviews/v0.3.1-design-review.md#s5--movement-velocity-ledger--strength-priority-draft-awaiting-greg)
 - [`velocity ledger`](reviews/v0.3.1-velocity-ledger.md)
 - [`W1-A completion`](reviews/completions/W1-A1-thrust-parity.md) and the
@@ -19,6 +22,9 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 
 ## Fabric
 
+- [`Movement + Fabric Simplification`](MOVEMENT-FABRIC-SIMPLIFICATION.md) —
+  current source audit and ordered simplification verticals. It supersedes
+  stale clock/wave-staleness findings without deciding camera taste.
 - [`S8 / S8a`](reviews/v0.3.1-design-review.md#s8--wavessurfing-v2-goal-in-progress)
 - [`one-sea design`](reviews/v0.3.1-fabric-design.md)
 - [`W1-B+C completion`](reviews/completions/W1-BC-seeded-sea.md)
