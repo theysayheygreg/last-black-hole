@@ -16,6 +16,18 @@
 
 ## 2026-08-01
 
+- **Movement and fabric simplification:** retained the player-facing
+  `TERMINAL / GRAPPLED / FREE` vocabulary and Grapple Arc v3 while giving FREE
+  one authority field sample and one ordered movement owner at the fixed 15 Hz
+  rate. `src/content/fabric.data.json` now owns seeded sea, well current, and
+  event-wave tuning for browser and authority. Disabled unauthoritative
+  planetoid wake code, duplicate local planetoid advancement, and split
+  authority gravity/star/planetoid/wave velocity mutators are removed. Named
+  entity contacts remain discrete force-ledger impulses rather than gaining a
+  new wrapper. This changes no movement tuning, maps, Heat, Noise, collision,
+  extraction, schedule, or Grapple Arc behavior. Movement feel and the
+  fabric/camera/viewport hierarchy remain Greg playtest gates.
+
 - **Movement continuity correction:** fixed the post-RC held-slingshot range
   guard introduced in `8f98f948`. Its player-to-anchor radial vector was used
   as if it pointed outward, so an out-of-range held orbit could snap through

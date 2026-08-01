@@ -3,6 +3,8 @@
 > Program base: `1eb6cdf3350accf68cd8b38372fbe0bda2050a94`
 > (accepted Grapple Arc v3). This is the v0.3.1 implementation contract, not
 > a new physics-engine plan.
+>
+> Source closure: `e24b8fcc17f0c43412b91a633150f816541765ee`.
 
 ## Player Vocabulary
 
@@ -80,6 +82,12 @@ named impulse seam without changing their game effects. Delete zero-strength
 or unreachable movement knobs instead of preserving compatibility aliases.
 This vertical follows V1/V2 only if the source remains smaller and clearer.
 
+**Closed without implementation.** The remaining sentry, fauna, scavenger,
+pulse, and Inhibitor changes are already discrete, player-attributable impacts
+and the force ledger classifies residual velocity changes as impulses. A new
+wrapper would add indirection without removing a competing continuous-physics
+owner. Reopen only when an observed impact cannot be attributed or tuned.
+
 ### V4 — Human movement/fabric tuning
 
 Greg plays the resulting FREE + GRAPPLED vocabulary. Tune only the named
@@ -93,6 +101,39 @@ Deck zoom remain separate motion-comparison decisions.
   collision, extraction, or toroidal coordinates;
 - no camera/viewport taste decision and no broad visual redesign;
 - no broad suite, RC, package, Deck build, or performance soak in this task.
+
+## Implemented Checkpoints
+
+- `16dd9cf78d305441ba06ade18fc351e402191485` — V1 establishes
+  `src/content/fabric.data.json` as the shared seeded-sea, well-current, and
+  event-wave tuning owner. Browser and authority use thin adapters. The
+  unauthoritative disabled planetoid velocity wake and its dead knobs are
+  deleted; SimCore is the sole local planetoid update owner; elapsed seconds
+  own event-wave decay; remote presentation no longer invents local analytic
+  field truth. Despite adding the canonical owner and focused proof, the
+  feature commit removes 27 net lines.
+- `e24b8fcc17f0c43412b91a633150f816541765ee` — V2 gives FREE one
+  ordered authority call: drive/Heat/current, contact truth, well/star/
+  planetoid gravity plus field wave, brake/drag/speed cap, then integration.
+  One normalized authority sample supplies current, well gravity, and event
+  wave for the tick. The prior split gravity/star/planetoid/wave velocity
+  mutators are removed while their arithmetic order and force-ledger labels
+  remain intact.
+
+The retained player vocabulary is still **TERMINAL / GRAPPLED / FREE**.
+Grapple Arc v3 exclusively owns GRAPPLED; these changes add no tuning and do
+not alter the fixed 15 Hz authority clock, Heat, Noise, collision, extraction,
+map scale, schedule, or toroidal coordinate contracts.
+
+Focused source proof covers canonical fabric parity, elapsed-time wave decay,
+one authority sample, exact previous FREE arithmetic order, force-ledger
+reconstruction, movement golden/trajectory parity, authoritative field, well
+grace, swept contacts and extraction, protocol authority, Heat, and map-rate/
+grapple contracts. No broad release claim is made.
+
+The remaining gates are human: Greg owns movement feel, and the fabric/camera/
+viewport visual hierarchy still needs its separate in-game and Steam Deck
+comparison pass.
 
 ## Acceptance
 

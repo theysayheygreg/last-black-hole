@@ -49,6 +49,17 @@ the 60 Hz route remains diagnostic only. Deep Field route generosity remains a
 Greg playtest/content question, not a reason to alter movement constants or
 restore lower-fidelity physics.
 
+### Movement and Fabric Ownership
+
+Resolved on 2026-08-01. Player movement has three exclusive modes:
+`TERMINAL`, Grapple Arc v3-owned `GRAPPLED`, and `FREE`. FREE consumes one
+normalized authority field sample and advances through one ordered movement
+owner at the canonical 15 Hz rate. Shared fabric tuning lives in
+`src/content/fabric.data.json`; browser and authority may adapt it but cannot
+copy or invent movement truth. Sentry, fauna, scavenger, pulse, and Inhibitor
+contacts remain named discrete impulses. Do not add a generalized force
+wrapper unless an observed impact cannot be attributed or tuned.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;
@@ -108,8 +119,9 @@ consequences work, not that they feel excellent.
 
 **Decision owner:** Greg
 
-Does the 1280x800 HUD, entity separation, route color language, UI motion, and
-ASCII density meet the intended contrast and couch/handheld standard?
+Does the 1280x800 HUD, entity separation, route color language, UI motion,
+fabric/camera/viewport hierarchy, and ASCII density meet the intended contrast
+and couch/handheld standard?
 
 ### 3. Physical Steam Deck Acceptance
 
