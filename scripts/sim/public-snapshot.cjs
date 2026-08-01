@@ -83,7 +83,6 @@ function projectNoise(player) {
 function projectPlayer(player, facts) {
   const heatRatio = getHeatRatio(player);
   const overheatRemaining = Math.max(0, Number(player.overheatRemaining) || 0);
-  const coyote = player.slingshot ? facts.slingshotCoyoteTelemetry(player.slingshot) : null;
   const slingshot = player.slingshot ? {
     phase: player.slingshot.phase || "idle",
     engaged: Boolean(player.slingshot.engaged),
@@ -92,8 +91,6 @@ function projectPlayer(player, facts) {
     anchorWX: player.slingshot.anchorWX ?? null,
     anchorWY: player.slingshot.anchorWY ?? null,
     anchorRange: player.slingshot.anchorRange ?? 0,
-    energy: 0,
-    chainCount: 0,
     engageRadius: player.slingshot.engageRadius || 0,
     swingRadius: player.slingshot.swingRadius || 0,
     hookRadius: player.slingshot.hookRadius || 0,
@@ -110,13 +107,8 @@ function projectPlayer(player, facts) {
       anchorWY: player.slingshot.aimAnchorWY,
       anchorRange: player.slingshot.aimAnchorRange,
       distance: player.slingshot.aimDistance,
-      tangentialSpeed: player.slingshot.aimTangentialSpeed || 0,
+      speed: player.slingshot.aimSpeed || 0,
       engageEligible: player.slingshot.engageEligible === true,
-      coyoteActive: false,
-      coyoteRemainingMs: 0,
-      canonicalCoyoteRemainingMs: 0,
-      effectiveCoyoteDurationMs: 0,
-      transportCoyoteRemainingMs: 0,
     } : null,
     // Keep this after the outer aim fields: telegraph projection refreshes
     // eligibility before the ruler facts below consume it.

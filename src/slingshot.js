@@ -90,8 +90,6 @@ export class SlingshotSystem {
     if (!ship) return;
     ship.slingshotEngaged = false;
     ship.slingshotAnchor = null;
-    ship.slingshotEnergy = 0;
-    ship.slingshotChainCount = 0;
     ship.slingshotEngageRadius = 0;
     ship.slingshotOrbitDir = 0;
   }

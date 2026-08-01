@@ -212,46 +212,14 @@ proof.
 
 ## W1-D Slingshot Input-Path RC Ratification
 
-Decision: accept the v0.3.1 slingshot input path as the packaged local-authority
-contract. Physical F and Deck/controller Y have complementary edge and level
-semantics: button-down queues the rising edge that initiates authority
-engagement, the held level sustains the owned orbit, and button-up releases at
-the chosen exit angle. InputManager and main own those inputs, SimClient
-acknowledges their transport, and only authority owns the resulting orbit and
-release. The client presents the authoritative aim ring and device-correct
-engage/release prompt; a press without an eligible anchor reports that no
-anchor is in range and does not invent a local outcome.
-
-The five gameplay values remain centralized in
-`scripts/sim/slingshot-contract.cjs` and ratified as:
-
-| Value | Baseline |
-| --- | ---: |
-| capture radius | `450 m` |
-| magnetism | `30 deg` |
-| coyote time | `50 ms` |
-| payoff curve | `1.4x` per quarter-turn |
-| chain window | `0.5 s` |
-
-Lock telegraph (`0.25 s`) and release ghost (`1.0 s`) are internal
-presentation durations. This ratification preserves server authority and the
-accepted movement, sea, Conductor, timeSlow, and unit contracts.
-
-Fixed-step transport interpretation: the canonical gameplay value remains
-`50 ms`, but prompt-originated edge eligibility uses the internal runtime
-allowance `50 ms + 4 * current authority dt`. Aim retention, affordance lookup,
-and effective/transport remaining-time telemetry use that duration; telemetry
-keeps canonical coyote and transport allowance distinct. For Shallows
-(`dt = 1/15 s`, about `66.7 ms`), an edge within `316.7 ms` is accepted and an
-edge beyond that effective window is rejected. The four-tick allowance is
-transport behavior, not a new gameplay knob, and changes no capture radius or
-broader movement behavior.
-
-The authority also publishes the current aim's `tangentialSpeed` and boolean
-`engageEligible` result against the internal `0.05` minimum. HUD guidance shows
-`align with current` without an actionable glyph until that result is true;
-eligible aim retains the device-correct Y/F engage prompt. This is derived
-telemetry and presentation gating, not a sixth gameplay value.
+Historical decision, superseded by **Grapple Arc v3**. The durable input seam
+that remains is authority ownership plus reliable rising-edge transport and a
+held level. The held level now owns capture and release: holding Y/F while free
+tries swept capture every tick, button-up always releases, and a queued edge
+can preserve a quick tap without toggling or latching the mechanic. The current
+mechanical and tuning contract is `docs/v0.3/GRAPPLE-ARC-v3.md`; coyote,
+tangential gating, energy payoff, chain windows, and hull multipliers are
+retired.
 
 ## Noise Radius v1
 
@@ -276,8 +244,8 @@ unlocks the existing rail with the nearest active aperture's canonical meter or
 kilometer distance; that discovery remains earned until the authority run ID
 changes, even after the two-and-a-half-second contact memory fades. The HUD
 surfaces only non-zero Noise listener counters, and results include the existing
-authoritative heard/tracked seconds. The ruler labels the fixed coyote transport
-allowance separately from the accepted `50 ms` gameplay value.
+authoritative heard/tracked seconds. The ruler now reflects Grapple Arc v3's
+size-relative radii, reel, flat boost, and bounded release assist.
 
 Noise emitter radii are universal across Shallows, Expanse, and Deep Field; no
 map-specific hearing multiplier exists. Shallows is deliberately the

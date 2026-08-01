@@ -79,13 +79,11 @@ export class Ship {
     this.currentCoupling = 1.0;
     this.wellResistScale = 1.0;
 
-    // --- Slingshot engagement state ---
-    // Owned by SlingshotSystem; read by Ship.update for orbital lock
-    // physics. See src/slingshot.js for the design.
+    // --- Grapple presentation state ---
+    // Authority owns capture and movement; the client only retains what the
+    // scene needs to draw the current anchor and arc.
     this.slingshotEngaged = false;
     this.slingshotAnchor = null;
-    this.slingshotEnergy = 0;
-    this.slingshotChainCount = 0;
     this.slingshotEngageRadius = 0;
     this.slingshotOrbitDir = 0;
   }

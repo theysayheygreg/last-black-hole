@@ -458,8 +458,8 @@ async function steerTo(page, clientId, target, options = {}) {
         // point.
         const insideReadyRange = !Number.isFinite(options.slingshotReadyRangeRatio)
           || aim.distance <= aim.anchorRange * options.slingshotReadyRangeRatio;
-        const aboveReadySpeed = !Number.isFinite(options.slingshotReadyTangentialSpeed)
-          || aim.tangentialSpeed >= options.slingshotReadyTangentialSpeed;
+        const aboveReadySpeed = !Number.isFinite(options.slingshotReadySpeed)
+          || aim.speed >= options.slingshotReadySpeed;
         if (aim.engageEligible === true && insideReadyRange && aboveReadySpeed) {
           return { start, end: last, closest, target: { ...target }, aim };
         }
@@ -559,11 +559,11 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
     // telemetry. Keep a real player-sized margin for the edge's next tick;
     // this is not a private timer or a repeated command.
     slingshotReadyRangeRatio: 0.85,
-    slingshotReadyTangentialSpeed: 0.10,
+    slingshotReadySpeed: 0.10,
   });
   assert(approach.aim?.anchorType === "well" && approach.aim?.engageEligible === true,
     `Authored route well was not engage-eligible: ${JSON.stringify(approach.aim)}`);
-  assert(approach.aim.distance <= approach.aim.anchorRange * 0.85 && approach.aim.tangentialSpeed >= 0.10,
+  assert(approach.aim.distance <= approach.aim.anchorRange * 0.85 && approach.aim.speed >= 0.10,
     `Authored route well did not retain the published command margin: ${JSON.stringify(approach.aim)}`);
 
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);

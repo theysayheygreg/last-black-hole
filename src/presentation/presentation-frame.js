@@ -170,8 +170,6 @@ function anchor(source = {}) {
     world: point(source),
     range: Math.max(0, finite(source.range, 0.1)),
     kind: text(source.type, 'gravity'),
-    energy: Math.max(0, finite(source.energy)),
-    chainCount: Math.max(0, Math.floor(finite(source.chainCount))),
   });
 }
 
@@ -182,8 +180,6 @@ function telegraph(source = null) {
     wy: value?.wy,
     range: value?.range,
     type: value?.type,
-    energy: value?.energy,
-    chainCount: value?.chainCount,
   });
   const lock = source.lock;
   const ownedArc = source.ownedArc;
@@ -193,13 +189,8 @@ function telegraph(source = null) {
     aimCue: source.aimCue ? Object.freeze({
       anchor: normalizeAnchor(source.aimCue.anchor),
       distance: Math.max(0, finite(source.aimCue.distance)),
-      tangentialSpeed: Math.max(0, finite(source.aimCue.tangentialSpeed)),
+      speed: Math.max(0, finite(source.aimCue.speed)),
       engageEligible: source.aimCue.engageEligible === true,
-      coyoteActive: source.aimCue.coyoteActive === true,
-      coyoteRemainingMs: Math.max(0, finite(source.aimCue.coyoteRemainingMs)),
-      canonicalCoyoteRemainingMs: Math.max(0, finite(source.aimCue.canonicalCoyoteRemainingMs)),
-      effectiveCoyoteDurationMs: Math.max(0, finite(source.aimCue.effectiveCoyoteDurationMs)),
-      transportCoyoteRemainingMs: Math.max(0, finite(source.aimCue.transportCoyoteRemainingMs)),
     }) : null,
     lock: lock ? Object.freeze({
       anchor: normalizeAnchor(lock.anchor),
@@ -222,7 +213,7 @@ function telegraph(source = null) {
       entry: forceVector(ghost.entry),
       exit: forceVector(ghost.exit),
       direction: forceVector(ghost.direction),
-      speedCap: Math.max(0, finite(ghost.speedCap)),
+      speed: Math.max(0, finite(ghost.speed)),
       remainingMs: Math.max(0, finite(ghost.remainingMs)),
       unspoolSeconds: Math.max(0, finite(ghost.unspoolSeconds)),
     }) : null,

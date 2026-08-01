@@ -4,6 +4,8 @@ const {
   assistedReleaseDirection,
   grappleGeometry,
   orbitDirection,
+  reelDirection,
+  releaseAnchorSnapshot,
   sweptHookContact,
   tangentFor,
 } = require('../scripts/sim/slingshot-contract.cjs');
@@ -37,6 +39,18 @@ function run() {
   assert([1, -1].includes(radialDirection), 'radial nonzero entry must get deterministic handedness');
   const tangent = tangentFor({ x: 1, y: 0 }, radialDirection);
   near(Math.hypot(tangent.x, tangent.y), 1);
+  assert.deepStrictEqual(reelDirection({ x: 1, y: 0 }, tangent, 0), { x: 1, y: 0 },
+    'capture must preserve a radial entry direction at reel start');
+  assert.deepStrictEqual(reelDirection({ x: 1, y: 0 }, tangent, 1), tangent,
+    'reel completion must resolve exactly onto the arc tangent');
+  assert.deepStrictEqual(
+    releaseAnchorSnapshot(
+      { id: 'planetoid-1', type: 'planetoid', wx: 0.8, wy: 0.9, swingRadius: 0.12 },
+      { anchorId: 'planetoid-1', anchorType: 'planetoid', anchorWX: 0.2, anchorWY: 0.3, anchorRange: 0.1 },
+    ),
+    { id: 'planetoid-1', type: 'planetoid', wx: 0.8, wy: 0.9, range: 0.12 },
+    'release ghost must snapshot the moving anchor, not stale aim coordinates',
+  );
 
   const outward = { x: -1, y: 0 };
   const baselineTangent = { x: 0, y: 1 };
@@ -66,7 +80,7 @@ function run() {
   assert(!('payoffCurve' in GRAPPLE_ARC), 'canonical contract must have no arc-duration payoff curve');
   assert(!('energyAccrualRate' in GRAPPLE_ARC), 'canonical contract must have no energy bank');
 
-  console.log('GrappleArcContract: 12/12 passed');
+  console.log('GrappleArcContract: 15/15 passed');
 }
 
 try {

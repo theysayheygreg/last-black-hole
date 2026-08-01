@@ -763,7 +763,7 @@ runner.run('Hull server/client manifests stay in sync', () => {
   }
 });
 
-runner.run('Hull definitions expose movement, delta-v, and slingshot truth', () => {
+runner.run('Hull definitions expose movement and delta-v truth', () => {
   const requiredNumeric = [
     'thrustScale', 'dragScale', 'currentCoupling',
     'noiseRadiusMultiplier', 'noiseDecayMultiplier',
@@ -771,7 +771,6 @@ runner.run('Hull definitions expose movement, delta-v, and slingshot truth', () 
     'cargoSlots', 'pickupRadius', 'sensorRange',
     'wellResistScale', 'controlDebuffResist',
     'deltaVMax', 'deltaVBurnEff', 'deltaVRegen', 'deltaVRegenBoost',
-    'slingshotEnergyMult', 'slingshotChainWindowMult', 'slingshotSignalReduction',
   ];
   const hullIds = new Set(Object.keys(serverHulls.HULL_DEFINITIONS));
   assert(hullIds.size >= 5, `Expected at least 5 hulls, got ${hullIds.size}`);

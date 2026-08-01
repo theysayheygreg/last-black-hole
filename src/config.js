@@ -44,7 +44,7 @@ export const CONFIG = {
                              // Clamped to max 0.5 per frame to prevent velocity teleport.
     turnRate: 360,            // deg/s rotation toward mouse/stick. 360 = snappy, 120 = sluggish.
     maxSpeedWorld: MOVEMENT.player.maxSpeedWorld, // Hard cap in world-units/sec.
-                             // Defensive — slingshot chains + favorable currents
+                             // Defensive — grapple boosts + favorable currents
                              // can otherwise compound into camera-breaking
                              // velocities. Set obscenely high (~17× the old
                              // thrust-only terminal of 0.47); the cap exists as

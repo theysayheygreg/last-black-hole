@@ -100,8 +100,6 @@ async function run() {
       anchorWY: 6,
       anchorRange: 0.3,
       anchorType: 'well',
-      energy: 0,
-      chainCount: 0,
       telegraph: { ownedArc: true },
     };
     const portal = {
@@ -166,7 +164,7 @@ async function run() {
       slingshot: {
         phase: 'lock',
         affordance: { wx: 3, wy: 4, range: 0.25, type: 'star' },
-        engaged: { wx: 5, wy: 6, range: 0.3, type: 'well', energy: 0, chainCount: 0 },
+        engaged: { wx: 5, wy: 6, range: 0.3, type: 'well' },
         telegraph: { ownedArc: true },
       },
     });

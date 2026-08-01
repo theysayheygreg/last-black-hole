@@ -12,17 +12,17 @@ async function run() {
   assert.strictEqual(facade.getSlingshotInteractionState, hud.getSlingshotInteractionState,
     'HUD facade must preserve getSlingshotInteractionState');
   const stationary = hud.getSlingshotInteractionState({
-    aim: { type: 'well', tangentialSpeed: 0, engageEligible: false },
+    aim: { type: 'well', speed: 0, engageEligible: false },
     engaged: false,
   });
   const stationaryPrompt = hud.getInteractionPresentationState(stationary, { deck: true });
   assert.strictEqual(stationary.actionable, false);
-  assert.strictEqual(stationary.detail, 'build some speed');
+  assert.strictEqual(stationary.detail, 'start moving to grapple');
   assert.strictEqual(stationaryPrompt.action, null);
   assert.strictEqual(stationaryPrompt.caption, null, 'Stationary aim must not expose an actionable glyph');
 
   const eligible = hud.getSlingshotInteractionState({
-    aim: { type: 'well', tangentialSpeed: 0.01, engageEligible: true },
+    aim: { type: 'well', speed: 0.01, engageEligible: true },
     engaged: false,
   });
   const eligiblePrompt = hud.getInteractionPresentationState(eligible, { deck: true });

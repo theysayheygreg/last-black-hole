@@ -373,7 +373,7 @@ export function getSlingshotInteractionState(slingshot) {
     return {
       actionable: false,
       label: `${anchorType} in range`,
-      detail: 'build some speed',
+      detail: 'start moving to grapple',
     };
   }
   return {

@@ -1978,8 +1978,6 @@ function applyRemoteSlingshotState(state) {
   ship.slingshotPhase = state.phase || state.telegraph?.phase || 'idle';
   ship.slingshotTelegraph = state.telegraph || null;
   ship.slingshotEngaged = Boolean(state.engaged);
-  ship.slingshotEnergy = state.energy || 0;
-  ship.slingshotChainCount = state.chainCount || 0;
   ship.slingshotEngageRadius = state.engageRadius || 0;
   ship.slingshotOrbitDir = state.orbitDir || 0;
   ship.slingshotAnchor = state.engaged ? {

@@ -13,14 +13,17 @@ single successful grapple.
 2. The hook reach is visibly larger than the held swing radius. A swept query
    across the next authority step catches fast fly-bys that would miss at both
    sampled endpoints.
-3. Capture reels the ship to the swing radius over 150 ms while preserving its
-   entry speed and bending into a deterministic clockwise/counterclockwise arc.
+3. Capture keeps the entry direction for its first authority state, then reels
+   the ship to the swing radius over 150 ms while smoothly bending into a
+   deterministic clockwise/counterclockwise tangent.
 4. Capture grants one immediate flat speed bonus derived from anchor family and
    physical scale. Holding longer never banks more speed.
 5. While F / Y remains held, the grapple owns movement: the ship follows a
    fixed-radius kinematic arc. Thrust, fabric coupling, gravity, star/planetoid
    push, wave push, and drag do not stack into that authority step. Hazard
    contacts, pickups, and extraction still resolve.
+   Scavenger contacts still emit their collision truth and react physically,
+   but cannot knock the grappled player off the owned tangent.
 6. Button-up releases tangent to the arc. Compatible outward input may bias the
    tangent by at most 10 degrees; backward, inward, or wild input is ignored.
    The tether/heading visually unspools for 125 ms without creating a second
@@ -54,8 +57,11 @@ both read that file.
 - **TERMINAL:** existing death/extraction rules own the player.
 
 Aim rings, tether, arc line, release ghost, audio, and the 125 ms unspool are
-presentation. Reliable F/Y rising edges plus held level remain transport truth;
-server authority owns capture, arc position, speed, abort, and release.
+presentation. The held F/Y level owns intent: while FREE and held, authority
+tries swept capture every tick; while GRAPPLED, button-up always releases.
+Reliable rising edges only preserve a missed quick press through transport and
+never toggle or latch state. Server authority owns capture, arc position,
+speed, abort, and release.
 
 There is no tangential-speed gate, energy bank, arc-degree payoff curve,
 mechanical chain counter/window/multiplier, gravity cancellation, range-break

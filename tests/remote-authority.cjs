@@ -936,7 +936,7 @@ async function run() {
           event.seq > lastSeqBeforeRelease &&
           event.type === "player.slingshotReleased" &&
           event.payload?.clientId === net.clientId &&
-          event.payload.totalEnergyAwarded > 0
+          event.payload.boostAwarded > 0
         ),
         { timeout: 10000 }
       );
@@ -952,7 +952,7 @@ async function run() {
         { timeout: 10000 }
       );
       assert(released.player.slingshot.engaged === false, "Expected authoritative slingshot release");
-      assert(releaseEvent?.payload?.totalEnergyAwarded > 0,
+      assert(releaseEvent?.payload?.boostAwarded > 0,
         `Expected positive authoritative flat grapple bonus, got ${JSON.stringify(releaseEvent)}`);
     });
 

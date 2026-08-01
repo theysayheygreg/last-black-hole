@@ -324,7 +324,7 @@ async function run() {
       const approach = await steerToRing(page, clientId, routeAnchor);
       const aim = approach.aim;
       const promptBefore = approach.prompt;
-      assert(aim?.engageEligible === true && aim.tangentialSpeed >= 0.05,
+      assert(aim?.engageEligible === true && aim.speed >= 0.01,
         `Authority aim was not engage-eligible: ${JSON.stringify(aim)}`);
       assert(promptBefore.visible && /well in range/i.test(promptBefore.text), `Missing in-world slingshot prompt: ${JSON.stringify(promptBefore)}`);
       assert(JSON.stringify(promptBefore.glyph) === JSON.stringify({

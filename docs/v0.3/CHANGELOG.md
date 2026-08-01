@@ -4,7 +4,11 @@
   with a forgiving arcade grapple. Anchor scale now owns hook/swing radii and
   flat boost; swept capture catches fast fly-bys; a 150 ms reel enters one
   exclusive held arc; release is tangent with a bounded outward assist; brake
-  aborts without bonus. Energy banking, arc payoff, mechanical chains,
+  aborts without bonus. Held input retries capture until the player enters
+  range and always releases on button-up; quick-tap edges cannot latch. The
+  reel preserves the entry line before blending to tangent, and collision
+  truth cannot knock a held arc off its line. Energy banking, arc payoff,
+  mechanical chains,
   tangential gate, coyote transport, gravity cancellation, range-break clamps,
   and the divergent local simulator are retired. Current design truth is
   `GRAPPLE-ARC-v3.md`; constants are centralized in

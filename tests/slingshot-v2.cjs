@@ -42,9 +42,20 @@ async function waitForPlayer(clientId, predicate, timeoutMs = 5000) {
     const snapshot = (await request('/snapshot')).body;
     last = snapshot.players?.find((player) => player.clientId === clientId) || null;
     if (last && predicate(last, snapshot)) return { player: last, snapshot };
-    await sleep(50);
+    await sleep(10);
   }
   throw new Error(`Timed out waiting for Grapple Arc state: ${JSON.stringify(last)}`);
+}
+
+async function waitForEvent(since, predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const events = (await request(`/events?since=${since}`)).body.events || [];
+    const match = events.find(predicate);
+    if (match) return match;
+    await sleep(20);
+  }
+  throw new Error('Timed out waiting for Grapple Arc event');
 }
 
 async function run() {
@@ -108,6 +119,10 @@ async function run() {
           - engaged.player.slingshot.entrySpeed
           - engaged.player.slingshot.boost,
       ) < 1e-6, 'flat boost must be granted once at capture');
+      assert.strictEqual(engaged.player.slingshot.telegraph.ownedArc.reelProgress, 0,
+        'capture tick must precede reel steering');
+      assert(engaged.player.vx < 0 && Math.abs(engaged.player.vy) < 1e-6,
+        'radial capture must preserve its entry direction before reel steering');
 
       await post('/input', {
         ...authority,
@@ -131,8 +146,47 @@ async function run() {
       assert(Math.abs(held.player.slingshot.arcSpeed - engaged.player.slingshot.arcSpeed) < 1e-9,
         'hold duration must not accrue more speed');
 
-      const dx = delta(held.player.wx, anchor.wx, scale);
-      const dy = delta(held.player.wy, anchor.wy, scale);
+      const heldOutwardX = delta(held.player.slingshot.anchorWX, held.player.wx, scale);
+      const heldOutwardY = delta(held.player.slingshot.anchorWY, held.player.wy, scale);
+      const heldRadius = Math.hypot(heldOutwardX, heldOutwardY);
+      const heldTangent = {
+        x: -heldOutwardY / heldRadius * held.player.slingshot.orbitDir,
+        y: heldOutwardX / heldRadius * held.player.slingshot.orbitDir,
+      };
+      const heldSpeed = Math.hypot(held.player.vx, held.player.vy);
+      assert((held.player.vx / heldSpeed) * heldTangent.x + (held.player.vy / heldSpeed) * heldTangent.y > 0.999,
+        'completed reel must resolve onto the active arc tangent');
+
+      const scavenger = held.snapshot.world.scavengers.find((entry) => entry.alive !== false);
+      assert(scavenger, 'expected a scavenger for held-arc contact proof');
+      const eventWatermark = Math.max(0, ...((await request('/events')).body.events || []).map((event) => event.seq || 0));
+      await post('/debug/scavenger-state', {
+        scavengerId: scavenger.id,
+        wx: held.player.wx,
+        wy: held.player.wy,
+        vx: 0,
+        vy: 0,
+        state: 'drift',
+        alive: true,
+      });
+      await waitForEvent(eventWatermark, (event) => event.type === 'player.scavengerBumped'
+        && event.payload?.clientId === 'grapple-arc-v3-test');
+      const afterContact = await waitForPlayer('grapple-arc-v3-test', (player, snapshot) =>
+        player.slingshot?.engaged && snapshot.tick > held.snapshot.tick);
+      const contactOutwardX = delta(afterContact.player.slingshot.anchorWX, afterContact.player.wx, scale);
+      const contactOutwardY = delta(afterContact.player.slingshot.anchorWY, afterContact.player.wy, scale);
+      const contactRadius = Math.hypot(contactOutwardX, contactOutwardY);
+      const contactTangent = {
+        x: -contactOutwardY / contactRadius * afterContact.player.slingshot.orbitDir,
+        y: contactOutwardX / contactRadius * afterContact.player.slingshot.orbitDir,
+      };
+      const contactSpeed = Math.hypot(afterContact.player.vx, afterContact.player.vy);
+      assert((afterContact.player.vx / contactSpeed) * contactTangent.x
+        + (afterContact.player.vy / contactSpeed) * contactTangent.y > 0.999,
+      'scavenger contact must not knock a grappled player off tangent');
+
+      const dx = delta(afterContact.player.wx, anchor.wx, scale);
+      const dy = delta(afterContact.player.wy, anchor.wy, scale);
       await post('/input', {
         ...authority,
         commandSeq: 3,
@@ -149,9 +203,13 @@ async function run() {
         !player.slingshot?.engaged && player.slingshot?.phase === 'release-ghost');
       const ghost = released.player.slingshot.telegraph.releaseGhost;
       assert(ghost, 'release ghost must survive as presentation');
-      assert(Math.abs(Math.hypot(ghost.exit.x, ghost.exit.y) - held.player.slingshot.arcSpeed) < 1e-6,
+      assert(Math.abs(Math.hypot(ghost.exit.x, ghost.exit.y) - afterContact.player.slingshot.arcSpeed) < 1e-6,
         'release must use the same flat boosted speed regardless of hold time');
-      assert.strictEqual(released.player.slingshot.chainCount, 0, 'mechanical chain state must be absent');
+      assert(!('chainCount' in released.player.slingshot) && !('energy' in released.player.slingshot),
+        'retired v2 chain and energy fields must be absent');
+      assert(Math.abs(ghost.anchor.wx - afterContact.player.slingshot.anchorWX) < 1e-9
+        && Math.abs(ghost.anchor.wy - afterContact.player.slingshot.anchorWY) < 1e-9,
+      'release ghost must retain the active anchor coordinates');
       const outward = { x: -dx / Math.hypot(dx, dy), y: -dy / Math.hypot(dx, dy) };
       assert(ghost.direction.x * outward.x + ghost.direction.y * outward.y >= -1e-6,
         'inward release request must not create an inward exit');

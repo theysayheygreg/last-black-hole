@@ -12,10 +12,9 @@ const COLORS = Object.freeze({
   capture: '#f7d774',
   magnetismEntry: '#70d8ff',
   magnetismLocked: '#ff7fd1',
-  coyote: '#a8b8c8',
-  payoffEntry: '#b5c8d8',
-  payoffExit: '#ffe36e',
-  chain: '#77f0bd',
+  releaseAssist: '#a8b8c8',
+  boostEntry: '#b5c8d8',
+  boostExit: '#ffe36e',
   thrust: '#66e6ff',
   coupling: '#6df2a2',
   gravity: '#ffca68',
@@ -100,12 +99,12 @@ const HANDLERS = {
   },
   'slingshot.flatBoost': (state, contract) => {
     const value = state.ruler.slingshot.flatBoost;
-    if (value.active) drawVectorPair(state, value.entry, value.exit, COLORS.payoffEntry, COLORS.payoffExit, 'exit');
-    return addRow(state, { id: contract.id, color: COLORS.payoffExit, label: 'flat boost', value: value.active ? `+${value.amount.toFixed(2)} sim u/s` : 'awaiting grapple' });
+    if (value.active) drawVectorPair(state, value.entry, value.exit, COLORS.boostEntry, COLORS.boostExit, 'exit');
+    return addRow(state, { id: contract.id, color: COLORS.boostExit, label: 'flat boost', value: value.active ? `+${value.amount.toFixed(2)} sim u/s` : 'awaiting grapple' });
   },
   'slingshot.releaseAssist': (state, contract) => {
     const value = state.ruler.slingshot.releaseAssist;
-    return addRow(state, { id: contract.id, color: COLORS.coyote, label: 'release assist', value: `±${value.degrees.toFixed(0)}° outward only` });
+    return addRow(state, { id: contract.id, color: COLORS.releaseAssist, label: 'release assist', value: `±${value.degrees.toFixed(0)}° outward only` });
   },
 };
 

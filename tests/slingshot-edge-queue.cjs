@@ -1,4 +1,5 @@
 const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers.cjs");
+const { grappleGeometry } = require("../scripts/sim/slingshot-contract.cjs");
 
 const SIM_PORT = 8807;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
@@ -89,7 +90,7 @@ function wrappedDistance(left, right, worldScale) {
 async function run() {
   const runner = new TestRunner("SlingshotEdgeQueue");
 
-  await runner.run("Queued slingshot press edges survive one POST and tick across engage/release", async () => {
+  await runner.run("A quick-tap rise edge preserves the tap but never latches the grapple", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {
       const start = await postJson("/session/start", {
@@ -136,31 +137,31 @@ async function run() {
         thrust: 0,
         brake: 0,
         slingshot: false,
-        slingshotEdges: [101, 102],
+        slingshotEdges: [101],
         timestamp: Date.now(),
       });
       assert(input.status === 200 && input.body.ok === true, `Expected input success, got ${input.status}`);
-      assert(input.body.acceptedSlingshotEdges?.join(",") === "101,102",
-        `Expected both queued edges to be accepted, got ${JSON.stringify(input.body)}`);
+      assert(input.body.acceptedSlingshotEdges?.join(",") === "101",
+        `Expected the rise edge to be accepted, got ${JSON.stringify(input.body)}`);
 
       const events = await waitForEvents(watermark, (allEvents) => {
         const engaged = allEvents.some((event) => event.type === "player.slingshotEngaged");
         const released = allEvents.some((event) => event.type === "player.slingshotReleased");
         return engaged && released;
       });
-      assert(events.some((event) => event.type === "player.slingshotEngaged"), "Expected queued edge to engage slingshot");
-      assert(events.some((event) => event.type === "player.slingshotReleased"), "Expected queued edge to release slingshot");
+      assert(events.some((event) => event.type === "player.slingshotEngaged"), "Expected quick tap to preserve capture");
+      assert(events.some((event) => event.type === "player.slingshotReleased"), "Expected false held level to release in the same tick");
 
       const final = await getJson("/snapshot");
       const player = final.body.players?.find((entry) => entry.clientId === "slingshot-edge-queue-test");
-      assert(player?.slingshot?.engaged === false, "Expected second queued edge to leave slingshot released");
+      assert(player?.slingshot?.engaged === false, "Quick tap must not latch the grapple");
       assert(player?.pendingSlingshotEdgeCount === 0, `Expected no queued edges left, got ${player?.pendingSlingshotEdgeCount}`);
     } finally {
       await stopSimServer(SIM_PORT).catch(() => null);
     }
   });
 
-  await runner.run("Held slingshot level sustains authority until button-up", async () => {
+  await runner.run("An early held press captures after entering range and releases on button-up", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {
       const start = await postJson("/session/start", {
@@ -180,24 +181,23 @@ async function run() {
       const authority = join.body.authority;
       const initial = await waitForSnapshot((body) => body.players?.some((player) =>
         player.clientId === "slingshot-held-level-test"));
-      const well = initial.world?.wells?.[0];
-      assert(well, "Expected a well for held slingshot level test");
       const ws = initial.session?.worldScale || 3;
+      const anchor = initial.world?.stars?.find((star) => star.alive !== false
+        && initial.world.wells.every((well) => wrappedDistance(star, well, ws) > 0.7));
+      assert(anchor, "Expected a clear star for held slingshot level test");
+      const geometry = grappleGeometry({ type: "star", starType: anchor.type, mass: anchor.mass });
 
       const moved = await postJson("/debug/player-state", {
         clientId: "slingshot-held-level-test",
-        wx: wrap(well.wx + 0.36, ws),
-        wy: well.wy,
-        vx: 0,
-        vy: -0.35,
+        wx: wrap(anchor.wx + geometry.hookRadius + 0.05, ws),
+        wy: anchor.wy,
+        vx: -1.2,
+        vy: 0,
         deltaV: 40,
         status: "alive",
         resetSlingshot: true,
       });
       assert(moved.status === 200 && moved.body.ok === true, "Expected held slingshot placement");
-      await waitForSnapshot((body) => body.players?.some((player) =>
-        player.clientId === "slingshot-held-level-test" && player.slingshot?.phase === "aim"));
-
       const engage = await postCommand("/input", authority, 1, {
         seq: 1,
         moveX: 0,
@@ -208,7 +208,7 @@ async function run() {
         slingshotEdges: [301],
         timestamp: Date.now(),
       });
-      assert(engage.status === 200 && engage.body.ok === true, "Expected held slingshot engage input");
+      assert(engage.status === 200 && engage.body.ok === true, "Expected early held slingshot input");
       await waitForSnapshot((body) => body.players?.some((player) =>
         player.clientId === "slingshot-held-level-test" && player.slingshot?.engaged === true));
 

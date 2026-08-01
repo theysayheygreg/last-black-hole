@@ -102,6 +102,30 @@ function lerp(from, to, t) {
   return finite(from) + (finite(to) - finite(from)) * progress;
 }
 
+function reelDirection(entry, tangent, progress) {
+  const from = normalized(entry);
+  const to = normalized(tangent);
+  const clamped = Math.max(0, Math.min(1, finite(progress)));
+  // Smoothstep avoids a visible steering corner at either end of the short
+  // magnetic reel. At capture this is exactly the entry line; at the end it
+  // is exactly the authored arc tangent.
+  const blend = clamped * clamped * (3 - 2 * clamped);
+  return normalized({
+    x: lerp(from.x, to.x, blend),
+    y: lerp(from.y, to.y, blend),
+  }, to);
+}
+
+function releaseAnchorSnapshot(anchor, state = {}) {
+  return Object.freeze({
+    id: state.anchorId ?? anchor?.id ?? null,
+    type: state.anchorType ?? anchor?.type ?? null,
+    wx: finite(anchor?.wx, finite(state.anchorWX)),
+    wy: finite(anchor?.wy, finite(state.anchorWY)),
+    range: Math.max(0, finite(anchor?.swingRadius, finite(state.anchorRange))),
+  });
+}
+
 module.exports = {
   GRAPPLE_ARC,
   anchorPhysicalRadius,
@@ -110,6 +134,8 @@ module.exports = {
   lerp,
   normalized,
   orbitDirection,
+  reelDirection,
+  releaseAnchorSnapshot,
   signedAngle,
   sweptHookContact,
   tangentFor,

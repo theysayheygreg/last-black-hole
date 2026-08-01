@@ -176,8 +176,6 @@ export function initTestAPI(getState) {
         anchorType: ship.slingshotAnchor?.type ?? null,
         anchorWX: ship.slingshotAnchor?.wx ?? null,
         anchorWY: ship.slingshotAnchor?.wy ?? null,
-        energy: ship.slingshotEnergy || 0,
-        chainCount: ship.slingshotChainCount || 0,
         engageRadius: ship.slingshotEngageRadius || 0,
       };
     },
