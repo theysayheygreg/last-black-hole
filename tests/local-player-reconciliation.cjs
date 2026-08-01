@@ -183,7 +183,7 @@ async function run() {
     assert(result.state.lastMode === 'rebase', `Expected rebase mode, got ${result.state.lastMode}`);
   });
 
-  await runner.run('slingshot release phase follows authority without replay', async () => {
+  await runner.run('slingshot phase updates blend without a presentation teleport', async () => {
     let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
     state = rebase(state, player({ slingshot: { phase: 'engaged' } })).state;
     const released = rebase(state, player({
@@ -191,9 +191,9 @@ async function run() {
       vx: 0.25,
       slingshot: { phase: 'release' },
     }), { now: 100 });
-    assert(released.hardReset === true, 'Expected slingshot release phase boundary to reset');
-    assert(released.state.wx === 1.15, 'Expected release presentation to use authority position');
-    assert(released.state.vx === 0.25, 'Expected release presentation to use authority velocity');
+    assert(released.hardReset === false, 'Expected slingshot release phase to rebase without a hard snap');
+    assert(released.state.authority.phase === 'alive', 'Expected latest authoritative status to be retained');
+    assert(released.state.lastMode === 'rebase', `Expected blended release rebase, got ${released.state.lastMode}`);
   });
 
   await runner.run('run changes and catastrophic divergence hard reset', async () => {

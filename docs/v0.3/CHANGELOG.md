@@ -1,5 +1,21 @@
 # v0.3 Changelog
 
+## 2026-08-01
+
+- **Movement continuity correction:** fixed the post-RC held-slingshot range
+  guard introduced in `8f98f948`. Its player-to-anchor radial vector was used
+  as if it pointed outward, so an out-of-range held orbit could snap through
+  the anchor, retain its actual outward velocity, and repeat. The guard now
+  returns the ship to the same capture-boundary side and removes only outward
+  velocity. Button-up release now preserves the established orbital tangent
+  instead of accepting a concurrent stick vector that could reverse the exit
+  into a well. Local reconciliation blends lock, arc, and release-ghost
+  snapshots rather than hard-snapping on those presentation phases. The
+  canonical 15 Hz rate, movement coefficients, Heat contract, map scales, and
+  portal residence policy are unchanged. Focused authority proof covers the
+  held-range discontinuity, tangent release, fifteen post-release alive/bounded
+  ticks, edge transport, portal extraction, and reconciliation blending.
+
 ## 2026-07-28
 
 - **CANCEL-first RC contract correction:** updated MetaFlow to read the

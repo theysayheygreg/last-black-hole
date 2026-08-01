@@ -4899,9 +4899,23 @@ function engagePlayerSlingshot(player, currentTime, dt = 0) {
   return true;
 }
 
-function slingshotReleaseDirection(player, input = player.lastInput) {
-  const mag = Math.hypot(input?.moveX || 0, input?.moveY || 0);
-  if (mag > 0.01) return { x: input.moveX / mag, y: input.moveY / mag };
+function slingshotReleaseDirection(player, state = ensurePlayerSlingshot(player)) {
+  const anchor = findSlingshotAnchorByState(state);
+  if (anchor) {
+    // Release carries the line the player has already earned. Button-up only
+    // ends the hold; its concurrent movement vector must not turn an orbit
+    // back through the anchor or an adjacent well.
+    const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+    const distance = Math.hypot(dx, dy);
+    if (distance > 1e-4) {
+      const orbitDir = state.orbitDir || 1;
+      return {
+        x: (-dy / distance) * orbitDir,
+        y: (dx / distance) * orbitDir,
+      };
+    }
+  }
   const speed = Math.hypot(player.vx, player.vy);
   if (speed > 0.01) return { x: player.vx / speed, y: player.vy / speed };
   return { x: 1, y: 0 };
@@ -4914,7 +4928,7 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   const baseEnergy = state.energy || 0;
   const entrySpeed = Math.hypot(state.entryVX || 0, state.entryVY || 0);
   const requestedBoost = baseEnergy * SLINGSHOT_INTERNAL.releaseFillMultiplier * mods.energyMult;
-  const dir = slingshotReleaseDirection(player, input);
+  const dir = slingshotReleaseDirection(player, state);
   const beforeRelease = { x: player.vx, y: player.vy };
   const speedCap = releaseSpeedCap(
     entrySpeed,
@@ -5041,24 +5055,25 @@ function applyPlayerSlingshotForces(player, dt, input) {
       return;
     }
 
-    // A held orbit owns the stick until deliberate button-up. Keep the
-    // existing range-break cleanup for released input, but correct a single
-    // outward integration step back to the capture boundary so stale held
-    // input cannot create a release ghost before the release packet arrives.
+    // `worldDisplacement(player, anchor)` is inward. A held orbit owns the
+    // button until deliberate button-up, so return an outward step to the
+    // same side of the capture boundary and discard only outward velocity.
+    // This prevents the old across-anchor snap/repeat that could throw a
+    // held Star or well orbit into an unrelated lethal well.
     const radialNX = dx / dist;
     const radialNY = dy / dist;
     player.wx = wrapWorldPosition(
-      anchor.wx + radialNX * anchor.range,
+      anchor.wx - radialNX * anchor.range,
       runtime.session.worldScale,
     );
     player.wy = wrapWorldPosition(
-      anchor.wy + radialNY * anchor.range,
+      anchor.wy - radialNY * anchor.range,
       runtime.session.worldScale,
     );
-    const outwardVelocity = player.vx * radialNX + player.vy * radialNY;
-    if (outwardVelocity > 0) {
-      player.vx -= radialNX * outwardVelocity;
-      player.vy -= radialNY * outwardVelocity;
+    const radialVelocity = player.vx * radialNX + player.vy * radialNY;
+    if (radialVelocity < 0) {
+      player.vx -= radialNX * radialVelocity;
+      player.vy -= radialNY * radialVelocity;
     }
     dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
     dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);

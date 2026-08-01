@@ -34,7 +34,10 @@ function movementBrain(source = {}) {
 }
 
 function phaseKey(player = {}) {
-  return `${player.status || 'alive'}:${player.slingshot?.phase || 'idle'}`;
+  // Slingshot phase is authority-owned presentation state, not a separate
+  // client simulation. A phase transition (lock -> arc -> release ghost)
+  // must rebase to fresh truth without teleporting the local ship.
+  return player.status || 'alive';
 }
 
 function forceAcceleration(forceLedger) {
@@ -172,8 +175,8 @@ export function createLocalPlayerReconciliationState({
 }
 
 /**
- * Rebase the private presentation state on a snapshot. Run and slingshot
- * phase changes are deliberate boundaries; ordinary snapshot updates blend.
+ * Rebase the private presentation state on a snapshot. Run and terminal
+ * status changes are deliberate boundaries; ordinary updates blend.
  */
 export function rebaseLocalPlayerReconciliation(state, player, {
   runId = null,
