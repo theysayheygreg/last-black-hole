@@ -15,7 +15,7 @@ assert(
 );
 assert(
   pressBlock.includes("authoritySlingshot?.aim?.engageEligible === false")
-    && pressBlock.includes('build tangential speed / follow the ring'),
+    && pressBlock.includes('start moving to grapple'),
   'an in-range but ineligible anchor must explain how to become eligible',
 );
 assert(
