@@ -54,9 +54,5 @@ export const MAP = {
     wells: {
       accretionRate: 0.03,
     },
-    fluid: {
-      ambientTurbulence: 0.0002,
-      ambientDensity: 0.0001,
-    },
   },
 };

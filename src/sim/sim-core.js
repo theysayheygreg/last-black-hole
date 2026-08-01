@@ -71,7 +71,7 @@ export class SimCore {
     if (!visualOnly) {
       this.wreckSystem.update(this.fluid, stepDt, totalTime, camX, camY, this.wellSystem);
       this.portalSystem.update(this.fluid, stepDt, totalTime, camX, camY, simState.runElapsedTime);
-      this.planetoidSystem.update(stepDt, this.fluid, totalTime, this.wellSystem, this.waveRings, camX, camY);
+      this.planetoidSystem.update(stepDt, this.wellSystem, this.waveRings);
     }
 
     if (!inMenu && !visualOnly) {

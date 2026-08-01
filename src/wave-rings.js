@@ -6,6 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { decayWaveAmplitude } from './content/event-wave.js';
 import { worldRadiusToFluidUV, worldDirectionTo, worldToFluidUV, splatScale } from './coords.js';
 import { waveBandForce, applyForceToShip } from './physics.js';
 
@@ -37,7 +38,7 @@ export class WaveRingSystem {
 
     for (const ring of this.rings) {
       ring.radius += cfg.waveSpeed * dt;
-      ring.amplitude *= cfg.waveDecay;
+      ring.amplitude = decayWaveAmplitude(ring.amplitude, dt);
       if (ring.radius > cfg.waveMaxRadius || ring.amplitude < 0.01) {
         ring.alive = false;
       }

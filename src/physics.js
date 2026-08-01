@@ -207,7 +207,7 @@ export function proximityForce(dist, strength, radius) {
  * @param {number} ringRadius - current expanding radius of the ring (world-units)
  * @param {number} halfWidth - half the wavefront band thickness (world-units)
  * @param {number} pushStrength - peak push acceleration (world-units/s²)
- * @param {number} amplitude - current ring amplitude (decays each frame by waveDecay)
+ * @param {number} amplitude - current ring amplitude (decays by elapsed seconds)
  * @returns {number} scalar acceleration in world-units/s²
  */
 export function waveBandForce(distFromSource, ringRadius, halfWidth, pushStrength, amplitude) {

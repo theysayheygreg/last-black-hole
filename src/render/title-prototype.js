@@ -287,7 +287,7 @@ function frame(now) {
     fluid.fadeVisualDensity(CONFIG.fluid.visualDensityFade ?? 0.92);
 
     wellSystem.update(fluid, SIM_DT, totalTime);
-    planetoidSystem.update(SIM_DT, fluid, totalTime, wellSystem, null);
+    planetoidSystem.update(SIM_DT, wellSystem, null);
 
     fluid.setWellPositions(wellSystem.getUVPositions());
     fluid.step(SIM_DT);

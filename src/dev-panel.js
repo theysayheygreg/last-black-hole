@@ -106,7 +106,6 @@ export const RANGE_HINTS = {
 
   'events.waveSpeed':       { min: 0.1, max: 1.5, step: 0.05, tip: 'Wave ring expansion speed in world-units/sec' },
   'events.waveWidth':       { min: 0.03, max: 0.3, step: 0.01, tip: 'Wavefront thickness in world-units' },
-  'events.waveDecay':       { min: 0.9, max: 1, step: 0.005, tip: 'Amplitude multiplier per frame. 0.97 = fades fast. 0.99 = rings travel far' },
   'events.waveMaxRadius':   { min: 0.5, max: 4, step: 0.25, tip: 'Ring death radius in world-units' },
   'events.waveShipPush':    { min: 0.1, max: 3, step: 0.1, unit: 'sim units/s²', startBias: 'authority baseline', tip: 'Force on ship when a ring passes through (world-units/s²)' },
   'events.growthInterval':  { min: 5, max: 120, step: 5, tip: 'Seconds between well growth events. 45 = slow. 5 = constant drama' },
@@ -199,9 +198,6 @@ export const RANGE_HINTS = {
   'portals.pulseRate':      { min: 0.3, max: 2, step: 0.1, tip: 'Pulse frequency (Hz)' },
 
   // Planetoids
-  'planetoids.bowShockForce':    { min: 0.001, max: 0.01, step: 0.0005, tip: 'Bow shock disturbance' },
-  'planetoids.wakeForce':        { min: 0.0005, max: 0.008, step: 0.0005, tip: 'Wake vortex strength' },
-  'planetoids.density':          { min: 0.005, max: 0.03, step: 0.002, tip: 'Trail brightness' },
   'planetoids.orbitSpeed':       { min: 0.1, max: 1.5, step: 0.05, tip: 'Orbit angular speed (rad/s)' },
   'planetoids.transitSpeed':     { min: 0.05, max: 0.4, step: 0.02, tip: 'Transit speed (world-units/s)' },
   'planetoids.shipPushStrength': { min: 0.05, max: 1, step: 0.05, tip: 'Ship push strength (world-units/s²)' },

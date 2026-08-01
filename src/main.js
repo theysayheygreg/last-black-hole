@@ -3872,7 +3872,11 @@ function collectPresentationSceneSource() {
   const slingshotAffordance = gamePhase === 'playing' && !remoteSession.active && slingshotSystem && !ship.slingshotEngaged
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
-  const fieldSample = flowField?.sample?.(ship.wx, ship.wy) || null;
+  // Remote product play has a server-owned coarse field. The local analytic
+  // helper omits its seeded sea, so it cannot claim semantic current truth.
+  const fieldSample = remoteSession.active
+    ? null
+    : (flowField?.sample?.(ship.wx, ship.wy) || null);
   const runElapsedTime = simState.runElapsedTime;
 
   return createPresentationSceneSource({
@@ -4085,8 +4089,6 @@ function gameLoop(now) {
     });
     if (remoteVisualMode) {
       combatSystem.update(dt);
-    } else if (!rendererFixtureActive) {
-      planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings, camX, camY);
     }
     recordPerfStat('simMs', performance.now() - simStart);
 

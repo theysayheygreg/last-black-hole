@@ -10,6 +10,7 @@ const { loadPlayableMaps } = require("./shared-map-loader.cjs");
 const { getMapDurationSeconds, getPortalPlacementPolicy } = require("./content/map-scales.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
 const { sanitizeRetiredItems } = require("./content/items.cjs");
+const { FABRIC } = require("./content/fabric.cjs");
 const SEEDED_GEN = require("./seeded-generation.cjs");
 const {
   buildCoarseFlowField,
@@ -348,9 +349,9 @@ const SERVER_WELLS = {
   shipPullStrength: WELL_GRAVITY_PARAMS.player.strength,
   shipPullFalloff: WELL_GRAVITY_PARAMS.player.falloff,
   maxRange: WELL_GRAVITY_PARAMS.player.maxRange,
-  currentStrength: 0.3,
-  currentFalloff: 1.5,
-  currentRange: 1.35,
+  currentStrength: FABRIC.wellCurrent.strength,
+  currentFalloff: FABRIC.wellCurrent.falloff,
+  currentRange: FABRIC.wellCurrent.maxRange,
 };
 const STAR_SERVER = {
   shipPushStrength: 0.45,
@@ -362,12 +363,12 @@ const PLANETOID_SERVER = {
   shipPushRadius: 0.1,
 };
 const WAVE_SERVER = {
-  waveSpeed: 0.4,
-  waveWidth: 0.1,
+  waveSpeed: FABRIC.eventWave.speed,
+  waveWidth: FABRIC.eventWave.width,
   waveHalfLife: WAVE_HALF_LIFE_SECONDS,
-  waveMaxRadius: 2.0,
-  waveShipPush: 0.8,
-  growthWaveAmplitude: 1.0,
+  waveMaxRadius: FABRIC.eventWave.maxRadius,
+  waveShipPush: FABRIC.eventWave.shipAcceleration,
+  growthWaveAmplitude: FABRIC.eventWave.growthAmplitude,
 };
 const SLINGSHOT_SERVER = Object.freeze({
   ...GRAPPLE_ARC,

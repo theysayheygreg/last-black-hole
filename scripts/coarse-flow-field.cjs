@@ -1,10 +1,12 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
+const { FABRIC } = require("./content/fabric.cjs");
+const { MOVEMENT } = require("./content/movement.cjs");
 const {
   wrapPosition: wrapWorld,
   wrappedDelta: worldDisplacement,
 } = require("./sim/world-geometry.cjs");
-const { AMBIENT_FLOOR, BASE_THRUST_ACCEL, sampleSeededSea } = require("./sim/seeded-sea.cjs");
+const { sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
 const FORCE_MIN_DIST = 0.15;
 
@@ -35,15 +37,15 @@ function buildCoarseFlowField({
   cellSize,
   wells = [],
   waveRings = [],
-  wellCurrentScale = 0.3,
-  wellCurrentFalloff = 1.5,
-  wellCurrentMaxRange = 1.35,
+  wellCurrentScale = FABRIC.wellCurrent.strength,
+  wellCurrentFalloff = FABRIC.wellCurrent.falloff,
+  wellCurrentMaxRange = FABRIC.wellCurrent.maxRange,
   wellGravityScale = 0.6,
   wellGravityFalloff = 1.5,
   wellGravityMaxRange = 1.2,
   seededSea = null,
-  waveShipPush = 0.8,
-  waveWidth = 0.1,
+  waveShipPush = FABRIC.eventWave.shipAcceleration,
+  waveWidth = FABRIC.eventWave.width,
   collapseParameters = {},
   maxCells = Infinity,
 }) {
@@ -197,7 +199,7 @@ function buildCoarseFlowField({
     cellSize: safeCellSize,
     columns,
     rows,
-    authorityFloor: BASE_THRUST_ACCEL * AMBIENT_FLOOR,
+    authorityFloor: MOVEMENT.player.thrustAccel * FABRIC.seededSea.ambientThrustCeiling,
     cells,
   };
 }
@@ -306,7 +308,10 @@ function sampleCoarseFlowField(field, wx, wy) {
     currentY: bilerp("currentY"),
     ambientX,
     ambientY,
-    ambientMagnitude: Math.min(BASE_THRUST_ACCEL * 0.30, Math.hypot(ambientX, ambientY)),
+    ambientMagnitude: Math.min(
+      MOVEMENT.player.thrustAccel * FABRIC.seededSea.ambientThrustCeiling,
+      Math.hypot(ambientX, ambientY),
+    ),
     gravityX: bilerp("gravityX"),
     gravityY: bilerp("gravityY"),
     waveX: bilerp("waveX"),

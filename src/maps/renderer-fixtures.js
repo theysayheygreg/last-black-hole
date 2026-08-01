@@ -142,10 +142,6 @@ export const FIXTURE_ENTITY_SHOWCASE = {
     ascii: {
       shimmer: 4.5,
     },
-    fluid: {
-      ambientTurbulence: 0.00035,
-      ambientDensity: 0.00022,
-    },
   },
 };
 
@@ -199,10 +195,6 @@ export const FIXTURE_VISUAL_REFERENCE = {
     ascii: {
       shimmer: 4.0,
     },
-    fluid: {
-      ambientTurbulence: 0.00028,
-      ambientDensity: 0.00018,
-    },
   },
 };
 
@@ -235,10 +227,6 @@ export const FIXTURE_SHIP_BAKEOFF = {
   configOverrides: {
     ascii: {
       shimmer: 4.2,
-    },
-    fluid: {
-      ambientTurbulence: 0.00032,
-      ambientDensity: 0.00020,
     },
   },
 };

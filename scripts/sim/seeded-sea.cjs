@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const { wrappedDelta } = require("./world-geometry.cjs");
+const { FABRIC } = require("../content/fabric.cjs");
+const { MOVEMENT } = require("../content/movement.cjs");
 
 const SEEDED_SEA_SCHEMA_VERSION = 1;
 const SEEDED_SEA_STREAMS = Object.freeze({
@@ -9,11 +11,7 @@ const SEEDED_SEA_STREAMS = Object.freeze({
 });
 
 const TAU = Math.PI * 2;
-const MIN_SWELL_COUNT = 2;
-const MAX_SWELL_COUNT = 4;
-const AMBIENT_FLOOR = 0.30;
-const BASE_THRUST_ACCEL = 2.5;
-const OUTSIDE_WELL_FLOOR_FACTOR = 0.2;
+const SEA = FABRIC.seededSea;
 
 function finite(value, fallback = 0) {
   const parsed = Number(value);
@@ -57,7 +55,8 @@ function createSeededSea({ seed, mapId, worldScale, wells, rngStreams }) {
   const layoutRng = requireStream(rngStreams, SEEDED_SEA_STREAMS.layout);
   const motionRng = requireStream(rngStreams, SEEDED_SEA_STREAMS.motion);
   const phaseRng = requireStream(rngStreams, SEEDED_SEA_STREAMS.phase);
-  const swellCount = MIN_SWELL_COUNT + Math.floor(layoutRng() * (MAX_SWELL_COUNT - MIN_SWELL_COUNT + 1));
+  const swellCount = SEA.swellCountMin
+    + Math.floor(layoutRng() * (SEA.swellCountMax - SEA.swellCountMin + 1));
   const normalizedWorldScale = Math.max(0.01, finite(worldScale, 1));
 
   const trains = [];
@@ -70,10 +69,15 @@ function createSeededSea({ seed, mapId, worldScale, wells, rngStreams }) {
       sourceWX: source.wx,
       sourceWY: source.wy,
       heading: stableNumber(heading),
-      wavelength: stableNumber(0.75 + motionRng() * 0.75),
-      speed: stableNumber(0.18 + motionRng() * 0.18),
-      amplitude: stableNumber(0.12 + motionRng() * 0.16),
-      influenceRadius: stableNumber(Math.max(0.75, Math.min(normalizedWorldScale * 0.45, 1.35))),
+      wavelength: stableNumber(SEA.wavelengthMin
+        + motionRng() * (SEA.wavelengthMax - SEA.wavelengthMin)),
+      speed: stableNumber(SEA.speedMin + motionRng() * (SEA.speedMax - SEA.speedMin)),
+      amplitude: stableNumber(SEA.amplitudeMin
+        + motionRng() * (SEA.amplitudeMax - SEA.amplitudeMin)),
+      influenceRadius: stableNumber(Math.max(
+        SEA.influenceRadiusMin,
+        Math.min(normalizedWorldScale * SEA.mapRadiusFraction, SEA.influenceRadiusMax),
+      )),
       phase: stableNumber(phaseRng() * TAU),
     });
   }
@@ -84,7 +88,7 @@ function createSeededSea({ seed, mapId, worldScale, wells, rngStreams }) {
     mapId: String(mapId || "unknown"),
     worldScale: stableNumber(normalizedWorldScale),
     source: "map-procgen-history",
-    ambientFloor: AMBIENT_FLOOR,
+    ambientFloor: SEA.ambientThrustCeiling,
     history: {
       wells: historyWells,
     },
@@ -119,7 +123,10 @@ function sampleSeededSea(sea, wx, wy, { ambientMultiplier = 1, sourceMultipliers
   }
 
   const worldScale = Math.max(0.01, finite(sea.worldScale, 1));
-  const ambientCeiling = Math.max(0, Math.min(AMBIENT_FLOOR, finite(sea.ambientFloor, AMBIENT_FLOOR)));
+  const ambientCeiling = Math.max(0, Math.min(
+    SEA.ambientThrustCeiling,
+    finite(sea.ambientFloor, SEA.ambientThrustCeiling),
+  ));
   const ambientScale = Math.max(0, finite(ambientMultiplier, 1));
   let x = 0;
   let y = 0;
@@ -133,8 +140,8 @@ function sampleSeededSea(sea, wx, wy, { ambientMultiplier = 1, sourceMultipliers
     const dist = Math.hypot(dx, dy);
     const radius = Math.max(0.001, finite(train.influenceRadius, 1));
     const wellInfluence = Math.max(0, Math.min(1, 1 - dist / radius));
-    const attenuation = OUTSIDE_WELL_FLOOR_FACTOR
-      + (1 - OUTSIDE_WELL_FLOOR_FACTOR) * wellInfluence;
+    const attenuation = SEA.outsideWellFloor
+      + (1 - SEA.outsideWellFloor) * wellInfluence;
     const heading = finite(train.heading);
     const wavelength = Math.max(0.001, finite(train.wavelength, 1));
     const longitudinalDistance = dx * Math.cos(heading) + dy * Math.sin(heading);
@@ -142,7 +149,7 @@ function sampleSeededSea(sea, wx, wy, { ambientMultiplier = 1, sourceMultipliers
     const sourceMultiplier = sourceMultipliers && train.sourceWellId != null
       ? Math.max(0, finite(sourceMultipliers[train.sourceWellId], 1))
       : 1;
-    const contribution = BASE_THRUST_ACCEL
+    const contribution = MOVEMENT.player.thrustAccel
       * ambientCeiling
       * ambientScale
       * sourceMultiplier
@@ -160,7 +167,7 @@ function sampleSeededSea(sea, wx, wy, { ambientMultiplier = 1, sourceMultipliers
   }
 
   const magnitude = Math.hypot(x, y);
-  const maxMagnitude = BASE_THRUST_ACCEL * ambientCeiling * ambientScale;
+  const maxMagnitude = MOVEMENT.player.thrustAccel * ambientCeiling * ambientScale;
   if (magnitude > maxMagnitude && magnitude > 0) {
     const scale = maxMagnitude / magnitude;
     x *= scale;
@@ -195,8 +202,6 @@ function hashSeededSea(sea) {
 }
 
 module.exports = {
-  AMBIENT_FLOOR,
-  BASE_THRUST_ACCEL,
   SEEDED_SEA_SCHEMA_VERSION,
   SEEDED_SEA_STREAMS,
   advanceSeededSea,

@@ -1,0 +1,30 @@
+{
+  "seededSea": {
+    "swellCountMin": 2,
+    "swellCountMax": 4,
+    "ambientThrustCeiling": 0.3,
+    "outsideWellFloor": 0.2,
+    "wavelengthMin": 0.75,
+    "wavelengthMax": 1.5,
+    "speedMin": 0.18,
+    "speedMax": 0.36,
+    "amplitudeMin": 0.12,
+    "amplitudeMax": 0.28,
+    "influenceRadiusMin": 0.75,
+    "influenceRadiusMax": 1.35,
+    "mapRadiusFraction": 0.45
+  },
+  "wellCurrent": {
+    "strength": 0.3,
+    "falloff": 1.5,
+    "maxRange": 1.35
+  },
+  "eventWave": {
+    "speed": 0.4,
+    "width": 0.1,
+    "halfLifeSeconds": 2,
+    "maxRadius": 2,
+    "shipAcceleration": 0.8,
+    "growthAmplitude": 1
+  }
+}

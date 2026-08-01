@@ -1,4 +1,5 @@
 import { MOVEMENT } from './content/movement.js';
+import { FABRIC } from './content/fabric.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 
 /**
@@ -86,10 +87,6 @@ export const CONFIG = {
     curl: 0.3,                // Vorticity confinement strength. Amplifies small-scale swirl.
     dissipation: 0.999,       // Velocity persistence per sim step. 0.99 = fast fade, 0.999 = long travel.
     densityDissipation: 0.998,// Base density persistence (overridden by distance-based pass below).
-    ambientTurbulence: 0.0008,// Random velocity splats per frame — keeps the fabric alive with texture.
-                             // Boosted 2x from 0.0004 for more spatial variation in the ASCII field.
-    ambientDensity: 0.0005,   // Random density splats per frame — faint background color.
-                             // Boosted 2.5x from 0.0002 so void has enough signal for shimmer to work with.
     nearDissipation: 0.998,   // Density persistence near wells/stars/loot. High = persistent accretion.
     farDissipation: 0.985,    // Density persistence far from any source. Low = quick fadeout in void.
     dissipationNearRadius: 0.03, // [UV-space] radius where near-dissipation applies. Tuned for GRID_WINDOW=3.
@@ -116,10 +113,10 @@ export const CONFIG = {
     maxRange: 1.2,            // World-units — ship gravity fades to zero here via linear curve.
                              // Beyond this distance, the well exerts zero force on the ship.
                              // Creates genuine flat empty space between distant wells.
-    currentStrength: 0.3,     // Tangential current speed near wells. This feeds fluid coupling,
+    currentStrength: FABRIC.wellCurrent.strength, // Tangential current speed near wells.
                              // so it should invite surfing without steering the ship from void space.
-    currentFalloff: 1.5,      // Distance exponent for surf current. Defaults to the gravity falloff.
-    currentRange: 1.35,       // World-units — orbital current fades to zero just outside gravity range.
+    currentFalloff: FABRIC.wellCurrent.falloff,
+    currentRange: FABRIC.wellCurrent.maxRange,
                              // Keeps empty space controllable while preserving near-well flow lanes.
 
     // --- Death ---
@@ -141,21 +138,19 @@ export const CONFIG = {
       { radiusMult: 0.8, brightness: 3.0, r: 1.0, g: 0.6, b: 0.15, splatR: 0.002 }, // mid — bright amber
       { radiusMult: 1.2, brightness: 1.5, r: 0.8, g: 0.3, b: 0.05, splatR: 0.003 }, // outer — dim red-orange
     ],
-    accretionTangentialForce: 0.002, // Velocity injection along disk rotation per ring. Feeds the swirl visually.
     horizonPoints: 12,        // Bright points in the innermost event horizon ring.
     horizonRadiusMult: 0.3,   // Horizon ring radius = accretionRadius × mass × this.
   },
 
   events: {
-    waveSpeed: 0.4,           // World-units/sec — how fast wave rings expand outward.
-    waveWidth: 0.1,           // World-units — thickness of the wavefront band.
+    waveSpeed: FABRIC.eventWave.speed, // World-units/sec — ring expansion.
+    waveWidth: FABRIC.eventWave.width, // World-units — wavefront thickness.
                              // Ship only feels force when inside this band.
-    waveDecay: 0.97,          // Amplitude multiplier per frame. 0.97 = fades in ~1s, 0.99 = long-lived.
-    waveMaxRadius: 2.0,       // World-units — ring dies when radius exceeds this.
-    waveShipPush: 0.8,        // Peak push on ship in world-units/s² when wavefront passes over.
+    waveMaxRadius: FABRIC.eventWave.maxRadius,
+    waveShipPush: FABRIC.eventWave.shipAcceleration,
     growthInterval: 45,       // Seconds between passive well growth events. Higher = calmer game.
     growthAmount: 0.02,       // Mass added to each well per growth event. Compounds over time.
-    growthWaveAmplitude: 1.0, // Initial amplitude of growth wave rings (scaled by well mass).
+    growthWaveAmplitude: FABRIC.eventWave.growthAmplitude,
   },
 
   ascii: {
@@ -203,7 +198,6 @@ export const CONFIG = {
     radiationStrength: 0.001, // Outward push on fluid. Same formula as well gravity but negative.
     falloff: 1.8,             // Distance exponent. Steeper than wells (1.8 vs 1.5) — sharper edge.
     orbitalStrength: 0.15,    // Tangential twist on the outflow. Creates spiral radiation pattern.
-    clearing: 0.2,            // Negative density injection at center — creates visible dark bubble.
                              // Also sets bubble radius: clearing × 0.13 in UV.
     fluidClampRadius: 20,     // Texels — wider than wells because stars push outward.
     fluidTerminalSpeed: 0.2,  // Lower terminal than wells — radiation is gentler.
@@ -255,15 +249,6 @@ export const CONFIG = {
   },
 
   planetoids: {
-    // --- Fluid injection (creates surfable wakes) ---
-    bowShockForce: 0.012,     // Velocity injection ahead of the planetoid. Boosted 4x from 0.003.
-    bowShockRadius: 0.007,    // Gaussian radius of bow shock splat in UV.
-    wakeForce: 0.008,         // Velocity injection for lateral wake vortex pair. Boosted 4x from 0.002.
-    wakeRadius: 0.005,        // Gaussian radius of each wake eddy in UV.
-    trailLength: 4,           // Number of density splats in the comet trail behind.
-    trailSpacing: 0.003,      // Gap between trail splats in UV.
-    density: 0.05,            // Trail brightness. Boosted 5x from 0.01. Blue-white color in planetoids.js.
-
     // --- Motion ---
     orbitSpeed: 0.4,          // Angular speed for orbit/figure-8 paths in rad/s.
     transitSpeed: 0.15,       // Linear speed for transit paths in world-units/s.
