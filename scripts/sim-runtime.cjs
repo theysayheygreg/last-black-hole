@@ -108,10 +108,9 @@ const { isBenchValidationError } = require("./sim/bench-errors.cjs");
 const { resolveBenchGate } = require("./sim/bench-gate.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 const {
-  applyPlayerBrakeAndIntegrate,
-  applyPlayerDriveAndFlow,
   getHeatRatio,
   setHeatRatio,
+  stepPlayerFreeMovement,
 } = require("./sim/player-movement-step.cjs");
 const {
   WELL_GRAVITY_PARAMS,
@@ -2824,7 +2823,8 @@ function tickPlanetoids(dt, planetoids = runtime.mapState.planetoids) {
   }
 }
 
-function applyStarPush(player, dt, stars = runtime.mapState.stars) {
+function resolveStarPushes(player, stars = runtime.mapState.stars) {
+  const pushes = [];
   for (const star of stars) {
     if (star.alive === false) continue;
     const { dist, nx, ny } = worldDirection(star.wx, star.wy, player.wx, player.wy, runtime.session.worldScale);
@@ -2836,22 +2836,23 @@ function applyStarPush(player, dt, stars = runtime.mapState.stars) {
       STAR_SERVER.maxRange
     );
     if (accel > 0) {
-      player.vx += nx * accel * dt;
-      player.vy += ny * accel * dt;
+      pushes.push({ x: nx * accel, y: ny * accel });
     }
   }
+  return pushes;
 }
 
-function applyPlanetoidPush(player, dt, planetoids = runtime.mapState.planetoids) {
+function resolvePlanetoidPushes(player, planetoids = runtime.mapState.planetoids) {
+  const pushes = [];
   for (const planetoid of planetoids) {
     if (planetoid.alive === false) continue;
     const { dist, nx, ny } = worldDirection(planetoid.wx, planetoid.wy, player.wx, player.wy, runtime.session.worldScale);
     const accel = proximityForce(dist, PLANETOID_SERVER.shipPushStrength, PLANETOID_SERVER.shipPushRadius);
     if (accel > 0) {
-      player.vx += nx * accel * dt;
-      player.vy += ny * accel * dt;
+      pushes.push({ x: nx * accel, y: ny * accel });
     }
   }
+  return pushes;
 }
 
 function movementSweep(startWX, startWY, player) {
@@ -2947,15 +2948,6 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sw
   }
 }
 
-function applyWaveRingPush(player, dt) {
-  if (runtime.coarseField) {
-    const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
-    player.vx += (field.wave?.x ?? field.waveX) * dt;
-    player.vy += (field.wave?.y ?? field.waveY) * dt;
-    return;
-  }
-}
-
 function resolveWellContact(player, well, dt, dx, dy) {
   if (player.effectState.shieldCharges > 0) {
     player.effectState.shieldCharges -= 1;
@@ -3022,7 +3014,7 @@ function resolveWellContact(player, well, dt, dx, dy) {
   return "dead";
 }
 
-function applyWellGravity(player, dt) {
+function refreshPlayerWellContact(player, dt) {
   const relevantWells = collectNearestByDistance(
     player.wx,
     player.wy,
@@ -3036,7 +3028,7 @@ function applyWellGravity(player, dt) {
     const dist = Math.hypot(dx, dy);
     if (dist < well.killRadius) {
       hasWellContact = true;
-      if (resolveWellContact(player, well, dt, dx, dy) === "dead") return;
+      if (resolveWellContact(player, well, dt, dx, dy) === "dead") return false;
     }
   }
   if (!hasWellContact && player._wellGraceContactActive) {
@@ -3044,14 +3036,23 @@ function applyWellGravity(player, dt) {
     player._wellGraceLastTick = -1;
     player.effectState.hullGraceRemaining = 0;
   }
+  return true;
+}
+
+function resolveWellGravity(player, flowSample) {
   let pullX = 0;
   let pullY = 0;
   if (runtime.session.useCoarseField && runtime.coarseField) {
-    const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
-    pullX = field.gravity?.x ?? field.gravityX;
-    pullY = field.gravity?.y ?? field.gravityY;
+    pullX = flowSample.gravity.x;
+    pullY = flowSample.gravity.y;
   } else {
-    for (const { entity: well } of relevantWells) {
+    const wells = collectNearestByDistance(
+      player.wx,
+      player.wy,
+      runtime.mapState.wells,
+      runtime.mapState.wells.length || 1
+    );
+    for (const { entity: well } of wells) {
       const direction = worldDirection(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
       const gravity = wellGravityVector("player", direction, effectiveWellMass(well));
       pullX += gravity.x;
@@ -3063,8 +3064,21 @@ function applyWellGravity(player, dt) {
   const wr = player.brain ? player.brain.wellResistScale : 1.0;
   if (wr !== 1.0) pullScale /= wr;
   pullScale *= getMomentumShieldMult(player);
-  player.vx += pullX * pullScale * dt;
-  player.vy += pullY * pullScale * dt;
+  return { x: pullX * pullScale, y: pullY * pullScale };
+}
+
+function resolvePlayerEnvironment(player, flowSample, relevance) {
+  const well = resolveWellGravity(player, flowSample);
+  return {
+    // Retain the previous well -> each star -> each planetoid arithmetic order
+    // while one FREE owner applies every continuous acceleration.
+    gravity: [
+      well,
+      ...resolveStarPushes(player, relevance.stars),
+      ...resolvePlanetoidPushes(player, relevance.planetoids),
+    ],
+    wave: { ...flowSample.wave },
+  };
 }
 
 function applySweptWellContacts(player, dt, sweep) {
@@ -6270,29 +6284,26 @@ function tickAuthorityPlayers(dt, relevance) {
     recordForceMutation(forceLedger, "impulse", player, () => tickHullAbilities(player, playerDt));
 
     const b = player.brain || BRAIN_DEFAULTS;
+    // FREE movement reads one authority field sample, then advances one
+    // ordered movement step. No later force path re-samples the fabric.
     const flowSample = estimateFlowSample(player.wx, player.wy);
-    const driveStep = applyPlayerDriveAndFlow(player, input, playerDt, {
+    const environmentAcceleration = resolvePlayerEnvironment(player, flowSample, relevance);
+    const movementStep = stepPlayerFreeMovement(player, input, playerDt, {
       brain: b,
       burnModifiers: getBurnModifiers(player),
       flowSample,
-    });
-    recordForceDeltaV(forceLedger, "thrust", driveStep.thrustDeltaV);
-    recordForceDeltaV(forceLedger, "coupling", driveStep.couplingDeltaV);
-    player.lastDeliveredThrustIntensity = driveStep.thrustIntensity;
-
-    recordForceMutation(forceLedger, "gravity", player, () => applyWellGravity(player, playerDt));
-    if (player.status !== "alive") continue;
-    recordForceMutation(forceLedger, "gravity", player, () => applyStarPush(player, playerDt, relevance.stars));
-    recordForceMutation(forceLedger, "gravity", player, () => applyPlanetoidPush(player, playerDt, relevance.planetoids));
-    recordForceMutation(forceLedger, "wave", player, () => applyWaveRingPush(player, playerDt));
-    const brakeStep = applyPlayerBrakeAndIntegrate(player, input, playerDt, {
-      brain: b,
-      thrustIntensity: driveStep.thrustIntensity,
+      environmentAcceleration,
       worldScale: runtime.session.worldScale,
+      afterDrive: (movingPlayer) => refreshPlayerWellContact(movingPlayer, playerDt),
     });
-    recordForceDeltaV(forceLedger, "thrust", brakeStep.thrustDeltaV);
-    recordForceDeltaV(forceLedger, "drag", brakeStep.dragDeltaV);
-    player.lastDeliveredBrakeIntensity = brakeStep.brakeIntensity;
+    recordForceDeltaV(forceLedger, "thrust", movementStep.thrustDeltaV);
+    recordForceDeltaV(forceLedger, "coupling", movementStep.couplingDeltaV);
+    recordForceDeltaV(forceLedger, "gravity", movementStep.gravityDeltaV);
+    recordForceDeltaV(forceLedger, "wave", movementStep.waveDeltaV);
+    recordForceDeltaV(forceLedger, "drag", movementStep.dragDeltaV);
+    player.lastDeliveredThrustIntensity = movementStep.thrustIntensity;
+    player.lastDeliveredBrakeIntensity = movementStep.brakeIntensity;
+    if (movementStep.aborted || player.status !== "alive") continue;
     const sweep = movementSweep(movementStartWX, movementStartWY, player);
     recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
     if (player.status !== "alive") continue;

@@ -237,18 +237,71 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   return { brakeIntensity, dragFactor, thrustDeltaV, dragDeltaV };
 }
 
-function stepPlayerMovementCore(player, input, dt, options = {}) {
-  const drive = applyPlayerDriveAndFlow(player, input, dt, options);
-  const externalAcceleration = options.externalAcceleration || null;
-  if (externalAcceleration) {
-    player.vx += finiteNumber(externalAcceleration.x, 0) * dt;
-    player.vy += finiteNumber(externalAcceleration.y, 0) * dt;
+function applyAccelerationChannel(player, acceleration, dt) {
+  const beforeX = player.vx;
+  const beforeY = player.vy;
+  const sources = Array.isArray(acceleration) ? acceleration : [acceleration];
+  for (const source of sources) {
+    player.vx += finiteNumber(source?.x, 0) * dt;
+    player.vy += finiteNumber(source?.y, 0) * dt;
   }
+  return { x: player.vx - beforeX, y: player.vy - beforeY };
+}
+
+/**
+ * Advance one FREE authority movement step in its complete gameplay order.
+ * GRAPPLED and TERMINAL never enter this path. The one field sample supplied
+ * here owns current coupling, well gravity, and event waves for the whole tick.
+ */
+function stepPlayerFreeMovement(player, input, dt, options = {}) {
+  const drive = applyPlayerDriveAndFlow(player, input, dt, options);
+
+  // Well contact sits here because protected contact may replace velocity.
+  // Returning false stops a newly terminal player before environment/drag.
+  if (options.afterDrive && options.afterDrive(player, drive) === false) {
+    return {
+      ...drive,
+      aborted: true,
+      gravityDeltaV: { x: 0, y: 0 },
+      waveDeltaV: { x: 0, y: 0 },
+      brakeIntensity: 0,
+      dragFactor: 1,
+      dragDeltaV: { x: 0, y: 0 },
+    };
+  }
+
+  const environment = options.environmentAcceleration || {};
+  const gravityDeltaV = applyAccelerationChannel(player, environment.gravity, dt);
+  const waveDeltaV = applyAccelerationChannel(player, environment.wave, dt);
+
   const brake = applyPlayerBrakeAndIntegrate(player, input, dt, {
     ...options,
     thrustIntensity: drive.thrustIntensity,
   });
-  return { ...drive, ...brake };
+  const thrustDeltaV = {
+    x: drive.thrustDeltaV.x + brake.thrustDeltaV.x,
+    y: drive.thrustDeltaV.y + brake.thrustDeltaV.y,
+  };
+  return {
+    ...drive,
+    ...brake,
+    thrustDeltaV,
+    gravityDeltaV,
+    waveDeltaV,
+    aborted: false,
+  };
+}
+
+// Compatibility entrypoint for fixtures and local consumers that supply one
+// undifferentiated external acceleration instead of authority field channels.
+function stepPlayerMovementCore(player, input, dt, options = {}) {
+  return stepPlayerFreeMovement(player, input, dt, {
+    ...options,
+    environmentAcceleration: options.environmentAcceleration || {
+      gravity: options.externalAcceleration || { x: 0, y: 0 },
+      wave: { x: 0, y: 0 },
+    },
+  });
 }
 
 export {
@@ -265,6 +318,7 @@ export {
   heatGainPerSecond,
   isPlayerOverheated,
   setHeatRatio,
+  stepPlayerFreeMovement,
   stepPlayerMovementCore,
   wrapWorldPosition,
 };
