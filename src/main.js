@@ -4490,7 +4490,7 @@ function gameLoop(now) {
           if (!authoritySlingshot?.engaged && !authoritySlingshot?.aim) {
             showWarning('no anchor in range // move toward a ring', 'rgba(120, 190, 255, 0.92)', 1600);
           } else if (!authoritySlingshot?.engaged && authoritySlingshot?.aim?.engageEligible === false) {
-            showWarning('anchor in range // build tangential speed / follow the ring', 'rgba(120, 190, 255, 0.92)', 1600);
+            showWarning('anchor in range // start moving to grapple', 'rgba(120, 190, 255, 0.92)', 1600);
           }
           queueRemoteSlingshotEdge(remoteSession);
         }

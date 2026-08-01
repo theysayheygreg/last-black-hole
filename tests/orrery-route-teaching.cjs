@@ -85,11 +85,10 @@ async function run() {
         ruler: {
           source: 'authority',
           slingshot: {
-            captureRadius: { well: 450, star: 300, planetoid: 180 },
-            magnetism: { active: false, entry: { x: 0, y: 0 }, locked: { x: 0, y: 0 }, bendDegrees: 0 },
-            coyoteTime: { implemented: true, durationMs: 50, remainingMs: 0, effectiveDurationMs: 316.666, transportAllowanceMs: 266.666 },
-            payoffCurve: { active: false, entry: { x: 0, y: 0 }, exit: { x: 0, y: 0 }, ratio: 0 },
-            chainWindow: { active: false, durationSeconds: 0.5, remainingSeconds: 0 },
+            radii: { hookMeters: 450, swingMeters: 300 },
+            reel: { active: false, entry: { x: 0, y: 0 }, locked: { x: 0, y: 0 }, bendDegrees: 0, configuredMs: 150 },
+            flatBoost: { active: false, entry: { x: 0, y: 0 }, exit: { x: 0, y: 0 }, amount: 0.55 },
+            releaseAssist: { degrees: 10 },
           },
         },
         forceLedger: { tick: 1, vectors: {} },
@@ -100,8 +99,14 @@ async function run() {
     canvasH: 800,
     reducedMotion: true,
   });
-  assert(context.calls.some((text) => text.includes('0 / 50 ms + 267 ms transport')),
-    'ruler must expose canonical coyote and fixed transport allowance separately');
+  assert(context.calls.some((text) => text.includes('450 / 300 m · anchor scale')),
+    'ruler must expose current size-relative hook and swing radii');
+  assert(context.calls.some((text) => text.includes('150 ms · 0.0° bend')),
+    'ruler must expose the current reel duration');
+  assert(context.calls.some((text) => text.includes('awaiting grapple')),
+    'ruler must expose the current flat boost row without a retired payoff curve');
+  assert(context.calls.some((text) => text.includes('±10° outward only')),
+    'ruler must expose the bounded release assist');
   CONFIG.debug.showRulerOverlay = false;
 
   console.log('OrreryRouteTeaching: 5/5 passed');
