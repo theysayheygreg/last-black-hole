@@ -2,8 +2,8 @@
 
 - **Movement, physics, and fabric design review:** diagnosed the centralized
   movement stack as still too complex at player level and the fabric as pretty
-  but illegible route terrain. Proposed six movement verbs, explicit bold SURF
-  carry/cost, `CALM / SWELL / BREAK`, Graphic Cosmic Swell, isotropic wide
+  but illegible route terrain. Proposed six movement verbs, a bold derived SURF
+  condition inside FREE, `CALM / SWELL / BREAK`, Graphic Cosmic Swell, isotropic wide
   projection, a closer restrained Deck camera, and a Shallows-only three-way
   motion prototype before any whole-game migration or shader rewrite. No
   runtime behavior changed.

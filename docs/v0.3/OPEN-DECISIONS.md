@@ -115,11 +115,13 @@ old 2D pipeline.
 
 The current implementation is centralized but not yet a legible surfing game.
 The [Movement, Physics, and Spacetime Fabric Redesign](reviews/2026-08-01-movement-physics-fabric-redesign.md)
-recommends an explicit SURF state with bold carry/cost, a Shallows comparison
-of Graphic Cosmic Swell, Wavefront Surfing, and a Signed ASCII truth control,
-and a restrained 8–12% speed camera with a closer Deck baseline. Lock those
-three directions before the prototype starts; do not migrate every map or add
-more fabric detail first.
+recommends a derived, player-readable SURF condition inside FREE with bold
+carry/cost, a Shallows comparison of Graphic Cosmic Swell, Wavefront Surfing,
+and a Signed ASCII truth control, and a restrained 8–12% speed-camera range.
+Before implementation, lock the SURF behavior, exaggerated outputs, comparison
+variants, and camera constraints. Select the winning route language and final
+Deck baseline only after the playable motion comparison; do not migrate every
+map or add more fabric detail first.
 
 ### 1. Greg's Feel Verdict
 

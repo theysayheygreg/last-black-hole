@@ -85,8 +85,9 @@ making the ship, route, and nearby terrain readable.
 - Retire the always-active seeded sea as the primary route language.
 - Demote decorative fluid simulation to low-contrast microtexture. It must not
   decide which route looks fast.
-- Replace hidden passive current coupling with an explicit SURF state and an
-  obvious aligned/opposed outcome.
+- Replace hidden passive current coupling with an explicit, player-readable
+  SURF condition inside FREE and an obvious aligned/opposed outcome. SURF does
+  not become a fourth authority movement mode.
 - Stop stacking separate radial well pull, star push, planetoid push, and tiny
   Inhibitor fabric pulls when the landmark can author one readable lane, zone,
   or discrete consequence.
@@ -119,6 +120,11 @@ Fabric should have exactly three player-readable states:
 
 Wells, stars, portals, waves, and Inhibitors shape or tint these states. They do
 not each invent a new kind of fabric.
+
+`CALM / SWELL / BREAK` are the complete world grammar. `RIDING / CUTTING /
+FIGHTING` are optional, temporary presentation descriptions derived from one
+ship-to-current alignment value—not three additional gameplay states, tuning
+systems, or authority owners. SURF remains the player verb inside FREE.
 
 ## Mechanical Starting Point
 
@@ -196,7 +202,8 @@ whole game.
 - Make BRAKE oppose velocity.
 - Disable seeded-sea overlap, separate radial gravity, star/planetoid pushes,
   and tiny Inhibitor pulls inside the prototype.
-- Expose one exact signed authority current to presentation.
+- Route the existing signed authority current directly into semantic
+  presentation instead of mixing its route language with decorative fluid.
 - Add bold aligned carry and opposed/crossing cost.
 
 ### Three presentation variants
@@ -213,7 +220,7 @@ whole game.
 Lensing Sheets may be explored as the rendering treatment for the winning
 variant, not as a fourth mechanical model.
 
-### Twenty-second comparison capture
+### Twenty-two-second comparison capture
 
 1. `0–3s`: CALM; the player can see that no route is active.
 2. `3–6s`: one giant SWELL enters the viewport.
@@ -249,17 +256,18 @@ They cannot decide whether surfing feels good or whether the image reads.
 1. **Does SURF become an explicit mechanical state with bold carry and cost?**
    Recommendation: yes. Without this, the shader can only decorate a passive
    force the player cannot deliberately learn.
-2. **Which Shallows prototype becomes the primary route language?**
-   Recommendation: Graphic Cosmic Swell / Spacetime Rivers, with Wavefront
-   Surfing and Signed ASCII Field as direct comparisons.
+2. **Which three route-language variants enter the comparison?** Recommendation:
+   Graphic Cosmic Swell / Spacetime Rivers, Wavefront Surfing, and Signed ASCII
+   Field. Select the primary language only after the playable motion captures.
 3. **Does the camera use restrained speed context?** Recommendation: yes;
    8–12% widening and velocity lead, with state freezes and a closer Deck
    baseline.
 
-Supporting taste choices—brief RIDING/CUTTING/FIGHTING teaching text, universal
-semantic values versus map hue, the exact well horizon treatment, and physical
-ship minimum size—should be judged from the comparison capture rather than
-locked in prose.
+Supporting taste choices—including the winning route language and final Deck
+baseline, brief RIDING/CUTTING/FIGHTING teaching text, universal semantic
+values versus map hue, the exact well horizon treatment, and physical ship
+minimum size—should be judged from the comparison capture rather than locked
+in prose.
 
 ## Implementation Order After Decisions
 
