@@ -44,6 +44,14 @@ export function cueForAuthoritativeEvent(event, { clientId = null } = {}) {
     case 'inhibitor.glitchSpawned': return { cue: 'inhibitorGlitch', payload };
     case 'inhibitor.swarmSpawned': return { cue: 'inhibitorWake', payload };
     case 'inhibitor.vesselInbound': return { cue: 'inhibitorVessel', payload };
+    case 'wave.announced': return {
+      cue: 'fabricWaveTelegraph',
+      payload: {
+        ...payload,
+        wx: payload.wx ?? payload.sourceWX,
+        wy: payload.wy ?? payload.sourceWY,
+      },
+    };
     default:
       return null;
   }

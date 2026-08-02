@@ -261,6 +261,11 @@ uniform float u_ecologyRadius[16];
 uniform float u_ecologyIntensity[16];
 uniform float u_ecologyTime[16];
 uniform int u_ecologyKind[16]; // 1=glitch, 2=swarm, 3=vessel
+// Source-bound event waves are a material layer, not detached geometry.
+uniform int u_waveCount;
+uniform vec2 u_waveSource[8];
+uniform vec4 u_waveShape[8]; // x=radius, y=front width, z=state, w=strength
+uniform float u_waveTelegraph[8];
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -355,6 +360,36 @@ void main() {
     }
 
     vec2 laneDir = normalize(laneFlow);
+
+    // B+C event-wave read: a broad material swell travels with the existing
+    // lanes and fades quickly behind the authoritative front. The broken
+    // crest is a sparse material accent, never a second ring primitive.
+    float waveSwell = 0.0;
+    float waveCrest = 0.0;
+    vec2 wavePush = vec2(0.0);
+    for (int wi = 0; wi < 8; wi++) {
+      if (wi >= u_waveCount) break;
+      vec4 wave = u_waveShape[wi];
+      if (wave.z < 0.5) continue; // telegraph belongs to the source well
+      vec2 waveDelta = laneWorld - u_waveSource[wi];
+      waveDelta -= round(waveDelta / u_worldScale) * u_worldScale;
+      float waveDistance = length(waveDelta);
+      float width = max(0.001, wave.y);
+      float front = exp(-abs(waveDistance - wave.x) / (width * 1.5));
+      float behindDistance = max(0.0, wave.x - waveDistance);
+      float behind = exp(-behindDistance / (width * 2.0));
+      float swell = max(front, behind * 0.5) * wave.w;
+      waveSwell = max(waveSwell, swell);
+      if (waveDistance > 0.0001) wavePush += normalize(waveDelta) * swell * 0.08;
+
+      float angle = atan(waveDelta.y, waveDelta.x);
+      float segment = fract(angle * 1.7 + float(wi) * 0.23);
+      float sparse = step(0.16, segment) * (1.0 - step(0.78, segment));
+      waveCrest = max(waveCrest, front * sparse * wave.w);
+    }
+    laneWorld += wavePush;
+    laneFlow = normalize(laneFlow + wavePush * 0.75);
+    laneDir = normalize(laneFlow);
     vec2 laneSide = vec2(-laneDir.y, laneDir.x);
     float across = dot(laneWorld, laneSide);
     float along = dot(laneWorld, laneDir);
@@ -379,7 +414,9 @@ void main() {
       * mix(0.34, 1.0, 1.0 - coreQuiet);
     vec3 laneColor = mix(vec3(0.025, 0.095, 0.11), vec3(0.07, 0.30, 0.34), laneStrength);
     laneColor = mix(laneColor, vec3(0.11, 0.36, 0.34), gravityWeight * 0.35 + fullGravityWeight * 0.65);
+    laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
     col += laneColor * laneSignal * 0.9;
+    col += vec3(0.24, 0.82, 0.70) * waveCrest * 0.42;
   }
 
   // === PER-WELL: dark core + one readable accretion band ===
@@ -397,17 +434,34 @@ void main() {
     float ringInner = shape.y;
     float ringOuter = shape.z;
     float orbitalDir = shape.w;
-    float coreMask = smoothstep(coreRadius * 1.22, coreRadius * 0.82, dist);
-    float horizonMask = smoothstep(coreRadius * 1.18, coreRadius * 1.03, dist)
-                      * (1.0 - smoothstep(coreRadius * 1.03, coreRadius * 0.92, dist));
+    vec2 wellGlobalUV = fract(u_worldCamera
+      + (u_wellPositions[i] - vec2(0.5)) * (u_gridWindow / u_worldScale));
+    vec2 wellWorld = wellGlobalUV * u_worldScale;
+    float telegraph = 0.0;
+    for (int wi = 0; wi < 8; wi++) {
+      if (wi >= u_waveCount) break;
+      vec4 wave = u_waveShape[wi];
+      if (wave.z > 0.5) continue;
+      vec2 waveDelta = wellWorld - u_waveSource[wi];
+      waveDelta -= round(waveDelta / u_worldScale) * u_worldScale;
+      float sourceMatch = 1.0 - smoothstep(0.015, 0.08, length(waveDelta));
+      telegraph = max(telegraph, sourceMatch * u_waveTelegraph[wi]);
+    }
+    // The source well tightens and brightens during the authored prelaunch
+    // window; progress comes from the authority projection, not u_time.
+    float telegraphScale = 1.0 + telegraph * 0.14;
+    float displayDist = dist * telegraphScale;
+    float coreMask = smoothstep(coreRadius * 1.22, coreRadius * 0.82, displayDist);
+    float horizonMask = smoothstep(coreRadius * 1.18, coreRadius * 1.03, displayDist)
+                      * (1.0 - smoothstep(coreRadius * 1.03, coreRadius * 0.92, displayDist));
     // Ring band: bright between inner and outer, fades to zero at both edges.
     // Outer fade: smoothstep from outer→inner (1 at inner, 0 at outer)
     // Inner fade: smoothstep from core→inner (0 at core, 1 at inner)
-    float ringMask = smoothstep(ringOuter, ringInner, dist)
-                   * smoothstep(coreRadius * 1.03, ringInner, dist);
+    float ringMask = smoothstep(ringOuter, ringInner, displayDist)
+                   * smoothstep(coreRadius * 1.03, ringInner, displayDist);
     float localLive = 1.0 - coreMask;
     float analyticRing = clamp(0.5 + u_wellMasses[i] * 0.36, 0.5, 1.2);
-    float ringEnergy = max(ringSignal, analyticRing);
+    float ringEnergy = max(ringSignal, analyticRing) + telegraph * 0.65;
     float localRing = ringMask * mix(0.62, 1.18, ringEnergy);
     vec3 ringColor = mix(u_nearWellColor, u_hotWellColor, clamp(0.12 + ringEnergy * 0.88, 0.0, 1.0));
     vec2 radial = dist > 0.0001 ? diff / length(diff) : vec2(1.0, 0.0);

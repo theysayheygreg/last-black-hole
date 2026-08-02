@@ -25,7 +25,10 @@ import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
 import { createPresentationFrame } from './presentation/presentation-frame.js';
 import { createPresentationSceneSource } from './presentation/scene-source.js';
-import { syncRemoteWellPresentation } from './presentation/well-wave-presentation.js';
+import {
+  projectEventWavePresentation,
+  syncRemoteWellPresentation,
+} from './presentation/well-wave-presentation.js';
 import { sampleTitleAttractState, TitleScenePresentation } from './presentation/title-scene-presentation.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { GainPass } from './render/passes/gain-pass.js';
@@ -2652,6 +2655,12 @@ function applyRemoteEvents(events) {
         break;
       case 'well.grew':
         break;
+      case 'wave.announced': {
+        const cause = String(payload.cause || 'well-growth').replaceAll('-', ' ').toUpperCase();
+        const source = payload.sourceWellId ? ` · ${payload.sourceWellId}` : '';
+        showWarning(`${cause} WAVE${source}`, 'rgba(160, 236, 224, 0.94)', 1600);
+        break;
+      }
       case 'scavenger.extracted':
         showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
         break;
@@ -4909,6 +4918,9 @@ function gameLoop(now) {
     presentation,
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes, wellProfiles,
+      wavePresentation: (waveRings?.rings || [])
+        .map((ring) => projectEventWavePresentation(ring, simState.runElapsedTime))
+        .filter(Boolean),
       camFU, camFV,
       worldScale: WORLD_SCALE,
       worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],

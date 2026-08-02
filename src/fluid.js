@@ -10,6 +10,7 @@
 
 import { CONFIG } from './config.js';
 import { FLUID_REF_SCALE, uvScale } from './coords.js';
+import { eventWaveSourceFluidWorld } from './presentation/well-wave-presentation.js';
 import {
   authorityFloor,
   resampleAuthoritativeField,
@@ -443,7 +444,7 @@ export class FluidSim {
    * @param {number} worldScale - total world span used by the lane prototype
    * @param {Array} worldCameraUV - camera center in global fluid UV for coarse sampling
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null, wellProfiles = [], worldScale = 3.0, worldCameraUV = [0.5, 0.5]) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null, wellProfiles = [], worldScale = 3.0, worldCameraUV = [0.5, 0.5], wavePresentation = []) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -504,6 +505,23 @@ export class FluidSim {
       gl.uniform1f(u[`u_ecologyIntensity[${i}]`], entity?.intensity ?? 0);
       gl.uniform1f(u[`u_ecologyTime[${i}]`], entity?.localTime ?? 0);
       gl.uniform1i(u[`u_ecologyKind[${i}]`], kind);
+    }
+
+    const waves = Array.isArray(wavePresentation) ? wavePresentation.slice(0, 8) : [];
+    gl.uniform1i(u['u_waveCount'], waves.length);
+    for (let i = 0; i < 8; i += 1) {
+      const wave = waves[i];
+      const sourceLoc = u[`u_waveSource[${i}]`];
+      const shapeLoc = u[`u_waveShape[${i}]`];
+      const telegraphLoc = u[`u_waveTelegraph[${i}]`];
+      if (sourceLoc) gl.uniform2fv(sourceLoc, eventWaveSourceFluidWorld(wave, worldScale));
+      if (shapeLoc) gl.uniform4fv(shapeLoc, [
+        wave?.radius ?? 0,
+        wave?.frontWidth ?? CONFIG.events.waveWidth,
+        wave?.state === 'active' ? 1 : 0,
+        wave?.strengthRatio ?? 0,
+      ]);
+      if (telegraphLoc) gl.uniform1f(telegraphLoc, wave?.telegraphProgress ?? 0);
     }
 
     if (target) {

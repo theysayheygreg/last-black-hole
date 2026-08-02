@@ -13,7 +13,6 @@ import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
 import { createWorldProjection, normalizedWorldPhase, wrappedAxisDelta } from './world-projection.js';
 import { resolveEntityPresentationScale, SPRITE_CARD_SCALE } from './entity-presentation-scale.js';
-import { sourceBoundWellWavefront } from '../presentation/well-wave-presentation.js';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -358,31 +357,6 @@ export class WorldScenePresentation {
     return mesh;
   }
 
-  _addSourceBoundWellWavefront(wave, wells, state = this.lastSceneState) {
-    const front = sourceBoundWellWavefront(wave, wells);
-    if (!front) return null;
-    const mesh = this._addMesh(
-      this.semanticGroup,
-      this.entityGeometries.ring,
-      this.entityMaterials.wave,
-      front.world.x,
-      front.world.y,
-      front.radius,
-      0,
-      0.02,
-      state,
-    );
-    if (!mesh) return null;
-    mesh.name = `well-growth-wavefront:${front.id}`;
-    mesh.userData = {
-      presentationRole: 'source-bound-authoritative-well-growth-front',
-      waveId: front.id,
-      sourceWellId: front.sourceWellId,
-      strengthRatio: front.strengthRatio,
-    };
-    return mesh;
-  }
-
   _estimateMatteCoverage(radius, radiusScale, yScale, radiusMode, state = this.lastSceneState) {
     // This is a broad visual budget canary, not a pixel-accurate area test.
     // It catches runaway backing layers before they erase the ASCII fabric.
@@ -706,14 +680,8 @@ export class WorldScenePresentation {
       );
       if (!mesh) this._recordSpriteState('inhibitors', inhibitor, 'offscreen-cull', radius, inhibitor.kind || 'inhibitor');
     }
-    // Each authoritative well-growth event gets one source-bound front. It is
-    // a semantic fabric cue, not a generic entity halo or a second simulation.
-    for (const wave of sceneState.waveRings || []) {
-      if (this._addSourceBoundWellWavefront(wave, sceneState.wells || [], renderState)) {
-        semanticCount += 1;
-        this.stateVfxCount += 1;
-      }
-    }
+    // Event waves live in the fluid material layer. Three owns no detached
+    // sonar ring, intersection node, or anonymous local wave primitive.
     this.visualFamilies.portal.update(frame, draw);
     this.visualFamilies.wreck.update(frame, draw);
     this.visualFamilies.worldSprites.update(frame, draw);

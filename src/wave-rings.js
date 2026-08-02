@@ -7,7 +7,6 @@
 
 import { CONFIG } from './config.js';
 import { decayWaveAmplitude } from './content/event-wave.js';
-import { worldRadiusToFluidUV, worldToFluidUV, splatScale } from './coords.js';
 
 class WaveRing {
   constructor(sourceWX, sourceWY, amplitude, metadata = {}, sequence = 0) {
@@ -16,6 +15,11 @@ class WaveRing {
     this.eventId = eventId;
     this.cause = metadata.cause || 'local-sandbox';
     this.sourceWellId = metadata.sourceWellId ?? null;
+    this.authoritative = metadata.authoritative === true;
+    this.state = metadata.state || 'active';
+    this.launchTime = metadata.launchTime ?? null;
+    this.telegraphStartTime = metadata.telegraphStartTime ?? null;
+    this.frontWidth = metadata.frontWidth ?? null;
     this.sourceWX = sourceWX;    // world-space coords
     this.sourceWY = sourceWY;
     this.radius = 0;             // current radius in world-units
@@ -43,6 +47,7 @@ export class WaveRingSystem {
     const cfg = CONFIG.events;
 
     for (const ring of this.rings) {
+      if (ring.authoritative) continue;
       ring.radius += cfg.waveSpeed * dt;
       ring.amplitude = decayWaveAmplitude(ring.amplitude, dt);
       if (ring.radius > cfg.waveMaxRadius || ring.amplitude < 0.01) {
@@ -54,34 +59,12 @@ export class WaveRingSystem {
   }
 
   /**
-   * Preserve the ring dye without injecting an unregistered velocity. The
-   * authority owns the one-shot crossing impulse separately.
+   * V5 keeps event waves in the existing fluid display pass. This legacy
+   * entry point remains harmless for local callers, but no longer paints a
+   * detached circumference of splats or invents a second wave renderer.
    */
-  injectIntoFluid(fluid) {
-    const SPLATS_PER_RING = 16; // points around the circumference
-
-    for (const ring of this.rings) {
-      if (ring.amplitude < 0.05) continue;
-
-      const life = ring.amplitude / ring.initialAmplitude;
-      const [srcU, srcV] = worldToFluidUV(ring.sourceWX, ring.sourceWY);
-      const radiusUV = worldRadiusToFluidUV(ring.radius);
-
-      // Dye the authority-driven wavefront; never add a client current.
-      const brightness = ring.amplitude * 0.08 * life; // density glow
-
-      for (let i = 0; i < SPLATS_PER_RING; i++) {
-        const angle = (i / SPLATS_PER_RING) * Math.PI * 2;
-        const px = srcU + Math.cos(angle) * radiusUV;
-        const py = srcV + Math.sin(angle) * radiusUV;
-
-        // Cyan-white density — scale splat radius by the central GPU splat rule.
-        const { s2 } = splatScale();
-        const splatRadius = 0.004;  // UV-space base radius for wave ring splats
-        fluid.visualSplat(px, py, splatRadius * s2,
-          brightness * 0.3, brightness * 0.8, brightness);
-      }
-    }
+  injectIntoFluid() {
+    return 0;
   }
 
   getActiveCount() {

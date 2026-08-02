@@ -29,6 +29,7 @@ const CUE_HANDLERS = Object.freeze({
   inhibitorWake: (synth, now, vol, pan, bus) => synth._playInhibitorWake(now, vol, bus),
   inhibitorVessel: (synth, now, vol, pan, bus) => synth._playInhibitorVessel(now, vol, bus),
   inhibitorFinalPortal: (synth, now, vol, pan, bus) => synth._playExtract(now, vol * 0.6, bus),
+  fabricWaveTelegraph: (synth, now, vol, pan, bus) => synth._playFabricWaveTelegraph(now, vol, pan, bus),
   menuMove: (synth, now, vol, pan, bus) => synth._playMenuBlip(now, vol * 0.3, bus),
   menuConfirm: (synth, now, vol, pan, bus) => synth._playMenuConfirm(now, vol * 0.4, bus),
   menuBack: (synth, now, vol, pan, bus) => synth._playMenuBack(now, vol * 0.3, bus),
@@ -288,6 +289,19 @@ export class CueSynthesis {
     voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
     osc.start(now);
     osc.stop(now + 0.44);
+  }
+
+  _playFabricWaveTelegraph(now, vol, pan, bus = 'world') {
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(118, now);
+    osc.frequency.linearRampToValueAtTime(168, now + 0.38);
+    const voice = this._createVoice(pan, bus);
+    osc.connect(voice.gain);
+    voice.gain.gain.setValueAtTime(vol * 0.16, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    osc.start(now);
+    osc.stop(now + 0.54);
   }
 
   _playPortalConfirm(now, vol, pan, bus = 'world') {

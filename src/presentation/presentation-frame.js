@@ -3,6 +3,7 @@
 // gameplay callbacks, so Three and future native renderers share one boundary.
 
 import { CAMERA_VIEW } from '../coords.js';
+import { FABRIC } from '../content/fabric.js';
 import { FORCE_LEDGER_CLASSES } from '../ruler-contract.js';
 import {
   PRESENTATION_PALETTE_ID,
@@ -289,11 +290,18 @@ function normalizeEntity(family, source, index) {
     case 'waveRings':
       return Object.freeze({
         ...base,
+        eventId: id(source.eventId || source.id, 'wave-event'),
+        cause: text(source.cause, 'unknown'),
         sourceWellId: source.sourceWellId == null ? null : id(source.sourceWellId, null),
         radius: Math.max(0, finite(source.radius, 0.01)),
+        previousRadius: Math.max(0, finite(source.previousRadius, source.radius)),
+        frontWidth: Math.max(0.001, finite(source.frontWidth, FABRIC.eventWave.frontWidth)),
+        state: source.state === 'telegraph' ? 'telegraph' : 'active',
+        launchTime: Math.max(0, finite(source.launchTime)),
+        telegraphStartTime: Math.max(0, finite(source.telegraphStartTime)),
         strength: Math.max(0, finite(source.amplitude)),
         initialStrength: Math.max(0.0001, finite(source.initialAmplitude, source.amplitude || 1)),
-        hint: hint('anomaly', { category: 'fabric', roleColor: 'fabricBlue', vfxFamily: 'gravityContour' }),
+        hint: hint('anomaly', { category: 'fabric', roleColor: 'fabricBlue', vfxFamily: 'fabricWave' }),
       });
     case 'stars':
       return Object.freeze({

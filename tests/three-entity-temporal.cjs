@@ -105,9 +105,10 @@ async function run() {
       'Renderer must not claim occlusion knowledge it does not have');
     assert(!renderer.includes('addSemantic(this.entityGeometries.ring, this.entityMaterials.wave'),
       'Product mode must not submit generic wave-growth rings');
-    assert(renderer.includes('_addSourceBoundWellWavefront')
-      && renderer.includes('source-bound-authoritative-well-growth-front'),
-    'Product mode must submit the named authoritative well-growth front through the existing scene owner');
+    assert(!renderer.includes('_addSourceBoundWellWavefront')
+      && !renderer.includes('source-bound-authoritative-well-growth-front')
+      && renderer.includes('fluid material layer'),
+    'Product mode must keep event waves in the existing fluid material layer');
     const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
     const waveRings = fs.readFileSync(path.join(ROOT, 'src/wave-rings.js'), 'utf8');
     assert(!main.includes('waveRings.render(') && !waveRings.includes('render(ctx, camX, camY'),

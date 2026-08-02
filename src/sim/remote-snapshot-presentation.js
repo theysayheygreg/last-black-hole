@@ -123,6 +123,7 @@ export function projectRemoteWorldPatch(world, {
       telegraphStartTime: remote.telegraphStartTime ?? null,
       state: remote.state || (remote.alive === false ? 'expired' : 'active'),
       alive: remote.alive !== false,
+      authoritative: true,
       id: remote.id || null,
     }));
   }

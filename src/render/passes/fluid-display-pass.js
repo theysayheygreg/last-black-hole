@@ -24,6 +24,7 @@
 //   - inhibitorData:   null on title; object when gameplay has an inhibitor
 //   - worldScale:      total world span used by the lane prototype
 //   - worldCameraUV:   camera center in global fluid UV for coarse sampling
+//   - wavePresentation: source-bound authority wave records, no render timing
 
 import { Pass } from '../composer.js';
 
@@ -52,6 +53,7 @@ export class FluidDisplayPass extends Pass {
       ctx.wellProfiles ?? [],
       ctx.worldScale ?? 3,
       ctx.worldCameraUV ?? [0.5, 0.5],
+      ctx.wavePresentation ?? [],
     );
   }
 }

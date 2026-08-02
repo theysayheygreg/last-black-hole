@@ -2341,14 +2341,14 @@ function commitPlayerOutcome(player, outcome) {
 function spawnWaveRing(wx, wy, amplitude, sourceWellId = null, {
   cause = "well-growth",
   eventId = null,
-  launchTime = runtime.simTime,
+  launchTime = null,
   prelaunchSeconds = WAVE_SERVER.telegraphSeconds,
 } = {}) {
   const stableEventId = eventId || nextSeededToken(`wave-${runtime.tick}`, "waveIds");
-  const resolvedLaunchTime = Number.isFinite(Number(launchTime))
-    ? Number(launchTime)
-    : runtime.simTime;
   const resolvedPrelaunch = Math.max(0, Number(prelaunchSeconds) || 0);
+  const resolvedLaunchTime = launchTime != null && Number.isFinite(Number(launchTime))
+    ? Number(launchTime)
+    : runtime.simTime + resolvedPrelaunch;
   const ring = {
     id: stableEventId,
     eventId: stableEventId,
@@ -2367,6 +2367,18 @@ function spawnWaveRing(wx, wy, amplitude, sourceWellId = null, {
     alive: true,
   };
   runtime.waveRings.push(ring);
+  if (sourceWellId != null && String(sourceWellId).trim()) {
+    publishEvent("wave.announced", {
+      waveId: stableEventId,
+      eventId: stableEventId,
+      sourceWellId: ring.sourceWellId,
+      sourceWX: wx,
+      sourceWY: wy,
+      cause: ring.cause,
+      launchTime: resolvedLaunchTime,
+      telegraphSeconds: resolvedPrelaunch,
+    }, { lane: "vfx", subject: ring.sourceWellId });
+  }
   return ring;
 }
 
@@ -2746,14 +2758,6 @@ function tickConductedWaves() {
           prelaunchSeconds: telegraphSeconds,
         },
       );
-      publishEvent("wave.announced", {
-        waveId: event.eventId,
-        eventId: event.eventId,
-        sourceWellId: well.id,
-        cause: event.cause,
-        launchTime,
-        telegraphSeconds,
-      }, { lane: "vfx", subject: well.id });
     }
     runtime.conductedWaveIndex += 1;
   }
