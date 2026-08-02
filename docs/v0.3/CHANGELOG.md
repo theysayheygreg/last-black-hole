@@ -25,8 +25,10 @@
   cause; match-relative Conductor surges, visible mass consumption, and Vessel
   overdrive are the initial causes. Anonymous periodic pulses are retired as
   design direction. Conducted fronts are staggered one source at a time with a
-  quiet readability interval, never emitted by every well simultaneously. No
-  runtime behavior changed.
+  quiet readability interval, never emitted by every well simultaneously. The
+  initial four-phase match-relative cadence is locked at 0 / 1 / 2 / 3 waves,
+  distributed inside each phase and independent of well count. No runtime
+  behavior changed.
 
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,

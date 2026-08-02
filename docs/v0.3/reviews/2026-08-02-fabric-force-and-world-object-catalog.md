@@ -138,6 +138,12 @@ iterate every well on the same phase boundary. Event-caused waves remain
 independent, while a scheduled wave may slip rather than pile onto an already
 illegible moment.
 
+Initial match-relative baseline: split the match into four equal phases;
+schedule zero conducted waves in Phase 1, one in Phase 2, two in Phase 3, and
+three in Phase 4. Space them within each phase, away from the boundaries. The
+six-wave total is independent of well count, and source selection may revisit
+an eligible well rather than manufacturing an all-well cycle.
+
 ## Canonical Player-Readable Fabric Causes
 
 The current catalog supports three fabric causes without creating three

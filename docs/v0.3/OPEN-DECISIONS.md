@@ -134,6 +134,13 @@ Vessel overdrive remain independent and do not require the whole map to wait;
 the runtime may defer a scheduled surge briefly when overlapping fronts would
 make their causes unreadable.
 
+The initial pacing uses the existing four equal match-relative phases. Phase 1
+emits no conducted waves. Phase 2 schedules one, Phase 3 schedules two, and
+Phase 4 schedules three. Events are distributed inside their phase rather than
+on its boundaries, so the cadence scales automatically with the selected match
+length and cannot collide merely because a new phase began. These counts are
+the first tuning baseline, not a requirement that every well emit once.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

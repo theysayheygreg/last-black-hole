@@ -166,6 +166,9 @@ The first locked tuning hypothesis is deliberately simple:
 - Conductor surges are staggered one source at a time, with a quiet readability
   interval between scheduled fronts. A phase boundary must never pulse every
   well simultaneously; event-caused fronts may occur independently.
+- Initial pacing across the four equal match-relative phases is 0 / 1 / 2 / 3
+  conducted waves. Each phase's events sit inside the phase rather than on its
+  boundary, making the cadence scale with match duration and not well count.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not
