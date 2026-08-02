@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-08-02: Added the v0.3 fabric-readability implementation contract and a
+  bundled E3 Orrery review packet covering the accepted-current renderer seam,
+  well deformation, one-shot wave authority, and feature-first proof budget.
+
 ## 2026-07-28 - latest playtest automation
 
 - Retooled the failing weekly Action into a useful rolling latest-playtest
