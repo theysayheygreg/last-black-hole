@@ -186,6 +186,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "FabricCurrentCap",
+    file: "fabric-current-cap.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "AuthoritativeField",
     file: "authoritative-field.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],
