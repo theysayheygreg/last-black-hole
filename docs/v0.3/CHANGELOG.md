@@ -63,6 +63,12 @@
   danger. Generic halos, surf bands, and gravity contours become removal
   targets. No runtime behavior changed.
 
+- **Well-distortion concept sheet:** generated and checked in orbital,
+  convergence, and combined treatments. Panel A proves broad rotation; Panel B
+  is recorded as a scientific-diagram anti-target; Panel C is the preferred
+  combined topology after reducing its line count and near-core density. No
+  runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

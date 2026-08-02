@@ -248,6 +248,14 @@ stable rather than a scientific visualization of every acceleration sample.
 Removal targets are the generic accretion halo outside the authored well body,
 the separate cool surf-hint band, repeated gravity contour rings, and any
 full-screen brightness response that competes with the local deformation.
+
+Concept sheet: [`../concepts/fabric-well-distortion-concept-01.png`](../concepts/fabric-well-distortion-concept-01.png).
+Panel A cleanly proves the broad rotational bend. Panel B is an anti-target:
+purely radial convergence reads as a scientific field diagram and creates too
+many equal lines. Panel C is the strongest combined direction—broad handed
+curvature, restrained inward compression, and a clean split around the core—
+but its line count and near-core density must be reduced toward the approved
+Layer 1 baseline.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not
