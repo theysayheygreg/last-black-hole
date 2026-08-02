@@ -69,6 +69,12 @@
   combined topology after reducing its line count and near-core density. No
   runtime behavior changed.
 
+- **Well-distortion art direction lock:** Greg approved Concept A's restrained
+  rotational bend plus Concept C's split/rejoin topology, with fewer lanes and
+  much less near-core detail. Concept B's uniform radial field-line treatment
+  is explicitly rejected as too scientific and visually dense. No runtime
+  behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

@@ -220,7 +220,7 @@ the locked bend/split/rejoin language near wells. Panel B is an upper bound for
 tactile grain and is too dense for ordinary play; its sand-like texture appears
 only as restrained detail inside the broader A/C lane structure.
 
-### Layer 2 candidate: well distortion
+### Layer 2 locked direction: well distortion
 
 Well distortion changes the geometry of the approved flow lanes instead of
 drawing another field diagram over them. The visible well remains the cause.
@@ -250,12 +250,11 @@ the separate cool surf-hint band, repeated gravity contour rings, and any
 full-screen brightness response that competes with the local deformation.
 
 Concept sheet: [`../concepts/fabric-well-distortion-concept-01.png`](../concepts/fabric-well-distortion-concept-01.png).
-Panel A cleanly proves the broad rotational bend. Panel B is an anti-target:
-purely radial convergence reads as a scientific field diagram and creates too
-many equal lines. Panel C is the strongest combined direction—broad handed
-curvature, restrained inward compression, and a clean split around the core—
-but its line count and near-core density must be reduced toward the approved
-Layer 1 baseline.
+Greg approved the final direction on 2026-08-02. Panel A supplies the restrained
+broad rotational bend. Panel C supplies the split/rejoin topology, with fewer
+lanes and substantially less near-core detail than the concept. Panel B is
+explicitly rejected: purely radial convergence reads as a scientific field
+diagram and creates too many equal lines.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not

@@ -186,7 +186,7 @@ broad bend/split/rejoin behavior of Concept C. Concept B contributes only
 restrained tactile grain within a lane. It is not permission to restore dense
 full-field texture.
 
-### Layer 2 presentation candidate: deform the lanes
+### Layer 2 locked presentation: deform the lanes
 
 Persistent well gravity and rotational current do not receive independent
 full-screen overlays. A visible well deforms the approved flow-lane material:
@@ -202,6 +202,11 @@ Downstream mark motion continues to report accepted current direction. The
 envelope convergence is a qualitative gravity affordance, not a fabricated
 velocity sample. This replaces generic halos, the old surf band, and repeated
 gravity contours with one source-bound material response.
+
+The approved art target combines Concept A's restrained orbital bend with
+Concept C's split/rejoin topology. Reduce Concept C's lane count and near-core
+density so the dark body remains the primary danger read. Concept B's uniform
+radial field-line treatment is rejected.
 
 ## Canonical Mechanical Fabric Causes
 

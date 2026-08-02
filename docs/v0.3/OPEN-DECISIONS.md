@@ -172,6 +172,13 @@ inside those lanes, never as the default full-field density. Direction comes
 from downstream mark motion; strength comes from longer, faster marks rather
 than more marks.
 
+Persistent well distortion uses Concept Panel A's restrained broad rotational
+bend combined with Panel C's split/rejoin topology. The final treatment uses
+fewer lanes and substantially less near-core detail than Concept C so the dark
+well silhouette and immediate rim remain dominant. Pure radial convergence as
+shown in Panel B is rejected because it reads as a scientific field diagram,
+not a game material.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;
