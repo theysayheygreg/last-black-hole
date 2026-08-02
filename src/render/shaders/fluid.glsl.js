@@ -230,6 +230,7 @@ void main() {
 export const FRAG_DISPLAY = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
+uniform sampler2D u_coarse;
 uniform sampler2D u_density;
 uniform sampler2D u_visualDensity;  // cosmetic-only density (no physics)
 uniform vec3 u_voidColor;
@@ -249,7 +250,9 @@ uniform float u_gridWindow;    // world-units spanned by the camera-anchored flu
 uniform float u_cameraView;    // world-units visible on each axis; matches the square fluid window
 uniform float u_viewAspect;    // retained for pass ABI; ignored while the fluid window is square
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
-uniform float u_time;          // elapsed time in seconds (for shimmer noise)
+uniform float u_worldScale;    // authoritative world span used to keep lanes world anchored
+uniform vec2 u_worldCamera;    // camera center in global fluid UV for the coarse field
+uniform float u_time;          // elapsed time in seconds (for downstream lane animation)
 // Collection-backed ecology state from the authority projection.
 uniform int u_ecologyCount;
 uniform vec2 u_ecologyPos[16];
@@ -283,20 +286,37 @@ void main() {
   float sceneExcitation = 1.0 - exp(-rawExcitation * (u_densityScale * 0.28));
   float ringSignal = 1.0 - exp(-length(visDens) * 0.06);
 
-  // === FABRIC NOISE — subtle texture, strongest in darker regions ===
-  vec2 fabricUV = wrappedFluidUV * 12.0 + u_time * 0.02;
-  float fabric = fract(sin(dot(fabricUV, vec2(127.1, 311.7))) * 43758.5453);
-  float fabric2 = fract(sin(dot(fabricUV * 0.5 + 3.3, vec2(269.5, 183.3))) * 43758.5453);
-  float fabricNoise = (fabric * 0.6 + fabric2 * 0.4) * 0.08;
-  fabricNoise *= mix(0.3, 1.0, 1.0 - sceneExcitation);
-
-  // Base fabric. Keep it dark. Let rings do the bright work.
-  float baseMix = 0.04 + sceneExcitation * 0.18 + smoothstep(0.01, 0.07, speed) * 0.12 + fabricNoise * 0.45;
+  // Base fabric stays quiet; the lane layer below is the only route-scale
+  // current cue. This keeps local texture from impersonating gameplay flow.
+  float baseMix = 0.04 + sceneExcitation * 0.18;
   vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.35));
 
-  // Currents should read, but not blow the frame out.
-  float flowLight = smoothstep(0.015, 0.08, speed);
-  col += vec3(0.03, 0.08, 0.10) * flowLight;
+  // Sparse world-anchored lanes. The coarse texture is the accepted remote
+  // current; local velocity is only a fallback for title/legacy sandbox views.
+  vec2 coarseUV = fract(u_worldCamera + (v_uv - vec2(0.5))
+    * (u_cameraView / u_worldScale) * vec2(1.0, -1.0));
+  vec2 coarseFlow = texture(u_coarse, coarseUV).xy;
+  vec2 laneFlow = length(coarseFlow) > 0.0001 ? coarseFlow : vel;
+  float laneSpeed = length(laneFlow) * u_worldScale / u_refScale;
+  float laneStrength = clamp(laneSpeed / 0.22, 0.0, 1.0);
+  if (laneSpeed > 0.0001) {
+    vec2 laneDir = normalize(laneFlow);
+    vec2 laneSide = vec2(-laneDir.y, laneDir.x);
+    vec2 laneWorld = coarseUV * u_worldScale;
+    float across = dot(laneWorld, laneSide);
+    float along = dot(laneWorld, laneDir);
+    const float laneSpacing = 0.28;
+    float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
+    float laneDistance = abs(across - laneCenter);
+    float laneWidth = mix(0.018, 0.032, laneStrength);
+    float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 1.8, laneDistance);
+    float markLength = mix(0.16, 0.38, laneStrength);
+    float markPhase = fract(along / markLength - u_time * mix(0.12, 0.42, laneStrength));
+    float brokenMark = step(0.10, markPhase) * (1.0 - step(0.82, markPhase));
+    float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed);
+    col += mix(vec3(0.025, 0.095, 0.11), vec3(0.07, 0.30, 0.34), laneStrength)
+      * laneSignal * 0.9;
+  }
 
   // === PER-WELL: dark core + one readable accretion band ===
   for (int i = 0; i < 256; i++) {

@@ -110,7 +110,7 @@ import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { DEFAULT_PLAYABLE_MAP, MAP_LIST, PLAYABLE_MAPS } from './maps/playable-map-loader.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
-import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToScreen, screenToWorld,
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldYToFluidTextureV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
@@ -4903,6 +4903,8 @@ function gameLoop(now) {
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
+      worldScale: WORLD_SCALE,
+      worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,
       viewAspect,

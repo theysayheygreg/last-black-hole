@@ -4,7 +4,7 @@
 //
 // FluidSim has an internal render() that takes an external target FBO and
 // fills it with the analytic scene color (dark core + accretion band + halo
-// + fabric noise + ambient flow). This pass delegates to that render, using
+// + world-anchored local-flow lanes). This pass delegates to that render, using
 // the Composer-provided targetFBO.
 //
 // Physics stepping is NOT part of this pass. The caller must call
@@ -19,8 +19,10 @@
 //   - gridWindow:      world-units spanned by the camera-anchored fluid grid
 //   - cameraView:      world-units visible on each axis
 //   - viewAspect:      retained for pass ABI while the fluid window stays square
-//   - totalTime:       elapsed seconds (drives fabric noise)
+//   - totalTime:       elapsed seconds (drives downstream lane animation)
 //   - inhibitorData:   null on title; object when gameplay has an inhibitor
+//   - worldScale:      total world span used by the lane prototype
+//   - worldCameraUV:   camera center in global fluid UV for coarse sampling
 
 import { Pass } from '../composer.js';
 
@@ -46,6 +48,8 @@ export class FluidDisplayPass extends Pass {
       ctx.wellMasses,
       ctx.wellShapes,
       ctx.inhibitorData ?? null,
+      ctx.worldScale ?? 3,
+      ctx.worldCameraUV ?? [0.5, 0.5],
     );
   }
 }

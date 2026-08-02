@@ -437,8 +437,12 @@ export class FluidSim {
    * @param {number} viewAspect - retained for pass ABI; ignored while the fluid window is square
    * @param {number} totalTime - elapsed time in seconds
    * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
+   * @param {Array} wellShapes - visual well shape data, matching wellPositionsUV order
+   * @param {Object|null} inhibitorData - bounded collection-backed ecology projection
+   * @param {number} worldScale - total world span used by the lane prototype
+   * @param {Array} worldCameraUV - camera center in global fluid UV for coarse sampling
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null, worldScale = 3.0, worldCameraUV = [0.5, 0.5]) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -450,6 +454,9 @@ export class FluidSim {
     gl.uniform1i(u['u_visualDensity'], 2);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, this.visualDensity.read.tex);
+    gl.uniform1i(u['u_coarse'], 3);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.read.tex);
 
     gl.uniform3fv(u['u_voidColor'], CONFIG.color.voidColor);
     gl.uniform3fv(u['u_normalColor'], CONFIG.color.normalSpace);
@@ -464,6 +471,8 @@ export class FluidSim {
     gl.uniform1f(u['u_cameraView'], cameraView);
     gl.uniform1f(u['u_viewAspect'], viewAspect);
     gl.uniform1f(u['u_refScale'], FLUID_REF_SCALE);
+    gl.uniform1f(u['u_worldScale'], worldScale);
+    gl.uniform2fv(u['u_worldCamera'], worldCameraUV);
     gl.uniform1f(u['u_time'], totalTime);
 
     // Set well positions and masses for gravity field visualization

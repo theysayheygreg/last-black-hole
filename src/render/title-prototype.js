@@ -33,7 +33,7 @@ import { FluidSim } from '../fluid.js';
 import { WellSystem } from '../wells.js';
 import { PlanetoidSystem } from '../planetoids.js';
 import { applySceneOverrides } from '../scene-config.js';
-import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldToFluidUV, setWorldScale,
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldToFluidUV, worldYToFluidTextureV, setWorldScale,
          setFluidCamera, getFluidCamera } from '../coords.js';
 import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
@@ -328,6 +328,8 @@ function frame(now) {
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
+      worldScale: WORLD_SCALE,
+      worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,
       viewAspect,
