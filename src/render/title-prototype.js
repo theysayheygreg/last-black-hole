@@ -320,13 +320,14 @@ function frame(now) {
   const wellUVs = wellSystem.getUVPositions();
   const wellMasses = wellSystem.getUVMasses();
   const wellShapes = wellSystem.getRenderShapes();
+  const wellProfiles = wellSystem.getRenderProfiles();
   const [camFU, camFV] = worldToFluidUV(camX, camY);
   const viewAspect = overlayCanvas.width / Math.max(1, overlayCanvas.height);
   const a = CONFIG.ascii;
 
   const frameContext = {
     fluidDisplay: {
-      wellUVs, wellMasses, wellShapes,
+      wellUVs, wellMasses, wellShapes, wellProfiles,
       camFU, camFV,
       worldScale: WORLD_SCALE,
       worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],

@@ -15,6 +15,7 @@
 //   - wellUVs:    Array<[u,v]> well positions in fluid UV
 //   - wellMasses: Array<number>
 //   - wellShapes: Array<[coreR, ringInnerR, ringOuterR, orbitalDir]>
+//   - wellProfiles: Array<[currentReach, gravityFalloff, fullGravity, feather]>
 //   - camFU, camFV:    camera center in fluid UV
 //   - gridWindow:      world-units spanned by the camera-anchored fluid grid
 //   - cameraView:      world-units visible on each axis
@@ -48,6 +49,7 @@ export class FluidDisplayPass extends Pass {
       ctx.wellMasses,
       ctx.wellShapes,
       ctx.inhibitorData ?? null,
+      ctx.wellProfiles ?? [],
       ctx.worldScale ?? 3,
       ctx.worldCameraUV ?? [0.5, 0.5],
     );

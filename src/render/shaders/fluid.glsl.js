@@ -241,6 +241,7 @@ uniform vec3 u_hotWellColor;
 uniform vec2 u_wellPositions[256];
 uniform float u_wellMasses[256];
 uniform vec4 u_wellShape[256]; // x=core radius, y=ring inner, z=ring outer, w=orbitalDir
+uniform vec4 u_wellProfile[256]; // x=current reach, y=gravity falloff, z=full gravity, w=feather
 uniform int u_wellCount;
 uniform float u_densityScale;
 uniform float u_gravityScale;
@@ -300,22 +301,85 @@ void main() {
   float laneSpeed = length(laneFlow) * u_worldScale / u_refScale;
   float laneStrength = clamp(laneSpeed / 0.22, 0.0, 1.0);
   if (laneSpeed > 0.0001) {
+    vec2 laneWorld = coarseUV * u_worldScale;
+    float nearestWellDistance = 999.0;
+    vec2 nearestWellWorld = laneWorld;
+    vec2 nearestDelta = vec2(0.0);
+    vec4 nearestProfile = vec4(0.0);
+    float nearestOrbitalDir = 1.0;
+    for (int i = 0; i < 256; i++) {
+      if (i >= u_wellCount) break;
+      // u_wellPositions is camera-relative fluid UV; restore its global
+      // fluid location before comparing it with the world-anchored lane.
+      vec2 wellGlobalUV = fract(u_worldCamera
+        + (u_wellPositions[i] - vec2(0.5)) * (u_gridWindow / u_worldScale));
+      vec2 wellWorld = wellGlobalUV * u_worldScale;
+      vec2 delta = laneWorld - wellWorld;
+      delta -= round(delta / u_worldScale) * u_worldScale;
+      float distanceToWell = length(delta);
+      vec4 profile = u_wellProfile[i];
+      if (profile.x > 0.0 && distanceToWell < min(nearestWellDistance, profile.x)) {
+        nearestWellDistance = distanceToWell;
+        nearestWellWorld = wellWorld;
+        nearestDelta = delta;
+        nearestProfile = profile;
+        nearestOrbitalDir = u_wellShape[i].w;
+      }
+    }
+
+    float currentWeight = 0.0;
+    float gravityWeight = 0.0;
+    float fullGravityWeight = 0.0;
+    float coreQuiet = 0.0;
+    if (nearestProfile.x > 0.0) {
+      currentWeight = 1.0 - smoothstep(nearestProfile.x * 0.55, nearestProfile.x, nearestWellDistance);
+      float gravityEnvelope = nearestProfile.y + nearestProfile.w;
+      gravityWeight = 1.0 - smoothstep(nearestProfile.y * 0.45, gravityEnvelope, nearestWellDistance);
+      fullGravityWeight = 1.0 - smoothstep(nearestProfile.z * 0.55, nearestProfile.z, nearestWellDistance);
+      coreQuiet = 1.0 - smoothstep(nearestProfile.z * 0.12, nearestProfile.z * 0.48, nearestWellDistance);
+
+      vec2 radial = nearestWellDistance > 0.0001
+        ? nearestDelta / nearestWellDistance
+        : vec2(1.0, 0.0);
+      vec2 tangent = vec2(-radial.y, radial.x) * nearestOrbitalDir;
+      float bendAngle = nearestOrbitalDir * currentWeight * (0.42 + gravityWeight * 0.32);
+      float cosine = cos(bendAngle);
+      float sine = sin(bendAngle);
+      vec2 bentRadial = vec2(
+        radial.x * cosine - radial.y * sine,
+        radial.x * sine + radial.y * cosine
+      );
+      float compression = 1.0 - gravityWeight * 0.18 - fullGravityWeight * 0.24;
+      laneWorld = nearestWellWorld + bentRadial * nearestWellDistance * compression;
+      laneFlow = normalize(mix(laneFlow, tangent, currentWeight * 0.38));
+    }
+
     vec2 laneDir = normalize(laneFlow);
     vec2 laneSide = vec2(-laneDir.y, laneDir.x);
-    vec2 laneWorld = coarseUV * u_worldScale;
     float across = dot(laneWorld, laneSide);
     float along = dot(laneWorld, laneDir);
     const float laneSpacing = 0.28;
     float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
     float laneDistance = abs(across - laneCenter);
+    float splitWeight = nearestProfile.z > 0.0
+      ? 1.0 - smoothstep(nearestProfile.z * 0.72, nearestProfile.z * 1.32, nearestWellDistance)
+      : 0.0;
+    float splitOffset = splitWeight * nearestProfile.z * 0.72;
+    float splitDistance = min(
+      abs(across - laneCenter - splitOffset),
+      abs(across - laneCenter + splitOffset)
+    );
+    laneDistance = mix(laneDistance, splitDistance, splitWeight);
     float laneWidth = mix(0.018, 0.032, laneStrength);
     float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 1.8, laneDistance);
     float markLength = mix(0.16, 0.38, laneStrength);
     float markPhase = fract(along / markLength - u_time * mix(0.12, 0.42, laneStrength));
     float brokenMark = step(0.10, markPhase) * (1.0 - step(0.82, markPhase));
-    float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed);
-    col += mix(vec3(0.025, 0.095, 0.11), vec3(0.07, 0.30, 0.34), laneStrength)
-      * laneSignal * 0.9;
+    float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed)
+      * mix(0.34, 1.0, 1.0 - coreQuiet);
+    vec3 laneColor = mix(vec3(0.025, 0.095, 0.11), vec3(0.07, 0.30, 0.34), laneStrength);
+    laneColor = mix(laneColor, vec3(0.11, 0.36, 0.34), gravityWeight * 0.35 + fullGravityWeight * 0.65);
+    col += laneColor * laneSignal * 0.9;
   }
 
   // === PER-WELL: dark core + one readable accretion band ===
@@ -341,9 +405,6 @@ void main() {
     // Inner fade: smoothstep from core→inner (0 at core, 1 at inner)
     float ringMask = smoothstep(ringOuter, ringInner, dist)
                    * smoothstep(coreRadius * 1.03, ringInner, dist);
-    float haloMask = smoothstep(ringOuter * 1.8, ringOuter, dist)
-                   * (1.0 - smoothstep(ringOuter, ringInner, dist));
-
     float localLive = 1.0 - coreMask;
     float analyticRing = clamp(0.5 + u_wellMasses[i] * 0.36, 0.5, 1.2);
     float ringEnergy = max(ringSignal, analyticRing);
@@ -354,23 +415,11 @@ void main() {
     float tangentialAlignment = speed > 0.001 ? dot(normalize(vel), tangent) * 0.5 + 0.5 : 0.5;
     float ringBias = mix(0.96, 1.34, tangentialAlignment);
 
-    // Gentle halo outside the ring so the fabric feels disturbed, not flooded.
-    col += ringColor * haloMask * (0.26 + 0.12 * ringEnergy) * localLive;
-
     // Thin event-horizon rim so the lethal edge is legible even on smaller wells.
     col += mix(u_nearWellColor, u_hotWellColor, 0.7) * horizonMask * (0.35 + 0.18 * ringEnergy) * localLive;
 
     // Main accretion band. This is the bright read, not the whole well.
     col += ringColor * localRing * 1.16 * ringBias * localLive;
-
-    // Surf hint just outside the ring: cool directional band where tangential
-    // motion is strongest. Visible between outer*1.04 and outer*2.7.
-    // Inner edge: fades IN from 0 at outer*1.04 to 1 at outer*1.5
-    // Outer edge: fades OUT from 1 at outer*1.5 to 0 at outer*2.7
-    float surfBand = smoothstep(ringOuter * 1.04, ringOuter * 1.5, dist)
-                   * (1.0 - smoothstep(ringOuter * 1.5, ringOuter * 2.7, dist));
-    float surfHint = surfBand * smoothstep(0.012, 0.055, speed) * mix(0.45, 1.0, tangentialAlignment);
-    col += vec3(0.05, 0.22, 0.3) * surfHint * 1.45 * localLive;
 
     // Final dark core. This must win.
     col = mix(col, vec3(0.0), coreMask * 0.985);

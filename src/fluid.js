@@ -439,10 +439,11 @@ export class FluidSim {
    * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
    * @param {Array} wellShapes - visual well shape data, matching wellPositionsUV order
    * @param {Object|null} inhibitorData - bounded collection-backed ecology projection
+   * @param {Array} wellProfiles - authored deformation profiles, matching wellPositionsUV order
    * @param {number} worldScale - total world span used by the lane prototype
    * @param {Array} worldCameraUV - camera center in global fluid UV for coarse sampling
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null, worldScale = 3.0, worldCameraUV = [0.5, 0.5]) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null, wellProfiles = [], worldScale = 3.0, worldCameraUV = [0.5, 0.5]) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -485,6 +486,8 @@ export class FluidSim {
       if (massLoc) gl.uniform1f(massLoc, wellMasses[i] ?? 1.0);
       const shapeLoc = u[`u_wellShape[${i}]`];
       if (shapeLoc) gl.uniform4fv(shapeLoc, wellShapes[i] ?? [0.01, 0.02, 0.03, 1.0]);
+      const profileLoc = u[`u_wellProfile[${i}]`];
+      if (profileLoc) gl.uniform4fv(profileLoc, wellProfiles[i] ?? [0, 0, 0, 0]);
     }
 
     // Collection-backed ecology uniforms. The fixed cap keeps the shader ABI

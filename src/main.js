@@ -280,6 +280,7 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
   const allUVs = wellSystem.getUVPositions();
   const allMasses = wellSystem.getUVMasses();
   const allShapes = wellSystem.getRenderShapes();
+  const allProfiles = wellSystem.getRenderProfiles();
 
   // Filter to wells whose camera-relative position lands within the
   // fluid grid window (plus a ring-extent margin). Off-window wells
@@ -290,23 +291,32 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
   const visibleUVs = [];
   const visibleMasses = [];
   const visibleShapes = [];
+  const visibleProfiles = [];
   const visibleIndices = [];
   const halfWindow = GRID_WINDOW / 2;
 
   for (let i = 0; i < wellSystem.wells.length; i++) {
     const well = wellSystem.wells[i];
     const shape = allShapes[i] || [0.01, 0.02, 0.03, 1.0];
+    const profile = allProfiles[i] || [0, 0, 0, 0];
     const [dx, dy] = worldDisplacement(cameraX, cameraY, well.wx, well.wy);
     const ringExtent = Math.max(0.05, shape[2] * 1.4);
     if (Math.abs(dx) <= halfWindow + ringExtent && Math.abs(dy) <= halfWindow + ringExtent) {
       visibleUVs.push(allUVs[i]);
       visibleMasses.push(allMasses[i]);
       visibleShapes.push(shape);
+      visibleProfiles.push(profile);
       visibleIndices.push(i);
     }
   }
 
-  return { wellUVs: visibleUVs, wellMasses: visibleMasses, wellShapes: visibleShapes, visibleIndices };
+  return {
+    wellUVs: visibleUVs,
+    wellMasses: visibleMasses,
+    wellShapes: visibleShapes,
+    wellProfiles: visibleProfiles,
+    visibleIndices,
+  };
 }
 // Title camera drift (lissajous). Small amplitude, long periods —
 // subtle motion to keep the frame alive without distracting.
@@ -4844,7 +4854,7 @@ function gameLoop(now) {
   }
 
   // 7. Render fluid -> ASCII (camera-aware)
-  const { wellUVs, wellMasses, wellShapes, visibleIndices } = getVisibleWellRenderInputs(camX, camY);
+  const { wellUVs, wellMasses, wellShapes, wellProfiles, visibleIndices } = getVisibleWellRenderInputs(camX, camY);
   const visibleAccretionRadii = visibleIndices.map((i) => sceneAccretionRadii[i] ?? [0.07, 0.30, 0.52]);
   perfStats.visibleWellCount = wellUVs.length;
   perfStats.totalWellCount = wellSystem.wells.length;
@@ -4901,7 +4911,7 @@ function gameLoop(now) {
   rendererBackend.render({
     presentation,
     fluidDisplay: {
-      wellUVs, wellMasses, wellShapes,
+      wellUVs, wellMasses, wellShapes, wellProfiles,
       camFU, camFV,
       worldScale: WORLD_SCALE,
       worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],

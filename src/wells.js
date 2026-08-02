@@ -6,6 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { FABRIC } from './content/fabric.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
 import { migrateCurrentWell } from './anomaly-catalog.js';
 import { effectiveWellVisualMass } from './presentation/well-wave-presentation.js';
@@ -59,6 +60,8 @@ export class Well {
     this.catalogId = catalogWell.catalogId;
     this.behaviorId = catalogWell.behaviorId;
     this.catalogActivation = catalogWell.catalogActivation;
+    this.fabricSignatureId = catalogWell.fabricSignatureId;
+    this.fabricSignature = catalogWell.fabricSignature;
   }
 
   /** Recalculate kill radius from current mass vs starting mass. */
@@ -207,6 +210,32 @@ export class WellSystem {
       const ringOuterRef = Math.max(ringInnerRef * 1.48, coreRef * 3.8, accretionRef * 2.2);
 
       return [coreRef, ringInnerRef, ringOuterRef, w.orbitalDir];
+    });
+  }
+
+  /**
+   * Return authored mechanical radii for the fabric deformation layer.
+   *
+   * The physical well body stays in getRenderShapes(); this vector is the
+   * presentation projection of the same canonical profile the field builder
+   * consumes: [currentReach, gravityFalloff, fullGravity, feather].
+   */
+  getRenderProfiles() {
+    return this.wells.map((well) => {
+      const parameters = well.fabricSignature?.parameters || {};
+      const multiplier = (name) => {
+        const value = Number(parameters[name]);
+        return Number.isFinite(value) && value > 0 ? value : 1;
+      };
+      const gravityReach = multiplier('gravityReachMultiplier');
+      return [
+        FABRIC.wellGravity.falloffEndRadius
+          * FABRIC.wellCurrent.currentReachMultiplier
+          * multiplier('currentReachMultiplier'),
+        FABRIC.wellGravity.falloffEndRadius * gravityReach,
+        FABRIC.wellGravity.fullGravityRadius * gravityReach,
+        FABRIC.wellGravity.featherRadius * gravityReach,
+      ];
     });
   }
 }
