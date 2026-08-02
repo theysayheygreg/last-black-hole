@@ -75,6 +75,13 @@
   is explicitly rejected as too scientific and visually dense. No runtime
   behavior changed.
 
+- **Event-wave concept sheet:** generated detached-ring, material-swell, and
+  hybrid-crest treatments. Panel A is the generic sonar-ring anti-target;
+  Panel B supplies the fabric-native swell; Panel C supplies a thinner sparse
+  leading crest while its bright intersection nodes are rejected. The source
+  remains visibly charged as the single front departs. No runtime behavior
+  changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

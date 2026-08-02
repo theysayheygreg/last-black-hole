@@ -208,6 +208,20 @@ Concept C's split/rejoin topology. Reduce Concept C's lane count and near-core
 density so the dark body remains the primary danger read. Concept B's uniform
 radial field-line treatment is rejected.
 
+### Layer 3 presentation candidate: one material swell
+
+The source-bound event-wave concept sheet compares a detached ring, a lane
+swell, and a hybrid crest. The preferred composition uses the broad material
+deformation of Panel B plus a thin sparse broken leading edge from Panel C.
+Panel A's generic neon/sonar ring is rejected. Panel C's bright intersection
+nodes are also rejected because they imply discrete devices or collision
+points.
+
+The well telegraphs by visibly compressing and brightening at its immediate
+source before launch. That source state fades as one crest travels outward;
+the lanes behind it promptly return to calm. This preserves cause, direction,
+and the one-crossing impulse without turning the event into a persistent band.
+
 ## Canonical Mechanical Fabric Causes
 
 The current catalog supports three fabric causes without creating three

@@ -255,6 +255,23 @@ broad rotational bend. Panel C supplies the split/rejoin topology, with fewer
 lanes and substantially less near-core detail than the concept. Panel B is
 explicitly rejected: purely radial convergence reads as a scientific field
 diagram and creates too many equal lines.
+
+### Layer 3 candidate: source-bound event wave
+
+Concept sheet: [`../concepts/fabric-event-wave-concept-01.png`](../concepts/fabric-event-wave-concept-01.png).
+
+Panel A is the generic-ring anti-target: readable but detached from the fabric
+and too close to a neon sonar effect. Panel B best communicates a wave traveling
+through the existing material by bunching and lifting the lanes into one broad
+outward swell. Panel C contributes the clean broken leading crest and strongest
+source connection, but its bright lane-intersection nodes look mechanical and
+should be removed.
+
+The preferred candidate combines Panel B's material deformation with a thinner,
+sparser version of Panel C's single crest. The source well visibly compresses
+and brightens before launch, then fades while the front travels. Behind the
+crest, lanes return quickly to their normal sparse state. There is no second
+ring, trailing filled zone, or persistent halo.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not
