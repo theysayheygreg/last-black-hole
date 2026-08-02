@@ -159,6 +159,13 @@ The first locked tuning hypothesis is deliberately simple:
   event wavefronts remain discrete source-bound consequences.
 - Event waves should be large, coherent moving fronts. A front may temporarily
   suppress microtexture so its direction and edge remain readable.
+- Each emitted front applies one source-bound outward impulse on crossing, not
+  accumulated per-tick acceleration. The source well must visibly telegraph an
+  explicit cause—Conductor surge, mass consumption, Vessel overdrive, or a
+  future named event—before launch. Anonymous timer pulses are retired.
+- Conductor surges are staggered one source at a time, with a quiet readability
+  interval between scheduled fronts. A phase boundary must never pulse every
+  well simultaneously; event-caused fronts may occur independently.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not

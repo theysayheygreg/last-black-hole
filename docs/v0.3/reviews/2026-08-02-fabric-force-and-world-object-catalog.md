@@ -110,6 +110,34 @@ The standard current profile is deliberately broad:
 This reuses the gravity-envelope radii and introduces no additional standard
 knobs. Narrow peak bands are reserved for later authored well identities.
 
+### Locked emitted-wave contract
+
+The first simplified wave applies one outward delta-v impulse per player when
+its visible front crosses them. A stable event/player receipt prevents repeat
+hits. Width controls presentation and forgiving crossing detection, not the
+number of acceleration ticks.
+
+Every wave must answer “what caused that?” before it reaches the player:
+
+1. retain a source well and explicit reason in authority truth;
+2. telegraph that well before emission through visible intensity and spatial
+   audio;
+3. launch one visible source-bound front;
+4. apply one readable impulse on crossing;
+5. expire without becoming ambient background motion.
+
+The absolute anonymous 45-second growth pulse is retired as design direction.
+Conductor scheduling must be match-relative and announce a specific well surge.
+Consumption and Vessel overdrive remain naturally visible causes. Future causes
+must opt in explicitly rather than reusing a generic pulse timer.
+
+Conducted waves use a staggered single-source queue. Only one well may be in a
+Conductor-owned telegraph or emission window at a time, followed by a quiet
+readability interval before the next scheduled source. The system must not
+iterate every well on the same phase boundary. Event-caused waves remain
+independent, while a scheduled wave may slip rather than pile onto an already
+illegible moment.
+
 ## Canonical Player-Readable Fabric Causes
 
 The current catalog supports three fabric causes without creating three

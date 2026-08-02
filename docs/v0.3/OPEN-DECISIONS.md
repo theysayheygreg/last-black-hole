@@ -110,6 +110,30 @@ to zero through the outer eddy region at `currentReach`. This profile derives
 from existing radii and adds no new standard-well tuning knobs. A future unusual
 well may author a narrow current band as an explicit identity.
 
+### Source-Bound Single-Impulse Waves
+
+Resolved on 2026-08-02. A well-emitted wave is one visible outward-moving
+front that applies one authored delta-v impulse when it crosses a player. It is
+not a per-tick acceleration band and cannot hit the same player twice. Front
+width remains presentation/crossing tolerance rather than accumulated-force
+duration.
+
+No anonymous periodic pulse may occur. Every wave owns a visible source well,
+stable event identity, and explicit cause. Valid initial causes are a
+Conductor-scheduled match-relative well surge, visible mass consumption, a
+Vessel overdrive transition, or another future event that explicitly names its
+source and reason. The source well telegraphs before emission through a bounded
+intensity change and spatial audio; Conductor timing may orchestrate a surge
+but may not conceal its cause behind a generic timer.
+
+Conductor surges are staggered local events, never a simultaneous all-well
+pulse. The Conductor selects one eligible source, completes that well's
+telegraph and emission, then observes a readable quiet interval before another
+conducted source may begin. Naturally caused waves such as consumption or
+Vessel overdrive remain independent and do not require the whole map to wait;
+the runtime may defer a scheduled surge briefly when overlapping fronts would
+make their causes unreadable.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

@@ -19,6 +19,15 @@
   profile reuses existing radii; narrow precision bands remain future unusual
   well identities. No runtime behavior changed.
 
+- **Source-bound wave design lock:** well waves become one visible front and
+  one outward delta-v impulse per player crossing rather than a per-tick
+  acceleration band. Every front must identify and telegraph its source and
+  cause; match-relative Conductor surges, visible mass consumption, and Vessel
+  overdrive are the initial causes. Anonymous periodic pulses are retired as
+  design direction. Conducted fronts are staggered one source at a time with a
+  quiet readability interval, never emitted by every well simultaneously. No
+  runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
