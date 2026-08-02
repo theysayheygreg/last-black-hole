@@ -106,12 +106,16 @@ function parseConfig() {
   const src = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
   const movement = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'movement.data.json'), 'utf8'));
   const sessionProfiles = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'session-profiles.data.json'), 'utf8'));
+  const fabric = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'fabric.data.json'), 'utf8'));
+  const stars = JSON.parse(fs.readFileSync(path.join(SRC, 'content', 'stars.data.json'), 'utf8'));
   const evaluable = src
     .replace("import { MOVEMENT } from './content/movement.js';", '')
+    .replace("import { FABRIC } from './content/fabric.js';", '')
     .replace("import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';", '')
+    .replace("import { STAR_GAMEPLAY } from './content/stars.js';", '')
     .replace('export const CONFIG =', 'return');
-  const fn = new Function('MOVEMENT', 'CLIENT_PERF_PROFILES', evaluable);
-  return fn(movement, sessionProfiles.CLIENT_PERF_PROFILES);
+  const fn = new Function('MOVEMENT', 'FABRIC', 'CLIENT_PERF_PROFILES', 'STAR_GAMEPLAY', evaluable);
+  return fn(movement, fabric, sessionProfiles.CLIENT_PERF_PROFILES, stars);
 }
 
 const CONFIG = parseConfig();

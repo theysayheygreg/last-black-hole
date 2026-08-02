@@ -186,7 +186,10 @@ async function run() {
         clientId,
         wx: wrap(portalX - 0.1, scale),
         wy: portalY,
-        vx: 0.3,
+        // Fabric currents deliberately bend a slow coast away from the
+        // aperture. This speed ends the next 15 Hz step inside the
+        // seam-wrapped capture radius without using the fly-through case.
+        vx: 2,
         vy: 0,
         status: "alive",
       });

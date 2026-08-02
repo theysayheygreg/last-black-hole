@@ -34,14 +34,23 @@ async function test(name, fn) {
     assert.strictEqual(radius.ry, 30);
   });
 
-  await test('all four Grapple Arc rows and six S5 force classes require handlers', () => {
+  await test('all four Grapple Arc rows and eight S5 force classes require handlers', () => {
     assert.deepStrictEqual(ruler.S4_RULER_CONTRACTS.map((contract) => contract.id), [
       'slingshot.radii',
       'slingshot.reel',
       'slingshot.flatBoost',
       'slingshot.releaseAssist',
     ]);
-    assert.strictEqual(ruler.S5_RULER_CONTRACTS.length, 6);
+    assert.deepStrictEqual(ruler.S5_RULER_CONTRACTS.map((contract) => contract.id), [
+      'force.thrust',
+      'force.currentCoupling',
+      'force.wellGravity',
+      'force.solarWind',
+      'force.bodyPush',
+      'force.wave',
+      'force.impulse',
+      'force.drag',
+    ]);
     const handlers = Object.fromEntries(ruler.REQUIRED_RULER_HANDLER_IDS.map((id) => [id, () => true]));
     const registry = ruler.createRulerRegistry(handlers);
     assert.deepStrictEqual(registry.ids(), ruler.REQUIRED_RULER_HANDLER_IDS);
