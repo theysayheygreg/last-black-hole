@@ -477,7 +477,25 @@ async function steerTo(page, clientId, target, options = {}) {
       } else if (fuelRatio < 0.015 || (fuelRatio < 0.08 && dist >= commitDistance)) {
         recharging = true;
       }
-      last = { wx: player.wx, wy: player.wy, vx: player.vx, vy: player.vy, dist, speed, fuelRatio, recharging };
+      last = {
+        tick: snapshot.tick,
+        serverAgeMs: Number.isFinite(Number(snapshot.serverTime)) ? Date.now() - Number(snapshot.serverTime) : null,
+        wx: player.wx,
+        wy: player.wy,
+        vx: player.vx,
+        vy: player.vy,
+        dist,
+        speed,
+        fuelRatio,
+        recharging,
+        acceptedControl: {
+          inputSeq: player.lastInputSeq,
+          thrust: player.deliveredThrust,
+          brake: player.deliveredBrake,
+        },
+        forceLedger: player.forceLedger,
+        slingshot: player.slingshot,
+      };
 
       if (options.portalId
         && player.portalInteraction?.portalId === options.portalId
@@ -508,6 +526,7 @@ async function steerTo(page, clientId, target, options = {}) {
         if (aim.engageEligible === true && insideReadyRange && aboveReadySpeed) {
           return { start, end: last, closest, target: { ...target }, aim };
         }
+        last.controller = { mode: "tangent", x: tangentX, y: tangentY, thrust: fuelRatio > 0.01 ? 1 : 0, brake: 0 };
         await setGamepadDrive(page, tangentX, tangentY, {
           thrust: fuelRatio > 0.01 ? 1 : 0,
         });
@@ -532,6 +551,7 @@ async function steerTo(page, clientId, target, options = {}) {
       const correctionMagnitude = Math.hypot(correctionX, correctionY);
       const emergencyBrake = speed > Math.max(0.52, maxCruiseSpeed * 1.6);
       if (recharging) {
+        last.controller = { mode: "recharge", x: 0, y: 0, thrust: 0, brake: 0 };
         await setGamepadDrive(page);
         await sleep(150);
         continue;
@@ -544,6 +564,13 @@ async function steerTo(page, clientId, target, options = {}) {
           brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
         },
       );
+      last.controller = {
+        mode: emergencyBrake ? "brake" : "approach",
+        x: emergencyBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
+        y: emergencyBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
+        thrust: !emergencyBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
+        brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
+      };
       await sleep(110);
     }
   } finally {
@@ -551,7 +578,7 @@ async function steerTo(page, clientId, target, options = {}) {
   }
 
   throw new Error(
-    `Could not reach ${target.id || "target"}; closest=${closest.toFixed(4)} last=${JSON.stringify(last)}`,
+    `Could not reach ${target.id || "target"}; target=${JSON.stringify(target)} closest=${closest.toFixed(4)} last=${JSON.stringify(last)}`,
   );
 }
 
@@ -585,17 +612,27 @@ async function rechargeForManeuver(page, clientId, minimumRatio = 0.42, timeout 
 async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   const snapshot = await getSnapshot();
   const player = localPlayer(snapshot, clientId);
-  const anchor = snapshot.world?.wells?.[SHALLOWS_ROUTE.slingshotWellIndex];
-  assert(player && anchor, "Expected the authored Shallows slingshot anchor");
-  const ws = snapshot.session.worldScale;
+  assert(player, "Expected a live Shallows pilot before selecting the slingshot anchor");
+  const worldScale = snapshot.session?.worldScale || 3;
+  const anchor = (snapshot.world?.wells || [])
+    .filter((well) => well.alive !== false && !well.consumedByInhibitor)
+    .sort((left, right) =>
+      wrappedDistance(player, left, worldScale) - wrappedDistance(player, right, worldScale)
+    )[0];
+  assert(anchor, "Expected the authored Shallows slingshot anchor");
+  const ws = worldScale;
   let awayX = wrappedDelta(anchor.wx, player.wx, ws);
   let awayY = wrappedDelta(anchor.wy, player.wy, ws);
   let awayMag = Math.hypot(awayX, awayY);
   if (awayMag < 1e-4) { awayX = 1; awayY = 0; awayMag = 1; }
   const ringPoint = {
-    id: `${anchor.id || "well-1"}-outer-current`,
-    wx: wrap(anchor.wx + awayX / awayMag * 0.36, ws),
-    wy: wrap(anchor.wy + awayY / awayMag * 0.36, ws),
+    id: `${anchor.id || "well-1"}-inner-current`,
+    // This is inside the published hook radius but remains well clear of the
+    // kill radius. A fixed world-array index can point across an evolving map
+    // after fabric generation; a normal pilot acquires the nearby readable
+    // well rather than navigating to an incidental registry position.
+    wx: wrap(anchor.wx + awayX / awayMag * 0.22, ws),
+    wy: wrap(anchor.wy + awayY / awayMag * 0.22, ws),
   };
   const approach = await steerTo(page, clientId, ringPoint, {
     maxCruiseSpeed: 0.31,
