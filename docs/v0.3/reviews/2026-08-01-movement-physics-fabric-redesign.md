@@ -176,6 +176,42 @@ The first locked tuning hypothesis is deliberately simple:
   broad local flow, persistent well distortion, and brief source-bound event
   waves. Every fabric shader, VFX, HUD, and audio contribution must clarify one
   of those layers or be subdued, removed, or deferred.
+
+### Layer 1 candidate: broad local flow
+
+The current display shader does not provide a stable flow read. It combines
+whole-frame speed brightness, hash noise, density excitation, a well-local
+"surf" band, and ecology overlays. The result can be attractive while leaving
+direction and useful carry unclear.
+
+Replace that vocabulary with sparse, broad, world-anchored **flow lanes**:
+
+- lanes align to the accepted local current vector, never to camera or ship;
+- their marks travel downstream so direction comes from motion, not arrows;
+- greater current strength makes marks longer and advances them more quickly,
+  but does not fill the screen with more marks;
+- lanes bend smoothly through the field and remain stable enough for a player
+  to choose a line across several seconds;
+- a low-contrast base texture may remain for atmosphere, but it does not pulse,
+  imply force direction, or compete with the lanes;
+- no FREE/SURF state, lock-on, alignment threshold, or bonus HUD is introduced.
+
+The ship reads the same fabric as every other moving body. Traveling with a
+lane visibly produces a longer, faster world-relative traverse; crossing or
+opposing it remains possible and simply receives a different continuous carry.
+The initial target is a handful of broad readable lanes in the camera window,
+not a streamline drawn at every field sample.
+
+Implementation cleanup implied by this direction:
+
+1. remove random hash noise and whole-frame speed brightening as gameplay cues;
+2. retire the generic well "surf band" as a separate mechanic-like layer;
+3. keep density excitation only where it communicates a named source or quiet
+   ambience;
+4. keep inhibitor corruption on its entities/source VFX instead of allowing it
+   to overwrite the entire flow read;
+5. derive lane direction and strength from the same accepted authority current
+   truth used for movement.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not

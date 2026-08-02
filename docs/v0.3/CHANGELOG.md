@@ -38,6 +38,13 @@
   contributions must support those layers, become quiet ambience, or defer. No
   runtime behavior changed.
 
+- **Broad-flow presentation candidate:** grounded the first fabric layer in the
+  current display shader and proposed sparse world-anchored flow lanes driven
+  by accepted authority current truth. Downstream motion communicates
+  direction; mark length and travel speed communicate strength without adding
+  density. Random hash noise, whole-frame speed brightening, and the generic
+  well surf band are removal candidates. No runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

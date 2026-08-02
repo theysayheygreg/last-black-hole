@@ -167,6 +167,20 @@ moving-body disturbance may remain in mechanical truth, but the first visual
 cleanup folds them into local flow or source VFX instead of adding dominant
 full-screen layers.
 
+### Layer 1 presentation candidate: flow lanes
+
+Broad local flow should appear as a small number of wide, world-anchored lanes
+whose internal marks move with the accepted current vector. Direction is shown
+by downstream motion; strength is shown by longer, faster marks rather than by
+adding visual density. Lanes bend continuously and persist long enough to plan
+a route. They are not rails, collision geometry, or a SURF state.
+
+The current shader's hash noise, global speed brightening, and generic well
+"surf band" are removal candidates because they imply activity without clearly
+communicating the accepted flow vector. Ambient texture remains quiet. Ecology
+distortion stays local to its visible source. The renderer must not create a
+second decorative vector field that disagrees with authority movement truth.
+
 ## Canonical Mechanical Fabric Causes
 
 The current catalog supports three fabric causes without creating three
