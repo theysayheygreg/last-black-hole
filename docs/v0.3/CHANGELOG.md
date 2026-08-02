@@ -42,7 +42,9 @@
   movement stack as still too complex at player level and the fabric as pretty
   but illegible route terrain. Follow-up design correction keeps fabric
   influence continuous throughout FREE flight—no SURF state or alternate
-  physics—and starts with a -20% to +20% velocity-influence band. Stars, solar
+  physics. Greg locked a moving-reference-frame model: the ship owns velocity
+  relative to local space, fabric contributes a current vector capped at 20%
+  of hull calm-space reference speed, and world velocity is their sum. Stars, solar
   wind, wells, moving masses, direct hazards, stations, and future
   megastructures are now cataloged by gameplay ownership before the shader
   language is selected. Only seeded sea, wells, and event rings currently own

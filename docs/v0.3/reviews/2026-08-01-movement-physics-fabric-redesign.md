@@ -37,12 +37,12 @@ well multiple related inputs can dominate together. The result is neither an
 arcade rule nor a readable simulation: the player cannot reliably predict which
 force produced the motion.
 
-### Surfing is passive instead of chosen
+### The fabric relationship is passive and unreadable
 
 The ship is continuously blended toward a sampled current. There is no crisp
-entry, no visible state change, and no bold payoff for alignment. A player can
-be receiving a technically correct benefit without knowing that they found a
-good line.
+motion response or visible field relationship. A player can be receiving a
+technically correct influence without knowing how local space changed their
+route.
 
 ### The visual fabric does not expose signed gameplay truth
 
@@ -125,25 +125,26 @@ contract deliberately changes. Vessel overdrive may change the well's fabric
 truth; the Vessel itself is not a shared field source.
 
 `CALM / SWELL / BREAK` are art-direction shorthand, not simulation states or
-thresholds. They blend continuously. `RIDING / CUTTING / FIGHTING` may remain
-internal language for ship-to-current alignment, but they are not gameplay
-states, HUD promises, or separate tuning systems. “Surfing the fabric” is the
-fantasy produced by free flight through that continuous field.
+thresholds. They blend continuously. “Surfing the fabric” is the fantasy
+produced by free flight through that moving reference frame, not a separate
+player state or alignment gate.
 
 ## Mechanical Starting Point
 
 The first locked tuning hypothesis is deliberately simple:
 
-- The band applies only to **continuous base-current alignment**. The calm
-  baseline is the steady travel speed produced by identical input, hull, Heat,
-  and drag in zero current. Gravity and discrete event-wave vectors remain
-  separate named consequences.
-- Prototype target: `speed factor = 1 + 0.20 × normalized current strength ×
-  signed alignment`, clamped to `0.80–1.20`. Alignment ranges continuously from
-  against the current (`-1`) through cross-current (`0`) to with it (`+1`).
-- The implementation must converge toward that steady-state relationship with
-  `dt`-stable coupling. It must never multiply existing velocity by
-  `0.80–1.20` every 15 Hz tick or compound the bonus without bound.
+- **Locked reference-frame model:** the ship owns velocity relative to local
+  space. The fabric owns a current velocity vector. World velocity is the
+  vector sum of those two truths.
+- The current vector is capped at **20% of the hull's calm-space reference
+  speed** at full authored current strength. Traveling with it can therefore be
+  up to 20% faster; traveling directly against it can be up to 20% slower;
+  cross-current travel drifts laterally.
+- With no thrust or player-relative velocity, the ship still drifts gently with
+  the local fabric. Gravity and discrete event-wave vectors remain separate
+  named consequences.
+- The current is sampled and coupled in a `dt`-stable manner. It is never a
+  per-tick velocity multiplier and cannot compound without bound.
 - BRAKE should cut speed roughly in half over about half a second before later
   tuning.
 - A well should author one curved surf lane and one lethal core, not several
@@ -155,9 +156,9 @@ The first locked tuning hypothesis is deliberately simple:
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not
   lead the design.
 
-The first prototype must expose the real 40-point band truthfully through
-motion, wake, and field presentation. If ±20% remains imperceptible in ordinary
-play, tune the mechanical band magnitude before inventing stronger visual
+The first prototype must expose the real current vector truthfully through
+motion, wake, and field presentation. If the 20% cap remains imperceptible in
+ordinary play, tune that mechanical cap before inventing stronger visual
 fiction, additional states, or more forces.
 
 The source-backed ownership inventory is maintained in the
@@ -226,7 +227,8 @@ whole game.
   gameplay ownership and replacement are explicit.
 - Route the existing signed authority current directly into semantic
   presentation instead of mixing its route language with decorative fluid.
-- Apply the continuous -20% to +20% fabric influence band throughout FREE.
+- Apply the locked moving-reference-frame model throughout FREE with a current
+  magnitude capped at 20% of hull calm-space reference speed.
 
 ### Three presentation variants
 
@@ -263,8 +265,8 @@ overlays:
   two seconds;
 - predict which of two routes will be faster before the ship enters either;
 - tell fast fabric from slow fabric in a paused frame and in motion;
-- perceive favorable and unfavorable ends of the continuous ±20% band without
-  experiencing a mode switch;
+- perceive with-current speed, against-current resistance, and cross-current
+  drift without experiencing a mode switch;
 - understand the result from the ship wake, motion, audio, and camera rather
   than a meter;
 - read the same decision on a physical Steam Deck;
@@ -276,9 +278,9 @@ They cannot decide whether surfing feels good or whether the image reads.
 
 ## Decisions To Lock Before Production
 
-1. **Does the first continuous fabric prototype use a -20% to +20% influence
-   band during FREE?** Locked as the starting hypothesis; playtesting decides
-   whether its motion and presentation are legible.
+1. **Does FREE use the moving-reference-frame model with current capped at 20%
+   of hull calm-space reference speed?** Locked. Playtesting decides whether
+   its motion and presentation are legible.
 2. **Which three route-language variants enter the comparison?** Recommendation:
    Graphic Cosmic Swell / Spacetime Rivers, Wavefront Surfing, and Signed ASCII
    Field. Select the primary language only after the playable motion captures.
@@ -298,8 +300,8 @@ in prose.
    consequence, and non-gravitational destination before locking visual rules.
 2. **Truth and projection:** expose the signed semantic field and correct the
    isotropic viewport.
-3. **Playable Shallows vertical:** real brake, continuous ±20% fabric influence,
-   continuous visual shorthand, and player wake.
+3. **Playable Shallows vertical:** real brake, the 20%-capped moving reference
+   frame, continuous visual shorthand, and player wake.
 4. **Motion comparison:** capture the three variants and let Greg choose.
 5. **Migration:** make seeded sea, wells, event waves, hull response, camera,
    and map palettes use the chosen semantic language. Stars, moving masses,

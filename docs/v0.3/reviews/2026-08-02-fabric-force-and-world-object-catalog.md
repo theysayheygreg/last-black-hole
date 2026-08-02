@@ -15,11 +15,12 @@
 
 FREE flight continuously respects the local fabric. “Surfing” is the fantasy
 of moving well through that field, not a lock, threshold, state, or alternate
-physics mode. The first prototype lets base-current alignment alter steady
-free-flight travel speed within a continuous **-20% to +20%** band relative to
-the same ship/input in zero current. Gravity and event waves remain separate
-named vectors. Coupling must be `dt`-stable and must not multiply velocity each
-authority tick.
+physics mode. The locked model treats the fabric as a moving reference frame:
+the ship owns velocity relative to local space, the fabric owns a current
+vector capped at **20% of hull calm-space reference speed**, and world velocity
+is their vector sum. An unpowered ship therefore drifts with the fabric.
+Gravity and event waves remain separate named vectors. Coupling must be
+`dt`-stable and must not multiply velocity each authority tick.
 
 Every world influence belongs to one of four ownership categories:
 
@@ -82,7 +83,7 @@ recognizable causes instead of inventing additional invisible forces.
 
 | Object or system | Live authority truth | Classification and design action |
 | --- | --- | --- |
-| Seeded sea | Two to four deterministic traveling sine trains form the only persistent non-well background current and are mixed directly into the serialized authority field. | **Base field.** The ±20% prototype must bound the player's response to this current. Reduce overlapping trains only after comparing readable alternatives. |
+| Seeded sea | Two to four deterministic traveling sine trains form the only persistent non-well background current and are mixed directly into the serialized authority field. | **Base field.** The reference-frame prototype caps this current vector at 20% of hull calm-space reference speed. Reduce overlapping trains only after comparing readable alternatives. |
 | Stars / solar wind | Alive stars apply direct outward inverse-power acceleration to players. They do not enter the coarse field or deform fabric. Authority ignores subtype `pushMult`, so current star types differ physically only through mass despite legacy local/type presentation claiming otherwise. | **Direct consequence and grapple anchor**, not currently a field shaper. Decide later whether outward solar wind should become a real spatial field; first reconcile subtype truth. |
 | Planetoids / comets | Follow deterministic moving paths, apply close-range repulsion, and can be consumed by wells, adding mass and emitting an event wave. They create no wake or fabric term. | **Moving grapple anchor/obstacle plus direct consequence.** A moving-mass wake is future design, not current truth. |
 | Event wave rings | Well growth or consumption emits a radial front that expands, decays, and applies outward acceleration through the authority field. | **Transient field shaper.** This is the live spatial pulse and needs a visible source-bound front. |
@@ -131,7 +132,7 @@ At the audited source, only three things own shared fabric motion:
 Vessel overdrive changes a well and therefore indirectly changes the field.
 Everything else is presently a direct force/contact, actor, destination,
 pickup, scheduler, or visual treatment. This is the honest input set for the
-first ±20% movement and presentation prototype.
+first moving-reference-frame movement and presentation prototype.
 
 ## Visualization Hold
 

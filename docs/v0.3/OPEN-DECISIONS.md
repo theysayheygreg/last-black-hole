@@ -62,6 +62,18 @@ fauna, scavenger, pulse, Eddy Brake, and damage contacts remain named discrete
 impulses outside those channels. Do not add a generalized force/event wrapper
 unless an observed impact cannot be attributed or tuned.
 
+### Fabric Reference Frame
+
+Resolved on 2026-08-02. FREE flight does not switch into a SURF state. The ship
+owns velocity relative to local space; the fabric owns a current velocity
+vector; world velocity is their vector sum. At full authored current strength,
+the fabric vector starts capped at 20% of the hull's calm-space reference speed.
+An unpowered ship therefore drifts with the fabric, with-current travel can be
+up to 20% faster, against-current travel can be up to 20% slower, and
+cross-current travel drifts laterally. Gravity and event-wave vectors remain
+separate named consequences. Coupling must be `dt`-stable and never multiply
+velocity every authority tick.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;
@@ -116,10 +128,8 @@ old 2D pipeline.
 The current implementation is centralized but not yet a legible surfing game.
 The [Movement, Physics, and Spacetime Fabric Redesign](reviews/2026-08-01-movement-physics-fabric-redesign.md)
 now keeps FREE flight continuous: there is no SURF state or alternate physics.
-The first tuning hypothesis lets base-current alignment alter steady free-flight
-travel speed across a continuous -20% to +20% band relative to zero-current
-travel; gravity and event waves remain separate named vectors. Before locking
-its visual grammar, catalog stars,
+The moving-reference-frame behavior is locked above; this remaining gate is
+visual and experiential. Before locking its visual grammar, catalog stars,
 solar wind, wells, moving masses, Inhibitors, event fronts, and large
 non-gravitational destinations such as stations or megastructures. That
 [source catalog is complete](reviews/2026-08-02-fabric-force-and-world-object-catalog.md):
