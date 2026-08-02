@@ -186,6 +186,23 @@ broad bend/split/rejoin behavior of Concept C. Concept B contributes only
 restrained tactile grain within a lane. It is not permission to restore dense
 full-field texture.
 
+### Layer 2 presentation candidate: deform the lanes
+
+Persistent well gravity and rotational current do not receive independent
+full-screen overlays. A visible well deforms the approved flow-lane material:
+
+1. lanes begin a broad handed bend at `currentReach`;
+2. spacing compresses toward the source across the gravity falloff;
+3. curvature and compression become obvious inside `fullGravityRadius` without
+   creating a binary capture boundary;
+4. lanes split around the lethal core while the body/accretion silhouette owns
+   immediate danger.
+
+Downstream mark motion continues to report accepted current direction. The
+envelope convergence is a qualitative gravity affordance, not a fabricated
+velocity sample. This replaces generic halos, the old surf band, and repeated
+gravity contours with one source-bound material response.
+
 ## Canonical Mechanical Fabric Causes
 
 The current catalog supports three fabric causes without creating three

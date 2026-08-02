@@ -219,6 +219,35 @@ baseline: sparse calm tidal lanes and substantial visual rest. Panel C supplies
 the locked bend/split/rejoin language near wells. Panel B is an upper bound for
 tactile grain and is too dense for ordinary play; its sand-like texture appears
 only as restrained detail inside the broader A/C lane structure.
+
+### Layer 2 candidate: well distortion
+
+Well distortion changes the geometry of the approved flow lanes instead of
+drawing another field diagram over them. The visible well remains the cause.
+
+- At `currentReach`, nearby lanes begin a broad bend in the authored orbital
+  direction. This outer response is gentle enough to form a route-scale eddy.
+- Across the gravity falloff, lane spacing gradually compresses toward the well
+  and the broken marks stretch slightly toward the source. This communicates
+  inward pull without adding radial arrows or contour rings.
+- Inside `fullGravityRadius`, compression and curvature become unmistakable but
+  remain smooth. The presentation does not create a binary capture zone.
+- Near the lethal core, lanes separate around the dark body/accretion silhouette
+  and lose fine grain. The core and its immediate rim own danger readability;
+  the fabric does not need another glowing halo.
+- Orbital direction is visible from the handedness of the broad bend and the
+  downstream movement of marks. Radial gravity is visible from convergence and
+  compression. These are two readings of one deformed material, not two
+  overlays.
+
+The lane centerline continues to follow accepted current truth. Gravity changes
+the lane envelope and local mark spacing as an affordance; it does not fabricate
+a second decorative velocity vector. The presentation is qualitative and
+stable rather than a scientific visualization of every acceleration sample.
+
+Removal targets are the generic accretion halo outside the authored well body,
+the separate cool surf-hint band, repeated gravity contour rings, and any
+full-screen brightness response that competes with the local deformation.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not

@@ -56,6 +56,13 @@
   implementation target for local-flow presentation. No runtime behavior
   changed.
 
+- **Well-distortion presentation candidate:** proposed making persistent wells
+  deform the approved flow lanes rather than adding another overlay. Lanes bend
+  broadly with orbital direction, compress inward through gravity falloff, and
+  split around the lethal core; the visible well owns causality and immediate
+  danger. Generic halos, surf bands, and gravity contours become removal
+  targets. No runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
