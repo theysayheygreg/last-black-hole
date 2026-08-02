@@ -14,6 +14,15 @@
   force to `solarWind` instead of gravity while preserving the accepted FREE
   application order and all well, planetoid, wave, map, and visual behavior.
 
+- **Fast small-contact cleanup:** post-movement authority sweeps now preserve
+  existing planetoid push, lunge-sentry bump, fauna consumption, and Swarm
+  hull-damage consequences when a fast ship crosses their small contact radius
+  between 15 Hz endpoints. Endpoint and swept hits share the same consequence
+  owners; radii, damage, impulse, cooldown, movement tuning, and authority
+  cadence are unchanged. Portal extraction deliberately remains residence plus
+  explicit confirmation: crossing the full cyan aperture between endpoints is
+  still not an extraction.
+
 - **Movement, physics, and fabric design review:** diagnosed the centralized
   movement stack as still too complex at player level and the fabric as pretty
   but illegible route terrain. Follow-up design correction keeps fabric
