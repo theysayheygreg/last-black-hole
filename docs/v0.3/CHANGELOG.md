@@ -82,6 +82,12 @@
   remains visibly charged as the single front departs. No runtime behavior
   changed.
 
+- **Event-wave art direction lock:** Greg approved Panel B's fabric-native
+  material swell plus a thinner, sparser Panel C leading crest. Detached sonar
+  rings and bright lane-intersection nodes are rejected. The well telegraphs,
+  emits one front, fades, and leaves calm fabric behind it. No runtime behavior
+  changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

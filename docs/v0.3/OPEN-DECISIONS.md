@@ -179,6 +179,12 @@ well silhouette and immediate rim remain dominant. Pure radial convergence as
 shown in Panel B is rejected because it reads as a scientific field diagram,
 not a game material.
 
+Source-bound event waves use Concept Panel B's fabric-native material swell
+plus a thinner, sparser version of Panel C's broken leading crest. Panel A's
+detached sonar-like ring is rejected, as are Panel C's bright lane-intersection
+nodes. The source well visibly compresses and brightens before launch, fades as
+the single front departs, and leaves calm sparse lanes behind the crest.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

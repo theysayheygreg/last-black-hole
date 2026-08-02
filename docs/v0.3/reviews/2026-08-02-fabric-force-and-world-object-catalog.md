@@ -208,7 +208,7 @@ Concept C's split/rejoin topology. Reduce Concept C's lane count and near-core
 density so the dark body remains the primary danger read. Concept B's uniform
 radial field-line treatment is rejected.
 
-### Layer 3 presentation candidate: one material swell
+### Layer 3 locked presentation: one material swell
 
 The source-bound event-wave concept sheet compares a detached ring, a lane
 swell, and a hybrid crest. The preferred composition uses the broad material
@@ -221,6 +221,9 @@ The well telegraphs by visibly compressing and brightening at its immediate
 source before launch. That source state fades as one crest travels outward;
 the lanes behind it promptly return to calm. This preserves cause, direction,
 and the one-crossing impulse without turning the event into a persistent band.
+
+Greg approved this Panel B plus sparse Panel C composite on 2026-08-02. The
+detached Panel A ring and Panel C intersection nodes are explicit anti-targets.
 
 ## Canonical Mechanical Fabric Causes
 
