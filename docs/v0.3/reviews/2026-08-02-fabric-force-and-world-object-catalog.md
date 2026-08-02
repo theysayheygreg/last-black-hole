@@ -5,6 +5,12 @@
 > **Date:** 2026-08-02
 > **Purpose:** Catalog causes before selecting a final fabric visualization.
 
+> **Cleanup checkpoint:** `6bada3ad12e0a50e09bbcd369003d0f428ef3103`
+> resolves remote well rotation, source-bound growth-wave presentation,
+> effective overdrive intensity, star subtype solar-wind parity, honest
+> environment channels, fast small-object contacts, and title/local authority
+> separation. Extraction remains intentionally residence plus confirmation.
+
 ## Design Boundary
 
 FREE flight continuously respects the local fabric. “Surfing” is the fantasy
@@ -42,16 +48,19 @@ motion. Only base-field and field-shaper truth belongs in the semantic fabric.
 | Local compatibility well stack | Live only in offline/title/local compatibility paths. It separately approximates gravity, current, waves, and growth. | Easy to mistake for shipping remote authority truth. | **Compatibility only.** Label and progressively remove as product tuning authority where remote play owns truth. |
 | Player pulse disruption | Older client combat code temporarily disrupts accretion presentation near a well. | It is not the same thing as the authority growth wave despite both being called a pulse. | **Direct ability presentation.** Rename distinctly; do not treat it as a baseline well force without an authority contract. |
 
-### Immediate well truth defects
+### Resolved well truth defects
 
-1. Copy authoritative `orbitalDir` into remote well presentation.
-2. Preserve growth-wave `sourceWellId` through remote projection.
-3. Draw authoritative wavefronts rather than implying them through ambient
+1. Authoritative `orbitalDir` now reaches remote well presentation.
+2. Growth-wave `sourceWellId` now survives remote projection.
+3. Authoritative source-bound wavefronts are now drawn rather than implied through ambient
    fluid disturbance.
-4. Scale visual intensity from effective mass/overdrive, not base mass alone.
-5. Replace the absolute 45-second growth loop with the already-decided
+4. Visual intensity now uses effective mass/overdrive rather than base mass alone.
+
+### Remaining well design work
+
+1. Replace the absolute 45-second growth loop with the already-decided
    match-relative four-phase Conductor structure.
-6. Mark inert CONFIG/dev-panel/signature controls as compatibility or retire
+2. Mark inert CONFIG/dev-panel/signature controls as compatibility or retire
    them from product tuning.
 
 ## Canonical Player-Readable Fabric Causes
@@ -92,18 +101,22 @@ recognizable causes instead of inventing additional invisible forces.
 
 ### Non-well truth defects and decisions
 
-1. Star subtype physics contradicts its legacy local implementation and visual
-   language. Decide whether types have distinct solar-wind strength, then make
-   one authority owner honest.
-2. Planetoid, sentry, fauna, Swarm, and some other small-object contacts are
-   endpoint-only and can miss fast crossings. This is collision truth, not a
-   fabric-visualization problem.
-3. High-speed exfil misses share that endpoint/residence boundary and should be
-   diagnosed with movement work, not compensated through shader cues.
-4. Large dormant local systems duplicate authority stars, planetoids, wrecks,
+1. Star subtype solar wind is now shared authority truth at
+   `0.6x / 1x / 2x / 3x` and is attributed separately from well gravity.
+2. Planetoid, sentry, fauna, and Swarm contacts now use post-movement sweeps so
+   fast crossings preserve their existing consequences.
+3. High-speed exfil fly-through remains deliberately ineligible. The current
+   product contract requires a movement step to end inside the cyan aperture
+   and then receive explicit confirmation; changing that is a Greg design
+   decision, not collision cleanup.
+4. Large dormant local systems still duplicate authority stars, planetoids, wrecks,
    scavengers, portals, wells, and waves. Label them as compatibility and avoid
    using their tuning as product truth.
-5. Moving-mass wakes, station shelter, and megastructure flow splitting are
+5. Title visual stepping is now presentation-only; the remaining fallback is
+   explicitly named `LocalSandboxSimCore`. Bench, renderer fixtures, remote
+   hydration, and the standalone title calibration prototype still consume it,
+   so deleting it requires migrating those real consumers first.
+6. Moving-mass wakes, station shelter, and megastructure flow splitting are
    useful future possibilities, not current mechanics.
 
 ## Decisive Current Catalog
