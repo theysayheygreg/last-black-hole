@@ -1,6 +1,13 @@
 import { CONFIG } from '../config.js';
 
-export class SimCore {
+/**
+ * Legacy local-sandbox world step.
+ *
+ * Product gameplay truth lives in the authority runtime. This remains for
+ * Bench/local sandbox work, renderer fixtures, and remote visual hydration;
+ * the title attract scene has its own presentation-only owner.
+ */
+export class LocalSandboxSimCore {
   constructor({
     fluid,
     flowField,
@@ -119,3 +126,7 @@ export class SimCore {
     }
   }
 }
+
+// Preserve the narrow historical import for external debug tooling while new
+// app wiring names the remaining local owner honestly.
+export { LocalSandboxSimCore as SimCore };

@@ -147,6 +147,17 @@ The remaining gates are human: Greg owns movement feel, and the fabric/camera/
 viewport visual hierarchy still needs its separate in-game and Steam Deck
 comparison pass.
 
+The title attract scene is now outside this fallback entirely. Its authored
+entity motion and fluid composition advance through
+`src/presentation/title-scene-presentation.js`, with no ship, input, AI,
+inventory, extraction, or run clock. `LocalSandboxSimCore` remains only because
+Bench/local fallback, renderer fixtures, and remote visual hydration still
+consume its existing system shapes. Removing those consumers is deferred until
+each has a replacement; this cleanup does not pretend the fallback is dead.
+The standalone `title-prototype.html` path is also retained as an explicit
+calibration surface because `npm run test:title-prototype` still consumes it;
+it is not the product title owner and was not safe dead-code deletion here.
+
 ## Acceptance
 
 - FREE has one obvious ordered source path and one authority field sample;
