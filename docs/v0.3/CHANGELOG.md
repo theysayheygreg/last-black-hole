@@ -7,6 +7,13 @@
   source-bound front for a live authoritative well-growth wave. This changes
   no authority force, wave, map, movement, or grapple tuning.
 
+- **Star solar-wind parity:** centralized shared star gameplay tuning in
+  `src/content/stars.data.json`. Authority now honors the existing visual
+  subtype promise: red giant 0.6x, yellow dwarf 1x, white dwarf 2x, and neutron
+  star 3x outward acceleration. The force ledger attributes this continuous
+  force to `solarWind` instead of gravity while preserving the accepted FREE
+  application order and all well, planetoid, wave, map, and visual behavior.
+
 - **Movement, physics, and fabric design review:** diagnosed the centralized
   movement stack as still too complex at player level and the fabric as pretty
   but illegible route terrain. Follow-up design correction keeps fabric

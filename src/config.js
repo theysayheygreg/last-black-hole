@@ -1,6 +1,7 @@
 import { MOVEMENT } from './content/movement.js';
 import { FABRIC } from './content/fabric.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
+import { STAR_GAMEPLAY } from './content/stars.js';
 
 /**
  * CONFIG — single source of truth for every tunable value.
@@ -196,7 +197,7 @@ export const CONFIG = {
   stars: {
     // --- Fluid forces (GPU-side, NEGATIVE gravity = outward push) ---
     radiationStrength: 0.001, // Outward push on fluid. Same formula as well gravity but negative.
-    falloff: 1.8,             // Distance exponent. Steeper than wells (1.8 vs 1.5) — sharper edge.
+    falloff: STAR_GAMEPLAY.solarWind.falloff, // Shared solar-wind distance exponent.
     orbitalStrength: 0.15,    // Tangential twist on the outflow. Creates spiral radiation pattern.
                              // Also sets bubble radius: clearing × 0.13 in UV.
     fluidClampRadius: 20,     // Texels — wider than wells because stars push outward.
@@ -210,9 +211,9 @@ export const CONFIG = {
     coreBrightness: 0.2,      // Core glow density. Also sets core radius: coreBrightness × 0.025.
 
     // --- Ship forces (CPU-side, repulsive) ---
-    shipPushStrength: 0.45,   // Push on ship in world-units/s² at FORCE_REF_DIST.
-    shipPushFalloff: 1.8,     // Distance exponent. Matches fluid falloff.
-    maxRange: 0.6,            // World-units — push fades to zero here. Smaller range than wells
+    shipPushStrength: STAR_GAMEPLAY.solarWind.strength, // Acceleration at FORCE_REF_DIST.
+    shipPushFalloff: STAR_GAMEPLAY.solarWind.falloff,
+    maxRange: STAR_GAMEPLAY.solarWind.maxRange, // World-units — push fades to zero here. Smaller range than wells
                              // because stars are local hazards, not long-range attractors.
   },
 

@@ -6,6 +6,7 @@ const FORCE_COMPONENTS = Object.freeze([
   'thrust',
   'coupling',
   'gravity',
+  'solarWind',
   'wave',
   'impulse',
   'drag',
