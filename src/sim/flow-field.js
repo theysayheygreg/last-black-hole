@@ -38,12 +38,8 @@ export class FlowField {
     let currentY = 0;
     let gravityX = 0;
     let gravityY = 0;
-    let waveX = 0;
-    let waveY = 0;
     let hazard = 0;
-    let surf = 0;
     let sourceWellId = null;
-    let sourceRingId = null;
     let bestCurrent = 0;
 
     const wellCfg = CONFIG.wells;
@@ -72,7 +68,6 @@ export class FlowField {
       if (orbital > 0) {
         currentX += tx * orbital;
         currentY += ty * orbital;
-        surf = Math.max(surf, Math.min(1, orbital / 0.7));
       }
       gravityX += dirToWell.nx * gravity;
       gravityY += dirToWell.ny * gravity;
@@ -99,10 +94,8 @@ export class FlowField {
     return normalizeFlowSample({
       current: { x: currentX, y: currentY },
       gravity: { x: gravityX, y: gravityY },
-      wave: { x: waveX, y: waveY },
       hazard,
-      surf,
-      sources: { wellId: sourceWellId, ringId: sourceRingId },
+      sources: { wellId: sourceWellId },
       confidence: 1,
     });
   }

@@ -26,10 +26,6 @@
  *   ├── Used by: planetoids (push)
  *   └── Simple and predictable — constant push that drops off linearly
  *
- *   waveBandForce:  strength × amplitude × cos(position in band)
- *   ├── Used by: wave rings (push)
- *   └── Only applies when ship is inside the expanding wavefront band
- *
  *   wellGravityVector: body-class parameterized inverse-power well gravity
  *   ├── Used by: player, scavenger, and wreck bodies
  *   └── Direction comes from coords.js; shared content owns magnitude + vector
@@ -191,33 +187,6 @@ export function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
 export function proximityForce(dist, strength, radius) {
   if (dist < 0.001 || dist > radius) return 0;
   return strength * (1 - dist / radius);
-}
-
-/**
- * Wave ring band-pass force (cosine profile across wavefront).
- *
- * Only applies when the ship is inside the ring's wavefront band
- * (within halfWidth of the current ring radius). Force peaks when the
- * ship is exactly on the wavefront and fades at the edges.
- *
- * Profile: cos(π/2 × distFromFront/halfWidth) — 1.0 at center, 0.0 at edge.
- * This creates a smooth push that feels like being hit by a wave, not a wall.
- *
- * @param {number} distFromSource - ship distance from ring center (world-units)
- * @param {number} ringRadius - current expanding radius of the ring (world-units)
- * @param {number} halfWidth - half the wavefront band thickness (world-units)
- * @param {number} pushStrength - peak push acceleration (world-units/s²)
- * @param {number} amplitude - current ring amplitude (decays by elapsed seconds)
- * @returns {number} scalar acceleration in world-units/s²
- */
-export function waveBandForce(distFromSource, ringRadius, halfWidth, pushStrength, amplitude) {
-  const distFromFront = Math.abs(distFromSource - ringRadius);
-  if (distFromFront > halfWidth) return 0;
-  // 0.0 at wavefront center, 1.0 at band edge
-  const bandPosition = distFromFront / halfWidth;
-  // cos(0) = 1 at center, cos(π/2) = 0 at edge
-  const profile = Math.cos(bandPosition * Math.PI * 0.5);
-  return pushStrength * amplitude * profile;
 }
 
 /**

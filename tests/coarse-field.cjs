@@ -16,12 +16,12 @@ async function run() {
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
     const hazardSample = sampleCoarseFlowField(field, 1.72, 1.5);
-    assert(sample.current && sample.gravity && sample.wave, "Expected nested FlowSample vectors");
+    assert(sample.current && sample.gravity && !('wave' in sample), "Expected current/gravity-only FlowSample vectors");
     assert(sample.x === sample.current.x && sample.y === sample.current.y, "Expected x/y aliases to mirror current");
     assert(Math.abs(sample.currentY) > 0.01, `Expected orbital current near well, got ${sample.currentY}`);
     assert(sample.gravityX < -0.01, `Expected inward gravity toward well, got ${sample.gravityX}`);
     assert(hazardSample.hazard > 0, `Expected non-zero hazard in well band, got ${hazardSample.hazard}`);
-    assert(hazardSample.signalShadow > 0, `Expected signal shadow in well band, got ${hazardSample.signalShadow}`);
+    assert(hazardSample.hazard > 0, `Expected hazard in well band, got ${hazardSample.hazard}`);
   });
 
   await runner.run("Well current fades out before open space", async () => {
@@ -46,9 +46,8 @@ async function run() {
       waveRings: [{ sourceWX: 1.5, sourceWY: 1.5, radius: 0.4, amplitude: 0.8 }],
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
-    assert(Math.abs(sample.waveX) < 1e-9, `Expected no coarse wave force, got ${sample.waveX}`);
-    assert(sample.wave.x === sample.waveX, "Expected nested wave vector to mirror legacy flat fields");
-    assert(sample.sources.ringId === null, "Expected no coarse wave source identity");
+    assert(!('wave' in sample) && !('waveX' in sample) && !('waveY' in sample), "Retired coarse wave channels must be absent");
+    assert(!('ringId' in sample.sources), "Retired coarse wave source identity must be absent");
   });
 
   const allPassed = runner.summary();

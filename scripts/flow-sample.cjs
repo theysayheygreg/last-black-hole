@@ -18,7 +18,6 @@ function vectorFrom(input, xKey, yKey) {
 function normalizeSources(input = {}) {
   return {
     wellId: input.wellId ?? null,
-    ringId: input.ringId ?? null,
     anchorId: input.anchorId ?? null,
   };
 }
@@ -30,12 +29,8 @@ function normalizeFlowSample(input = {}) {
   const gravity = input.gravity
     ? vectorFrom(input.gravity, "gravityX", "gravityY")
     : { x: finiteNumber(input.gravityX, 0), y: finiteNumber(input.gravityY, 0) };
-  const wave = input.wave
-    ? vectorFrom(input.wave, "waveX", "waveY")
-    : { x: finiteNumber(input.waveX, 0), y: finiteNumber(input.waveY, 0) };
   const sources = normalizeSources(input.sources || {
     wellId: input.sourceWellId,
-    ringId: input.sourceRingId,
     anchorId: input.sourceAnchorId,
   });
 
@@ -44,10 +39,7 @@ function normalizeFlowSample(input = {}) {
     y: current.y,
     current,
     gravity,
-    wave,
     hazard: clamp01(input.hazard),
-    surf: clamp01(input.surf),
-    signalShadow: clamp01(input.signalShadow),
     sources,
     confidence: clamp01(input.confidence ?? 1),
   };

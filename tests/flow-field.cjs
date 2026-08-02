@@ -46,7 +46,7 @@ async function run() {
     });
 
     const sample = field.sample(1.9, 1.5);
-    assert(Math.abs(sample.wave.x) < 1e-9, `Expected no local wave push, got ${sample.wave.x}`);
+    assert(!('wave' in sample), 'Retired local wave channel must be absent');
     assert(Math.abs(sample.current.x) < 1e-9 && Math.abs(sample.current.y) < 1e-9,
       `Wave force should not be mixed into current, got (${sample.current.x}, ${sample.current.y})`);
   });

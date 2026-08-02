@@ -3,7 +3,7 @@
 // FluidDisplayPass — wraps FluidSim.render() as a Pass.
 //
 // FluidSim has an internal render() that takes an external target FBO and
-// fills it with the analytic scene color (dark core + accretion band + halo
+// fills it with the analytic scene color (dark core + accretion material
 // + world-anchored local-flow lanes). This pass delegates to that render, using
 // the Composer-provided targetFBO.
 //

@@ -91,15 +91,10 @@ function buildCoarseFlowField({
       let currentY = 0;
       let gravityX = 0;
       let gravityY = 0;
-      let waveX = 0;
-      let waveY = 0;
       let ambientX = 0;
       let ambientY = 0;
       let hazard = 0;
-      let surf = 0;
-      let signalShadow = 0;
       let sourceWellId = null;
-      let sourceRingId = null;
       let bestCurrent = 0;
 
       for (const well of wells) {
@@ -143,8 +138,6 @@ function buildCoarseFlowField({
         });
         gravityX += (dx / dist) * gravityStrength;
         gravityY += (dy / dist) * gravityStrength;
-        if (currentAccel > 0) surf = Math.max(surf, clamp01(currentAccel / 2.5));
-
         const killRadius = well.killRadius || 0.04;
         const ringOuter = well.ringOuter || killRadius * 2.5;
         if (dist <= killRadius) {
@@ -152,7 +145,6 @@ function buildCoarseFlowField({
         } else if (dist <= ringOuter) {
           const band = 1 - (dist - killRadius) / Math.max(0.001, ringOuter - killRadius);
           hazard = Math.max(hazard, clamp01(band));
-          signalShadow = Math.max(signalShadow, clamp01(band * 0.7));
         }
       }
 
@@ -177,13 +169,8 @@ function buildCoarseFlowField({
         ambientY,
         gravityX,
         gravityY,
-        waveX,
-        waveY,
         hazard,
-        surf,
-        signalShadow,
         sourceWellId,
-        sourceRingId,
       };
     }
   }
@@ -236,11 +223,7 @@ function sampleCoarseFlowField(field, wx, wy) {
       currentY: 0,
       gravityX: 0,
       gravityY: 0,
-      waveX: 0,
-      waveY: 0,
       hazard: 0,
-      surf: 0,
-      signalShadow: 0,
       ...sample,
     };
   }
@@ -263,8 +246,8 @@ function sampleCoarseFlowField(field, wx, wy) {
   const lerp = (a, b, t) => a + (b - a) * t;
   const bilerp = (key) => lerp(lerp(c00[key], c10[key], tx), lerp(c01[key], c11[key], tx), ty);
   const pickSourceCell = [c00, c10, c01, c11].reduce((best, cell) => {
-    const score = (cell?.surf || 0) + (cell?.hazard || 0);
-    const bestScore = (best?.surf || 0) + (best?.hazard || 0);
+    const score = cell?.hazard || 0;
+    const bestScore = best?.hazard || 0;
     return score > bestScore ? cell : best;
   }, c00);
 
@@ -274,24 +257,15 @@ function sampleCoarseFlowField(field, wx, wy) {
   const ambientY = bilerp("ambientY");
   const gravityX = bilerp("gravityX");
   const gravityY = bilerp("gravityY");
-  const waveX = bilerp("waveX");
-  const waveY = bilerp("waveY");
   const hazard = bilerp("hazard");
-  const surf = bilerp("surf");
-  const signalShadow = bilerp("signalShadow");
   const sample = normalizeFlowSample({
     currentX,
     currentY,
     gravityX,
     gravityY,
-    waveX,
-    waveY,
     hazard,
-    surf,
-    signalShadow,
     sources: {
       wellId: pickSourceCell?.sourceWellId ?? null,
-      ringId: pickSourceCell?.sourceRingId ?? null,
       anchorId: null,
     },
     confidence: 1,
@@ -308,11 +282,7 @@ function sampleCoarseFlowField(field, wx, wy) {
     ),
     gravityX: bilerp("gravityX"),
     gravityY: bilerp("gravityY"),
-    waveX: bilerp("waveX"),
-    waveY: bilerp("waveY"),
     hazard,
-    surf,
-    signalShadow,
     ...sample,
   };
 }

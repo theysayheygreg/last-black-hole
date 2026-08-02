@@ -100,22 +100,21 @@ existing consumers. Star consumption also publishes `star.consumed` with the
 `collapseEpochContract` is deliberately provisional for Greg tuning. Epoch
 boundaries are match-progress fractions, not player clocks:
 
-| Identity | Progress | Default 600s schedule | Seeded ambient | Live wave push |
-|---|---:|---:|---:|---:|
-| `collapse-epoch-0` | `0.00` | `0s` | `1.00x` | `1.00x` |
-| `collapse-epoch-1` | `0.25` | `150s` | `1.08x` | `1.05x` |
-| `collapse-epoch-2` | `0.50` | `300s` | `1.16x` | `1.10x` |
-| `collapse-epoch-3` | `0.75` | `450s` | `1.24x` | `1.15x` |
+| Identity | Progress | Default 600s schedule | Seeded ambient |
+|---|---:|---:|---:|
+| `collapse-epoch-0` | `0.00` | `0s` | `1.00x` |
+| `collapse-epoch-1` | `0.25` | `150s` | `1.08x` |
+| `collapse-epoch-2` | `0.50` | `300s` | `1.16x` |
+| `collapse-epoch-3` | `0.75` | `450s` | `1.24x` |
 
-The two vector components are bounded, named multipliers over existing
-authoritative field machinery only:
-`seededSeaAmbientMultiplier` is bounded to `[1.00, 1.25]`, and
-`liveWavePushMultiplier` is bounded to `[1.00, 1.20]`. Well gravity, orbital
-current, movement constants, slingshot, fabric ownership, and player clocks do
-not read the epoch vector. Epoch state is retained in the Conductor schedule,
-and `collapse.epochTransition` is appended to the normal authority event
-journal once per stable epoch identity, including previous/current ids,
-scheduled time, event time, and vector.
+The vector contains the one remaining bounded field multiplier,
+`seededSeaAmbientMultiplier`, over existing authoritative seeded-current
+machinery. Well gravity, orbital current, source-bound waves, movement
+constants, slingshot, fabric ownership, and player clocks do not read the epoch
+vector. Epoch state is retained in the Conductor schedule, and
+`collapse.epochTransition` is appended to the normal authority event journal
+once per stable epoch identity, including previous/current ids, scheduled time,
+event time, and vector.
 
 Snapshots expose `world.collapseEpoch` and `world.collapseEpochSchedule` next
 to the existing wells and wave rings. Presentation normalization preserves

@@ -164,14 +164,15 @@ async function run() {
       waveRings: [{ id: "retired-band", sourceWX: 1.5, sourceWY: 1.5, radius: 0.4, amplitude: 1 }],
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
-    assert(Math.abs(sample.wave.x) < EPSILON && Math.abs(sample.wave.y) < EPSILON);
-    assert.strictEqual(sample.sources.ringId, null);
-    assert.strictEqual(sample.surf, 0);
+    assert(!('wave' in sample) && !('surf' in sample) && !('signalShadow' in sample));
+    assert(!('ringId' in sample.sources));
     const coarseSource = fs.readFileSync(path.join(ROOT, "scripts/coarse-flow-field.cjs"), "utf8");
     const localSource = fs.readFileSync(path.join(ROOT, "src/sim/flow-field.js"), "utf8");
     const ringSource = fs.readFileSync(path.join(ROOT, "src/wave-rings.js"), "utf8");
+    const physicsSource = fs.readFileSync(path.join(ROOT, "src/physics.js"), "utf8");
     assert(!coarseSource.includes("waveShipPush"));
     assert(!localSource.includes("waveBandForce"));
+    assert(!physicsSource.includes("waveBandForce"));
     assert(!ringSource.includes("applyToShip"));
   });
 

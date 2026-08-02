@@ -76,9 +76,9 @@ export const RENDER_PLAN_DESCRIPTOR = Object.freeze({
     Object.freeze({
       id: 'fabricSource',
       name: 'Fabric Source',
-      purpose: 'Fluid, ASCII source frame, and gravity contour inputs.',
-      inputs: Object.freeze(['fluidFrame', 'gravityContourHints', 'worldScale']),
-      outputs: Object.freeze(['fabricFrame', 'gravityContourMask']),
+      purpose: 'Fluid, ASCII source frame, and authored well-profile inputs.',
+      inputs: Object.freeze(['fluidFrame', 'wellProfiles', 'worldScale']),
+      outputs: Object.freeze(['fabricFrame', 'wellDeformationMask']),
       qualityTier: 'minimal',
       renderTargetSize: 'fluid-resolution',
       debugView: 'fabricSource',
@@ -191,4 +191,3 @@ export const RENDER_PLAN_DESCRIPTOR = Object.freeze({
 export function getRenderPlanPass(id) {
   return RENDER_PLAN_DESCRIPTOR.passes.find((pass) => pass.id === id) || null;
 }
-

@@ -82,7 +82,7 @@ async function run() {
       },
       semanticField: {
         shipSample: {
-          hazard: 0.2, surf: 0, signalShadow: 0, current: { x: 0.3, y: -0.4 },
+          hazard: 0.2, current: { x: 0.3, y: -0.4 },
         },
       },
     });

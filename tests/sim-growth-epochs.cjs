@@ -94,7 +94,7 @@ async function run() {
     const base = buildCoarseFlowField(input);
     const identity = buildCoarseFlowField({
       ...input,
-      collapseParameters: { seededSeaAmbientMultiplier: 1, liveWavePushMultiplier: 1 },
+      collapseParameters: { seededSeaAmbientMultiplier: 1 },
     });
     assert.deepStrictEqual(identity.cells, base.cells, "epoch zero must leave base field cells unchanged");
   });
@@ -103,19 +103,19 @@ async function run() {
     const well = { id: "well-a", wx: 1.5, wy: 1.5, mass: 1, killRadius: 0.06, orbitalDir: 1 };
     const wellOnly = { worldScale: 3, cellSize: 0.2, wells: [well], waveRings: [], seededSea: null };
     assert.deepStrictEqual(
-      buildCoarseFlowField({ ...wellOnly, collapseParameters: { seededSeaAmbientMultiplier: 1.24, liveWavePushMultiplier: 1.15 } }).cells,
+      buildCoarseFlowField({ ...wellOnly, collapseParameters: { seededSeaAmbientMultiplier: 1.24 } }).cells,
       buildCoarseFlowField(wellOnly).cells,
       "well gravity/current terms must not read collapse multipliers"
     );
 
     const seededSea = createSeededSea({ seed: 8, mapId: "field-proof", worldScale: 3, wells: [well], rngStreams: createRNGStreams(8) });
     const ambientBase = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [], seededSea });
-    const ambientRetuned = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [], seededSea, collapseParameters: { seededSeaAmbientMultiplier: 1.24, liveWavePushMultiplier: 1 } });
+    const ambientRetuned = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [], seededSea, collapseParameters: { seededSeaAmbientMultiplier: 1.24 } });
     assert(ambientBase.cells.some((cell, index) => cell.currentX !== ambientRetuned.cells[index].currentX || cell.currentY !== ambientRetuned.cells[index].currentY), "seeded ambient multiplier must alter the seeded term");
 
     const ring = { id: "growth-ring", sourceWX: 1.5, sourceWY: 1.5, radius: 0.4, amplitude: 0.8, alive: true };
     const waveBase = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [ring], seededSea: null });
-    const waveRetuned = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [ring], seededSea: null, collapseParameters: { seededSeaAmbientMultiplier: 1, liveWavePushMultiplier: 1.15 } });
+    const waveRetuned = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [ring], seededSea: null, collapseParameters: { seededSeaAmbientMultiplier: 1 } });
     assert.deepStrictEqual(waveBase.cells, waveRetuned.cells, "retired live wave parameter must not alter the coarse field");
   });
 
@@ -166,13 +166,13 @@ async function run() {
           epochIndex: 1,
           scheduledTime: 150,
           transitionCount: 1,
-          parameterVector: { seededSeaAmbientMultiplier: 1.08, liveWavePushMultiplier: 1.05 },
+          parameterVector: { seededSeaAmbientMultiplier: 1.08 },
         },
         collapseEpochSchedule: [{
           epochId: "collapse-epoch-1",
           epochIndex: 1,
           scheduledTime: 150,
-          parameterVector: { seededSeaAmbientMultiplier: 1.08, liveWavePushMultiplier: 1.05 },
+          parameterVector: { seededSeaAmbientMultiplier: 1.08 },
         }],
       },
       events: [{
@@ -197,7 +197,7 @@ async function run() {
     assert.strictEqual(frame.world.wells[0].catalogId, "base-well");
     assert.strictEqual(frame.world.wells[0].mass, 1.52);
     assert.strictEqual(frame.world.collapseEpoch.epochId, "collapse-epoch-1");
-    assert.strictEqual(frame.world.collapseEpoch.parameterVector.liveWavePushMultiplier, 1.05);
+    assert.deepStrictEqual(frame.world.collapseEpoch.parameterVector, { seededSeaAmbientMultiplier: 1.08 });
     assert.strictEqual(frame.events[0].wellId, "well-a");
     assert.strictEqual(frame.events[0].growthSource, "star-consumption");
     assert.strictEqual(frame.events[0].after.mass, 1.52);

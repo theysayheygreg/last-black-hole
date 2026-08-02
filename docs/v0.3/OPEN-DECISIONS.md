@@ -148,6 +148,11 @@ This is deliberately large enough to read in play. Unusual or overdriven wells
 may later author a stronger impulse explicitly; ordinary wells share this one
 baseline.
 
+The V1-V6 implementation now consumes only the canonical fabric profile and
+source-bound wave projection. The retired collapse-epoch live-wave multiplier,
+coarse `wave`/surf shadow channels, and gravity-contour presentation names are
+not live tuning or renderer contracts.
+
 ### Three-Layer Fabric Grammar
 
 Resolved on 2026-08-02. The player-facing fabric has only three primary layers:

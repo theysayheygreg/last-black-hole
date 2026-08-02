@@ -119,8 +119,8 @@ async function run() {
       waveRings: [ring],
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
-    assert(Math.abs(sample.wave.x) < 1e-9, `Expected no live ring force in authoritative field, got ${sample.wave.x}`);
-    assert(sample.sources.ringId === null, `Expected no live ring source, got ${sample.sources.ringId}`);
+    assert(!('wave' in sample), "Retired live ring force must not be present in the authoritative field");
+    assert(!('ringId' in sample.sources), "Retired live ring source must not be present");
   });
 
   await runner.run("field scale is unified across map profiles", async () => {

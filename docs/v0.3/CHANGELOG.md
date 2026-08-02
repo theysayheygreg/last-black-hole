@@ -1,5 +1,15 @@
 # v0.3 Changelog
 
+- **Fabric readability V6 cleanup:** removed the inert collapse-epoch
+  `liveWavePushMultiplier`, zeroed coarse `wave`/surf-shadow channels, and
+  retired gravity-contour renderer vocabulary. The live source-bound wave
+  presentation and universal Noise contract remain unchanged. The earlier V2
+  bounded Shallows capture did not produce an image; its bootstrap log is not
+  retained in this worktree, so no V2 visual acceptance is claimed. The one
+  final 1280x800 live capture attempt also stopped at HTML bootstrap after 12s
+  with `window.__TEST_API` unavailable and no browser errors; it was not
+  retried. V6 keeps Greg's final visual/readability gate open.
+
 - **Localized well-gravity design lock:** separated radial-gravity reach from
   strength. Wells will own a full-strength radius, falloff-end radius, minimum
   edge fraction, and eased falloff with zero pull outside the localized

@@ -289,7 +289,7 @@ async function run() {
     for (const [x, y] of [[1.25, 2.5], [12.4, 19.1], [24.7, 0.2]]) {
       const first = sampleCoarseFlowField(field, x, y);
       const shifted = sampleCoarseFlowField(field, x + map.worldScale, y - map.worldScale);
-      for (const key of ["currentX", "currentY", "gravityX", "gravityY", "hazard", "surf"]) {
+      for (const key of ["currentX", "currentY", "gravityX", "gravityY", "hazard"]) {
         assertAlmostEqual(shifted[key], first[key], `${key} changed across toroidal shift`);
       }
     }

@@ -121,12 +121,16 @@ async function run() {
     }
   });
 
-  await runner.run("each trio vector preserves the source-bound wave contract", () => {
+  await runner.run("each trio vector leaves waves to the source-bound authority contract", () => {
     const fields = Object.fromEntries(["base-well", ...TRIO_IDS].map((id) => [id, makeField(id)]));
     const hashes = new Set(Object.values(fields).map((field) => hash(field.cells)));
     assert.strictEqual(hashes.size, 4, "base plus trio must produce four distinct field outputs");
-    const waveSamples = TRIO_IDS.map((id) => sampleCoarseFlowField(fields[id], 1.9, 1.5).wave.x);
-    assert(waveSamples.every((value) => Math.abs(value) < 1e-9), "coarse field wave force must remain retired");
+    const waveSamples = TRIO_IDS.map((id) => sampleCoarseFlowField(fields[id], 1.9, 1.5));
+    assert(waveSamples.every((sample) => !('wave' in sample) && !('waveX' in sample) && !('waveY' in sample)),
+      "coarse field must not expose a retired wave channel");
+    const waveAuthority = fs.readFileSync(path.join(ROOT, "scripts/sim/swept-wave-crossing.cjs"), "utf8");
+    assert(waveAuthority.includes("sweptWaveCrossing") && waveAuthority.includes("rememberWaveReceipt"),
+      "source-bound wave truth must remain in the authority crossing/receipt helper");
   });
 
   await runner.run("base-well migration preserves fields and identity-vector parity", () => {

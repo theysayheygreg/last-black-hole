@@ -44,13 +44,6 @@
         "startBias": "identity base-well field",
         "source": "scripts/sim/seeded-sea.cjs:sampleSeededSea"
       },
-      "liveWavePushMultiplier": {
-        "unit": "x live wave source term",
-        "range": [0.75, 1.25],
-        "step": 0.05,
-        "startBias": "identity base-well field",
-        "source": "scripts/coarse-flow-field.cjs:waveShipPush"
-      },
       "growthRateMultiplier": {
         "unit": "x mass per existing growth event",
         "range": [0.75, 1.25],
@@ -151,13 +144,6 @@
         "step": 0.05,
         "startBias": "identity until first collapse epoch",
         "source": "scripts/sim/seeded-sea.cjs:sampleSeededSea"
-      },
-      "liveWavePushMultiplier": {
-        "unit": "x live wave field term",
-        "range": [1, 1.2],
-        "step": 0.05,
-        "startBias": "identity until first collapse epoch",
-        "source": "scripts/coarse-flow-field.cjs:waveShipPush"
       }
     },
     "boundaries": [
@@ -165,32 +151,28 @@
         "id": "collapse-epoch-0",
         "progress": 0,
         "parameterVector": {
-          "seededSeaAmbientMultiplier": 1,
-          "liveWavePushMultiplier": 1
+          "seededSeaAmbientMultiplier": 1
         }
       },
       {
         "id": "collapse-epoch-1",
         "progress": 0.25,
         "parameterVector": {
-          "seededSeaAmbientMultiplier": 1.08,
-          "liveWavePushMultiplier": 1.05
+          "seededSeaAmbientMultiplier": 1.08
         }
       },
       {
         "id": "collapse-epoch-2",
         "progress": 0.5,
         "parameterVector": {
-          "seededSeaAmbientMultiplier": 1.16,
-          "liveWavePushMultiplier": 1.1
+          "seededSeaAmbientMultiplier": 1.16
         }
       },
       {
         "id": "collapse-epoch-3",
         "progress": 0.75,
         "parameterVector": {
-          "seededSeaAmbientMultiplier": 1.24,
-          "liveWavePushMultiplier": 1.15
+          "seededSeaAmbientMultiplier": 1.24
         }
       }
     ]
@@ -213,7 +195,6 @@
           "currentStrengthMultiplier": 1.0,
           "currentReachMultiplier": 1.0,
           "seededSeaAmbientMultiplier": 1.0,
-          "liveWavePushMultiplier": 1.0,
           "growthRateMultiplier": 1.0,
           "growthWaveAmplitudeMultiplier": 1.0
         }
@@ -265,7 +246,6 @@
           "currentStrengthMultiplier": 1.20,
           "currentReachMultiplier": 0.80,
           "seededSeaAmbientMultiplier": 0.90,
-          "liveWavePushMultiplier": 0.95,
           "growthRateMultiplier": 1.15,
           "growthWaveAmplitudeMultiplier": 0.90
         }
@@ -319,7 +299,6 @@
           "currentStrengthMultiplier": 0.80,
           "currentReachMultiplier": 1.25,
           "seededSeaAmbientMultiplier": 0.95,
-          "liveWavePushMultiplier": 1.10,
           "growthRateMultiplier": 0.85,
           "growthWaveAmplitudeMultiplier": 1.15
         }
@@ -373,7 +352,6 @@
           "currentStrengthMultiplier": 1.05,
           "currentReachMultiplier": 1.00,
           "seededSeaAmbientMultiplier": 1.00,
-          "liveWavePushMultiplier": 1.20,
           "growthRateMultiplier": 1.00,
           "growthWaveAmplitudeMultiplier": 1.20
         }

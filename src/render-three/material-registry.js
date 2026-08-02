@@ -12,7 +12,6 @@ export const MATERIAL_QUALITY_TIERS = Object.freeze([
 
 export const REQUIRED_MATERIAL_FAMILY_IDS = Object.freeze([
   'asciiFabric',
-  'gravityContour',
   'entityEcho',
   'shipContactMatte',
   'thrusterWake',
@@ -34,21 +33,6 @@ export const MATERIAL_FAMILIES = Object.freeze([
       paletteRole: 'fabricBlue',
       blendMode: 'postComposite',
       contrastRole: 'canonicalSurface',
-    }),
-    budgetClass: 'strict',
-    fixturePolicy: 'required',
-  }),
-  Object.freeze({
-    id: 'gravityContour',
-    name: 'Gravity Contour',
-    category: 'fabric',
-    defaultQualityTier: 'default',
-    minimumQualityTier: 'minimal',
-    captureQualityTier: 'capture',
-    defaults: Object.freeze({
-      paletteRole: 'routeCyan',
-      blendMode: 'additiveContour',
-      contrastRole: 'terrainRead',
     }),
     budgetClass: 'strict',
     fixturePolicy: 'required',

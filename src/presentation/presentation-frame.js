@@ -86,7 +86,7 @@ function forceLedger(source = null) {
 function normalizeParameterVector(source = null) {
   if (!source || typeof source !== 'object') return Object.freeze({});
   const vector = {};
-  for (const key of ['seededSeaAmbientMultiplier', 'liveWavePushMultiplier']) {
+  for (const key of ['seededSeaAmbientMultiplier']) {
     const value = optionalFinite(source[key]);
     if (value !== undefined) vector[key] = value;
   }
@@ -283,9 +283,9 @@ function normalizeEntity(family, source, index) {
         overdriveMultiplier: Math.max(1, finite(source.overdriveMultiplier, 1)),
         visual: Object.freeze({
           coreRadius: Math.max(0.001, finite(source.killRadius, 0.04)),
-          contourRadius: Math.max(0.001, finite(source.ringOuter, 0.1)),
+          outerRadius: Math.max(0.001, finite(source.ringOuter, 0.1)),
         }),
-        hint: hint('anomaly', { category: 'fabric', roleColor: 'neutralWhite', vfxFamily: 'gravityContour' }),
+        hint: hint('anomaly', { category: 'fabric', roleColor: 'neutralWhite', vfxFamily: 'none' }),
       });
     case 'waveRings':
       return Object.freeze({
@@ -451,8 +451,6 @@ function normalizeWorld(scene = {}) {
   world.semanticField = Object.freeze({
     localSample: scene.semanticField?.shipSample ? Object.freeze({
       hazard: finite(scene.semanticField.shipSample.hazard),
-      surf: finite(scene.semanticField.shipSample.surf),
-      signalShadow: finite(scene.semanticField.shipSample.signalShadow),
     }) : null,
   });
   world.collapseEpoch = normalizeCollapseEpoch(scene.collapseEpoch);

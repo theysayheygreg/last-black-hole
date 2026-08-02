@@ -226,7 +226,7 @@ void main() {
 
 // Display shader — maps fluid state to visible colors
 // V4: gravity field as primary brightness signal — wells visible immediately, no warm-up
-// Layers: gravity field → density/velocity overlay → fabric noise → well color gradient → accretion
+// Layers: gravity field → density/velocity overlay → sparse lanes → well color gradient → accretion
 export const FRAG_DISPLAY = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
@@ -366,7 +366,7 @@ void main() {
     // crest is a sparse material accent, never a second ring primitive.
     float waveSwell = 0.0;
     float waveCrest = 0.0;
-    vec2 wavePush = vec2(0.0);
+    vec2 waveDeformation = vec2(0.0);
     for (int wi = 0; wi < 8; wi++) {
       if (wi >= u_waveCount) break;
       vec4 wave = u_waveShape[wi];
@@ -380,15 +380,15 @@ void main() {
       float behind = exp(-behindDistance / (width * 2.0));
       float swell = max(front, behind * 0.5) * wave.w;
       waveSwell = max(waveSwell, swell);
-      if (waveDistance > 0.0001) wavePush += normalize(waveDelta) * swell * 0.08;
+      if (waveDistance > 0.0001) waveDeformation += normalize(waveDelta) * swell * 0.08;
 
       float angle = atan(waveDelta.y, waveDelta.x);
       float segment = fract(angle * 1.7 + float(wi) * 0.23);
       float sparse = step(0.16, segment) * (1.0 - step(0.78, segment));
       waveCrest = max(waveCrest, front * sparse * wave.w);
     }
-    laneWorld += wavePush;
-    laneFlow = normalize(laneFlow + wavePush * 0.75);
+    laneWorld += waveDeformation;
+    laneFlow = normalize(laneFlow + waveDeformation * 0.75);
     laneDir = normalize(laneFlow);
     vec2 laneSide = vec2(-laneDir.y, laneDir.x);
     float across = dot(laneWorld, laneSide);

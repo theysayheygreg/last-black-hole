@@ -41,7 +41,6 @@ export const MATTE_POLICIES = Object.freeze([
 
 export const VFX_FAMILIES = Object.freeze([
   'none',
-  'gravityContour',
   'thrusterWake',
   'portalAperture',
   'inhibitorShard',

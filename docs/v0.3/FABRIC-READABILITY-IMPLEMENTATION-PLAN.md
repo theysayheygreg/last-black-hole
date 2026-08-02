@@ -1,8 +1,28 @@
 # v0.3 Fabric Readability Implementation Plan
 
-> Status: implementation contract awaiting Orrery review. Product base:
-> `d9939949c2e7075f305998cfd18de34dac47be3c`. This is a v0.3 same-line
-> feature program; it does not authorize promotion or cross-version work.
+> Status: V1-V6 implementation complete on the v0.3 same-line feature branch.
+> Orrery visual review was waived while offline. Machine checks and the final
+> capture attempt are recorded in the V6 handoff; visual acceptance remains
+> Greg's human gate. This does not authorize promotion or cross-version work.
+
+## Implementation Status
+
+- **V1:** `src/content/fabric.data.json` is the mechanical profile owner and is
+  consumed by the authoritative coarse field, movement, and wave helpers.
+- **V2:** the display shader renders sparse, world-anchored current lanes from
+  accepted coarse current. The earlier bounded Shallows capture bootstrap did
+  not produce visual evidence, and its bootstrap log is not retained in this
+  worktree; V2 visual acceptance remains unclaimed.
+- **V3:** authored well radii drive broad bend, compression, and split/rejoin
+  deformation; generic surf, halo, and contour cues are retired.
+- **V4:** 15 Hz authority owns swept one-shot wave crossings, hull reference
+  speed, receipts, and staggered Conductor scheduling; coarse movement no
+  longer carries a wave-force channel.
+- **V5:** source-bound waves have the approved telegraph, audio cue, material
+  swell, and sparse crest, with calm fabric returning behind the front.
+- **V6:** inert epoch/config fields and retired flow/render vocabulary are
+  removed without changing gameplay tuning; focused proof and the one final
+  capture attempt are recorded in the handoff receipt.
 
 ## Outcome
 
@@ -184,6 +204,17 @@ Run one focused renderer smoke and one natural playable capture at 1280x800.
 Do not run broad CI until this coherent vertical is selected as a checkpoint or
 RC candidate. Greg owns the final movement feel and visual-readability gate.
 
+#### V6 Handoff Evidence (2026-08-02)
+
+- Cleanup vocabulary check: `tests/fabric-readability-cleanup.cjs` — 2 passed.
+- Focused well-presentation smoke: `tests/fabric-well-presentation.cjs` — 2
+  passed. Renderer contract check: `tests/render-plan.cjs` — 4 passed.
+- Changed JS/CJS syntax and `git diff --check`: 21 files checked, clean.
+- Exactly one natural 1280x800 attempt used the existing `tests/ruler-live.cjs`
+  seam. It produced no capture because page bootstrap timed out after 12s:
+  `Timed out waiting for test API boot: false; boot={"state":{"stage":"html"...
+  },"errors":[]}`. No retry was made and no visual acceptance is claimed.
+
 ## File Ownership
 
 Likely high-conflict owners:
@@ -226,4 +257,3 @@ Return each vertical as one meaningful commit with:
 - one artifact path when the vertical is visual;
 - honest remaining exposure;
 - next playable vertical.
-

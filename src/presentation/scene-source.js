@@ -228,8 +228,6 @@ export function createPresentationSceneSource(input = {}) {
     semanticField: {
       shipSample: fieldSample ? {
         hazard: fieldSample.hazard || 0,
-        surf: fieldSample.surf || 0,
-        signalShadow: fieldSample.signalShadow || 0,
         current: fieldSample.current || { x: fieldSample.x || 0, y: fieldSample.y || 0 },
       } : null,
     },

@@ -67,7 +67,6 @@ function assertEpochSchedule(snapshot, duration) {
   ]);
   epochs.forEach((epoch, index) => closeEnough(epoch.scheduledTime, duration * [0, 0.25, 0.5, 0.75][index], `${duration}s epoch ${index}`));
   assert.deepStrictEqual(epochs.map((epoch) => epoch.parameterVector.seededSeaAmbientMultiplier), [1, 1.08, 1.16, 1.24]);
-  assert.deepStrictEqual(epochs.map((epoch) => epoch.parameterVector.liveWavePushMultiplier), [1, 1.05, 1.1, 1.15]);
 }
 
 function assertRunSchedule(snapshot, duration) {

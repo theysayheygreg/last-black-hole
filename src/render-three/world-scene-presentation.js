@@ -646,7 +646,7 @@ export class WorldScenePresentation {
     for (const well of sceneState.wells || []) {
       if (diagnosticView) {
         if (addSemantic(this.entityGeometries.ring, this.entityMaterials.hazardRing,
-          well.world.x, well.world.y, well.visual.contourRadius, 0, 0.01)) this.wellDebugPrimitiveCount += 1;
+          well.world.x, well.world.y, well.visual.outerRadius, 0, 0.01)) this.wellDebugPrimitiveCount += 1;
         if (addEntity(this.entityGeometries.ring, this.entityMaterials.wellRing,
           well.world.x, well.world.y, Math.max(0.07, well.visual.coreRadius * 2.6), 0, 0.03)) this.wellDebugPrimitiveCount += 1;
         if (addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore,
