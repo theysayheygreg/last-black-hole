@@ -167,7 +167,7 @@ moving-body disturbance may remain in mechanical truth, but the first visual
 cleanup folds them into local flow or source VFX instead of adding dominant
 full-screen layers.
 
-### Layer 1 presentation candidate: flow lanes
+### Layer 1 locked presentation: flow lanes
 
 Broad local flow should appear as a small number of wide, world-anchored lanes
 whose internal marks move with the accepted current vector. Direction is shown
@@ -180,6 +180,11 @@ The current shader's hash noise, global speed brightening, and generic well
 communicating the accepted flow vector. Ambient texture remains quiet. Ecology
 distortion stays local to its visible source. The renderer must not create a
 second decorative vector field that disagrees with authority movement truth.
+
+The approved composition uses the low-density visual rest of Concept A and the
+broad bend/split/rejoin behavior of Concept C. Concept B contributes only
+restrained tactile grain within a lane. It is not permission to restore dense
+full-field texture.
 
 ## Canonical Mechanical Fabric Causes
 

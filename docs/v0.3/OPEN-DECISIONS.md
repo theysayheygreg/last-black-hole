@@ -164,6 +164,14 @@ object identity. Solar wind and moving-body disturbances remain mechanical
 catalog items but do not earn separate dominant fabric layers in the first
 readability pass.
 
+Broad local flow uses sparse, soft, world-anchored lanes made from broken
+ASCII-like streaks. The locked visual target combines Concept Panel A's low
+density and visual rest with Panel C's broad bend/split/rejoin topology near
+wells. Panel B's tactile sand-like grain is permitted only as restrained detail
+inside those lanes, never as the default full-field density. Direction comes
+from downstream mark motion; strength comes from longer, faster marks rather
+than more marks.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

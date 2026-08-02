@@ -50,6 +50,12 @@
   well-bending topology, and Panel B marks the maximum acceptable tactile
   density rather than the default. No runtime behavior changed.
 
+- **Broad-flow art direction lock:** Greg approved Concept A's sparse visual
+  rest plus Concept C's well-bending topology, with only restrained tactile
+  grain borrowed from Concept B inside the lanes. This composite is now the
+  implementation target for local-flow presentation. No runtime behavior
+  changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

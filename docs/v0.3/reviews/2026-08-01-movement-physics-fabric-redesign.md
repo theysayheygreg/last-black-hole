@@ -177,7 +177,7 @@ The first locked tuning hypothesis is deliberately simple:
   waves. Every fabric shader, VFX, HUD, and audio contribution must clarify one
   of those layers or be subdued, removed, or deferred.
 
-### Layer 1 candidate: broad local flow
+### Layer 1 locked direction: broad local flow
 
 The current display shader does not provide a stable flow read. It combines
 whole-frame speed brightness, hash noise, density excitation, a well-local
@@ -214,11 +214,11 @@ Implementation cleanup implied by this direction:
    truth used for movement.
 
 Concept sheet: [`../concepts/fabric-flow-lanes-concept-01.png`](../concepts/fabric-flow-lanes-concept-01.png).
-Panel A is the clarity baseline: sparse calm tidal lanes and substantial visual
-rest. Panel C supplies the preferred bend/split/rejoin language near wells.
-Panel B is a useful upper bound for tactile grain but is too dense for ordinary
-play; its sand-like texture should appear only as restrained detail inside the
-broader A/C lane structure.
+Greg approved the composite on 2026-08-02. Panel A is the locked clarity
+baseline: sparse calm tidal lanes and substantial visual rest. Panel C supplies
+the locked bend/split/rejoin language near wells. Panel B is an upper bound for
+tactile grain and is too dense for ordinary play; its sand-like texture appears
+only as restrained detail inside the broader A/C lane structure.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not
