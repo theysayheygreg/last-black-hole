@@ -344,7 +344,7 @@ async function main() {
         const [player, visible] = await Promise.all([playerFor(), visibleState(page)]);
         return { player, visible };
       },
-      ({ player, visible }) => hasAuthorityPhase(player, "lock", "lock", well)
+      ({ player, visible }) => hasAuthorityPhase(player, "arc", "lock", well)
         && isSelectedWellAnchor(visible.scene?.slingshot?.telegraph?.lock?.anchor, well),
       "authoritative and visible selected-well lock",
       1500,
@@ -396,7 +396,7 @@ async function main() {
         well,
       )
         && visible.ruler?.enabled
-        && visible.ruler.handlerCount === 11
+        && visible.ruler.handlerCount === 12
         && visible.ruler.forceTick != null
         && (arcForceTick == null || visible.ruler.forceTick >= arcForceTick),
       "visible selected-well arc and fresh ruler evidence",

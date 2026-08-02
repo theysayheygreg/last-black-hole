@@ -138,7 +138,7 @@ async function placePlayer(clientId, body) {
     await page.keyboard.down('KeyW');
     const overlay = await waitFor(
       () => page.evaluate(() => window.__TEST_API.getRulerOverlayStats()),
-      (value) => value?.enabled && value.handlerCount === 11 && value.forceTick != null,
+      (value) => value?.enabled && value.handlerCount === 12 && value.forceTick != null,
       'live ruler handler and force facts',
     );
     const movementPlayer = await waitFor(
