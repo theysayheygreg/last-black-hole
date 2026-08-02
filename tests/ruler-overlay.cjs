@@ -34,7 +34,8 @@ function presentationFixture() {
         tick: 42,
         vectors: {
           thrust: { x: 100, y: 0, magnitude: 100 },
-          coupling: { ...zero }, gravity: { ...zero }, wave: { ...zero },
+          currentCoupling: { ...zero }, wellGravity: { ...zero }, solarWind: { ...zero },
+          bodyPush: { ...zero }, wave: { ...zero },
           impulse: { ...zero }, drag: { ...zero },
         },
       },
@@ -54,7 +55,7 @@ function presentationFixture() {
   const initial = drawRulerOverlay(fakeContext(), {
     presentation: presentationFixture(), canvasW: 1200, canvasH: 900, reducedMotion: true,
   });
-  assert.strictEqual(initial.handlerCount, 10);
+  assert.strictEqual(initial.handlerCount, REQUIRED_RULER_HANDLER_IDS.length);
   assert.deepStrictEqual(initial.handlerIds, REQUIRED_RULER_HANDLER_IDS);
   assert.strictEqual(initial.geometry.scaleBarPx, RULER_SCALE_BAR_METERS * 1200 / 3000);
   assert.strictEqual(initial.geometry.captureRadiusPx, 180);

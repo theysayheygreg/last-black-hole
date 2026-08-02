@@ -88,13 +88,13 @@ function player(overrides = {}) {
       velocitySeenByAbility = movingPlayer.vx;
       return { x: 0.3, y: 0 };
     },
-    environmentAcceleration: { gravity: { x: 0.4, y: 0 }, wave: { x: 0.5, y: 0 } },
+    environmentAcceleration: { wellGravity: { x: 0.4, y: 0 }, wave: { x: 0.5, y: 0 } },
   });
   assert(Math.abs(velocitySeenByAbility - 0.02) < 1e-12,
     'ability state must observe the already-applied inhibitor contribution');
   assert(Math.abs(step.inhibitorDeltaV.x - 0.02) < 1e-12);
   assert(Math.abs(step.abilityDeltaV.x - 0.03) < 1e-12);
-  assert(Math.abs(step.gravityDeltaV.x - 0.04) < 1e-12);
+  assert(Math.abs(step.wellGravityDeltaV.x - 0.04) < 1e-12);
   assert(Math.abs(step.waveDeltaV.x - 0.05) < 1e-12);
 }
 

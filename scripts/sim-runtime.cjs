@@ -3102,7 +3102,7 @@ function resolvePlayerEnvironment(player, flowSample, relevance) {
   return {
     // Retain the previous well -> each star -> each planetoid arithmetic order
     // while one FREE owner applies every continuous acceleration.
-    gravity: well,
+    wellGravity: well,
     solarWind: resolveStarSolarWind(player, relevance.stars),
     bodyPush: resolvePlanetoidPushes(player, relevance.planetoids),
     wave: { ...flowSample.wave },
@@ -6434,9 +6434,10 @@ function tickAuthorityPlayers(dt, relevance) {
     recordForceDeltaV(forceLedger, "inhibitor", movementStep.inhibitorDeltaV);
     recordForceDeltaV(forceLedger, "ability", movementStep.abilityDeltaV);
     recordForceDeltaV(forceLedger, "thrust", movementStep.thrustDeltaV);
-    recordForceDeltaV(forceLedger, "coupling", movementStep.couplingDeltaV);
-    recordForceDeltaV(forceLedger, "gravity", movementStep.gravityDeltaV);
+    recordForceDeltaV(forceLedger, "currentCoupling", movementStep.currentCouplingDeltaV);
+    recordForceDeltaV(forceLedger, "wellGravity", movementStep.wellGravityDeltaV);
     recordForceDeltaV(forceLedger, "solarWind", movementStep.solarWindDeltaV);
+    recordForceDeltaV(forceLedger, "bodyPush", movementStep.bodyPushDeltaV);
     recordForceDeltaV(forceLedger, "wave", movementStep.waveDeltaV);
     recordForceDeltaV(forceLedger, "drag", movementStep.dragDeltaV);
     player.lastDeliveredThrustIntensity = movementStep.thrustIntensity;

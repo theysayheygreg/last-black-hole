@@ -1,5 +1,12 @@
 # v0.3 Changelog
 
+- **Honest FREE environment channels:** renamed the authority movement and
+  diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
+  `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
+  generic gravity row. The accepted current -> well -> star -> planetoid ->
+  wave order, force values, fixed timestep, field sampling, contacts, and
+  renderer behavior are unchanged.
+
 - **Remote well and growth-wave presentation:** the client now preserves each
   well's authoritative orbital direction and each growth wave's source well.
   The fabric shader uses effective overdrive mass for well intensity, while

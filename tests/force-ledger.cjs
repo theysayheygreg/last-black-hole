@@ -37,7 +37,7 @@ test('authoritative ledger emits every labeled continuous and impulse vector in 
 test('component vectors exactly reconstruct authoritative tick delta-v', () => {
   const player = { vx: 1, vy: -0.5 };
   const ledger = beginForceLedger(player, 0.2, 8);
-  recordForceMutation(ledger, 'gravity', player, () => { player.vx -= 0.1; player.vy += 0.3; });
+  recordForceMutation(ledger, 'wellGravity', player, () => { player.vx -= 0.1; player.vy += 0.3; });
   recordForceMutation(ledger, 'wave', player, () => { player.vx += 0.2; });
   const result = finalizeForceLedger(ledger, player);
   const sum = FORCE_COMPONENTS.reduce((total, name) => ({
@@ -48,7 +48,7 @@ test('component vectors exactly reconstruct authoritative tick delta-v', () => {
   close(sum.y, result.total.y, 'total y');
 });
 
-test('shared movement step reports thrust, coupling, brake, and drag without changing order', () => {
+test('shared movement step reports thrust, current coupling, brake, and drag without changing order', () => {
   const player = {
     vx: 0.4, vy: -0.2, wx: 1, wy: 1,
     deltaV: 100, deltaVMax: 100, deltaVBurnRate: 12, deltaVBurnEff: 1,
@@ -60,8 +60,8 @@ test('shared movement step reports thrust, coupling, brake, and drag without cha
     brain,
     flowSample: { current: { x: -0.1, y: 0.3 } },
   });
-  close(drive.thrustDeltaV.x + drive.couplingDeltaV.x, player.vx - beforeDrive.x, 'drive x');
-  close(drive.thrustDeltaV.y + drive.couplingDeltaV.y, player.vy - beforeDrive.y, 'drive y');
+  close(drive.thrustDeltaV.x + drive.currentCouplingDeltaV.x, player.vx - beforeDrive.x, 'drive x');
+  close(drive.thrustDeltaV.y + drive.currentCouplingDeltaV.y, player.vy - beforeDrive.y, 'drive y');
 
   const beforeBrake = { x: player.vx, y: player.vy };
   const brake = applyPlayerBrakeAndIntegrate(player, { moveX: 1, moveY: 0, brake: 1 }, 0.1, {
