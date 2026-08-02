@@ -143,6 +143,51 @@ async function holdAcknowledgedPortalConfirm(page, clientId, portalId, label, ti
   return { ack, lostReadiness: false, player: lastPlayer };
 }
 
+async function holdPortalControlThroughProjection(page, clientId, portalId, readySnapshot, label, timeout = 5000) {
+  const readyTick = Number(readySnapshot?.tick);
+  assert(Number.isFinite(readyTick), `${label} lacked an authoritative ready tick`);
+  const deadline = Date.now() + timeout;
+  let last = null;
+
+  while (Date.now() < deadline) {
+    const snapshot = await getSnapshot();
+    const player = localPlayer(snapshot, clientId);
+    assert(player?.status === "alive", `${label} left the live route; last=${JSON.stringify(player)}`);
+    assert(
+      player.portalInteraction?.portalId === portalId && player.portalInteraction.ready === true,
+      `${label} lost authoritative portal readiness; last=${JSON.stringify(player)}`,
+    );
+
+    // Keep a deliberate brake input live while the public client consumes the
+    // server watermark. The direct snapshot is only the authority reference;
+    // the HUD assertion below still waits for the player's rendered client.
+    const speed = Math.hypot(player.vx || 0, player.vy || 0);
+    await setGamepadDrive(
+      page,
+      speed > 0.01 ? (player.vx || 0) / speed : 0,
+      speed > 0.01 ? (player.vy || 0) / speed : 0,
+      { brake: speed > 0.01 ? 1 : 0 },
+    );
+
+    const projection = await page.evaluate(() => {
+      const network = window.__TEST_API?.getNetworkState?.();
+      return {
+        remoteTick: network?.remoteTick ?? null,
+        portalStatus: document.getElementById("hud-portals-status")?.textContent || "",
+      };
+    });
+    last = { serverTick: snapshot.tick, player, projection };
+    if (Number(projection.remoteTick) >= readyTick && projection.portalStatus === "CONFIRM EXTRACTION") {
+      return { player, snapshot, projection };
+    }
+
+    await stepGameFrames(page, 1, 0.001);
+    await sleep(40);
+  }
+
+  throw new Error(`${label} did not reach the public client projection; last=${JSON.stringify(last)}`);
+}
+
 async function tapAcknowledgedSlingshotEdge(page, label, { release = true } = {}) {
   const before = await slingshotEdgeAcks(page);
   await setGamepadButton(page, 3, true);
@@ -502,7 +547,7 @@ async function steerTo(page, clientId, target, options = {}) {
       await sleep(110);
     }
   } finally {
-    await setGamepadDrive(page).catch(() => null);
+    if (!options.keepControl) await setGamepadDrive(page).catch(() => null);
   }
 
   throw new Error(
@@ -691,63 +736,79 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     maxCruiseSpeed: 0.18,
     portalId: initialPortal.id,
     timeout: 70000,
+    keepControl: true,
   };
-  const waitForPortalReady = (label) => waitForPlayer(
-    clientId,
-    (player) => player.portalInteraction?.portalId === initialPortal.id && player.portalInteraction.ready === true,
-    { timeout: 7000, label },
-  );
-  const travel = await steerTo(page, clientId, initialPortal, portalApproach);
-  const ready = { player: travel.player, snapshot: travel.snapshot };
-  assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
-  await page.waitForFunction(() => (
-    document.getElementById('hud-portals-status')?.textContent === 'CONFIRM EXTRACTION'
-  ), { timeout: 5000 });
-  screenshots.push(await capturePage(page, outputDir, "08-portal-zone-awaiting-confirm"));
-
-  // Capturing the evidence frame can take long enough for strong portal flow
-  // to carry the ship out. Reacquire normal ready state before the real input
-  // instead of widening the production residence/abort contract for the test.
-  await steerTo(page, clientId, initialPortal, portalApproach);
-  await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready state`);
-  // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
-  // Keep the edge held until the existing client diagnostics prove authority
-  // acknowledged it. A pre-ack drift-out may reacquire once; an acknowledged
-  // confirm must either extract or fail as a product defect below.
-  let confirmation = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    confirmation = await holdAcknowledgedPortalConfirm(
+  try {
+    const travel = await steerTo(page, clientId, initialPortal, portalApproach);
+    const ready = { player: travel.player, snapshot: travel.snapshot };
+    assert(ready.player.status === "alive", "Entering an aperture must not auto-extract before confirmation");
+    await holdPortalControlThroughProjection(
       page,
       clientId,
       initialPortal.id,
-      `portal ${initialPortal.id} confirmation acknowledgement`,
+      ready.snapshot,
+      `portal ${initialPortal.id} public ready projection`,
     );
-    if (confirmation.ack) {
-      confirmation.attempt = attempt;
-      break;
+    screenshots.push(await capturePage(page, outputDir, "08-portal-zone-awaiting-confirm"));
+
+    // Capturing the evidence frame can take long enough for strong portal flow
+    // to carry the ship out. Reacquire normal ready state before the real input
+    // instead of widening the production residence/abort contract for the test.
+    const recapture = await steerTo(page, clientId, initialPortal, portalApproach);
+    await holdPortalControlThroughProjection(
+      page,
+      clientId,
+      initialPortal.id,
+      recapture.snapshot,
+      `portal ${initialPortal.id} confirmation-ready projection`,
+    );
+    // Deck A reaches the sim through InputManager -> SimClient -> protocol v2.
+    // Keep the edge held until the existing client diagnostics prove authority
+    // acknowledged it. A pre-ack drift-out may reacquire once; an acknowledged
+    // confirm must either extract or fail as a product defect below.
+    let confirmation = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      confirmation = await holdAcknowledgedPortalConfirm(
+        page,
+        clientId,
+        initialPortal.id,
+        `portal ${initialPortal.id} confirmation acknowledgement`,
+      );
+      if (confirmation.ack) {
+        confirmation.attempt = attempt;
+        break;
+      }
+      assert(attempt === 1, `Portal ${initialPortal.id} lost readiness twice before confirmation acknowledgement`);
+      const reacquire = await steerTo(page, clientId, initialPortal, portalApproach);
+      await holdPortalControlThroughProjection(
+        page,
+        clientId,
+        initialPortal.id,
+        reacquire.snapshot,
+        `portal ${initialPortal.id} confirmation-ready reacquire projection`,
+      );
     }
-    assert(attempt === 1, `Portal ${initialPortal.id} lost readiness twice before confirmation acknowledgement`);
-    await steerTo(page, clientId, initialPortal, portalApproach);
-    await waitForPortalReady(`portal ${initialPortal.id} confirmation-ready reacquire`);
+    const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
+      timeout: 8000,
+      label: `portal ${initialPortal.id} extraction consequence`,
+    });
+    await waitForPhase(page, "escaped", 8000);
+    await waitForSettledResult(page, "extracted", 12000);
+    screenshots.push(await capturePage(page, outputDir, "09-authoritative-extraction-result"));
+    return {
+      portalId: initialPortal.id,
+      portalType: initialPortal.type,
+      readyTick: ready.snapshot.tick,
+      escapedTick: escaped.snapshot.tick,
+      confirmAck: {
+        ...confirmation.ack,
+        attempt: confirmation.attempt,
+      },
+      travel,
+    };
+  } finally {
+    await setGamepadDrive(page).catch(() => null);
   }
-  const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", {
-    timeout: 8000,
-    label: `portal ${initialPortal.id} extraction consequence`,
-  });
-  await waitForPhase(page, "escaped", 8000);
-  await waitForSettledResult(page, "extracted", 12000);
-  screenshots.push(await capturePage(page, outputDir, "09-authoritative-extraction-result"));
-  return {
-    portalId: initialPortal.id,
-    portalType: initialPortal.type,
-    readyTick: ready.snapshot.tick,
-    escapedTick: escaped.snapshot.tick,
-    confirmAck: {
-      ...confirmation.ack,
-      attempt: confirmation.attempt,
-    },
-    travel,
-  };
 }
 
 async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
@@ -778,7 +839,7 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
   await steerTo(page, clientId, nearPoint, {
     radius: 0.08,
     maxCruiseSpeed: 0.28,
-    arrivalSpeed: 0.18,
+    arrivalSpeed: 0.65,
     timeout: 60000,
   });
   screenshots.push(await capturePage(page, outputDir, "16-well-contact-approach"));
