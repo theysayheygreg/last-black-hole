@@ -23,10 +23,13 @@
   event-wave tuning for browser and authority. Disabled unauthoritative
   planetoid wake code, duplicate local planetoid advancement, and split
   authority gravity/star/planetoid/wave velocity mutators are removed. Named
-  entity contacts remain discrete force-ledger impulses rather than gaining a
-  new wrapper. This changes no movement tuning, maps, Heat, Noise, collision,
-  extraction, schedule, or Grapple Arc behavior. Movement feel and the
-  fabric/camera/viewport hierarchy remain Greg playtest gates.
+  Drifter Flow Lock and Glitch/Vessel fabric pulls now enter FREE as continuous
+  ability/Inhibitor ledger inputs instead of mutating velocity elsewhere.
+  Entity collisions, pulse, Eddy Brake, and damage contacts remain discrete
+  impulses rather than gaining a new event wrapper. This changes no movement
+  tuning, maps, Heat, Noise, collision, extraction, schedule, or Grapple Arc
+  behavior. Movement feel and the fabric/camera/viewport hierarchy remain Greg
+  playtest gates.
 
 - **Movement continuity correction:** fixed the post-RC held-slingshot range
   guard introduced in `8f98f948`. Its player-to-anchor radial vector was used

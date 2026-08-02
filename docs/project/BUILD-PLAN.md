@@ -131,7 +131,7 @@ This is the whole bet. If the fluid sim + thrust control isn't fun to navigate, 
 
 **Night shift (Experiments 6-8) — DONE:**
 - [ ] AI traffic ships + well consumption (deferred — planetoids fill this role for now)
-- [x] Planetoids: 3 path types (orbit, figure-8, transit), bow shock + wake vortex, well consumption
+- [x] Planetoids: 3 path types (orbit, figure-8, transit), visual tail, proximity push, well consumption; no fluid velocity wake
 - [x] Map expansion: 3x3 world, camera follow with lead-ahead, toroidal wrapping
 - [x] Exit wormholes (portals): extraction loop prototype, "ESCAPED" screen
 

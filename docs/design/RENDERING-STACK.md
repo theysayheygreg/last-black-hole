@@ -59,7 +59,7 @@ These are the Navier-Stokes simulation state. They're advected, diffused, pressu
 
 | Buffer | Format | Contents | Who writes | Who reads |
 |--------|--------|----------|-----------|----------|
-| **Velocity** | RGBA16F, 256² (or 512²) | Fluid velocity (xy). Per-texel flow direction and speed. | Well force shader, splat forces (thrust, planetoid wakes) | Ship (fluid coupling), display shader (speed brightness, flow tinting), ASCII shader (directional chars) |
+| **Velocity** | RGBA16F, 256² (or 512²) | Fluid velocity (xy). Per-texel flow direction and speed. | Well force shader and authored thrust/fabric splats | Ship (fluid coupling), display shader (speed brightness, flow tinting), ASCII shader (directional chars) |
 | **Density** | RGBA16F, 256² | Fluid density (rgb). Visible "stuff" in the fluid. | Density splats (accretion disks, star rays, wakes, loot glow) | Display shader (brightness, color), dissipation shader |
 | **Pressure** | RGBA16F, 256² | Pressure field (x). Intermediate solver state. | Jacobi iteration | Gradient subtraction |
 

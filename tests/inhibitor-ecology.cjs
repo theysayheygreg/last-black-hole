@@ -9,7 +9,7 @@ const {
   INHIBITOR_ECOLOGY_CONFIG,
   createGlitchEntity,
   advanceGlitchEntity,
-  applyGlitchForcesAndContacts,
+  resolveGlitchInfluence,
   projectGlitchEntity,
   createSwarmEntity,
   advanceSwarmEntity,
@@ -17,7 +17,7 @@ const {
   projectSwarmEntity,
   createVesselEntity,
   advanceVesselEntity,
-  applyVesselForcesAndContacts,
+  resolveVesselInfluence,
   projectVesselEntity,
   countLiveVessels,
   shouldSpawnVessel,
@@ -128,12 +128,12 @@ async function run() {
 
   advanceGlitchEntity(second, { dt: 0, worldScale: 5, config: cfg });
   const player = { clientId: "pilot", status: "alive", wx: second.wx, wy: second.wy, vx: 0, vy: 0, hullDamage: 0 };
-  const firstContact = applyGlitchForcesAndContacts([second], [player], { dt: 0.1, worldScale: 5, tick: 1 });
-  assert.strictEqual(firstContact[0].damage, cfg.coreDamage, "Core contact must apply configured hull damage");
-  const cooldownContact = applyGlitchForcesAndContacts([second], [player], { dt: 0.1, worldScale: 5, tick: 2 });
-  assert.strictEqual(cooldownContact.length, 0, "Core contact must respect its bounded cadence");
-  const lethalContact = applyGlitchForcesAndContacts([second], [player], { dt: 1, worldScale: 5, tick: 3 });
-  assert(lethalContact[0].lethal, "Accumulated core damage must be bounded and lethal at the configured maximum");
+  const firstInfluence = resolveGlitchInfluence([second], [player], { dt: 0.1, worldScale: 5, tick: 1 });
+  assert.strictEqual(firstInfluence.contacts[0].damage, cfg.coreDamage, "Core contact must apply configured hull damage");
+  const cooldownInfluence = resolveGlitchInfluence([second], [player], { dt: 0.1, worldScale: 5, tick: 2 });
+  assert.strictEqual(cooldownInfluence.contacts.length, 0, "Core contact must respect its bounded cadence");
+  const lethalInfluence = resolveGlitchInfluence([second], [player], { dt: 1, worldScale: 5, tick: 3 });
+  assert(lethalInfluence.contacts[0].lethal, "Accumulated core damage must be bounded and lethal at the configured maximum");
   const projected = projectGlitchEntity(second);
   assert.strictEqual(projected.listensToNoise, false, "Glitches must never listen to Noise");
   assert.strictEqual(projected.noiseListenerState, "NONE", "Glitches must publish no listener state");
@@ -249,15 +249,15 @@ async function run() {
   vessel.wy = 2;
   vesselPilot.wx = 2 + vesselCfg.outerDamageRadius * 0.9;
   vesselPilot.wy = 2;
-  const vesselOuterContact = applyVesselForcesAndContacts([vessel], [vesselPilot], { dt: 0.1, worldScale: 5, tick: 1 });
-  assert.strictEqual(vesselOuterContact[0].damage, vesselCfg.outerDamage, "Vessel outer contact must apply configured damage");
+  const vesselOuterInfluence = resolveVesselInfluence([vessel], [vesselPilot], { dt: 0.1, worldScale: 5, tick: 1 });
+  assert.strictEqual(vesselOuterInfluence.contacts[0].damage, vesselCfg.outerDamage, "Vessel outer contact must apply configured damage");
   assert.strictEqual(vesselPilot.hullDamage, vesselCfg.outerDamage, "Vessel outer damage must use the existing hull state seam");
-  assert.strictEqual(applyVesselForcesAndContacts([vessel], [vesselPilot], { dt: 0.1, worldScale: 5, tick: 2 }).length, 0,
+  assert.strictEqual(resolveVesselInfluence([vessel], [vesselPilot], { dt: 0.1, worldScale: 5, tick: 2 }).contacts.length, 0,
     "Vessel outer damage must respect its cooldown");
   vesselPilot.wx = vessel.wx;
   vesselPilot.wy = vessel.wy;
-  const vesselCoreContact = applyVesselForcesAndContacts([vessel], [vesselPilot], { dt: 1, worldScale: 5, tick: 3 });
-  assert(vesselCoreContact[0].instantKill && vesselCoreContact[0].lethal, "Vessel core contact must be instant lethal");
+  const vesselCoreInfluence = resolveVesselInfluence([vessel], [vesselPilot], { dt: 1, worldScale: 5, tick: 3 });
+  assert(vesselCoreInfluence.contacts[0].instantKill && vesselCoreInfluence.contacts[0].lethal, "Vessel core contact must be instant lethal");
   const vesselProjection = projectVesselEntity(vessel);
   assert.strictEqual(vesselProjection.awareness, "STRATEGIC", "Vessel projection must expose strategic awareness");
   assert.strictEqual(vesselProjection.presentation.palette, "procedural-magenta", "Vessel presentation must be procedural magenta");

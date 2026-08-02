@@ -22,7 +22,7 @@ function close(actual, expected, label) {
   assert(Math.abs(actual - expected) < 1e-9, `${label}: expected ${expected}, got ${actual}`);
 }
 
-test('authoritative ledger emits all six labeled vectors in m/s^2', () => {
+test('authoritative ledger emits every labeled continuous and impulse vector in m/s^2', () => {
   const player = { vx: 0, vy: 0 };
   const ledger = beginForceLedger(player, 0.1, 7);
   recordForceMutation(ledger, 'thrust', player, () => { player.vx += 0.25; });

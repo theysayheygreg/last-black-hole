@@ -129,13 +129,13 @@ const {
   totalCapBlocksSpawn,
   createGlitchEntity,
   advanceGlitchEntity,
-  applyGlitchForcesAndContacts,
+  resolveGlitchInfluence,
   createSwarmEntity,
   advanceSwarmEntity,
   applySwarmContacts,
   createVesselEntity,
   advanceVesselEntity,
-  applyVesselForcesAndContacts,
+  resolveVesselInfluence,
   shouldSpawnVessel,
   applyWellOverdrive,
   effectiveWellMass,
@@ -1212,6 +1212,7 @@ const runtime = {
   portalClock: null,
   inhibitor: createInhibitorState(),
   inhibitorEntities: [],
+  inhibitorContinuousByPlayer: new Map(),
   inhibitorEcology: {
     glitchSequence: 0,
     nextGlitchSpawnAt: null,
@@ -5314,8 +5315,9 @@ function tickAIPlayers(dt) {
 // Per-hull abilities: passives check conditions, actives respond to input.
 // Runs once per player per tick, before physics.
 
-function tickHullAbilities(player, dt) {
-  if (player.status !== "alive" || !player.abilityState) return;
+function tickHullAbilities(player, dt, flowSample = null) {
+  const continuous = { x: 0, y: 0 };
+  if (player.status !== "alive" || !player.abilityState) return continuous;
   const as = player.abilityState;
   const ws = runtime.session.worldScale;
   const input = player.lastInput;
@@ -5326,7 +5328,7 @@ function tickHullAbilities(player, dt) {
 
   if (as.hullType === 'drifter') {
     // Flow Lock: current-aligned for 3s → locked surfing state
-    const flow = estimateFlow(player.wx, player.wy);
+    const flow = flowSample?.current || { x: 0, y: 0 };
     const flowMag = Math.hypot(flow.x, flow.y);
     const speed = Math.hypot(player.vx, player.vy);
     let aligned = false;
@@ -5352,18 +5354,23 @@ function tickHullAbilities(player, dt) {
       as.flowLockAlignTimer = 0;
     }
 
-    // Flow Lock effects: speed boost + signal suppression (applied in physics/signal ticks via brain override)
+    // Flow Lock contributes continuous acceleration to the one FREE step;
+    // signal suppression remains a separate state projection.
     if (as.flowLockActive) {
       const boost = HULL_DEFINITIONS.drifter.abilities.flowLock.speedBoost;
       if (flowMag > 0.005) {
-        player.vx += (flow.x / flowMag) * boost * speed * dt;
-        player.vy += (flow.y / flowMag) * boost * speed * dt;
+        continuous.x = (flow.x / flowMag) * boost * speed;
+        continuous.y = (flow.y / flowMag) * boost * speed;
       }
     }
 
     // Eddy Brake: active ability — input.ability1 triggers instant stop + turbulence
     if (as.eddyBrakeCooldown > 0) as.eddyBrakeCooldown -= dt;
     if (ability1Pressed && as.eddyBrakeCooldown <= 0 && speed > 0.02) {
+      // The discrete stop occurs after the old Flow Lock push, so it cancels
+      // this tick's deferred continuous contribution as well.
+      continuous.x = 0;
+      continuous.y = 0;
       player.vx = 0;
       player.vy = 0;
       as.eddyBrakeCooldown = HULL_DEFINITIONS.drifter.abilities.eddyBrake.cooldown;
@@ -5541,6 +5548,7 @@ function tickHullAbilities(player, dt) {
   }
   as.ability1WasDown = ability1Down;
   as.ability2WasDown = ability2Down;
+  return continuous;
 }
 
 // Breacher Burn modifies thrust and signal in the per-player physics loop.
@@ -6014,12 +6022,23 @@ function applyInhibitorContacts(contacts, cause) {
   }
 }
 
+function appendContinuousInfluence(target, contributions) {
+  for (const contribution of contributions || []) {
+    const playerId = String(contribution.clientId || "");
+    if (!playerId) continue;
+    const playerContributions = target.get(playerId) || [];
+    playerContributions.push(contribution);
+    target.set(playerId, playerContributions);
+  }
+}
+
 function tickInhibitorEcology(dt, noiseSources = []) {
   const ecology = runtime.inhibitorEcology;
   const cfg = INHIBITOR_ECOLOGY_CONFIG.glitch;
   const swarmCfg = INHIBITOR_ECOLOGY_CONFIG.swarm;
   const vesselCfg = INHIBITOR_ECOLOGY_CONFIG.vessel;
   const worldScale = runtime.session.worldScale;
+  const continuousByPlayer = new Map();
   // Expired entries remain visible for one snapshot so lifecycle is truthful,
   // then the bounded active collection drops them on the next tick.
   for (let index = runtime.inhibitorEntities.length - 1; index >= 0; index -= 1) {
@@ -6125,24 +6144,26 @@ function tickInhibitorEcology(dt, noiseSources = []) {
       });
     }
   }
-  const glitchContacts = applyGlitchForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
+  const glitchInfluence = resolveGlitchInfluence(runtime.inhibitorEntities, runtime.players.values(), {
     dt,
     worldScale,
     tick: runtime.tick,
   });
-  applyInhibitorContacts(glitchContacts, "inhibitor_glitch");
+  appendContinuousInfluence(continuousByPlayer, glitchInfluence.continuous);
+  applyInhibitorContacts(glitchInfluence.contacts, "inhibitor_glitch");
   const swarmContacts = applySwarmContacts(runtime.inhibitorEntities, runtime.players.values(), {
     dt,
     worldScale,
     tick: runtime.tick,
   });
   applyInhibitorContacts(swarmContacts, "inhibitor_swarm");
-  const vesselContacts = applyVesselForcesAndContacts(runtime.inhibitorEntities, runtime.players.values(), {
+  const vesselInfluence = resolveVesselInfluence(runtime.inhibitorEntities, runtime.players.values(), {
     dt,
     worldScale,
     tick: runtime.tick,
   });
-  applyInhibitorContacts(vesselContacts, "inhibitor_vessel");
+  appendContinuousInfluence(continuousByPlayer, vesselInfluence.continuous);
+  applyInhibitorContacts(vesselInfluence.contacts, "inhibitor_vessel");
 
   for (const vessel of runtime.inhibitorEntities) {
     if (vessel.kind !== "vessel" || vessel.lifecycle !== "alive") continue;
@@ -6171,6 +6192,7 @@ function tickInhibitorEcology(dt, noiseSources = []) {
       }, { lane: "vfx", subject: well.id });
     }
   }
+  return continuousByPlayer;
 }
 
 function collectInhibitorNoiseSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
@@ -6213,7 +6235,10 @@ function tickInhibitor(dt) {
   // Conductor time alone advances Inhibitor phases. Noise is only a Swarm
   // acquisition input and never drives Vessel awareness or exfil timing.
   advanceInhibitorClock();
-  tickInhibitorEcology(dt, collectInhibitorNoiseSources({ includeDecoys: true }));
+  runtime.inhibitorContinuousByPlayer = tickInhibitorEcology(
+    dt,
+    collectInhibitorNoiseSources({ includeDecoys: true }),
+  );
 
 }
 
@@ -6253,6 +6278,10 @@ function tickAuthorityPlayers(dt, relevance) {
     setForceLedgerDt(forceLedger, playerDt);
     const movementStartWX = player.wx;
     const movementStartWY = player.wy;
+    // Cache one normalized field sample before the movement-mode branch.
+    // Drifter abilities and FREE physics share this exact sample.
+    const flowSample = estimateFlowSample(player.wx, player.wy);
+    const inhibitorAcceleration = runtime.inhibitorContinuousByPlayer.get(player.clientId) || [];
     let grappleOwnsMovement = false;
     recordForceMutation(forceLedger, "impulse", player, () => {
       grappleOwnsMovement = tickPlayerSlingshot(player, playerDt, input);
@@ -6266,7 +6295,7 @@ function tickAuthorityPlayers(dt, relevance) {
       const grappleVelocity = { x: player.vx, y: player.vy };
       const heldInput = player.lastInput;
       player.lastInput = { ...heldInput, ability1: false, ability2: false };
-      tickHullAbilities(player, playerDt);
+      tickHullAbilities(player, playerDt, flowSample);
       player.lastInput = heldInput;
       player.vx = grappleVelocity.x;
       player.vy = grappleVelocity.y;
@@ -6280,22 +6309,27 @@ function tickAuthorityPlayers(dt, relevance) {
       tickPlayerNoise(player, playerDt);
       continue;
     }
-    // Tick hull abilities before physics
-    recordForceMutation(forceLedger, "impulse", player, () => tickHullAbilities(player, playerDt));
-
     const b = player.brain || BRAIN_DEFAULTS;
-    // FREE movement reads one authority field sample, then advances one
-    // ordered movement step. No later force path re-samples the fabric.
-    const flowSample = estimateFlowSample(player.wx, player.wy);
+    // FREE movement advances one ordered step. No later player-force path
+    // re-samples the authority fabric or mutates continuous velocity directly.
     const environmentAcceleration = resolvePlayerEnvironment(player, flowSample, relevance);
     const movementStep = stepPlayerFreeMovement(player, input, playerDt, {
       brain: b,
       burnModifiers: getBurnModifiers(player),
       flowSample,
+      continuousAcceleration: { inhibitor: inhibitorAcceleration },
       environmentAcceleration,
       worldScale: runtime.session.worldScale,
+      resolveAbilityAcceleration: (movingPlayer) => recordForceMutation(
+        forceLedger,
+        "impulse",
+        movingPlayer,
+        () => tickHullAbilities(movingPlayer, playerDt, flowSample),
+      ),
       afterDrive: (movingPlayer) => refreshPlayerWellContact(movingPlayer, playerDt),
     });
+    recordForceDeltaV(forceLedger, "inhibitor", movementStep.inhibitorDeltaV);
+    recordForceDeltaV(forceLedger, "ability", movementStep.abilityDeltaV);
     recordForceDeltaV(forceLedger, "thrust", movementStep.thrustDeltaV);
     recordForceDeltaV(forceLedger, "coupling", movementStep.couplingDeltaV);
     recordForceDeltaV(forceLedger, "gravity", movementStep.gravityDeltaV);

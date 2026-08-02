@@ -35,9 +35,10 @@ several places:
   speed cap, and integration;
 - `tickAuthorityPlayers` separately applies well gravity, star push,
   planetoid push, and live-wave push;
-- hull abilities may add or replace velocity before that pipeline;
-- sentries, fauna, scavenger contacts, pulse, and Inhibitor ecology write
-  player velocity as named contacts or impulses outside it.
+- Flow Lock contributes named continuous acceleration inside FREE; discrete
+  hull actions may still replace velocity before drive;
+- Glitch and Vessel continuous forces enter FREE through the same named input;
+  sentries, fauna, scavenger contacts, and pulse remain attributable impulses.
 
 The authoritative coarse field is rebuilt every tick and already contains
 seeded sea, orbital well current, well gravity, and live event waves. The old
@@ -82,11 +83,13 @@ named impulse seam without changing their game effects. Delete zero-strength
 or unreachable movement knobs instead of preserving compatibility aliases.
 This vertical follows V1/V2 only if the source remains smaller and clearer.
 
-**Closed without implementation.** The remaining sentry, fauna, scavenger,
-pulse, and Inhibitor changes are already discrete, player-attributable impacts
-and the force ledger classifies residual velocity changes as impulses. A new
-wrapper would add indirection without removing a competing continuous-physics
-owner. Reopen only when an observed impact cannot be attributed or tuned.
+**Completed as a bounded correction.** Drifter Flow Lock and Glitch/Vessel
+fabric pulls are continuous, so they now return named acceleration inputs to
+the FREE step and have explicit force-ledger channels. Inhibitor ecology no
+longer mutates player velocity. Sentry, fauna, scavenger, pulse, Eddy Brake,
+and damage contacts remain discrete, player-attributable impulses; wrapping
+them in a new event framework would add indirection without removing a
+competing continuous owner.
 
 ### V4 — Human movement/fabric tuning
 
@@ -119,6 +122,13 @@ Deck zoom remain separate motion-comparison decisions.
   wave for the tick. The prior split gravity/star/planetoid/wave velocity
   mutators are removed while their arithmetic order and force-ledger labels
   remain intact.
+- The V3 correction closes two missed continuous paths without expanding the
+  movement model. The player field sample is cached once and passed to Drifter
+  Flow Lock. Flow Lock and per-player Glitch/Vessel accelerations enter FREE in
+  their previous timing order and receive `ability` / `inhibitor` ledger
+  labels. GRAPPLED and TERMINAL never consume those deferred contributions.
+  Remaining collision, enemy-contact, pulse, and discrete ability mutations
+  stay named impulses outside the continuous FREE channels.
 
 The retained player vocabulary is still **TERMINAL / GRAPPLED / FREE**.
 Grapple Arc v3 exclusively owns GRAPPLED; these changes add no tuning and do
@@ -126,10 +136,12 @@ not alter the fixed 15 Hz authority clock, Heat, Noise, collision, extraction,
 map scale, schedule, or toroidal coordinate contracts.
 
 Focused source proof covers canonical fabric parity, elapsed-time wave decay,
-one authority sample, exact previous FREE arithmetic order, force-ledger
-reconstruction, movement golden/trajectory parity, authoritative field, well
-grace, swept contacts and extraction, protocol authority, Heat, and map-rate/
-grapple contracts. No broad release claim is made.
+one cached player sample including Drifter, exact previous FREE arithmetic
+order, continuous contribution ordering, direct-mutation removal, GRAPPLED
+exclusion, force-ledger reconstruction, movement golden/trajectory parity,
+authoritative field, well grace, swept contacts and extraction, protocol
+authority, Heat, and map-rate/grapple contracts. No broad release claim is
+made.
 
 The remaining gates are human: Greg owns movement feel, and the fabric/camera/
 viewport visual hierarchy still needs its separate in-game and Steam Deck

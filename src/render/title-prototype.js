@@ -10,7 +10,7 @@
 //
 // Per frame:
 //   1. Step FluidSim physics (sim-core passes inside fluid.js)
-//   2. WellSystem applies well forces; PlanetoidSystem injects comet wakes
+//   2. WellSystem owns well visuals; PlanetoidSystem advances comet tails
 //   3. Composer runs HDR chain:
 //        FluidDisplayPass            writes HDR scene color
 //        BloomPass                   catches highlights > 1.0, blurs, composites back

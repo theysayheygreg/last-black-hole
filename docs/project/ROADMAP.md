@@ -448,7 +448,7 @@ Greg writes the Mon→Tue night prompt:
 #### Night Shift — Experiments 6-8 (DONE):
 - [x] **Map Expansion** — 3x3 toroidal world, camera follow with velocity lead-ahead, REPEAT-wrap fluid textures, all entities spread across map. `coords.js` world-space authority, `CAMERA_VIEW` + `pxPerWorld()` centralized.
 - [x] **Exit Wormholes (Portals)** — `portals.js`. Weak inward pull + purple spiral density. Capture radius → "ESCAPED" screen. 2 portals at (0.3, 0.3) and (2.7, 2.7).
-- [x] **Planetoids** — `planetoids.js`. 3 path types (orbit, figure-8, transit). Bow shock + wake vortex fluid injection. Consumed by wells (adds mass + wave ring). Transits spawn every 15-25s.
+- [x] **Planetoids** — `planetoids.js`. 3 path types (orbit, figure-8, transit), readable visual tails, proximity push, and well consumption (adds mass + wave ring). They do not inject an authority-less fluid velocity wake. Transits spawn every 15-25s.
 - [ ] **AI Traffic Ships** — deferred, planetoids fill the ambient life role for now.
 
 #### Morning Session — Fixes + Refactor:
@@ -478,7 +478,7 @@ Greg playtest feedback (3x3 map):
 - [x] **Title screen + Map select UI** — Full UI flow: title → mapSelect → playing. Fluid sim runs as ambient background during menus. Map select shows all maps with stats. Death/escape returns to map select. Pause → ESC quits to map select.
 
 #### Remaining today:
-- [ ] **Wake visibility** — Boost ship/planetoid wake injection 3-4×, lower display shader velocity thresholds. CONFIG tuning + shader change.
+- [ ] **Wake visibility** — Tune the ship wake and authored fabric velocity thresholds. Planetoid tails remain presentation only unless authority gains an explicit wake term.
 - [ ] **ASCII visual depth** — Expand density ramp charset, add time-varying shimmer noise to display shader, tune contrast curve. Shader + ascii-renderer change.
 
 ### Scope Notes

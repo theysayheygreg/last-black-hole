@@ -245,12 +245,13 @@ function advanceGlitchEntity(entity, {
   return entity.lifecycle !== "expired";
 }
 
-function applyGlitchForcesAndContacts(entities, players, {
+function resolveGlitchInfluence(entities, players, {
   dt = 0,
   worldScale = 1,
   tick = 0,
 } = {}) {
   const contacts = [];
+  const continuous = [];
   const step = Math.max(0, finite(dt));
   for (const glitch of entities || []) {
     if (!glitch || glitch.lifecycle !== "alive") continue;
@@ -261,8 +262,13 @@ function applyGlitchForcesAndContacts(entities, players, {
       const distance = Math.hypot(dx, dy);
       if (distance > 0 && distance < glitch.fabricForceRadius) {
         const falloff = 1 - distance / Math.max(0.001, glitch.fabricForceRadius);
-        player.vx += (dx / distance) * glitch.fabricForceStrength * falloff * step;
-        player.vy += (dy / distance) * glitch.fabricForceStrength * falloff * step;
+        continuous.push({
+          clientId: String(player.clientId || "unknown"),
+          source: "glitch",
+          entityId: glitch.id,
+          x: (dx / distance) * glitch.fabricForceStrength * falloff,
+          y: (dy / distance) * glitch.fabricForceStrength * falloff,
+        });
       }
 
       const playerId = String(player.clientId || "unknown");
@@ -284,7 +290,7 @@ function applyGlitchForcesAndContacts(entities, players, {
       });
     }
   }
-  return contacts;
+  return { contacts, continuous };
 }
 
 function projectGlitchEntity(entity) {
@@ -702,12 +708,13 @@ function advanceVesselEntity(entity, {
   return entity.lifecycle !== "expired";
 }
 
-function applyVesselForcesAndContacts(entities, players, {
+function resolveVesselInfluence(entities, players, {
   dt = 0,
   worldScale = 1,
   tick = 0,
 } = {}) {
   const contacts = [];
+  const continuous = [];
   const step = Math.max(0, finite(dt));
   for (const vessel of entities || []) {
     if (!vessel || vessel.kind !== "vessel" || vessel.lifecycle !== "alive") continue;
@@ -718,8 +725,13 @@ function applyVesselForcesAndContacts(entities, players, {
       const distance = Math.hypot(dx, dy);
       if (distance > 0 && distance < vessel.gravityRange) {
         const falloff = 1 - distance / Math.max(0.001, vessel.gravityRange);
-        player.vx += (dx / distance) * vessel.gravityStrength * falloff * step;
-        player.vy += (dy / distance) * vessel.gravityStrength * falloff * step;
+        continuous.push({
+          clientId: String(player.clientId || "unknown"),
+          source: "vessel",
+          entityId: vessel.id,
+          x: (dx / distance) * vessel.gravityStrength * falloff,
+          y: (dy / distance) * vessel.gravityStrength * falloff,
+        });
       }
 
       const playerId = String(player.clientId || "unknown");
@@ -743,7 +755,7 @@ function applyVesselForcesAndContacts(entities, players, {
       });
     }
   }
-  return contacts;
+  return { contacts, continuous };
 }
 
 function projectVesselEntity(entity) {
@@ -847,7 +859,7 @@ module.exports = {
   INHIBITOR_ECOLOGY_CONFIG,
   createGlitchEntity,
   advanceGlitchEntity,
-  applyGlitchForcesAndContacts,
+  resolveGlitchInfluence,
   projectGlitchEntity,
   createSwarmEntity,
   advanceSwarmEntity,
@@ -867,7 +879,7 @@ module.exports = {
   selectNearestAliveTarget,
   createVesselEntity,
   advanceVesselEntity,
-  applyVesselForcesAndContacts,
+  resolveVesselInfluence,
   projectVesselEntity,
   deriveWellOverdriveMultiplier,
   applyWellOverdrive,

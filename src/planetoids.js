@@ -1,5 +1,5 @@
 /**
- * planetoids.js — Comets: moving terrain that creates surfable wakes.
+ * planetoids.js — Comets: moving hazards with readable visual tails.
  *
  * Three path types:
  * 1. Orbit — elliptical orbit around a single well

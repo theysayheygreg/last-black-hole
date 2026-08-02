@@ -1,6 +1,8 @@
 const { UNIT_SCALE } = require('../content/units.cjs');
 
 const FORCE_COMPONENTS = Object.freeze([
+  'inhibitor',
+  'ability',
   'thrust',
   'coupling',
   'gravity',

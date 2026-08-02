@@ -100,7 +100,7 @@ Falls back to `yellowDwarf` if type omitted (backward compat).
 
 ## 5. Planetoids → Comets
 
-**Current state:** Planetoids are tiny blue dots (6px) that orbit wells or trace figure-8 paths. They create bow shocks and wake eddies in the fluid. They get consumed by wells.
+**Current state:** Planetoids orbit wells, trace figure-8 paths, or transit the map with visual tails and a proximity push. They do not create a fluid velocity wake. They get consumed by wells.
 
 **Conversion to comets:**
 
@@ -119,7 +119,7 @@ Falls back to `yellowDwarf` if type omitted (backward compat).
 - Number: 1-99
 - Example: "Comet Zeta-47", "Wanderer Alpha-3"
 
-**Behavior unchanged:** Same orbit/figure8/transit paths. Same bow shock + wake fluid effects. Same well consumption. Just looks and feels like a comet now.
+**Behavior unchanged:** Same orbit/figure8/transit paths, proximity push, and well consumption. The tail is presentation, not a fluid velocity source.
 
 **Map format:** No change needed — existing `planetoids` array works as-is. Just rename internally.
 

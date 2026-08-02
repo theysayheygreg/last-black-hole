@@ -254,6 +254,12 @@ function applyAccelerationChannel(player, acceleration, dt) {
  * here owns current coupling, well gravity, and event waves for the whole tick.
  */
 function stepPlayerFreeMovement(player, input, dt, options = {}) {
+  const continuous = options.continuousAcceleration || {};
+  const inhibitorDeltaV = applyAccelerationChannel(player, continuous.inhibitor, dt);
+  const abilityAcceleration = options.resolveAbilityAcceleration
+    ? options.resolveAbilityAcceleration(player)
+    : continuous.ability;
+  const abilityDeltaV = applyAccelerationChannel(player, abilityAcceleration, dt);
   const drive = applyPlayerDriveAndFlow(player, input, dt, options);
 
   // Well contact sits here because protected contact may replace velocity.
@@ -262,6 +268,8 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
     return {
       ...drive,
       aborted: true,
+      abilityDeltaV,
+      inhibitorDeltaV,
       gravityDeltaV: { x: 0, y: 0 },
       waveDeltaV: { x: 0, y: 0 },
       brakeIntensity: 0,
@@ -286,6 +294,8 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
     ...drive,
     ...brake,
     thrustDeltaV,
+    abilityDeltaV,
+    inhibitorDeltaV,
     gravityDeltaV,
     waveDeltaV,
     aborted: false,

@@ -56,9 +56,11 @@ Resolved on 2026-08-01. Player movement has three exclusive modes:
 normalized authority field sample and advances through one ordered movement
 owner at the canonical 15 Hz rate. Shared fabric tuning lives in
 `src/content/fabric.data.json`; browser and authority may adapt it but cannot
-copy or invent movement truth. Sentry, fauna, scavenger, pulse, and Inhibitor
-contacts remain named discrete impulses. Do not add a generalized force
-wrapper unless an observed impact cannot be attributed or tuned.
+copy or invent movement truth. Drifter Flow Lock and Glitch/Vessel fabric pulls
+are named continuous FREE inputs with dedicated force-ledger channels. Sentry,
+fauna, scavenger, pulse, Eddy Brake, and damage contacts remain named discrete
+impulses outside those channels. Do not add a generalized force/event wrapper
+unless an observed impact cannot be attributed or tuned.
 
 ### Extraction
 

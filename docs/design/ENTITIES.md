@@ -14,7 +14,7 @@
 | Loot Anchor | loot.js | Zero-velocity splat (obstruction) | None (passive) | Fluid (glow, shimmer) + Overlay (pulse dot) |
 | Wreck | wrecks.js | Zero-velocity splat (obstacle) | None (passive) | Fluid (obstruction + glow) + Overlay (marker) |
 | Portal | portals.js | Weak inward pull + spiral density | None | Fluid (purple vortex) + Overlay (pulsing ring) |
-| Planetoid | planetoids.js | Bow shock + wake vortex + trail | Push (proximity) | Fluid (wake) + Overlay (dot + velocity line) |
+| Planetoid | planetoids.js | Moving body + visual tail | Push (proximity) | Three/overlay presentation; no fluid velocity wake |
 | Ship | ship.js | Bullet wake (speed-based splats) | Self (thrust + drag + fluid coupling) | Overlay (triangle + trail) |
 | Scavenger | scavengers.js | Bullet wake (same as ship) | Same as ship (AI-driven) | Overlay (smaller triangle, tinted) |
 | Force Pulse | combat.js | Massive radial force injection | Velocity impulse on nearby entities | Wave ring + ship flash |
