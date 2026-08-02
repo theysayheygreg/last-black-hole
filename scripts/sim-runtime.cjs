@@ -127,6 +127,7 @@ const {
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
 const { hullCalmSpaceReferenceSpeed } = require("./sim/hull-reference-speed.cjs");
+const { capFabricCurrent } = require("./sim/fabric-reference-frame.cjs");
 const {
   hasWaveReceipt,
   rememberWaveReceipt,
@@ -4631,6 +4632,17 @@ function estimateFlowSample(wx, wy) {
   return normalizeFlowSample({ confidence: 0 });
 }
 
+function estimatePlayerFabricFlow(player) {
+  const sample = estimateFlowSample(player.wx, player.wy);
+  const current = capFabricCurrent(sample.current, player);
+  return {
+    ...sample,
+    current: { x: current.x, y: current.y },
+    x: current.x,
+    y: current.y,
+  };
+}
+
 function estimateFlow(wx, wy) {
   const sample = estimateFlowSample(wx, wy);
   return { x: sample.current.x, y: sample.current.y };
@@ -6541,7 +6553,7 @@ function tickAuthorityPlayers(dt, relevance) {
     const movementStartWY = player.wy;
     // Cache one normalized field sample before the movement-mode branch.
     // Drifter abilities and FREE physics share this exact sample.
-    const flowSample = estimateFlowSample(player.wx, player.wy);
+    const flowSample = estimatePlayerFabricFlow(player);
     const inhibitorAcceleration = runtime.inhibitorContinuousByPlayer.get(player.clientId) || [];
     let grappleOwnsMovement = false;
     recordForceMutation(forceLedger, "impulse", player, () => {
