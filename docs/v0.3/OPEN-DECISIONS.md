@@ -1,6 +1,6 @@
 # v0.3 Open Decisions
 
-> Document revision: v0.3. Updated 2026-07-26. Resolved implementation choices
+> Document revision: v0.3. Updated 2026-08-01. Resolved implementation choices
 > are listed first so they are not repeatedly reopened during release work.
 
 ## Resolved For v0.3
@@ -109,6 +109,20 @@ old 2D pipeline.
 
 ## Open Before Promotion
 
+### 0. Movement And Fabric Redesign Direction
+
+**Decision owner:** Greg
+
+The current implementation is centralized but not yet a legible surfing game.
+The [Movement, Physics, and Spacetime Fabric Redesign](reviews/2026-08-01-movement-physics-fabric-redesign.md)
+recommends a derived, player-readable SURF condition inside FREE with bold
+carry/cost, a Shallows comparison of Graphic Cosmic Swell, Wavefront Surfing,
+and a Signed ASCII truth control, and a restrained 8–12% speed-camera range.
+Before implementation, lock the SURF behavior, exaggerated outputs, comparison
+variants, and camera constraints. Select the winning route language and final
+Deck baseline only after the playable motion comparison; do not migrate every
+map or add more fabric detail first.
+
 ### 1. Greg's Feel Verdict
 
 **Decision owner:** Greg
@@ -157,8 +171,8 @@ intermediate playtest build rather than waiting for the whole authored library.
 
 These are intentionally beyond the v0.3 release gate:
 
-- choose the v0.3.2 fabric hierarchy and Deck camera baseline after the gated
-  [Fabric, Surfing, and Camera motion review](reviews/v0.3.2-fabric-surfing-camera-review.md);
+- migrate the chosen fabric hierarchy and Deck camera baseline across later
+  maps only after the Shallows motion comparison is playable and selected;
 - which internal hull graduates next;
 - multiplayer transport, prediction, rollback, and matchmaking shape;
 - whether measured entity/network scale justifies a full ECS;
