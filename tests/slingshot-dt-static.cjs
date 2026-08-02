@@ -5,8 +5,9 @@ const path = require("path");
 const mainSource = fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8");
 
 assert(!/\bshipDt\b/.test(mainSource), "main.js must not reference retired shipDt");
-assert(mainSource.includes("slingshotSystem.applyEngagedForces(ship, dt, hullSlingMods)"));
+assert(!mainSource.includes("slingshotSystem.applyEngagedForces("), "client presentation must not simulate Grapple Arc forces");
+assert(mainSource.includes("slingshot: !inventoryOpen && slingshotNow"), "remote authority input must carry Grapple Arc intent");
 assert(mainSource.includes("starSystem.applyToShip(ship, dt)"));
 assert(mainSource.includes("planetoidSystem.applyToShip(ship, dt)"));
 
-console.log("SlingshotDtStatic: 4/4 passed");
+console.log("SlingshotDtStatic: 5/5 passed");
