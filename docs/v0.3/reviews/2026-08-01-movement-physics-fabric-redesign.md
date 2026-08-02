@@ -153,6 +153,10 @@ The first locked tuning hypothesis is deliberately simple:
   falloff-to-minimum radius, then feathers to zero. Growth initially expands
   those reach controls without increasing gravity strength; exceptional large
   wells or large-map variants may author strength separately later.
+- Rotational current extends farther than radial gravity, initially deriving
+  `currentReach` as `1.5x falloffEndRadius`. This produces a broad persistent
+  eddy around the localized gravity hazard. It does not itself emit a wave;
+  event wavefronts remain discrete source-bound consequences.
 - Event waves should be large, coherent moving fronts. A front may temporarily
   suppress microtexture so its direction and edge remain readable.
 - Hull and equipment identities should change obvious vocabulary: wider swell

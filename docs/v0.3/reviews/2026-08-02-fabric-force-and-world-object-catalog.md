@@ -84,6 +84,22 @@ property for unusually large wells or large-map variants. This is intentionally
 not another automatic mass multiplier: ordinary growth should introduce one
 player-readable change at a time.
 
+### Locked wider rotational eddy
+
+Persistent well current reaches beyond localized radial gravity:
+
+`currentReach = falloffEndRadius × currentReachMultiplier`
+
+The starting multiplier is `1.5x`. This creates an outer region where the
+player can read and ride the rotational fabric before entering meaningful
+radial pull. Growth expands the common reach basis, so the eddy grows with the
+gravity envelope without automatically becoming stronger.
+
+This is a persistent eddy, not a wave. A mechanical wave remains a discrete,
+source-bound front emitted by well growth, consumption, or another explicit
+event. Visual microtexture may suggest fluid motion but must not obscure that
+gameplay distinction.
+
 ## Canonical Player-Readable Fabric Causes
 
 The current catalog supports three fabric causes without creating three

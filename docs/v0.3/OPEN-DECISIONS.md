@@ -89,6 +89,20 @@ but ordinary growth must not simultaneously enlarge the field and increase its
 force. Add strength variation sparingly and only when the player can read the
 distinction.
 
+### Wider Rotational Well Current
+
+Resolved on 2026-08-02. A well's persistent rotational current extends beyond
+its localized radial-gravity envelope so the outer approach creates a broad,
+readable eddy before inward pull becomes important. The first relationship is
+derived rather than separately authored:
+
+`currentReach = falloffEndRadius × currentReachMultiplier`, starting at `1.5x`.
+
+Growth expands the shared reach basis, so both the gravity envelope and broader
+eddy grow spatially while their strengths remain fixed. Rotational current is a
+persistent field. It does not create a mechanical wave by itself; growth,
+consumption, or another explicit event must emit a discrete wavefront.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

@@ -7,6 +7,12 @@
   large-map variants may later opt into stronger gravity explicitly. This
   records design direction only and changes no runtime behavior.
 
+- **Wider rotational-eddy design lock:** well rotational current will extend
+  beyond localized radial gravity, initially using a `1.5x` reach multiplier
+  derived from the gravity falloff end. Growth expands the shared reach basis
+  without increasing strength. Persistent eddies and discrete emitted
+  wavefronts remain separate gameplay truths. No runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
