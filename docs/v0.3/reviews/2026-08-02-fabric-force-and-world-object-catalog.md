@@ -64,6 +64,26 @@ motion. Only base-field and field-shaper truth belongs in the semantic fabric.
 2. Mark inert CONFIG/dev-panel/signature controls as compatibility or retire
    them from product tuning.
 
+### Locked localized-gravity envelope
+
+Radial gravity is not a map-wide tail. It uses four readable controls:
+
+- `fullGravityRadius`: full authored pull inside this boundary;
+- `falloffEndRadius`: outer end of the main falloff;
+- `minimumGravityFraction`: remaining pull at that outer edge;
+- `falloffCurve`: the eased transition between full and minimum pull.
+
+A short derived feather reaches zero outside the envelope. The lethal core is
+separate. Rotational current may remain readable beyond radial gravity's
+localized reach.
+
+Reach and strength are independent. The first growth implementation expands
+`fullGravityRadius` and `falloffEndRadius` only; it does not increase baseline
+gravity strength. Stronger gravity remains available as an explicit authored
+property for unusually large wells or large-map variants. This is intentionally
+not another automatic mass multiplier: ordinary growth should introduce one
+player-readable change at a time.
+
 ## Canonical Player-Readable Fabric Causes
 
 The current catalog supports three fabric causes without creating three

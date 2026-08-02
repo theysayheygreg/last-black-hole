@@ -149,6 +149,10 @@ The first locked tuning hypothesis is deliberately simple:
   tuning.
 - A well should author one curved surf lane and one lethal core, not several
   overlapping invisible radial contributions.
+- Well radial gravity is localized through a full-strength radius and an eased
+  falloff-to-minimum radius, then feathers to zero. Growth initially expands
+  those reach controls without increasing gravity strength; exceptional large
+  wells or large-map variants may author strength separately later.
 - Event waves should be large, coherent moving fronts. A front may temporarily
   suppress microtexture so its direction and edge remain readable.
 - Hull and equipment identities should change obvious vocabulary: wider swell

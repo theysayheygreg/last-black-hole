@@ -1,5 +1,12 @@
 # v0.3 Changelog
 
+- **Localized well-gravity design lock:** separated radial-gravity reach from
+  strength. Wells will own a full-strength radius, falloff-end radius, minimum
+  edge fraction, and eased falloff with zero pull outside the localized
+  envelope. Initial growth expands reach only; authored large wells and
+  large-map variants may later opt into stronger gravity explicitly. This
+  records design direction only and changes no runtime behavior.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
