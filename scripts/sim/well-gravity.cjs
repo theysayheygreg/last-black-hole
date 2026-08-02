@@ -2,15 +2,21 @@
 // keeps its accepted production tuning here; the formula lives in src/content.
 const sharedGravity = require("../../src/content/well-gravity.js");
 const { gravityStrengthFromReferenceDriftSpeed } = require("../../src/content/tuning.js");
+const { FABRIC } = require("../content/fabric.cjs");
 
 const WELL_GRAVITY_PARAMS = Object.freeze({
   player: Object.freeze({
-    strength: 0.6,
-    referenceDistance: 0.25,
-    minimumDistance: 0.15,
-    falloff: 1.5,
-    rangeMode: "linear",
-    maxRange: 1.2,
+    strength: FABRIC.wellGravity.strength,
+    referenceDistance: FABRIC.wellGravity.referenceDistance,
+    minimumDistance: FABRIC.wellGravity.minimumDistance,
+    fullGravityRadius: FABRIC.wellGravity.fullGravityRadius,
+    falloffEndRadius: FABRIC.wellGravity.falloffEndRadius,
+    minimumGravityFraction: FABRIC.wellGravity.minimumGravityFraction,
+    falloffCurve: FABRIC.wellGravity.falloffCurve,
+    featherRadius: FABRIC.wellGravity.featherRadius,
+    falloff: FABRIC.wellGravity.falloff,
+    rangeMode: "localized",
+    maxRange: FABRIC.wellGravity.falloffEndRadius + FABRIC.wellGravity.featherRadius,
     zeroDistanceThreshold: 0.001,
   }),
   scavenger: Object.freeze({

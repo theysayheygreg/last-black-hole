@@ -26,12 +26,12 @@ async function run() {
 
   await runner.run("Well current fades out before open space", async () => {
     const field = buildCoarseFlowField({
-      worldScale: 3,
+      worldScale: 5,
       cellSize: 0.25,
-      wells: [{ wx: 1.5, wy: 1.5, mass: 1.2, orbitalDir: 1, killRadius: 0.08, ringOuter: 0.3 }],
+      wells: [{ wx: 2.5, wy: 2.5, mass: 1.2, orbitalDir: 1, killRadius: 0.08, ringOuter: 0.3 }],
       waveRings: [],
     });
-    const sample = sampleCoarseFlowField(field, 2.95, 1.5);
+    const sample = sampleCoarseFlowField(field, 0.5, 2.5);
     assert(Math.abs(sample.current.x) < 1e-9 && Math.abs(sample.current.y) < 1e-9,
       `Expected no coarse current outside well range, got (${sample.current.x}, ${sample.current.y})`);
     assert(Math.abs(sample.gravity.x) < 1e-9 && Math.abs(sample.gravity.y) < 1e-9,

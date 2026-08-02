@@ -7,6 +7,7 @@
 const fs = require("fs");
 const path = require("path");
 const { TestRunner, assert } = require("./helpers.cjs");
+const FABRIC = require("../src/content/fabric.data.json");
 
 const WELL = { mass: 1.5 };
 const LEGACY_PRODUCTION_PARAMS = {
@@ -41,6 +42,12 @@ const LEGACY_PRODUCTION_PARAMS = {
 
 const CURRENT_PRODUCTION_PARAMS = {
   ...LEGACY_PRODUCTION_PARAMS,
+  player: {
+    ...LEGACY_PRODUCTION_PARAMS.player,
+    ...FABRIC.wellGravity,
+    rangeMode: "localized",
+    maxRange: FABRIC.wellGravity.falloffEndRadius + FABRIC.wellGravity.featherRadius,
+  },
   wreck: {
     referenceDriftSpeed: 0.003,
     dragRate: 1.5,
@@ -54,8 +61,29 @@ const CURRENT_PRODUCTION_PARAMS = {
 };
 
 function oldMagnitude(bodyClass, dist) {
-  const params = LEGACY_PRODUCTION_PARAMS[bodyClass];
+  const params = bodyClass === "player"
+    ? CURRENT_PRODUCTION_PARAMS[bodyClass]
+    : LEGACY_PRODUCTION_PARAMS[bodyClass];
   if (dist < params.zeroDistanceThreshold) return 0;
+  if (params.rangeMode === "localized") {
+    const fullRadius = params.fullGravityRadius;
+    const falloffEnd = params.falloffEndRadius;
+    const feather = params.featherRadius;
+    const fullMagnitude = params.strength * WELL.mass
+      / Math.pow(Math.max(fullRadius, params.minimumDistance, params.referenceDistance) / params.referenceDistance, params.falloff);
+    if (dist <= fullRadius) return fullMagnitude;
+    if (dist <= falloffEnd) {
+      const t = Math.max(0, Math.min(1, (dist - fullRadius) / (falloffEnd - fullRadius)));
+      const eased = t * t * (3 - 2 * t);
+      return fullMagnitude * (1 - (1 - params.minimumGravityFraction) * eased);
+    }
+    if (dist <= falloffEnd + feather) {
+      const t = Math.max(0, Math.min(1, (dist - falloffEnd) / feather));
+      const eased = t * t * (3 - 2 * t);
+      return fullMagnitude * params.minimumGravityFraction * (1 - eased);
+    }
+    return 0;
+  }
   if (params.rangeMode !== "unbounded" && dist > params.maxRange) return 0;
   const safeDist = Math.max(dist, params.minimumDistance);
   const base = params.strength * WELL.mass

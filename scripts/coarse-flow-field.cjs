@@ -8,7 +8,7 @@ const {
 } = require("./sim/world-geometry.cjs");
 const { sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
-const FORCE_MIN_DIST = 0.15;
+const FORCE_MIN_DIST = FABRIC.wellGravity.minimumDistance;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
@@ -25,11 +25,22 @@ function effectiveWellMass(well) {
   return baseMass * overdrive;
 }
 
-function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
+function broadOrbitalCurrentSpeed(
+  dist,
+  strength,
+  mass,
+  falloff,
+  maxRange,
+  fullGravityRadius = FABRIC.wellGravity.fullGravityRadius,
+  falloffEndRadius = FABRIC.wellGravity.falloffEndRadius,
+) {
   if (dist < 0.001 || dist > maxRange) return 0;
-  const safeDist = Math.max(dist, FORCE_MIN_DIST);
-  const baseSpeed = strength * mass / Math.pow(safeDist, falloff);
-  return baseSpeed * (1 - dist / maxRange);
+  const referenceRadius = Math.max(FORCE_MIN_DIST, Number(fullGravityRadius) || FORCE_MIN_DIST);
+  const baseSpeed = strength * mass / Math.pow(referenceRadius, falloff);
+  if (dist <= falloffEndRadius) return baseSpeed;
+  const t = Math.max(0, Math.min(1, (dist - falloffEndRadius) / Math.max(0.001, maxRange - falloffEndRadius)));
+  const eased = t * t * (3 - 2 * t);
+  return baseSpeed * (1 - eased);
 }
 
 function buildCoarseFlowField({
@@ -39,13 +50,18 @@ function buildCoarseFlowField({
   waveRings = [],
   wellCurrentScale = FABRIC.wellCurrent.strength,
   wellCurrentFalloff = FABRIC.wellCurrent.falloff,
-  wellCurrentMaxRange = FABRIC.wellCurrent.maxRange,
-  wellGravityScale = 0.6,
-  wellGravityFalloff = 1.5,
-  wellGravityMaxRange = 1.2,
+  wellCurrentMaxRange = FABRIC.wellGravity.falloffEndRadius * FABRIC.wellCurrent.currentReachMultiplier,
+  wellGravityScale = FABRIC.wellGravity.strength,
+  wellGravityFalloff = FABRIC.wellGravity.falloff,
+  wellGravityMaxRange = FABRIC.wellGravity.falloffEndRadius,
+  wellGravityFullRadius = FABRIC.wellGravity.fullGravityRadius,
+  wellGravityMinimumFraction = FABRIC.wellGravity.minimumGravityFraction,
+  wellGravityFalloffCurve = FABRIC.wellGravity.falloffCurve,
+  wellGravityFeatherRadius = FABRIC.wellGravity.featherRadius,
+  wellCurrentFalloffEnd = FABRIC.wellGravity.falloffEndRadius,
   seededSea = null,
-  waveShipPush = FABRIC.eventWave.shipAcceleration,
-  waveWidth = FABRIC.eventWave.width,
+  waveShipPush = FABRIC.eventWave.impulseFraction,
+  waveWidth = FABRIC.eventWave.frontWidth,
   collapseParameters = {},
   maxCells = Infinity,
 }) {
@@ -104,12 +120,14 @@ function buildCoarseFlowField({
         }
 
         const dir = well.orbitalDir || 1;
-        const currentAccel = orbitalCurrentSpeed(
+        const currentAccel = broadOrbitalCurrentSpeed(
           dist,
           wellCurrentScale * signatureMultiplier(well, 'currentStrengthMultiplier'),
           effectiveWellMass(well) || 1,
           wellCurrentFalloff,
-          wellCurrentMaxRange * signatureMultiplier(well, 'currentReachMultiplier')
+          wellCurrentMaxRange * signatureMultiplier(well, 'currentReachMultiplier'),
+          wellGravityFullRadius,
+          wellCurrentFalloffEnd,
         );
         if (currentAccel > 0) {
           currentX += (-dy / dist) * dir * currentAccel;
@@ -124,6 +142,12 @@ function buildCoarseFlowField({
           strength: wellGravityScale * signatureMultiplier(well, 'gravityStrengthMultiplier'),
           falloff: wellGravityFalloff,
           maxRange: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),
+          fullGravityRadius: wellGravityFullRadius * signatureMultiplier(well, 'gravityReachMultiplier'),
+          falloffEndRadius: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),
+          minimumGravityFraction: wellGravityMinimumFraction,
+          falloffCurve: wellGravityFalloffCurve,
+          featherRadius: wellGravityFeatherRadius * signatureMultiplier(well, 'gravityReachMultiplier'),
+          rangeMode: "localized",
         });
         gravityX += (dx / dist) * gravityStrength;
         gravityY += (dy / dist) * gravityStrength;

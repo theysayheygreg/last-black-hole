@@ -117,7 +117,7 @@ export const CONFIG = {
     currentStrength: FABRIC.wellCurrent.strength, // Tangential current speed near wells.
                              // so it should invite surfing without steering the ship from void space.
     currentFalloff: FABRIC.wellCurrent.falloff,
-    currentRange: FABRIC.wellCurrent.maxRange,
+    currentRange: FABRIC.wellGravity.falloffEndRadius * FABRIC.wellCurrent.currentReachMultiplier,
                              // Keeps empty space controllable while preserving near-well flow lanes.
 
     // --- Death ---
@@ -145,10 +145,10 @@ export const CONFIG = {
 
   events: {
     waveSpeed: FABRIC.eventWave.speed, // World-units/sec — ring expansion.
-    waveWidth: FABRIC.eventWave.width, // World-units — wavefront thickness.
+    waveWidth: FABRIC.eventWave.frontWidth, // World-units — wavefront thickness.
                              // Ship only feels force when inside this band.
     waveMaxRadius: FABRIC.eventWave.maxRadius,
-    waveShipPush: FABRIC.eventWave.shipAcceleration,
+    waveShipPush: FABRIC.eventWave.impulseFraction,
     growthInterval: 45,       // Seconds between passive well growth events. Higher = calmer game.
     growthAmount: 0.02,       // Mass added to each well per growth event. Compounds over time.
     growthWaveAmplitude: FABRIC.eventWave.growthAmplitude,

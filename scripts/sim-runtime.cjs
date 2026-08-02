@@ -348,12 +348,16 @@ const SERVER_COMBAT = {
   pulseRecoilForce: 0.4,
 };
 const SERVER_WELLS = {
-  shipPullStrength: WELL_GRAVITY_PARAMS.player.strength,
-  shipPullFalloff: WELL_GRAVITY_PARAMS.player.falloff,
-  maxRange: WELL_GRAVITY_PARAMS.player.maxRange,
+  shipPullStrength: FABRIC.wellGravity.strength,
+  shipPullFalloff: FABRIC.wellGravity.falloff,
+  fullGravityRadius: FABRIC.wellGravity.fullGravityRadius,
+  minimumGravityFraction: FABRIC.wellGravity.minimumGravityFraction,
+  falloffCurve: FABRIC.wellGravity.falloffCurve,
+  featherRadius: FABRIC.wellGravity.featherRadius,
+  maxRange: FABRIC.wellGravity.falloffEndRadius,
   currentStrength: FABRIC.wellCurrent.strength,
   currentFalloff: FABRIC.wellCurrent.falloff,
-  currentRange: FABRIC.wellCurrent.maxRange,
+  currentRange: FABRIC.wellGravity.falloffEndRadius * FABRIC.wellCurrent.currentReachMultiplier,
 };
 const PLANETOID_SERVER = {
   shipPushStrength: 0.3,
@@ -361,10 +365,10 @@ const PLANETOID_SERVER = {
 };
 const WAVE_SERVER = {
   waveSpeed: FABRIC.eventWave.speed,
-  waveWidth: FABRIC.eventWave.width,
+  waveWidth: FABRIC.eventWave.frontWidth,
   waveHalfLife: WAVE_HALF_LIFE_SECONDS,
   waveMaxRadius: FABRIC.eventWave.maxRadius,
-  waveShipPush: FABRIC.eventWave.shipAcceleration,
+  waveShipPush: FABRIC.eventWave.impulseFraction,
   growthWaveAmplitude: FABRIC.eventWave.growthAmplitude,
 };
 const SLINGSHOT_SERVER = Object.freeze({
@@ -374,7 +378,8 @@ const INHIBITOR_CONFIG = {
   // The prior Expanse schedule is 90/180/270 seconds on a 600-second run.
   // These normalized fronts preserve that anchor on every map tier.
   phaseProgresses: Object.freeze([0, 0.15, 0.30, 0.45]),
-  phaseWaveBudgets: [0, 1, 2, 3],
+  phaseWaveBudgets: Object.freeze([...FABRIC.eventWave.conductedPhaseCounts]),
+  conductedSourceSpacingSeconds: FABRIC.eventWave.conductedSourceSpacingSeconds,
 };
 
 function inhibitorPhaseProgress(phase) {
@@ -474,6 +479,7 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId) {
         phase,
         progress,
         scheduledTime,
+        conductedWaveCount: INHIBITOR_CONFIG.phaseWaveBudgets[phase],
       },
     });
     previousRegisteredPhaseTime = scheduledTime;
@@ -5007,6 +5013,10 @@ function rebuildAuthoritativeField() {
     wellGravityScale: SERVER_WELLS.shipPullStrength,
     wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
     wellGravityMaxRange: SERVER_WELLS.maxRange,
+    wellGravityFullRadius: SERVER_WELLS.fullGravityRadius,
+    wellGravityMinimumFraction: SERVER_WELLS.minimumGravityFraction,
+    wellGravityFalloffCurve: SERVER_WELLS.falloffCurve,
+    wellGravityFeatherRadius: SERVER_WELLS.featherRadius,
     wellCurrentScale: SERVER_WELLS.currentStrength,
     wellCurrentFalloff: SERVER_WELLS.currentFalloff,
     wellCurrentMaxRange: SERVER_WELLS.currentRange,

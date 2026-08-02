@@ -2,7 +2,7 @@
   "seededSea": {
     "swellCountMin": 2,
     "swellCountMax": 4,
-    "ambientThrustCeiling": 0.3,
+    "ambientThrustCeiling": 0.2,
     "outsideWellFloor": 0.2,
     "wavelengthMin": 0.75,
     "wavelengthMax": 1.5,
@@ -14,17 +14,34 @@
     "influenceRadiusMax": 1.35,
     "mapRadiusFraction": 0.45
   },
+  "referenceFrame": {
+    "carryCapFraction": 0.2
+  },
+  "wellGravity": {
+    "strength": 0.6,
+    "referenceDistance": 0.25,
+    "minimumDistance": 0.15,
+    "fullGravityRadius": 0.25,
+    "falloffEndRadius": 1.2,
+    "minimumGravityFraction": 0.15,
+    "falloffCurve": "smoothstep",
+    "featherRadius": 0.12,
+    "falloff": 1.5
+  },
   "wellCurrent": {
     "strength": 0.3,
     "falloff": 1.5,
-    "maxRange": 1.35
+    "currentReachMultiplier": 1.5,
+    "profile": "broad-plateau"
   },
   "eventWave": {
     "speed": 0.4,
-    "width": 0.1,
+    "frontWidth": 0.1,
+    "impulseFraction": 0.25,
     "halfLifeSeconds": 2,
     "maxRadius": 2,
-    "shipAcceleration": 0.8,
-    "growthAmplitude": 1
+    "growthAmplitude": 1,
+    "conductedPhaseCounts": [0, 1, 2, 3],
+    "conductedSourceSpacingSeconds": 10
   }
 }

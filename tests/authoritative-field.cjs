@@ -77,8 +77,8 @@ async function run() {
     });
     const ambientMagnitudes = field.cells.map((cell) => Math.hypot(cell.ambientX, cell.ambientY));
     assert(ambientMagnitudes.some((magnitude) => magnitude > 0), "Expected seeded trains to contribute to field current");
-    assert(Math.max(...ambientMagnitudes) <= 2.5 * 0.30 + 1e-9,
-      "Seeded ambient must stay at or below 30% of base thrust");
+    assert(Math.max(...ambientMagnitudes) <= 2.5 * 0.20 + 1e-9,
+      "Seeded ambient must stay at or below the canonical 20% carry cap");
     const sample = sampleCoarseFlowField(field, 1.5, 1.5);
     assert(Math.hypot(sample.current.x, sample.current.y) > 0,
       "Gameplay sample must carry the seeded authoritative current");
