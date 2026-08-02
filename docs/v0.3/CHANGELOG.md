@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+- **Title/local authority separation:** the live title backdrop now advances
+  through a presentation-only owner in the existing frame loop. Its fluid,
+  well, star, wreck, portal, planetoid, combat-decay, growth-wave, and attract
+  ordering is unchanged, but it no longer enters the legacy local gameplay
+  step. The remaining `LocalSandboxSimCore` is named explicitly for Bench,
+  local fallback, renderer fixtures, and remote visual hydration; product
+  gameplay truth remains in the authority runtime.
+
 - **Remote well and growth-wave presentation:** the client now preserves each
   well's authoritative orbital direction and each growth wave's source well.
   The fabric shader uses effective overdrive mass for well intensity, while

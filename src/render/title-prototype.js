@@ -1,6 +1,8 @@
 // src/render/title-prototype.js
 //
-// Standalone title-screen prototype. Loaded by title-prototype.html.
+// Legacy standalone title-screen calibration surface. Loaded only by
+// title-prototype.html / `npm run test:title-prototype`; the product title is
+// owned by TitleScenePresentation in the normal app frame loop.
 //
 // Drives the LBH multi-pass Composer (src/render/composer.js) end to end,
 // using the existing FluidSim for physics and three Pass subclasses

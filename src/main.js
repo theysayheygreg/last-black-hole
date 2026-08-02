@@ -26,6 +26,7 @@ import { createRendererBackend, requestedRendererBackend, requestedRenderQuality
 import { createPresentationFrame } from './presentation/presentation-frame.js';
 import { createPresentationSceneSource } from './presentation/scene-source.js';
 import { syncRemoteWellPresentation } from './presentation/well-wave-presentation.js';
+import { sampleTitleAttractState, TitleScenePresentation } from './presentation/title-scene-presentation.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { GainPass } from './render/passes/gain-pass.js';
 import { AccretionPass } from './render/passes/accretion-pass.js';
@@ -63,7 +64,7 @@ import {
   surveyScaleForMap,
 } from './ui/map-select-survey.js';
 import { FlowField } from './sim/flow-field.js';
-import { SimCore } from './sim/sim-core.js';
+import { LocalSandboxSimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
 import {
   advanceLocalPlayerReconciliation,
@@ -212,7 +213,7 @@ let fluid, ship, wellSystem, starSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
 let scavengerSystem, combatSystem, audioEngine, audioRouter, inventorySystem;
 let slingshotSystem;
-let flowField, simCore;
+let flowField, legacyLocalSimCore, titleScenePresentation;
 let simClient = null;
 let currentSignature = null;
 let inputManager, composer, fluidDisplayPass, tonemapPass, asciiPass;
@@ -1046,7 +1047,7 @@ function init() {
   // Init ship
   ship = new Ship(glCanvas.width, glCanvas.height);
 
-  simCore = new SimCore({
+  legacyLocalSimCore = new LocalSandboxSimCore({
     fluid,
     flowField,
     wellSystem,
@@ -1059,6 +1060,16 @@ function init() {
     combatSystem,
     waveRings,
     ship,
+  });
+  titleScenePresentation = new TitleScenePresentation({
+    fluid,
+    wellSystem,
+    starSystem,
+    wreckSystem,
+    portalSystem,
+    planetoidSystem,
+    combatSystem,
+    waveRings,
   });
 
   const simServerUrl = getConfiguredSimServerUrl();
@@ -1522,7 +1533,8 @@ function loadScene(map, { seed = 1 } = {}) {
   deathTimer = 0;
   escapeTimer = 0;
   resetSimState(simState);
-  simCore?.reset();
+  legacyLocalSimCore?.reset();
+  titleScenePresentation?.reset();
 
   // 4. Reset gameplay state
   resetLocalInventoryShape();
@@ -3157,37 +3169,17 @@ function isTitleBackdropActive() {
 }
 
 function titleAttractState(time) {
-  const t = titleLoopTime(time);
-  const collapse = smoothstep(6.2, 7.5, t);
-  const returnFade = smoothstep(8.8, 10.6, t);
-  const portalAlpha = t < 6.2 ? 1 : t < 8.8 ? 1 - collapse : returnFade;
-  let story = 'wake scan nominal';
-  let role = 'flow';
-
-  if (t >= 2.5 && t < 5.0) {
-    story = 'derelict signatures indexed';
-    role = 'salvage';
-  } else if (t >= 5.0 && t < 7.9) {
-    story = 'rift aperture decay';
-    role = 'anomaly';
-  } else if (t >= 7.9 && t < 10.4) {
-    story = 'route memory degraded';
-    role = 'muted';
-  }
-
-  return { portalAlpha, story, role };
+  return sampleTitleAttractState(titleLoopTime(time));
 }
 
 function updateTitleAttractScene() {
-  if (rendererFixtureActive || gamePhase !== 'title' || !portalSystem) return;
-  const portal = portalSystem.portals.find((p) => p.id === TITLE_RIFT_ID);
-  if (!portal) return;
-
-  const { portalAlpha } = titleAttractState(totalTime);
-  portal.opacity = portalAlpha;
-  // Menus do not advance runElapsedTime, so the title rift uses the attract
-  // loop clock instead of gameplay evaporation to blink out and return.
-  portal.alive = portalAlpha > 0.035;
+  if (rendererFixtureActive || gamePhase !== 'title' || !titleScenePresentation) return;
+  // Menus have no gameplay clock. The presentation owner applies the authored
+  // attract loop directly to its title-local portal fixture.
+  titleScenePresentation.applyAttractState({
+    portalId: TITLE_RIFT_ID,
+    loopTime: titleLoopTime(totalTime),
+  });
 }
 
 function drawTitleTextMatte(ctx, rect, alpha = 1) {
@@ -4069,14 +4061,20 @@ function gameLoop(now) {
   const localSandboxPaused = gamePhase === 'paused' && !remoteSession.active;
   if (!localSandboxPaused) {
     const simStart = performance.now();
-    simCore.update(simState, {
-      frameDt: dt,
-      totalTime,
-      inMenu: inMenu || remoteVisualMode,
-      visualOnly: remoteVisualMode,
-      camX,
-      camY,
-    });
+    if (gamePhase === 'title' && !rendererFixtureActive) {
+      titleScenePresentation.update({ frameDt: dt, totalTime, camX, camY });
+    } else {
+      // Explicit legacy fallback for Bench/local play and remote visual
+      // hydration. It is not product gameplay authority.
+      legacyLocalSimCore.update(simState, {
+        frameDt: dt,
+        totalTime,
+        inMenu: inMenu || remoteVisualMode,
+        visualOnly: remoteVisualMode,
+        camX,
+        camY,
+      });
+    }
     if (remoteVisualMode) {
       combatSystem.update(dt);
     }

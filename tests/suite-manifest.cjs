@@ -508,6 +508,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "TitleScenePresentation",
+    file: "title-scene-presentation.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
     name: "HudDeck",
     file: "hud-deck.cjs",
     lanes: ["core", "visual", "playtest", "full"],
