@@ -115,13 +115,18 @@ old 2D pipeline.
 
 The current implementation is centralized but not yet a legible surfing game.
 The [Movement, Physics, and Spacetime Fabric Redesign](reviews/2026-08-01-movement-physics-fabric-redesign.md)
-recommends a derived, player-readable SURF condition inside FREE with bold
-carry/cost, a Shallows comparison of Graphic Cosmic Swell, Wavefront Surfing,
-and a Signed ASCII truth control, and a restrained 8–12% speed-camera range.
-Before implementation, lock the SURF behavior, exaggerated outputs, comparison
-variants, and camera constraints. Select the winning route language and final
-Deck baseline only after the playable motion comparison; do not migrate every
-map or add more fabric detail first.
+now keeps FREE flight continuous: there is no SURF state or alternate physics.
+The first tuning hypothesis lets base-current alignment alter steady free-flight
+travel speed across a continuous -20% to +20% band relative to zero-current
+travel; gravity and event waves remain separate named vectors. Before locking
+its visual grammar, catalog stars,
+solar wind, wells, moving masses, Inhibitors, event fronts, and large
+non-gravitational destinations such as stations or megastructures. That
+[source catalog is complete](reviews/2026-08-02-fabric-force-and-world-object-catalog.md):
+only seeded sea, wells, and event rings currently own shared fabric motion.
+Next compare Graphic Cosmic Swell, Wavefront Surfing, and a Signed ASCII truth control
+within a restrained 8–12% speed-camera range. Select the winning route language
+and final Deck baseline only after the playable motion comparison.
 
 ### 1. Greg's Feel Verdict
 

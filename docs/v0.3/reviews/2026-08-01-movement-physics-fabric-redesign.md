@@ -85,9 +85,10 @@ making the ship, route, and nearby terrain readable.
 - Retire the always-active seeded sea as the primary route language.
 - Demote decorative fluid simulation to low-contrast microtexture. It must not
   decide which route looks fast.
-- Replace hidden passive current coupling with an explicit, player-readable
-  SURF condition inside FREE and an obvious aligned/opposed outcome. SURF does
-  not become a fourth authority movement mode.
+- Replace hidden passive current coupling with one continuous, readable fabric
+  influence during FREE. There is no SURF state, threshold, lock, or alternate
+  physics. The ship is always flying freely and always relates continuously to
+  the local fabric.
 - Stop stacking separate radial well pull, star push, planetoid push, and tiny
   Inhibitor fabric pulls when the landmark can author one readable lane, zone,
   or discrete consequence.
@@ -99,41 +100,50 @@ making the ship, route, and nearby terrain readable.
 
 ## The New Player Language
 
-Movement should have six verbs:
+Movement should have five verbs:
 
 | Verb | Player rule | Required tell |
 | --- | --- | --- |
 | **THRUST** | Spend Heat to change velocity deliberately. | Heat, exhaust, and acceleration react together. |
 | **COAST** | Preserve momentum through quiet fabric. | Sparse wake and stable camera. |
 | **BRAKE** | Reduce current velocity regardless of facing. | Wake compresses and speed falls visibly. |
-| **SURF** | Enter a swell and align with it for a large carry. | Wake locks to the swell; speed and audio open up. |
 | **GRAPPLE** | Attach to a massive landmark, ride its arc, release tangent. | Existing reel, arc, and release language. |
 | **IMPACT** | A strong front, hazard, or collision changes the line. | One coherent hit, displacement, and recovery cue. |
 
-Fabric should have exactly three player-readable states:
+For visual exploration, fabric may be described at three points on a continuous
+spectrum:
 
-| State | Meaning | Presentation |
+| Visual point | Meaning | Presentation |
 | --- | --- | --- |
 | **CALM** | Re-aim, coast, cool, and listen. | Near-black field, sparse slow glyph drift, no false route. |
 | **SWELL** | A broad directional opportunity. | Wide cyan/blue-white ribbon with signed motion and a readable crest. |
 | **BREAK** | A compressed edge, shear, or dangerous front. | Bright bone/amber edge with reduced local detail and a strong consequence. |
 
-Wells, stars, portals, waves, and Inhibitors shape or tint these states. They do
-not each invent a new kind of fabric.
+Seeded sea, wells, and event waves shape this spectrum. Other actors,
+destinations, and threats keep separate presentation unless their authority
+contract deliberately changes. Vessel overdrive may change the well's fabric
+truth; the Vessel itself is not a shared field source.
 
-`CALM / SWELL / BREAK` are the complete world grammar. `RIDING / CUTTING /
-FIGHTING` are optional, temporary presentation descriptions derived from one
-ship-to-current alignment value—not three additional gameplay states, tuning
-systems, or authority owners. SURF remains the player verb inside FREE.
+`CALM / SWELL / BREAK` are art-direction shorthand, not simulation states or
+thresholds. They blend continuously. `RIDING / CUTTING / FIGHTING` may remain
+internal language for ship-to-current alignment, but they are not gameplay
+states, HUD promises, or separate tuning systems. “Surfing the fabric” is the
+fantasy produced by free flight through that continuous field.
 
 ## Mechanical Starting Point
 
-These are prototype values, deliberately too large rather than final balance:
+The first locked tuning hypothesis is deliberately simple:
 
-- Aligned SWELL carry should feel roughly **75–100% faster** than comparable
-  CALM travel.
-- Crossing or opposing a BREAK should produce an obvious **half-speed** result
-  or comparably large deflection.
+- The band applies only to **continuous base-current alignment**. The calm
+  baseline is the steady travel speed produced by identical input, hull, Heat,
+  and drag in zero current. Gravity and discrete event-wave vectors remain
+  separate named consequences.
+- Prototype target: `speed factor = 1 + 0.20 × normalized current strength ×
+  signed alignment`, clamped to `0.80–1.20`. Alignment ranges continuously from
+  against the current (`-1`) through cross-current (`0`) to with it (`+1`).
+- The implementation must converge toward that steady-state relationship with
+  `dt`-stable coupling. It must never multiply existing velocity by
+  `0.80–1.20` every 15 Hz tick or compound the bonus without bound.
 - BRAKE should cut speed roughly in half over about half a second before later
   tuning.
 - A well should author one curved surf lane and one lethal core, not several
@@ -145,8 +155,17 @@ These are prototype values, deliberately too large rather than final balance:
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not
   lead the design.
 
-The first prototype should exaggerate the rule. Greg can tune a clear effect
-down; he cannot judge a mechanic hidden inside visual noise.
+The first prototype must expose the real 40-point band truthfully through
+motion, wake, and field presentation. If ±20% remains imperceptible in ordinary
+play, tune the mechanical band magnitude before inventing stronger visual
+fiction, additional states, or more forces.
+
+The source-backed ownership inventory is maintained in the
+[Fabric Force And World-Object Catalog](2026-08-02-fabric-force-and-world-object-catalog.md).
+At the audited source, shared fabric motion has only three owners: seeded sea
+as base current, wells as persistent gravity/rotational shapers, and event rings
+as transient wavefronts. Other forces and objects must not be drawn as fabric
+unless their authority contract changes deliberately.
 
 ## Visual Direction: Graphic Cosmic Swell
 
@@ -158,10 +177,11 @@ reaction**.
    before animation does.
 2. **Disturbance:** a well or front bends, compresses, tears, or deletes the
    lane. Wells use a single hot horizon band plus faint lensing rather than many
-   equal rings. Inhibitors create discontinuity rather than more random flow.
+   equal rings. Inhibitors retain separate threat presentation; only a
+   Vessel-overdriven well changes shared fabric truth.
 3. **Player reaction:** the ship wake shows whether it is RIDING, CUTTING, or
-   FIGHTING the field. A brief word cue may teach those states initially, but
-   the wake must remain sufficient after the lesson.
+   FIGHTING the field. A brief word cue may teach those relationships
+   initially, but the wake must remain sufficient after the lesson.
 
 The shader may keep rich microtexture, but at half or less of its current
 contrast and animation. If disabling microfluid, bloom, parallax, or scanlines
@@ -200,11 +220,13 @@ whole game.
 ### Mechanical control
 
 - Make BRAKE oppose velocity.
-- Disable seeded-sea overlap, separate radial gravity, star/planetoid pushes,
-  and tiny Inhibitor pulls inside the prototype.
+- Start by cataloging seeded-sea motion, gravity, rotational well current,
+  stars/solar wind, planetoids, moving masses, event fronts, Inhibitor effects,
+  and non-gravitational destinations. Do not disable a live force until its
+  gameplay ownership and replacement are explicit.
 - Route the existing signed authority current directly into semantic
   presentation instead of mixing its route language with decorative fluid.
-- Add bold aligned carry and opposed/crossing cost.
+- Apply the continuous -20% to +20% fabric influence band throughout FREE.
 
 ### Three presentation variants
 
@@ -241,7 +263,8 @@ overlays:
   two seconds;
 - predict which of two routes will be faster before the ship enters either;
 - tell fast fabric from slow fabric in a paused frame and in motion;
-- feel a large carry when aligned and a large cost when opposed;
+- perceive favorable and unfavorable ends of the continuous ±20% band without
+  experiencing a mode switch;
 - understand the result from the ship wake, motion, audio, and camera rather
   than a meter;
 - read the same decision on a physical Steam Deck;
@@ -253,10 +276,9 @@ They cannot decide whether surfing feels good or whether the image reads.
 
 ## Decisions To Lock Before Production
 
-1. **Does SURF become a derived, player-readable condition inside FREE with
-   bold carry and cost?**
-   Recommendation: yes. Without this, the shader can only decorate a passive
-   force the player cannot deliberately learn.
+1. **Does the first continuous fabric prototype use a -20% to +20% influence
+   band during FREE?** Locked as the starting hypothesis; playtesting decides
+   whether its motion and presentation are legible.
 2. **Which three route-language variants enter the comparison?** Recommendation:
    Graphic Cosmic Swell / Spacetime Rivers, Wavefront Surfing, and Signed ASCII
    Field. Select the primary language only after the playable motion captures.
@@ -272,14 +294,18 @@ in prose.
 
 ## Implementation Order After Decisions
 
-1. **Truth and projection:** expose the signed semantic field and correct the
+1. **Force catalog:** identify every current and intended field shaper, direct
+   consequence, and non-gravitational destination before locking visual rules.
+2. **Truth and projection:** expose the signed semantic field and correct the
    isotropic viewport.
-2. **Playable Shallows vertical:** real brake, CALM/SWELL/BREAK, bold carry and
-   cost, and player wake.
-3. **Motion comparison:** capture the three variants and let Greg choose.
-4. **Migration:** make wells, event waves, hull identity, camera, and map
-   palettes use the chosen language.
-5. **Deletion:** remove superseded decorative physics inputs, false route
+3. **Playable Shallows vertical:** real brake, continuous ±20% fabric influence,
+   continuous visual shorthand, and player wake.
+4. **Motion comparison:** capture the three variants and let Greg choose.
+5. **Migration:** make seeded sea, wells, event waves, hull response, camera,
+   and map palettes use the chosen semantic language. Stars, moving masses,
+   Inhibitors, portals, wrecks, and future structures retain their own
+   actor/destination/threat language unless their authority contract changes.
+6. **Deletion:** remove superseded decorative physics inputs, false route
    texture, and redundant shader paths only after the winning vertical works.
 
 ## Non-Goals

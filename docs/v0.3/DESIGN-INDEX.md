@@ -13,8 +13,9 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 ## Movement
 
 - [`Movement, Physics, and Spacetime Fabric Redesign`](reviews/2026-08-01-movement-physics-fabric-redesign.md) —
-  current design review and next playable prototype: six movement verbs,
-  `CALM / SWELL / BREAK`, Graphic Cosmic Swell, and the Shallows comparison.
+  current design review and next playable prototype: five movement verbs,
+  continuous fabric influence, visual-spectrum shorthand, and the Shallows
+  comparison.
 - [`Movement + Fabric Simplification`](MOVEMENT-FABRIC-SIMPLIFICATION.md) —
   current v0.3.1 implementation contract for exclusive movement modes, one
   ordered FREE step, and one authoritative fabric sample.
@@ -25,6 +26,11 @@ the frozen v0.1/v0.2 bodies are linked only as history.
 
 ## Fabric
 
+- [`Fabric Force And World-Object Catalog`](reviews/2026-08-02-fabric-force-and-world-object-catalog.md) —
+  current authority/presentation inventory; catalogs well gravity, rotational
+  current, growth, waves, escalation, current object ownership, and future
+  object questions. Future wakes, stations, and megastructures do not block the
+  current-truth shader comparison.
 - [`Movement, Physics, and Spacetime Fabric Redesign`](reviews/2026-08-01-movement-physics-fabric-redesign.md) —
   current experiential diagnosis, semantic fabric target, viewport direction,
   and Greg decision gates.

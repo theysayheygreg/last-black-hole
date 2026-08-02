@@ -2,11 +2,15 @@
 
 - **Movement, physics, and fabric design review:** diagnosed the centralized
   movement stack as still too complex at player level and the fabric as pretty
-  but illegible route terrain. Proposed six movement verbs, a bold derived SURF
-  condition inside FREE, `CALM / SWELL / BREAK`, Graphic Cosmic Swell, isotropic wide
-  projection, a closer restrained Deck camera, and a Shallows-only three-way
-  motion prototype before any whole-game migration or shader rewrite. No
-  runtime behavior changed.
+  but illegible route terrain. Follow-up design correction keeps fabric
+  influence continuous throughout FREE flight—no SURF state or alternate
+  physics—and starts with a -20% to +20% velocity-influence band. Stars, solar
+  wind, wells, moving masses, direct hazards, stations, and future
+  megastructures are now cataloged by gameplay ownership before the shader
+  language is selected. Only seeded sea, wells, and event rings currently own
+  shared fabric motion. Graphic Cosmic Swell, isotropic projection, a closer
+  restrained Deck camera, and a Shallows-only comparison remain prototype
+  directions. No runtime behavior changed.
 
 - **Grapple Arc v3:** replaced the layered Slingshot v2 orbital-energy model
   with a forgiving arcade grapple. Anchor scale now owns hook/swing radii and
