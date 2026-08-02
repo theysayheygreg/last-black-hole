@@ -117,6 +117,7 @@ const {
   wellGravityMagnitude,
   wellGravityVector,
 } = require("./sim/well-gravity.cjs");
+const { solarWindMagnitudeForStar } = require("./sim/star-solar-wind.cjs");
 const {
   singleCorrectionDelta: worldDisplacement,
   singleCorrectionDistance: worldDistance,
@@ -351,11 +352,6 @@ const SERVER_WELLS = {
   currentStrength: FABRIC.wellCurrent.strength,
   currentFalloff: FABRIC.wellCurrent.falloff,
   currentRange: FABRIC.wellCurrent.maxRange,
-};
-const STAR_SERVER = {
-  shipPushStrength: 0.45,
-  shipPushFalloff: 1.8,
-  maxRange: 0.6,
 };
 const PLANETOID_SERVER = {
   shipPushStrength: 0.3,
@@ -2824,18 +2820,12 @@ function tickPlanetoids(dt, planetoids = runtime.mapState.planetoids) {
   }
 }
 
-function resolveStarPushes(player, stars = runtime.mapState.stars) {
+function resolveStarSolarWind(player, stars = runtime.mapState.stars) {
   const pushes = [];
   for (const star of stars) {
     if (star.alive === false) continue;
     const { dist, nx, ny } = worldDirection(star.wx, star.wy, player.wx, player.wy, runtime.session.worldScale);
-    const accel = inversePowerForce(
-      dist,
-      STAR_SERVER.shipPushStrength,
-      star.mass || 1,
-      STAR_SERVER.shipPushFalloff,
-      STAR_SERVER.maxRange
-    );
+    const accel = solarWindMagnitudeForStar(star, dist);
     if (accel > 0) {
       pushes.push({ x: nx * accel, y: ny * accel });
     }
@@ -3073,11 +3063,9 @@ function resolvePlayerEnvironment(player, flowSample, relevance) {
   return {
     // Retain the previous well -> each star -> each planetoid arithmetic order
     // while one FREE owner applies every continuous acceleration.
-    gravity: [
-      well,
-      ...resolveStarPushes(player, relevance.stars),
-      ...resolvePlanetoidPushes(player, relevance.planetoids),
-    ],
+    gravity: well,
+    solarWind: resolveStarSolarWind(player, relevance.stars),
+    bodyPush: resolvePlanetoidPushes(player, relevance.planetoids),
     wave: { ...flowSample.wave },
   };
 }
@@ -6333,6 +6321,7 @@ function tickAuthorityPlayers(dt, relevance) {
     recordForceDeltaV(forceLedger, "thrust", movementStep.thrustDeltaV);
     recordForceDeltaV(forceLedger, "coupling", movementStep.couplingDeltaV);
     recordForceDeltaV(forceLedger, "gravity", movementStep.gravityDeltaV);
+    recordForceDeltaV(forceLedger, "solarWind", movementStep.solarWindDeltaV);
     recordForceDeltaV(forceLedger, "wave", movementStep.waveDeltaV);
     recordForceDeltaV(forceLedger, "drag", movementStep.dragDeltaV);
     player.lastDeliveredThrustIntensity = movementStep.thrustIntensity;

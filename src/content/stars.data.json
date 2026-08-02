@@ -1,0 +1,21 @@
+{
+  "solarWind": {
+    "strength": 0.45,
+    "falloff": 1.8,
+    "maxRange": 0.6
+  },
+  "types": {
+    "redGiant": {
+      "solarWindMultiplier": 0.6
+    },
+    "yellowDwarf": {
+      "solarWindMultiplier": 1
+    },
+    "whiteDwarf": {
+      "solarWindMultiplier": 2
+    },
+    "neutronStar": {
+      "solarWindMultiplier": 3
+    }
+  }
+}

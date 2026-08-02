@@ -9,6 +9,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { solarWindMultiplierForType } from './content/stars.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, uvScale, wrapWorld } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
@@ -26,7 +27,7 @@ const STAR_TYPES = {
     color: [255, 240, 180],      // warm yellow — baseline, most common
     haloColor: [255, 230, 160],
     sizeMult: 1.0,               // standard size
-    pushMult: 1.0,               // standard push — easy to navigate around
+    pushMult: solarWindMultiplierForType('yellowDwarf'), // standard push — easy to navigate around
     rayCount: 4,
     raySpinMult: 1.0,
     coreColor: [255, 255, 240],
@@ -36,7 +37,7 @@ const STAR_TYPES = {
     color: [255, 120, 60],       // deep red-orange — large but gentle
     haloColor: [255, 100, 40],
     sizeMult: 1.8,               // 1.8× bigger halo — dominates the screen
-    pushMult: 0.6,               // weaker push — size isn't danger, proximity is
+    pushMult: solarWindMultiplierForType('redGiant'), // weaker push — size isn't danger, proximity is
     rayCount: 6,                 // more rays = softer, more diffuse appearance
     raySpinMult: 0.4,            // slow rotation — stately, ancient feel
     coreColor: [255, 180, 100],
@@ -46,7 +47,7 @@ const STAR_TYPES = {
     color: [220, 230, 255],      // blue-white — compact and intense
     haloColor: [200, 210, 255],
     sizeMult: 0.5,               // tiny — half the normal size
-    pushMult: 2.0,               // 2× push — hard to get close, sharp edges
+    pushMult: solarWindMultiplierForType('whiteDwarf'), // 2× push — hard to get close, sharp edges
     rayCount: 4,
     raySpinMult: 2.0,            // fast spin — energetic, dangerous feel
     coreColor: [240, 245, 255],
@@ -56,7 +57,7 @@ const STAR_TYPES = {
     color: [180, 255, 255],      // pale cyan — exotic, rare
     haloColor: [160, 240, 255],
     sizeMult: 0.3,               // very tiny — collapsed remnant
-    pushMult: 3.0,               // 3× push — approaching is dangerous
+    pushMult: solarWindMultiplierForType('neutronStar'), // 3× push — approaching is dangerous
     rayCount: 2,                 // only 2 beams — pulsar effect
     raySpinMult: 4.0,            // 4× spin — rapid pulsar rotation
     coreColor: [200, 255, 255],

@@ -271,6 +271,7 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
       abilityDeltaV,
       inhibitorDeltaV,
       gravityDeltaV: { x: 0, y: 0 },
+      solarWindDeltaV: { x: 0, y: 0 },
       waveDeltaV: { x: 0, y: 0 },
       brakeIntensity: 0,
       dragFactor: 1,
@@ -280,6 +281,13 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
 
   const environment = options.environmentAcceleration || {};
   const gravityDeltaV = applyAccelerationChannel(player, environment.gravity, dt);
+  const solarWindDeltaV = applyAccelerationChannel(player, environment.solarWind, dt);
+  // Planetoid proximity remains attributed to the existing gravity/body-force
+  // ledger component. Applying it here preserves the accepted well -> star ->
+  // planetoid arithmetic order without hiding stellar force under gravity.
+  const bodyPushDeltaV = applyAccelerationChannel(player, environment.bodyPush, dt);
+  gravityDeltaV.x += bodyPushDeltaV.x;
+  gravityDeltaV.y += bodyPushDeltaV.y;
   const waveDeltaV = applyAccelerationChannel(player, environment.wave, dt);
 
   const brake = applyPlayerBrakeAndIntegrate(player, input, dt, {
@@ -297,6 +305,7 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
     abilityDeltaV,
     inhibitorDeltaV,
     gravityDeltaV,
+    solarWindDeltaV,
     waveDeltaV,
     aborted: false,
   };
