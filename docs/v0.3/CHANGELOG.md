@@ -1,5 +1,16 @@
 # v0.3 Changelog
 
+- **Fabric candidate RC receipt:** exact source `00cca067` completed one
+  accepted no-retry full lane with 124 selected suites: 96 passed and 28
+  failed in 280.73 seconds wall time, with zero suite retries. Twenty-three
+  failures were missing-dependency/browser-bootstrap infrastructure, four were
+  stale direct contracts, and the remaining AuthorityCadence sample measured
+  14.77/15 Hz despite a passing 14.96/15 Hz AuthorityBudget sample. AgentPlay,
+  Renderer, UIVisual, and package evidence were invalidated by missing `three`
+  and `@electron/packager`; no build or playtest archive was produced. The
+  next release checkpoint must provision normally, correct the stale fixtures,
+  and re-evaluate cadence before packaging.
+
 - **Fabric readability V6 cleanup:** removed the inert collapse-epoch
   `liveWavePushMultiplier`, zeroed coarse `wave`/surf-shadow channels, and
   retired gravity-contour renderer vocabulary. The live source-bound wave

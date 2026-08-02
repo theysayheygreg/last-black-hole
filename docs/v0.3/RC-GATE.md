@@ -1,9 +1,65 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-28. This is branch acceptance
+> Document revision: v0.3. Updated 2026-08-02. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
+
+### `00cca067` Fabric Candidate: RC Red, Not Built
+
+Exact product source `00cca0670ce6b603343483a4f5b63af9f67a42ee`
+completed one isolated no-retry full lane after an initial runner-topology
+collision was stopped and discarded as infrastructure. The accepted run used
+four workers and two browser workers, selected 124 of 126 registered suites,
+and finished 96 passed / 28 failed with zero suite retries. Harness wall time
+was 280.73 seconds and summed suite time was 434.59 seconds.
+
+This result does not support a build claim. The isolated worktree was missing
+the normal `three` and `@electron/packager` dependencies. Twenty-three failures
+were therefore dependency or browser-bootstrap infrastructure failures,
+including AgentPlay, Renderer, UIVisual, desktop package, and Cloudflare-drop
+evidence. AgentPlay reached no valid journey state and produced no captures;
+Renderer and UIVisual produced no valid acceptance manifests. Four additional
+failures were stale current-contract fixtures: Validation did not strip the new
+`FABRIC` import, SweptAuthority did not isolate the portal endpoint setup from
+the accepted fabric current, RulerContract expected six rather than eight
+canonical ruler values, and SlingshotDtStatic asserted an obsolete source-code
+call shape.
+
+AuthorityCadence was the remaining timing red at 14.77/15 Hz. The independent
+AuthorityBudget sample in the same run passed at 14.96/15 Hz with 24.35 ms
+snapshot p95 latency, 225.6 KiB snapshot p95 size, 1.16 MB/s estimated
+transport, 28.23 MiB heap growth, 1.328 ms Ballpark-sync p95, 12 queries per
+tick, 158 ticks, two catch-up ticks, and one skipped deadline. This mixed
+sample is a release blocker for the next correctly provisioned checkpoint, not
+evidence sufficient to diagnose a fabric gameplay regression.
+
+Direct movement, input, coarse/authoritative field, renderer-authority, and
+Ballpark extraction fixtures passed. In particular, BallparkExtraction
+preserved residence plus explicit confirmation, and high-speed portal
+fly-through still did not bypass that contract.
+
+Evidence:
+
+- accepted full log:
+  `/private/tmp/lbh-v031-rc-artifacts-00cca067/full-gate-clean-20260802T2245Z.log`
+  (SHA-256
+  `d534b20a6335897c4cc85f7ae0a300f5888f53932d721678657a4620838d220d`);
+- run metadata:
+  `/private/tmp/lbh-v031-rc-artifacts-00cca067/full-gate-clean-20260802T2245Z.meta`
+  (SHA-256
+  `a6dc123589327f3e8dc83e6b936db2c72d6dcde48edd76cba9bace402194b547`);
+- harness artifacts:
+  `/private/tmp/lbh-v031-rc-00cca067/tmp/harness-artifacts/1785710695587-30315`;
+- invalidated AgentPlay report:
+  `/private/tmp/lbh-v031-rc-00cca067/tests/screenshots/agent-play-eval-2026-08-02T224617392Z/report.json`.
+
+No `release:internal`, `release:status`, or `test:package` command was run. No
+`0.3.1.00cca067` build directory, playtest archive, package hash, or Deck
+artifact exists. The next release checkpoint must provision dependencies
+normally, update only the four stale fixtures, re-evaluate cadence, and then
+run a newly authorized immutable RC. Human visual, movement-feel, audio, and
+physical Deck gates remain open.
 
 ### `29997fb7` Playable Audio Candidate
 

@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.3. Updated 2026-07-26. This file answers “what can I
+> Document revision: v0.3. Updated 2026-08-02. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -17,14 +17,21 @@ does not erase newer committed work.
 ## v0.3 Candidate
 
 **Source status:** `codex/v0.3-ballpark-roadmap` is the current v0.3.1
-integration and release-candidate lineage. Exact product source `29997fb7`
-integrates audible-contact audio with Pilot Delete and session-local master
-mute; later commits through pre-merge checkpoint `e48ecabd` are review,
-version-routing, and outgoing-v0.2 preservation documentation. It retains one
-15 Hz authoritative movement clock across Shallows, Expanse, and Deep Field,
-plus the accepted Ballpark, Noise, Heat, slingshot, Inhibitor ecology,
-readability, extraction, and package work. Promotion to `main` remains a
-separate explicitly approved operation.
+integration and release-candidate lineage. Exact product source `00cca067`
+contains the completed fabric-readability V1-V6 candidate plus the accepted
+Ballpark, Noise, Heat, slingshot, Inhibitor ecology, extraction, Pilot Delete,
+master mute, and audible-contact work. Promotion to `main` remains a separate
+explicitly approved operation.
+
+**Current RC status:** red and not built. The one accepted no-retry full lane
+selected 124 suites and finished 96 passed / 28 failed in 280.73 seconds wall
+time (434.59 seconds summed), using four workers and two browser workers. Its
+isolated worktree lacked `three` and `@electron/packager`, invalidating 23
+dependency/browser suites and all current AgentPlay, Renderer, UIVisual, and
+package evidence. Four failures were stale fixtures, and AuthorityCadence
+measured 14.77/15 Hz while AuthorityBudget independently passed at 14.96/15 Hz.
+No release build, ZIP, package closure, or Deck artifact exists for
+`00cca067`. See `docs/v0.3/RC-GATE.md` for exact evidence and classification.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
