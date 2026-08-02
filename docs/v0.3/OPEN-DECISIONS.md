@@ -103,6 +103,13 @@ eddy grow spatially while their strengths remain fixed. Rotational current is a
 persistent field. It does not create a mechanical wave by itself; growth,
 consumption, or another explicit event must emit a discrete wavefront.
 
+Standard wells use a broad plateau rather than a narrow precision band. Current
+ramps up outside the lethal core, reaches full authored strength by the
+full-gravity radius, remains broad across the gravity-falloff region, then eases
+to zero through the outer eddy region at `currentReach`. This profile derives
+from existing radii and adds no new standard-well tuning knobs. A future unusual
+well may author a narrow current band as an explicit identity.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;

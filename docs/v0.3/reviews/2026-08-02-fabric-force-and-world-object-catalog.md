@@ -100,6 +100,16 @@ source-bound front emitted by well growth, consumption, or another explicit
 event. Visual microtexture may suggest fluid motion but must not obscure that
 gameplay distinction.
 
+The standard current profile is deliberately broad:
+
+1. ramp from the lethal core toward full rotational current;
+2. reach full current by `fullGravityRadius`;
+3. hold a plateau across the radial-gravity falloff region;
+4. ease to zero between `falloffEndRadius` and `currentReach`.
+
+This reuses the gravity-envelope radii and introduces no additional standard
+knobs. Narrow peak bands are reserved for later authored well identities.
+
 ## Canonical Player-Readable Fabric Causes
 
 The current catalog supports three fabric causes without creating three

@@ -13,6 +13,12 @@
   without increasing strength. Persistent eddies and discrete emitted
   wavefronts remain separate gameplay truths. No runtime behavior changed.
 
+- **Broad standard-eddy profile:** standard wells will ramp rotational current
+  outside the lethal core, hold a broad full-strength plateau across the
+  gravity-falloff region, and ease to zero at the wider current reach. The
+  profile reuses existing radii; narrow precision bands remain future unusual
+  well identities. No runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
