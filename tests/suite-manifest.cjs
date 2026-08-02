@@ -192,6 +192,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AgentPlayRoutePlanner",
+    file: "agent-play-route-planner.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "AuthoritativeField",
     file: "authoritative-field.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],

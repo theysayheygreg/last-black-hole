@@ -25,7 +25,13 @@ const {
   createPlayerBrain,
   projectPlayerNoiseModifiers,
 } = require("../scripts/player-brain.cjs");
+const {
+  wrapPosition: wrap,
+  wrappedDelta,
+  wrappedDistance: worldDistance,
+} = require("../scripts/sim/world-geometry.cjs");
 const { recordJourneyStage } = require("./agent-play-report.cjs");
+const { planPortalApproach } = require("./agent-play-route.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
 // Agent evals are commonly run beside other authority lanes. A process-local
@@ -47,24 +53,8 @@ function safeName(value) {
     .toLowerCase();
 }
 
-function wrappedDelta(from, to, worldScale) {
-  const scale = Number(worldScale) || 1;
-  let delta = (Number(to) || 0) - (Number(from) || 0);
-  if (delta > scale / 2) delta -= scale;
-  if (delta < -scale / 2) delta += scale;
-  return delta;
-}
-
-function wrap(value, worldScale) {
-  const scale = Number(worldScale) || 1;
-  return ((value % scale) + scale) % scale;
-}
-
 function wrappedDistance(left, right, worldScale) {
-  return Math.hypot(
-    wrappedDelta(left.wx, right.wx, worldScale),
-    wrappedDelta(left.wy, right.wy, worldScale),
-  );
+  return worldDistance(left.wx, left.wy, right.wx, right.wy, worldScale);
 }
 
 async function requestJson(route) {
@@ -444,6 +434,30 @@ async function enterFirstRunThroughMenus(page, outputDir, screenshots, browserEr
   return { profile, briefing };
 }
 
+class RouteFailure extends Error {
+  constructor(message, receipt) {
+    super(message);
+    this.name = "RouteFailure";
+    this.routeFailureReceipt = receipt;
+  }
+}
+
+async function routeFailureReceipt(clientId, snapshot, player, last) {
+  const events = await getEvents(0).catch(() => []);
+  const deathEvent = [...events].reverse().find((event) =>
+    event.type === "player.died" && event.payload?.clientId === clientId,
+  ) || null;
+  return {
+    terminalSnapshot: {
+      tick: snapshot?.tick ?? null,
+      session: snapshot?.session || null,
+      player: player || null,
+      controller: last || null,
+    },
+    deathEvent,
+  };
+}
+
 async function steerTo(page, clientId, target, options = {}) {
   const timeout = options.timeout ?? 40000;
   const radius = options.radius ?? 0.065;
@@ -453,6 +467,8 @@ async function steerTo(page, clientId, target, options = {}) {
   let closest = Infinity;
   let last = null;
   let recharging = false;
+  let portalRoute = null;
+  let portalRouteLeg = "capture";
 
   try {
     while (Date.now() < deadline) {
@@ -462,18 +478,53 @@ async function steerTo(page, clientId, target, options = {}) {
       if (options.acceptDeath && player.status === "dead") {
         return { start, end: last, closest, target: { ...target }, died: true, snapshot, player };
       }
-      assert(player.status === "alive", `Player became ${player.status} while steering toward ${target.id || "target"}`);
+      if (player.status !== "alive") {
+        const receipt = await routeFailureReceipt(clientId, snapshot, player, last);
+        throw new RouteFailure(
+          `Player became ${player.status} while steering toward ${target.id || "target"}; terminalTick=${receipt.terminalSnapshot.tick}; death=${JSON.stringify(receipt.deathEvent)}`,
+          receipt,
+        );
+      }
       if (!start) start = { wx: player.wx, wy: player.wy };
       const ws = snapshot.session?.worldScale || 3;
-      const dx = wrappedDelta(player.wx, target.wx, ws);
-      const dy = wrappedDelta(player.wy, target.wy, ws);
+      let route = null;
+      let steeringTarget = target;
+      if (options.portalId) {
+        const portal = (snapshot.world?.portals || []).find((entry) => entry.id === options.portalId);
+        assert(portal, `Authoritative portal ${options.portalId} disappeared while routing`);
+        if (portalRoute?.waypoint && portalRouteLeg === "clearance") {
+          const waypointDistance = wrappedDistance(player, portalRoute.waypoint, ws);
+          if (waypointDistance <= (options.clearanceWaypointRadius ?? 0.04)) {
+            portalRoute = null;
+            portalRouteLeg = "capture";
+          }
+        }
+        if (!portalRoute) {
+          portalRoute = planPortalApproach({
+            player,
+            portal,
+            wells: snapshot.world?.wells || [],
+            worldScale: ws,
+          });
+          portalRouteLeg = portalRoute.waypoint ? "clearance" : "capture";
+        }
+        route = portalRoute;
+        steeringTarget = portalRouteLeg === "clearance" ? route.waypoint : route.target;
+      }
+      const dx = wrappedDelta(player.wx, steeringTarget.wx, ws);
+      const dy = wrappedDelta(player.wy, steeringTarget.wy, ws);
       const dist = Math.hypot(dx, dy);
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
       const fuelRatio = player.deltaVRatio || 0;
+      const heatRatio = Number.isFinite(Number(player.heatRatio))
+        ? Number(player.heatRatio)
+        : Math.max(0, 1 - fuelRatio);
+      const overheatRemaining = Math.max(0, Number(player.overheatRemaining) || 0);
+      const overheated = player.overheated === true || overheatRemaining > 0 || heatRatio >= 1;
       closest = Math.min(closest, dist);
       const commitDistance = Math.max(radius * 4, 0.16);
       if (recharging) {
-        if (fuelRatio > 0.42) recharging = false;
+        if (!overheated && fuelRatio > 0.42) recharging = false;
       } else if (fuelRatio < 0.015 || (fuelRatio < 0.08 && dist >= commitDistance)) {
         recharging = true;
       }
@@ -487,7 +538,19 @@ async function steerTo(page, clientId, target, options = {}) {
         dist,
         speed,
         fuelRatio,
+        heatRatio,
+        overheatRemaining,
+        overheated,
         recharging,
+        route: route && {
+          portalId: options.portalId,
+          captureRadius: route.captureRadius,
+          target: route.target,
+          blocker: route.blocker,
+          waypoint: route.waypoint,
+          leg: portalRouteLeg,
+          steeringTarget,
+        },
         acceptedControl: {
           inputSeq: player.lastInputSeq,
           thrust: player.deliveredThrust,
@@ -549,27 +612,43 @@ async function steerTo(page, clientId, target, options = {}) {
       const correctionX = nx * desiredSpeed - (player.vx || 0);
       const correctionY = ny * desiredSpeed - (player.vy || 0);
       const correctionMagnitude = Math.hypot(correctionX, correctionY);
-      const emergencyBrake = speed > Math.max(0.52, maxCruiseSpeed * 1.6);
-      if (recharging) {
-        last.controller = { mode: "recharge", x: 0, y: 0, thrust: 0, brake: 0 };
+      const forwardSpeed = (player.vx || 0) * nx + (player.vy || 0) * ny;
+      const brakeDeceleration = options.brakeDeceleration ?? 0.72;
+      const stoppingDistance = forwardSpeed > 0
+        ? (forwardSpeed * forwardSpeed) / (2 * brakeDeceleration)
+        : 0;
+      const proximityBuffer = Math.max(radius, options.portalId ? (route?.captureRadius || radius) * 0.35 : 0.025);
+      const shouldBrake = !options.allowFlyby
+        && forwardSpeed > 0.01
+        && dist <= stoppingDistance + proximityBuffer;
+      if (overheated || recharging) {
+        last.controller = {
+          mode: overheated ? "overheat-coast" : "recharge",
+          x: 0,
+          y: 0,
+          thrust: 0,
+          brake: 0,
+        };
         await setGamepadDrive(page);
         await sleep(150);
         continue;
       }
       await setGamepadDrive(page,
-        emergencyBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
-        emergencyBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
+        shouldBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
+        shouldBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
         {
-          thrust: !emergencyBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
-          brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
+          thrust: !shouldBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
+          brake: shouldBrake && fuelRatio > 0.01 ? 1 : 0,
         },
       );
       last.controller = {
-        mode: emergencyBrake ? "brake" : "approach",
-        x: emergencyBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
-        y: emergencyBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
-        thrust: !emergencyBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
-        brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
+        mode: shouldBrake ? "brake-for-proximity" : "approach",
+        x: shouldBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
+        y: shouldBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
+        thrust: !shouldBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
+        brake: shouldBrake && fuelRatio > 0.01 ? 1 : 0,
+        stoppingDistance,
+        proximityBuffer,
       };
       await sleep(110);
     }
@@ -1037,6 +1116,19 @@ function writeReport(outputDir, report) {
   if (report.failure) {
     lines.push("## Failure / Dependency", "", `- ${report.failure}`, "");
   }
+  if (report.failureReceipt) {
+    const terminal = report.failureReceipt.terminalSnapshot || {};
+    const death = report.failureReceipt.deathEvent || null;
+    lines.push(
+      "## Terminal Authority Receipt",
+      "",
+      `- Terminal tick: ${terminal.tick ?? "unavailable"}.`,
+      `- Player: ${JSON.stringify(terminal.player || null)}.`,
+      `- Controller: ${JSON.stringify(terminal.controller || null)}.`,
+      `- player.died: ${JSON.stringify(death)}.`,
+      "",
+    );
+  }
 
   const mdPath = path.join(outputDir, "summary.md");
   fs.writeFileSync(mdPath, `${lines.join("\n")}\n`);
@@ -1154,6 +1246,7 @@ async function run() {
     simLogs: [],
     journey: {},
     failure: null,
+    failureReceipt: null,
   };
 
   await startServer();
@@ -1194,6 +1287,7 @@ async function run() {
     }
   } catch (error) {
     report.failure = error.message;
+    report.failureReceipt = error.routeFailureReceipt || null;
   } finally {
     stopServer();
   }
