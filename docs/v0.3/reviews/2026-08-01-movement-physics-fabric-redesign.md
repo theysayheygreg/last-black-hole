@@ -253,7 +253,8 @@ They cannot decide whether surfing feels good or whether the image reads.
 
 ## Decisions To Lock Before Production
 
-1. **Does SURF become an explicit mechanical state with bold carry and cost?**
+1. **Does SURF become a derived, player-readable condition inside FREE with
+   bold carry and cost?**
    Recommendation: yes. Without this, the shader can only decorate a passive
    force the player cannot deliberately learn.
 2. **Which three route-language variants enter the comparison?** Recommendation:
