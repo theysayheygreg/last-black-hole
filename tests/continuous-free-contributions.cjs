@@ -95,7 +95,6 @@ function player(overrides = {}) {
   assert(Math.abs(step.inhibitorDeltaV.x - 0.02) < 1e-12);
   assert(Math.abs(step.abilityDeltaV.x - 0.03) < 1e-12);
   assert(Math.abs(step.wellGravityDeltaV.x - 0.04) < 1e-12);
-  assert(Math.abs(step.waveDeltaV.x - 0.05) < 1e-12);
 }
 
 assert(FORCE_COMPONENTS.includes('ability') && FORCE_COMPONENTS.includes('inhibitor'),

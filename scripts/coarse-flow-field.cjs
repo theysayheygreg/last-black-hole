@@ -47,7 +47,6 @@ function buildCoarseFlowField({
   worldScale,
   cellSize,
   wells = [],
-  waveRings = [],
   wellCurrentScale = FABRIC.wellCurrent.strength,
   wellCurrentFalloff = FABRIC.wellCurrent.falloff,
   wellCurrentMaxRange = FABRIC.wellGravity.falloffEndRadius * FABRIC.wellCurrent.currentReachMultiplier,
@@ -60,8 +59,6 @@ function buildCoarseFlowField({
   wellGravityFeatherRadius = FABRIC.wellGravity.featherRadius,
   wellCurrentFalloffEnd = FABRIC.wellGravity.falloffEndRadius,
   seededSea = null,
-  waveShipPush = FABRIC.eventWave.impulseFraction,
-  waveWidth = FABRIC.eventWave.frontWidth,
   collapseParameters = {},
   maxCells = Infinity,
 }) {
@@ -77,10 +74,6 @@ function buildCoarseFlowField({
   const seededSeaAmbientMultiplier = Number.isFinite(Number(collapseParameters.seededSeaAmbientMultiplier))
     ? Number(collapseParameters.seededSeaAmbientMultiplier)
     : 1;
-  const liveWavePushMultiplier = Number.isFinite(Number(collapseParameters.liveWavePushMultiplier))
-    ? Number(collapseParameters.liveWavePushMultiplier)
-    : 1;
-  const wellById = new Map(wells.map((well) => [String(well?.id ?? well?.name ?? ''), well]));
   const seededSeaSourceMultipliers = Object.fromEntries(
     wells
       .filter((well) => well?.id != null || well?.name != null)
@@ -108,7 +101,6 @@ function buildCoarseFlowField({
       let sourceWellId = null;
       let sourceRingId = null;
       let bestCurrent = 0;
-      let bestWave = 0;
 
       for (const well of wells) {
         const dx = worldDisplacement(wx, well.wx, worldScale);
@@ -176,28 +168,6 @@ function buildCoarseFlowField({
       if (ambientMagnitude > bestCurrent) {
         bestCurrent = ambientMagnitude;
         sourceWellId = ambient.sourceWellId;
-      }
-
-      const halfWidth = waveWidth * 0.5;
-      for (const ring of waveRings) {
-        const dx = worldDisplacement(ring.sourceWX, wx, worldScale);
-        const dy = worldDisplacement(ring.sourceWY, wy, worldScale);
-        const dist = Math.hypot(dx, dy);
-        const distFromFront = Math.abs(dist - ring.radius);
-        if (dist < 0.001 || distFromFront > halfWidth) continue;
-        const bandPosition = distFromFront / halfWidth;
-        const profile = Math.cos(bandPosition * Math.PI * 0.5);
-        const sourceWell = ring.sourceWellId == null ? null : wellById.get(String(ring.sourceWellId));
-        const ringMultiplier = signatureMultiplier(sourceWell, 'liveWavePushMultiplier');
-        const accel = waveShipPush * liveWavePushMultiplier * ringMultiplier * (ring.amplitude || 0) * profile;
-        waveX += (dx / dist) * accel;
-        waveY += (dy / dist) * accel;
-        hazard = Math.max(hazard, clamp01(accel));
-        surf = Math.max(surf, clamp01(accel));
-        if (Math.abs(accel) > bestWave) {
-          bestWave = Math.abs(accel);
-          sourceRingId = ring.id ?? ring.sourceId ?? null;
-        }
       }
 
       cells[row * columns + col] = {

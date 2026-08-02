@@ -48,9 +48,78 @@ function stableClone(value, label = "value") {
 
 function compareTimedRecords(a, b) {
   if (a.time !== b.time) return a.time - b.time;
-  if (a.id < b.id) return -1;
-  if (a.id > b.id) return 1;
+  const aId = a.id || a.eventId || "";
+  const bId = b.id || b.eventId || "";
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
   return (a.waveIndex || 0) - (b.waveIndex || 0);
+}
+
+/**
+ * Build source-bound wave events without registering anonymous global fronts.
+ * Each phase owns an interior time band so the source tell has room on both
+ * sides; the spacing floor scales with the selected match length.
+ */
+function createConductedWaveSchedule({
+  matchDurationSeconds,
+  phaseProgresses = [0, 0.15, 0.30, 0.45],
+  phaseCounts = [0, 1, 2, 3],
+  sourceSpacingSeconds = 10,
+  wells = [],
+  telegraphSeconds = 0,
+} = {}) {
+  const duration = positiveNumber(matchDurationSeconds, "matchDurationSeconds");
+  if (!Array.isArray(phaseProgresses) || phaseProgresses.length !== phaseCounts.length) {
+    throw new RangeError("phaseProgresses and phaseCounts must have equal lengths");
+  }
+  const progress = phaseProgresses.map((value, index) => {
+    const normalized = clamp01(value);
+    if (index > 0 && normalized < phaseProgresses[index - 1]) {
+      throw new RangeError("phaseProgresses must be ordered");
+    }
+    return normalized;
+  });
+  const counts = phaseCounts.map((value, index) => integerAtLeast(value, `phaseCounts[${index}]`));
+  const sourceSpacing = nonNegativeNumber(sourceSpacingSeconds, "sourceSpacingSeconds")
+    * (duration / 600);
+  const telegraph = nonNegativeNumber(telegraphSeconds, "telegraphSeconds");
+  const orderedWells = Array.from(wells || [])
+    .filter((well) => well && Number.isFinite(Number(well.wx)) && Number.isFinite(Number(well.wy)))
+    .sort((a, b) => String(a.id ?? a.name ?? "").localeCompare(String(b.id ?? b.name ?? "")));
+  const events = [];
+
+  for (let phase = 0; phase < counts.length; phase += 1) {
+    const count = counts[phase];
+    if (count === 0) continue;
+    const phaseStart = duration * progress[phase];
+    const phaseEnd = duration * (progress[phase + 1] ?? 1);
+    const phaseSpan = Math.max(0, phaseEnd - phaseStart);
+    const idealStep = phaseSpan / (count + 1);
+    const step = Math.max(sourceSpacing, idealStep);
+    const usableStep = (count - 1) * step <= phaseSpan ? step : idealStep;
+    const blockLength = (count - 1) * usableStep;
+    const firstTime = phaseStart + (phaseSpan - blockLength) * 0.5;
+
+    for (let index = 0; index < count; index += 1) {
+      const sourceWell = orderedWells.length > 0
+        ? orderedWells[(phase + index) % orderedWells.length]
+        : null;
+      events.push(Object.freeze({
+        eventId: `conductor:wave:phase-${phase}:${index + 1}`,
+        phase,
+        index,
+        time: firstTime + index * usableStep,
+        sourceWellId: sourceWell?.id ?? sourceWell?.name ?? null,
+        sourceWX: sourceWell?.wx ?? null,
+        sourceWY: sourceWell?.wy ?? null,
+        cause: "conductor",
+        telegraphSeconds: telegraph,
+        spacingSeconds: sourceSpacing,
+      }));
+    }
+  }
+
+  return Object.freeze(events.sort(compareTimedRecords));
 }
 
 function resolveOffsetGuardSeconds({ offsetGuardSeconds = 0, matchDurationSeconds } = {}) {
@@ -402,6 +471,7 @@ class Conductor {
       }),
     });
     this._severityWaves = [];
+    this._conductedWaves = [];
     this._windows = [];
     this._collapseEpochs = [];
   }
@@ -419,6 +489,12 @@ class Conductor {
       metadata: { waveId: wave.waveId },
     })));
     this._severityWaves.push(...waves);
+    return waves;
+  }
+
+  scheduleConductedWaves(declaration) {
+    const waves = createConductedWaveSchedule(declaration);
+    this._conductedWaves = this._conductedWaves.concat(waves).sort(compareTimedRecords);
     return waves;
   }
 
@@ -501,6 +577,7 @@ class Conductor {
       offsetGuardSeconds: this.events.offsetGuardSeconds,
       eventFronts: this.events.ordered(),
       severityWaves: this._severityWaves.slice().sort(compareTimedRecords),
+      conductedWaves: this._conductedWaves.slice().sort(compareTimedRecords),
       windows: this._windows.slice().sort((a, b) => a.openTime - b.openTime),
       collapseEpochs: this._collapseEpochs.slice(),
     }, "schedule");
@@ -522,6 +599,7 @@ module.exports = {
   clampedIntervalLerp,
   clampedMonotoneLerp: clampedIntervalLerp,
   createConductor,
+  createConductedWaveSchedule,
   createIntervalLerp,
   createSeverityWaveSchedule,
   createSeverityWaves: createSeverityWaveSchedule,

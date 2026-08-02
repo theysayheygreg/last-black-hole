@@ -40,6 +40,7 @@
     "impulseFraction": 0.25,
     "halfLifeSeconds": 2,
     "maxRadius": 2,
+    "telegraphSeconds": 1.5,
     "growthAmplitude": 1,
     "conductedPhaseCounts": [0, 1, 2, 3],
     "conductedSourceSpacingSeconds": 10

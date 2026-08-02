@@ -4537,9 +4537,6 @@ function gameLoop(now) {
         escapeTimer += dt;
       }
     } else {
-      // 5. Wave ring forces on ship
-      waveRings.applyToShip(ship, dt);
-
       // Suppress ship input while inventory is open (don't fly into a well while sorting loot)
       if (!inventoryOpen) {
         inputManager.applyToShip(ship);

@@ -145,10 +145,9 @@ export const CONFIG = {
 
   events: {
     waveSpeed: FABRIC.eventWave.speed, // World-units/sec — ring expansion.
-    waveWidth: FABRIC.eventWave.frontWidth, // World-units — wavefront thickness.
-                             // Ship only feels force when inside this band.
+    waveWidth: FABRIC.eventWave.frontWidth, // World-units — authority front thickness.
     waveMaxRadius: FABRIC.eventWave.maxRadius,
-    waveShipPush: FABRIC.eventWave.impulseFraction,
+    waveImpulseFraction: FABRIC.eventWave.impulseFraction,
     growthInterval: 45,       // Seconds between passive well growth events. Higher = calmer game.
     growthAmount: 0.02,       // Mass added to each well per growth event. Compounds over time.
     growthWaveAmplitude: FABRIC.eventWave.growthAmplitude,

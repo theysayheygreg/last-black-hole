@@ -251,7 +251,8 @@ function applyAccelerationChannel(player, acceleration, dt) {
 /**
  * Advance one FREE authority movement step in its complete gameplay order.
  * GRAPPLED and TERMINAL never enter this path. The one field sample supplied
- * here owns current coupling, well gravity, and event waves for the whole tick.
+ * here owns current coupling and continuous named field forces for the whole
+ * tick. Event waves arrive later as one-shot authority contacts.
  */
 function stepPlayerFreeMovement(player, input, dt, options = {}) {
   const continuous = options.continuousAcceleration || {};
@@ -273,7 +274,6 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
       wellGravityDeltaV: { x: 0, y: 0 },
       solarWindDeltaV: { x: 0, y: 0 },
       bodyPushDeltaV: { x: 0, y: 0 },
-      waveDeltaV: { x: 0, y: 0 },
       brakeIntensity: 0,
       dragFactor: 1,
       dragDeltaV: { x: 0, y: 0 },
@@ -284,7 +284,6 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
   const wellGravityDeltaV = applyAccelerationChannel(player, environment.wellGravity, dt);
   const solarWindDeltaV = applyAccelerationChannel(player, environment.solarWind, dt);
   const bodyPushDeltaV = applyAccelerationChannel(player, environment.bodyPush, dt);
-  const waveDeltaV = applyAccelerationChannel(player, environment.wave, dt);
 
   const brake = applyPlayerBrakeAndIntegrate(player, input, dt, {
     ...options,
@@ -303,7 +302,6 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
     wellGravityDeltaV,
     solarWindDeltaV,
     bodyPushDeltaV,
-    waveDeltaV,
     aborted: false,
   };
 }

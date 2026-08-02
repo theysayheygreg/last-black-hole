@@ -125,6 +125,7 @@ function createRunState() {
       _wreckWaveRepeatTimer: 0,
       _wreckRepeatWaveCount: 0,
       waveRings: [],
+      conductedWaveIndex: 0,
       coarseField: null,
       authorityFieldPacket: null,
     },

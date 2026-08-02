@@ -1,17 +1,21 @@
 /**
  * wave-rings.js — Explicit propagating wave ring system.
  *
- * V3: World-space. Wave rings expand in world-units, push ship in world-units.
- * Source positions stored in world-space. Toroidal distance for ship interaction.
+ * V4: World-space presentation projection. Rings expand in world-units and
+ * preserve their source identity for dye/VFX; authority owns crossing impulse.
  */
 
 import { CONFIG } from './config.js';
 import { decayWaveAmplitude } from './content/event-wave.js';
-import { worldRadiusToFluidUV, worldDirectionTo, worldToFluidUV, splatScale } from './coords.js';
-import { waveBandForce, applyForceToShip } from './physics.js';
+import { worldRadiusToFluidUV, worldToFluidUV, splatScale } from './coords.js';
 
 class WaveRing {
-  constructor(sourceWX, sourceWY, amplitude) {
+  constructor(sourceWX, sourceWY, amplitude, metadata = {}, sequence = 0) {
+    const eventId = metadata.eventId || `local-wave-${sequence}`;
+    this.id = eventId;
+    this.eventId = eventId;
+    this.cause = metadata.cause || 'local-sandbox';
+    this.sourceWellId = metadata.sourceWellId ?? null;
     this.sourceWX = sourceWX;    // world-space coords
     this.sourceWY = sourceWY;
     this.radius = 0;             // current radius in world-units
@@ -24,13 +28,15 @@ class WaveRing {
 export class WaveRingSystem {
   constructor() {
     this.rings = [];
+    this.sequence = 0;
   }
 
   /**
    * Spawn a new expanding wave ring at a world-space position.
    */
-  spawn(wx, wy, amplitude) {
-    this.rings.push(new WaveRing(wx, wy, amplitude));
+  spawn(wx, wy, amplitude, metadata = {}) {
+    this.sequence += 1;
+    this.rings.push(new WaveRing(wx, wy, amplitude, metadata, this.sequence));
   }
 
   update(dt) {
@@ -48,24 +54,8 @@ export class WaveRingSystem {
   }
 
   /**
-   * Apply wave ring forces to the ship (world-space).
-   */
-  applyToShip(ship, dt = 1 / 60) {
-    const cfg = CONFIG.events;
-    const halfWidth = cfg.waveWidth * 0.5;
-
-    for (const ring of this.rings) {
-      const { dist, nx, ny } = worldDirectionTo(ring.sourceWX, ring.sourceWY, ship.wx, ship.wy);
-      const accel = waveBandForce(dist, ring.radius, halfWidth, cfg.waveShipPush, ring.amplitude);
-      if (accel > 0) {
-        applyForceToShip(ship, nx, ny, accel, dt);
-      }
-    }
-  }
-
-  /**
    * Preserve the ring dye without injecting an unregistered velocity. The
-   * server coarse field carries the authoritative wave force.
+   * authority owns the one-shot crossing impulse separately.
    */
   injectIntoFluid(fluid) {
     const SPLATS_PER_RING = 16; // points around the circumference

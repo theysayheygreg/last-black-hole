@@ -44,11 +44,10 @@ function forceAcceleration(forceLedger) {
   const currentCoupling = forceLedger?.vectors?.currentCoupling || {};
   const wellGravity = forceLedger?.vectors?.wellGravity || {};
   const bodyPush = forceLedger?.vectors?.bodyPush || {};
-  const wave = forceLedger?.vectors?.wave || {};
   const scale = UNIT_SCALE.metersPerSimUnit;
   return {
-    x: (finite(currentCoupling.x) + finite(wellGravity.x) + finite(bodyPush.x) + finite(wave.x)) / scale,
-    y: (finite(currentCoupling.y) + finite(wellGravity.y) + finite(bodyPush.y) + finite(wave.y)) / scale,
+    x: (finite(currentCoupling.x) + finite(wellGravity.x) + finite(bodyPush.x)) / scale,
+    y: (finite(currentCoupling.y) + finite(wellGravity.y) + finite(bodyPush.y)) / scale,
   };
 }
 

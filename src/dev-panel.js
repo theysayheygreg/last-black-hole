@@ -107,7 +107,6 @@ export const RANGE_HINTS = {
   'events.waveSpeed':       { min: 0.1, max: 1.5, step: 0.05, tip: 'Wave ring expansion speed in world-units/sec' },
   'events.waveWidth':       { min: 0.03, max: 0.3, step: 0.01, tip: 'Wavefront thickness in world-units' },
   'events.waveMaxRadius':   { min: 0.5, max: 4, step: 0.25, tip: 'Ring death radius in world-units' },
-  'events.waveShipPush':    { min: 0.1, max: 3, step: 0.1, unit: 'sim units/s²', startBias: 'authority baseline', tip: 'Force on ship when a ring passes through (world-units/s²)' },
   'events.growthInterval':  { min: 5, max: 120, step: 5, tip: 'Seconds between well growth events. 45 = slow. 5 = constant drama' },
   'events.growthAmount':    { min: 0.005, max: 0.1, step: 0.005, tip: 'Mass added to each well per growth event. Compounds over time.' },
   'events.growthWaveAmplitude':{ min: 0.1, max: 3, step: 0.1, tip: 'Initial amplitude of growth wave rings. 1.0 = standard. 2.0 = dramatic' },

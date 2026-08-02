@@ -47,9 +47,9 @@ function makePlayer() {
   const step = stepPlayerFreeMovement(unified, input, 0.1, options);
 
   // Frozen reference is the accepted FREE order: drive/current, well gravity,
-  // solar wind, body push, wave, brake/drag/cap, then position integration.
+  // solar wind, body push, brake/drag/cap, then position integration.
   const drive = applyPlayerDriveAndFlow(reference, input, 0.1, options);
-  for (const channel of ['wellGravity', 'solarWind', 'bodyPush', 'wave']) {
+  for (const channel of ['wellGravity', 'solarWind', 'bodyPush']) {
     reference.vx += options.environmentAcceleration[channel].x * 0.1;
     reference.vy += options.environmentAcceleration[channel].y * 0.1;
   }
@@ -87,12 +87,11 @@ function makePlayer() {
   close(step.wellGravityDeltaV.x, 0.01, 'well-gravity delta-v x');
   close(step.solarWindDeltaV.x, 0.01, 'solar-wind delta-v x');
   close(step.bodyPushDeltaV.x, 0.02, 'body-push delta-v x');
-  close(step.waveDeltaV.y, 0.02, 'wave delta-v y');
   const reconstructed = {
     x: step.thrustDeltaV.x + step.currentCouplingDeltaV.x + step.wellGravityDeltaV.x
-      + step.solarWindDeltaV.x + step.bodyPushDeltaV.x + step.waveDeltaV.x + step.dragDeltaV.x,
+      + step.solarWindDeltaV.x + step.bodyPushDeltaV.x + step.dragDeltaV.x,
     y: step.thrustDeltaV.y + step.currentCouplingDeltaV.y + step.wellGravityDeltaV.y
-      + step.solarWindDeltaV.y + step.bodyPushDeltaV.y + step.waveDeltaV.y + step.dragDeltaV.y,
+      + step.solarWindDeltaV.y + step.bodyPushDeltaV.y + step.dragDeltaV.y,
   };
   close(player.vx - before.x, reconstructed.x, 'complete FREE delta-v x');
   close(player.vy - before.y, reconstructed.y, 'complete FREE delta-v y');
@@ -117,7 +116,6 @@ function makePlayer() {
   assert.deepStrictEqual({ x: player.vx, y: player.vy }, { x: 0, y: 0 });
   assert.deepStrictEqual(step.wellGravityDeltaV, { x: 0, y: 0 });
   assert.deepStrictEqual(step.bodyPushDeltaV, { x: 0, y: 0 });
-  assert.deepStrictEqual(step.waveDeltaV, { x: 0, y: 0 });
 }
 
 const runtimeSource = fs.readFileSync(path.join(ROOT, 'scripts/sim-runtime.cjs'), 'utf8');

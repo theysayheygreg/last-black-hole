@@ -64,8 +64,6 @@ function makeField(catalogId) {
     wellCurrentScale: 0.3,
     wellCurrentFalloff: 1.5,
     wellCurrentMaxRange: 1.35,
-    waveShipPush: 0.8,
-    waveWidth: 0.1,
   });
 }
 
@@ -123,14 +121,12 @@ async function run() {
     }
   });
 
-  await runner.run("each trio vector changes the existing authoritative field and wave output", () => {
+  await runner.run("each trio vector preserves the source-bound wave contract", () => {
     const fields = Object.fromEntries(["base-well", ...TRIO_IDS].map((id) => [id, makeField(id)]));
     const hashes = new Set(Object.values(fields).map((field) => hash(field.cells)));
     assert.strictEqual(hashes.size, 4, "base plus trio must produce four distinct field outputs");
     const waveSamples = TRIO_IDS.map((id) => sampleCoarseFlowField(fields[id], 1.9, 1.5).wave.x);
-    assert(waveSamples.every((value) => Number.isFinite(value)));
-    assert.notStrictEqual(waveSamples[0], waveSamples[1], "micro and supermassive wave terms must differ");
-    assert.notStrictEqual(waveSamples[1], waveSamples[2], "supermassive and pulsar wave terms must differ");
+    assert(waveSamples.every((value) => Math.abs(value) < 1e-9), "coarse field wave force must remain retired");
   });
 
   await runner.run("base-well migration preserves fields and identity-vector parity", () => {

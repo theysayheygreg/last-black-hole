@@ -126,6 +126,12 @@ const {
   wrapPosition: wrapWorldPosition,
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
+const { hullCalmSpaceReferenceSpeed } = require("./sim/hull-reference-speed.cjs");
+const {
+  hasWaveReceipt,
+  rememberWaveReceipt,
+  sweptWaveCrossing,
+} = require("./sim/swept-wave-crossing.cjs");
 const {
   INHIBITOR_ECOLOGY_CONFIG,
   totalCapBlocksSpawn,
@@ -368,7 +374,8 @@ const WAVE_SERVER = {
   waveWidth: FABRIC.eventWave.frontWidth,
   waveHalfLife: WAVE_HALF_LIFE_SECONDS,
   waveMaxRadius: FABRIC.eventWave.maxRadius,
-  waveShipPush: FABRIC.eventWave.impulseFraction,
+  impulseFraction: FABRIC.eventWave.impulseFraction,
+  telegraphSeconds: FABRIC.eventWave.telegraphSeconds,
   growthWaveAmplitude: FABRIC.eventWave.growthAmplitude,
 };
 const SLINGSHOT_SERVER = Object.freeze({
@@ -436,7 +443,7 @@ function portalWindowMetadata(
   };
 }
 
-function createInhibitorConductor(seed, runDurationSeconds, mapId) {
+function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
   const duration = Number(runDurationSeconds);
   if (!Number.isFinite(duration) || duration <= 0) {
     throw new RangeError("runDurationSeconds must be greater than zero");
@@ -484,6 +491,14 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId) {
     });
     previousRegisteredPhaseTime = scheduledTime;
   }
+  conductor.scheduleConductedWaves({
+    matchDurationSeconds: duration,
+    phaseProgresses: INHIBITOR_CONFIG.phaseProgresses,
+    phaseCounts: INHIBITOR_CONFIG.phaseWaveBudgets,
+    sourceSpacingSeconds: INHIBITOR_CONFIG.conductedSourceSpacingSeconds,
+    telegraphSeconds: WAVE_SERVER.telegraphSeconds,
+    wells,
+  });
 
   const guardSeconds = PORTAL_CONFIG.schedule.offsetGuardSeconds;
   const inhibitorFrontTimes = INHIBITOR_CONFIG.phaseProgresses.map(
@@ -1203,6 +1218,7 @@ const runtime = {
   joinClaims: new Map(),
   idCounters: Object.create(null),
   waveRings: [],
+  conductedWaveIndex: 0,
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
@@ -1416,6 +1432,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     },
     _wellGraceContactActive: false,
     _wellGraceLastTick: -1,
+    waveReceipts: [],
     noise: {
       audibleRadiusMeters: 0,
       previousRadiusMeters: 0,
@@ -1588,6 +1605,7 @@ function startSession(config = {}) {
     runtime.session.seed,
     runtime.session.runDurationSeconds,
     runtime.session.mapId,
+    runtime.mapState.wells,
   );
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
   runtime.portalClock = runState.portalClock;
@@ -2320,19 +2338,35 @@ function commitPlayerOutcome(player, outcome) {
   return runResult;
 }
 
-function spawnWaveRing(wx, wy, amplitude, sourceWellId = null) {
+function spawnWaveRing(wx, wy, amplitude, sourceWellId = null, {
+  cause = "well-growth",
+  eventId = null,
+  launchTime = runtime.simTime,
+  prelaunchSeconds = WAVE_SERVER.telegraphSeconds,
+} = {}) {
+  const stableEventId = eventId || nextSeededToken(`wave-${runtime.tick}`, "waveIds");
+  const resolvedLaunchTime = Number.isFinite(Number(launchTime))
+    ? Number(launchTime)
+    : runtime.simTime;
+  const resolvedPrelaunch = Math.max(0, Number(prelaunchSeconds) || 0);
   const ring = {
-    id: nextSeededToken(`wave-${runtime.tick}`, "waveIds"),
+    id: stableEventId,
+    eventId: stableEventId,
+    cause: String(cause || "well-growth"),
     sourceWX: wx,
     sourceWY: wy,
     radius: 0,
+    previousRadius: 0,
+    frontWidth: WAVE_SERVER.waveWidth,
     amplitude,
     initialAmplitude: amplitude,
     sourceWellId: sourceWellId == null ? null : String(sourceWellId),
+    launchTime: resolvedLaunchTime,
+    telegraphStartTime: resolvedLaunchTime - resolvedPrelaunch,
+    state: runtime.simTime < resolvedLaunchTime ? "telegraph" : "active",
     alive: true,
   };
   runtime.waveRings.push(ring);
-  if (runtime.session?.status === "running") rebuildAuthoritativeField();
   return ring;
 }
 
@@ -2650,6 +2684,10 @@ function applyWellGrowth(well, {
     well.wy,
     (waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass) * growthWaveMultiplier,
     well.id,
+    {
+      cause: source === "star-consumption" ? "consumption" : "well-growth",
+      eventId: `${source || "well-growth"}:${sourceEntityId || well.id}:${runtime.tick}`,
+    },
   );
   return publishEvent("well.grew", createWellGrowthEvent({
     well,
@@ -2667,6 +2705,12 @@ function applyWellGrowth(well, {
 
 function tickWaveRings(dt) {
   for (const ring of runtime.waveRings) {
+    ring.previousRadius = ring.radius;
+    if (runtime.simTime < ring.launchTime) {
+      ring.state = "telegraph";
+      continue;
+    }
+    ring.state = "active";
     ring.radius += WAVE_SERVER.waveSpeed * dt;
     ring.amplitude = decayWaveAmplitude(ring.amplitude, dt, WAVE_SERVER.waveHalfLife);
     if (ring.radius > WAVE_SERVER.waveMaxRadius || ring.amplitude < 0.01) {
@@ -2674,6 +2718,45 @@ function tickWaveRings(dt) {
     }
   }
   runtime.waveRings = runtime.waveRings.filter((ring) => ring.alive !== false);
+  const liveWaveIds = new Set(runtime.waveRings.map((ring) => String(ring.id)));
+  for (const player of runtime.players.values()) {
+    player.waveReceipts = (player.waveReceipts || [])
+      .filter((receipt) => liveWaveIds.has(String(receipt.waveId)));
+  }
+}
+
+function tickConductedWaves() {
+  const schedule = runtime.inhibitorSchedule?.conductedWaves || [];
+  while (runtime.conductedWaveIndex < schedule.length) {
+    const event = schedule[runtime.conductedWaveIndex];
+    const launchTime = Number(event.time);
+    const telegraphSeconds = Math.max(0, Number(event.telegraphSeconds) || 0);
+    if (runtime.simTime < launchTime - telegraphSeconds) break;
+    const well = runtime.mapState.wells.find((candidate) => String(candidate.id) === String(event.sourceWellId));
+    if (well) {
+      spawnWaveRing(
+        well.wx,
+        well.wy,
+        WAVE_SERVER.growthWaveAmplitude * Math.max(0.1, Number(well.mass) || 1),
+        well.id,
+        {
+          cause: event.cause,
+          eventId: event.eventId,
+          launchTime,
+          prelaunchSeconds: telegraphSeconds,
+        },
+      );
+      publishEvent("wave.announced", {
+        waveId: event.eventId,
+        eventId: event.eventId,
+        sourceWellId: well.id,
+        cause: event.cause,
+        launchTime,
+        telegraphSeconds,
+      }, { lane: "vfx", subject: well.id });
+    }
+    runtime.conductedWaveIndex += 1;
+  }
 }
 
 function maybeCollapseRun() {
@@ -2795,6 +2878,10 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
         wreck.alive = false;
         well.mass += 0.1;
         well.killRadius = wellKillRadiusForMass(well);
+        spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass, well.id, {
+          cause: "consumption",
+          eventId: `consumption:wreck:${wreck.id}:${runtime.tick}`,
+        });
         publishEvent("wreck.consumed", {
           wreckId: wreck.id,
           wellId: well.id,
@@ -2815,7 +2902,10 @@ function tickPlanetoids(dt, planetoids = runtime.mapState.planetoids) {
         planetoid.alive = false;
         well.mass += 0.08;
         well.killRadius = wellKillRadiusForMass(well);
-        spawnWaveRing(well.wx, well.wy, 0.2);
+        spawnWaveRing(well.wx, well.wy, 0.2, well.id, {
+          cause: "consumption",
+          eventId: `consumption:planetoid:${planetoid.id}:${runtime.tick}`,
+        });
         publishEvent("planetoid.consumed", {
           planetoidId: planetoid.id,
           wellId: well.id,
@@ -3111,8 +3201,56 @@ function resolvePlayerEnvironment(player, flowSample, relevance) {
     wellGravity: well,
     solarWind: resolveStarSolarWind(player, relevance.stars),
     bodyPush: resolvePlanetoidPushes(player, relevance.planetoids),
-    wave: { ...flowSample.wave },
   };
+}
+
+function applySweptWaveContacts(player, sweep) {
+  let receipts = Array.isArray(player.waveReceipts) ? player.waveReceipts : [];
+  const candidates = [];
+  for (const ring of runtime.waveRings) {
+    if (ring.alive === false || ring.state !== "active") continue;
+    if (hasWaveReceipt(receipts, ring.id)) continue;
+    const crossing = sweptWaveCrossing({
+      startX: sweep.startX,
+      startY: sweep.startY,
+      deltaX: sweep.deltaX,
+      deltaY: sweep.deltaY,
+      sourceX: ring.sourceWX,
+      sourceY: ring.sourceWY,
+      worldScale: runtime.session.worldScale,
+      previousRadius: ring.previousRadius,
+      currentRadius: ring.radius,
+      frontWidth: ring.frontWidth,
+    });
+    if (crossing.hit) candidates.push({ ring, crossing });
+  }
+  candidates.sort((a, b) => a.crossing.t - b.crossing.t || String(a.ring.id).localeCompare(String(b.ring.id)));
+
+  for (const { ring, crossing } of candidates) {
+    if (hasWaveReceipt(receipts, ring.id)) continue;
+    const hullReferenceSpeed = hullCalmSpaceReferenceSpeed(player);
+    const impulse = WAVE_SERVER.impulseFraction * hullReferenceSpeed;
+    const deltaV = {
+      x: crossing.normalX * impulse,
+      y: crossing.normalY * impulse,
+    };
+    player.vx += deltaV.x;
+    player.vy += deltaV.y;
+    receipts = rememberWaveReceipt(receipts, ring.id, runtime.tick);
+    publishEvent("player.waveCrossed", {
+      clientId: player.clientId,
+      waveId: ring.id,
+      eventId: ring.eventId || ring.id,
+      sourceWellId: ring.sourceWellId,
+      cause: ring.cause,
+      launchTime: ring.launchTime,
+      wx: crossing.contactX,
+      wy: crossing.contactY,
+      deltaV,
+      hullReferenceSpeed,
+    }, { lane: "vfx", subject: ring.sourceWellId || ring.id });
+  }
+  player.waveReceipts = receipts;
 }
 
 function applySweptWellContacts(player, dt, sweep) {
@@ -3451,7 +3589,6 @@ function applyPulse(player) {
     wx: player.wx,
     wy: player.wy,
   });
-  spawnWaveRing(player.wx, player.wy, 1.5);
   return true;
 }
 
@@ -5008,7 +5145,6 @@ function rebuildAuthoritativeField() {
     worldScale: runtime.session.worldScale,
     cellSize: runtime.session.flowFieldCellSize,
     wells: runtime.mapState.wells,
-    waveRings: runtime.waveRings,
     seededSea: runtime.session.seededSea,
     wellGravityScale: SERVER_WELLS.shipPullStrength,
     wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
@@ -5020,8 +5156,6 @@ function rebuildAuthoritativeField() {
     wellCurrentScale: SERVER_WELLS.currentStrength,
     wellCurrentFalloff: SERVER_WELLS.currentFalloff,
     wellCurrentMaxRange: SERVER_WELLS.currentRange,
-    waveShipPush: WAVE_SERVER.waveShipPush,
-    waveWidth: WAVE_SERVER.waveWidth,
     collapseParameters: runtime.collapseEpochState?.parameterVector,
     maxCells: runtime.session.useCoarseField
       ? runtime.session.maxCoarseFieldCells
@@ -6280,6 +6414,10 @@ function tickInhibitorEcology(dt, noiseSources = []) {
       });
       Object.assign(well, change.after);
       vessel.overdriveWellIds.add(wellKey);
+      spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * change.multiplier, well.id, {
+        cause: "vessel-overdrive",
+        eventId: `vessel-overdrive:${vessel.id}:${well.id}:${runtime.tick}`,
+      });
       publishEvent("inhibitor.wellOverdriven", {
         conductorId: runtime.conductor?.id || "match-conductor",
         entityId: vessel.id,
@@ -6344,6 +6482,7 @@ function tickInhibitor(dt) {
 function resolvePostMovementContacts(player, playerDt, sweep, relevance, forceLedger, extractConfirm) {
   recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
   if (player.status !== "alive") return false;
+  recordForceMutation(forceLedger, "wave", player, () => applySweptWaveContacts(player, sweep));
   recordForceMutation(forceLedger, "impulse", player, () => {
     // Contact sweeps use the bounded full collections rather than the
     // start-of-tick relevance view; a fast ship can cross into an object that
@@ -6448,7 +6587,6 @@ function tickAuthorityPlayers(dt, relevance) {
     recordForceDeltaV(forceLedger, "wellGravity", movementStep.wellGravityDeltaV);
     recordForceDeltaV(forceLedger, "solarWind", movementStep.solarWindDeltaV);
     recordForceDeltaV(forceLedger, "bodyPush", movementStep.bodyPushDeltaV);
-    recordForceDeltaV(forceLedger, "wave", movementStep.waveDeltaV);
     recordForceDeltaV(forceLedger, "drag", movementStep.dragDeltaV);
     player.lastDeliveredThrustIntensity = movementStep.thrustIntensity;
     player.lastDeliveredBrakeIntensity = movementStep.brakeIntensity;
@@ -6503,6 +6641,7 @@ function tickSim() {
   if (maybeEnforceMatchLifetime()) return;
   tickWreckWaves(dt);
   tickScavengers(dt, relevance.scavengers);
+  tickConductedWaves();
   tickWaveRings(dt);
   runtime.session.seededSea = advanceSeededSea(runtime.session.seededSea, dt);
   runtime.session.seededSeaHash = hashSeededSea(runtime.session.seededSea);

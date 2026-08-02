@@ -63,7 +63,6 @@ const step = stepPlayerFreeMovement(player, {}, 0.1, {
 close(step.wellGravityDeltaV.x, 0.01, 'well-gravity delta-v');
 close(step.solarWindDeltaV.x, 0.02, 'solar-wind delta-v');
 close(step.bodyPushDeltaV.x, 0.03, 'body-push delta-v');
-close(step.waveDeltaV.x, 0.04, 'wave delta-v');
 
 const ledgerPlayer = { vx: 0, vy: 0 };
 const ledger = beginForceLedger(ledgerPlayer, 0.1, 1);

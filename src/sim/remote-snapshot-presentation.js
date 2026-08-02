@@ -111,10 +111,17 @@ export function projectRemoteWorldPatch(world, {
     patch.waveRings = world.waveRings.map((remote) => ({
       sourceWX: remote.sourceWX,
       sourceWY: remote.sourceWY,
+      eventId: remote.eventId || remote.id || null,
+      cause: remote.cause || null,
       radius: remote.radius ?? 0,
+      previousRadius: remote.previousRadius ?? remote.radius ?? 0,
+      frontWidth: remote.frontWidth ?? null,
       amplitude: remote.amplitude ?? 0,
       initialAmplitude: remote.initialAmplitude ?? remote.amplitude ?? 0,
       sourceWellId: remote.sourceWellId ?? null,
+      launchTime: remote.launchTime ?? null,
+      telegraphStartTime: remote.telegraphStartTime ?? null,
+      state: remote.state || (remote.alive === false ? 'expired' : 'active'),
       alive: remote.alive !== false,
       id: remote.id || null,
     }));

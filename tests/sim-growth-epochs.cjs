@@ -99,7 +99,7 @@ async function run() {
     assert.deepStrictEqual(identity.cells, base.cells, "epoch zero must leave base field cells unchanged");
   });
 
-  await runner.run("epoch retune changes only named seeded ambient and live wave terms", () => {
+  await runner.run("epoch retune changes only the seeded ambient term", () => {
     const well = { id: "well-a", wx: 1.5, wy: 1.5, mass: 1, killRadius: 0.06, orbitalDir: 1 };
     const wellOnly = { worldScale: 3, cellSize: 0.2, wells: [well], waveRings: [], seededSea: null };
     assert.deepStrictEqual(
@@ -116,7 +116,7 @@ async function run() {
     const ring = { id: "growth-ring", sourceWX: 1.5, sourceWY: 1.5, radius: 0.4, amplitude: 0.8, alive: true };
     const waveBase = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [ring], seededSea: null });
     const waveRetuned = buildCoarseFlowField({ worldScale: 3, cellSize: 0.2, wells: [], waveRings: [ring], seededSea: null, collapseParameters: { seededSeaAmbientMultiplier: 1, liveWavePushMultiplier: 1.15 } });
-    assert(waveBase.cells.some((cell, index) => cell.waveX !== waveRetuned.cells[index].waveX || cell.waveY !== waveRetuned.cells[index].waveY), "live wave multiplier must alter the live wave term");
+    assert.deepStrictEqual(waveBase.cells, waveRetuned.cells, "retired live wave parameter must not alter the coarse field");
   });
 
   await runner.run("scheduled and star-consumption growth events identify only the changed well", () => {

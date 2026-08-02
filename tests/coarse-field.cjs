@@ -38,7 +38,7 @@ async function run() {
       `Expected no coarse gravity outside well range, got (${sample.gravity.x}, ${sample.gravity.y})`);
   });
 
-  await runner.run("Wave rings project outward band force", async () => {
+  await runner.run("Wave rings stay presentation-only outside the coarse field", async () => {
     const field = buildCoarseFlowField({
       worldScale: 3,
       cellSize: 0.2,
@@ -46,9 +46,9 @@ async function run() {
       waveRings: [{ sourceWX: 1.5, sourceWY: 1.5, radius: 0.4, amplitude: 0.8 }],
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
-    assert(sample.waveX > 0.01, `Expected outward wave force on +X side, got ${sample.waveX}`);
+    assert(Math.abs(sample.waveX) < 1e-9, `Expected no coarse wave force, got ${sample.waveX}`);
     assert(sample.wave.x === sample.waveX, "Expected nested wave vector to mirror legacy flat fields");
-    assert(sample.surf > 0, `Expected surf semantic channel on wavefront, got ${sample.surf}`);
+    assert(sample.sources.ringId === null, "Expected no coarse wave source identity");
   });
 
   const allPassed = runner.summary();

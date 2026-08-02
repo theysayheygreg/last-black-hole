@@ -10,7 +10,7 @@ const {
 } = require('../scripts/sim/force-ledger.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
-const expectedEnvironmentOrder = ['currentCoupling', 'wellGravity', 'solarWind', 'bodyPush', 'wave'];
+const expectedEnvironmentOrder = ['currentCoupling', 'wellGravity', 'solarWind', 'bodyPush'];
 for (const name of expectedEnvironmentOrder) {
   assert(FORCE_COMPONENTS.includes(name), `force ledger must expose ${name}`);
 }
@@ -37,7 +37,6 @@ assert.deepStrictEqual(step.currentCouplingDeltaV, { x: 0, y: 0 });
 assert(Math.abs(step.wellGravityDeltaV.x - 0.01) < 1e-12);
 assert(Math.abs(step.solarWindDeltaV.x - 0.02) < 1e-12);
 assert(Math.abs(step.bodyPushDeltaV.x - 0.03) < 1e-12);
-assert(Math.abs(step.waveDeltaV.x - 0.04) < 1e-12);
 
 const ledgerPlayer = { vx: 0, vy: 0 };
 const ledger = beginForceLedger(ledgerPlayer, 0.1, 1);
@@ -56,4 +55,4 @@ assert(runtime.includes('wellGravity: well'));
 assert(runtime.includes('bodyPush: resolvePlanetoidPushes'));
 assert(!runtime.includes('recordForceDeltaV(forceLedger, "gravity"'));
 
-console.log('HonestEnvironmentChannels: current/well/star/body/wave attribution PASS');
+console.log('HonestEnvironmentChannels: current/well/star/body attribution PASS');

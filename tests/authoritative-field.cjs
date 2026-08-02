@@ -103,7 +103,7 @@ async function run() {
     }
   });
 
-  await runner.run("field carries live wave force at one normalized weight", async () => {
+  await runner.run("field carries no live wave force", async () => {
     const ring = {
       id: "wave-proof",
       sourceWX: 1.5,
@@ -117,12 +117,10 @@ async function run() {
       cellSize: 0.2,
       wells: [],
       waveRings: [ring],
-      waveShipPush: 0.8,
-      waveWidth: 0.1,
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
-    assert(sample.wave.x > 0.01, `Expected live ring force in authoritative field, got ${sample.wave.x}`);
-    assert(sample.sources.ringId === ring.id, `Expected live ring source, got ${sample.sources.ringId}`);
+    assert(Math.abs(sample.wave.x) < 1e-9, `Expected no live ring force in authoritative field, got ${sample.wave.x}`);
+    assert(sample.sources.ringId === null, `Expected no live ring source, got ${sample.sources.ringId}`);
   });
 
   await runner.run("field scale is unified across map profiles", async () => {

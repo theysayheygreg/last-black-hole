@@ -1,6 +1,6 @@
 import { CONFIG } from '../config.js';
 import { fluidVelToWorld, worldDirectionTo, worldToFluidUV } from '../coords.js';
-import { inversePowerForce, orbitalCurrentSpeed, waveBandForce } from '../physics.js';
+import { inversePowerForce, orbitalCurrentSpeed } from '../physics.js';
 import { emptyFlowSample, normalizeFlowSample } from './flow-sample.js';
 
 function wrapUV(value) {
@@ -30,8 +30,7 @@ export class FlowField {
   sample(wx, wy) {
     const wells = this.wellSystem?.wells || [];
     const stars = this.starSystem?.stars || [];
-    const rings = this.waveRings?.rings || [];
-    if (wells.length === 0 && stars.length === 0 && rings.length === 0) {
+    if (wells.length === 0 && stars.length === 0) {
       return emptyFlowSample();
     }
 
@@ -95,27 +94,6 @@ export class FlowField {
       const typePush = star.typeDef?.pushMult ?? 1;
       const strength = (star.mass || 1) * typePush * rangeFade / Math.pow(safeDist / 0.25, starCfg.falloff ?? 1.8);
       hazard = Math.max(hazard, Math.min(1, strength / 2.5));
-    }
-
-    const eventCfg = CONFIG.events;
-    const halfWidth = (eventCfg.waveWidth ?? 0.1) * 0.5;
-    for (const ring of rings) {
-      if (!ring || ring.alive === false || ring.amplitude < 0.01) continue;
-      const dirFromRing = worldDirectionTo(ring.sourceWX, ring.sourceWY, wx, wy);
-      const accel = waveBandForce(
-        dirFromRing.dist,
-        ring.radius || 0,
-        halfWidth,
-        eventCfg.waveShipPush ?? 0.8,
-        ring.amplitude || 0
-      );
-      if (accel <= 0) continue;
-      const x = dirFromRing.nx * accel;
-      const y = dirFromRing.ny * accel;
-      waveX += x;
-      waveY += y;
-      sourceRingId = sourceRingId || `${ring.sourceWX?.toFixed?.(2) ?? 'ring'},${ring.sourceWY?.toFixed?.(2) ?? ''}`;
-      surf = Math.max(surf, Math.min(1, accel / 1.4));
     }
 
     return normalizeFlowSample({
