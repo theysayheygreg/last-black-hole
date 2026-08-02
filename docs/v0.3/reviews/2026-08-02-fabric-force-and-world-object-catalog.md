@@ -144,7 +144,30 @@ three in Phase 4. Space them within each phase, away from the boundaries. The
 six-wave total is independent of well count, and source selection may revisit
 an eligible well rather than manufacturing an all-well cycle.
 
-## Canonical Player-Readable Fabric Causes
+The standard wave crossing adds a single radial-outward delta-v equal to 25%
+of the player's hull calm-space reference speed. It adds to the current
+velocity vector and does not normalize, replace, or rotate it. There is no
+follow-on force. Stronger unusual or overdriven waves require an explicit
+authored identity rather than hidden scaling on ordinary wells.
+
+## Locked Three-Layer Fabric Grammar
+
+The initial player-readable fabric is constrained to:
+
+| Layer | Mechanical truth | Presentation job |
+|---|---|---|
+| Local fabric flow | Broad continuous current contributing up to the locked reference-frame band. | Show one coherent local direction and relative speed opportunity. |
+| Well distortion | Persistent localized radial gravity and wider rotational eddy around a visible well. | Show the source, the broad bend, and where carry changes without drawing every force sample. |
+| Event wave | One source-bound outward front and one 25% crossing impulse. | Telegraph the cause, preserve a clean advancing edge, then disappear. |
+
+All fabric-facing visual or audio work must serve one of these jobs. Unmapped
+contributions are removed, reduced to quiet non-gameplay ambience, or deferred
+until an unusual object has a distinct authored identity. Solar wind and
+moving-body disturbance may remain in mechanical truth, but the first visual
+cleanup folds them into local flow or source VFX instead of adding dominant
+full-screen layers.
+
+## Canonical Mechanical Fabric Causes
 
 The current catalog supports three fabric causes without creating three
 simulation states:

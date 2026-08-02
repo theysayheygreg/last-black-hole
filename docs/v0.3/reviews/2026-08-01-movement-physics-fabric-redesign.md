@@ -169,6 +169,13 @@ The first locked tuning hypothesis is deliberately simple:
 - Initial pacing across the four equal match-relative phases is 0 / 1 / 2 / 3
   conducted waves. Each phase's events sit inside the phase rather than on its
   boundary, making the cadence scale with match duration and not well count.
+- A standard wave crossing adds one radial-outward delta-v equal to 25% of the
+  active hull's calm-space reference speed. It adds to existing velocity with
+  no normalization, rotation, or lingering force.
+- The first readability pass recognizes only three dominant fabric layers:
+  broad local flow, persistent well distortion, and brief source-bound event
+  waves. Every fabric shader, VFX, HUD, and audio contribution must clarify one
+  of those layers or be subdued, removed, or deferred.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not

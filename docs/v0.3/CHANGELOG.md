@@ -30,6 +30,14 @@
   distributed inside each phase and independent of well count. No runtime
   behavior changed.
 
+- **Wave impulse and fabric grammar lock:** a standard wave crossing now has a
+  design baseline of one radial-outward delta-v equal to 25% of hull calm-space
+  reference speed, added without normalization or lingering acceleration. The
+  player-facing fabric is constrained to three dominant layers: broad local
+  flow, persistent well distortion, and brief source-bound event waves. Other
+  contributions must support those layers, become quiet ambience, or defer. No
+  runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a

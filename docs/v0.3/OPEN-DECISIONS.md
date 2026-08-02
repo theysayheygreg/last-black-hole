@@ -141,6 +141,29 @@ on its boundaries, so the cadence scales automatically with the selected match
 length and cannot collide merely because a new phase began. These counts are
 the first tuning baseline, not a requirement that every well emit once.
 
+The standard crossing impulse is a fixed outward delta-v equal to 25% of the
+active hull's calm-space reference speed. It adds to existing velocity without
+normalizing, replacing, or rotating it, and it has no lingering acceleration.
+This is deliberately large enough to read in play. Unusual or overdriven wells
+may later author a stronger impulse explicitly; ordinary wells share this one
+baseline.
+
+### Three-Layer Fabric Grammar
+
+Resolved on 2026-08-02. The player-facing fabric has only three primary layers:
+
+1. **Local fabric flow:** broad continuous direction and carry.
+2. **Well distortion:** persistent localized radial gravity plus rotational
+   eddy around a visible source.
+3. **Event wave:** a brief source-bound outward front and one crossing impulse.
+
+Every shader, VFX, HUD, and audio contribution must identify which layer it is
+communicating. Contributions that do not make one of these layers clearer are
+removed, greatly subdued as non-gameplay ambience, or held for a later authored
+object identity. Solar wind and moving-body disturbances remain mechanical
+catalog items but do not earn separate dominant fabric layers in the first
+readability pass.
+
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;
