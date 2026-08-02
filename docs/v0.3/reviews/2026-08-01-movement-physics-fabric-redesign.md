@@ -212,6 +212,13 @@ Implementation cleanup implied by this direction:
    to overwrite the entire flow read;
 5. derive lane direction and strength from the same accepted authority current
    truth used for movement.
+
+Concept sheet: [`../concepts/fabric-flow-lanes-concept-01.png`](../concepts/fabric-flow-lanes-concept-01.png).
+Panel A is the clarity baseline: sparse calm tidal lanes and substantial visual
+rest. Panel C supplies the preferred bend/split/rejoin language near wells.
+Panel B is a useful upper bound for tactile grain but is too dense for ordinary
+play; its sand-like texture should appear only as restrained detail inside the
+broader A/C lane structure.
 - Hull and equipment identities should change obvious vocabulary: wider swell
   capture, stronger carry, farther grapple reach, larger flat release bonus, or
   faster braking. Hidden alignment thresholds and 5–15% modifiers should not

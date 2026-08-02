@@ -45,6 +45,11 @@
   density. Random hash noise, whole-frame speed brightening, and the generic
   well surf band are removal candidates. No runtime behavior changed.
 
+- **Flow-lane concept sheet:** generated and checked in three comparative
+  broad-flow treatments. Panel A is the readability baseline, Panel C provides
+  well-bending topology, and Panel B marks the maximum acceptable tactile
+  density rather than the default. No runtime behavior changed.
+
 - **Honest FREE environment channels:** renamed the authority movement and
   diagnostic boundaries to `currentCoupling`, `wellGravity`, `solarWind`,
   `bodyPush`, and `wave`. Planetoid proximity push no longer hides inside a
