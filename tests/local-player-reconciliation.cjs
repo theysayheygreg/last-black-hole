@@ -135,12 +135,13 @@ async function run() {
     assert(state.vx < 0.5, `Expected brake to reduce velocity, got ${state.vx}`);
   });
 
-  await runner.run('coupling, gravity, and wave ledger hints bend presentation between snapshots', async () => {
+  await runner.run('current coupling, well gravity, body push, and wave hints preserve presentation', async () => {
     let state = reconciliation.createLocalPlayerReconciliationState({ brain, inputConfig });
     state = rebase(state, player({ forceLedger: {
       vectors: {
-        coupling: { x: UNIT_SCALE.metersPerSimUnit, y: 0 },
-        gravity: { x: 0, y: 0 },
+        currentCoupling: { x: UNIT_SCALE.metersPerSimUnit, y: 0 },
+        wellGravity: { x: 0, y: 0 },
+        bodyPush: { x: 0, y: 0 },
         wave: { x: 0, y: 0 },
       },
     } })).state;

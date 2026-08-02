@@ -54,25 +54,28 @@ const step = stepPlayerFreeMovement(player, {}, 0.1, {
   worldScale: 5,
   flowSample: { current: { x: 0, y: 0 } },
   environmentAcceleration: {
-    gravity: { x: 0.1, y: 0 },
+    wellGravity: { x: 0.1, y: 0 },
     solarWind: [{ x: 0.2, y: 0 }],
     bodyPush: [{ x: 0.3, y: 0 }],
     wave: { x: 0.4, y: 0 },
   },
 });
-close(step.gravityDeltaV.x, 0.04, 'well plus existing body push attribution');
+close(step.wellGravityDeltaV.x, 0.01, 'well-gravity delta-v');
 close(step.solarWindDeltaV.x, 0.02, 'solar-wind delta-v');
+close(step.bodyPushDeltaV.x, 0.03, 'body-push delta-v');
 close(step.waveDeltaV.x, 0.04, 'wave delta-v');
 
 const ledgerPlayer = { vx: 0, vy: 0 };
 const ledger = beginForceLedger(ledgerPlayer, 0.1, 1);
-ledgerPlayer.vx += step.gravityDeltaV.x;
-recordForceDeltaV(ledger, 'gravity', step.gravityDeltaV);
+ledgerPlayer.vx += step.wellGravityDeltaV.x;
+recordForceDeltaV(ledger, 'wellGravity', step.wellGravityDeltaV);
 ledgerPlayer.vx += step.solarWindDeltaV.x;
 recordForceDeltaV(ledger, 'solarWind', step.solarWindDeltaV);
+ledgerPlayer.vx += step.bodyPushDeltaV.x;
+recordForceDeltaV(ledger, 'bodyPush', step.bodyPushDeltaV);
 const receipt = finalizeForceLedger(ledger, ledgerPlayer);
 assert(receipt.vectors.solarWind.x > 0, 'solar wind has an independent force-ledger vector');
-assert(receipt.vectors.gravity.x > receipt.vectors.solarWind.x, 'planetoid/body push remains in existing gravity attribution');
+assert(receipt.vectors.bodyPush.x > receipt.vectors.solarWind.x, 'body push has independent attribution');
 
 const runtimeSource = fs.readFileSync(path.join(ROOT, 'scripts/sim-runtime.cjs'), 'utf8');
 assert(runtimeSource.includes('solarWind: resolveStarSolarWind'), 'authority routes stars through solarWind');

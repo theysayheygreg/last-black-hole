@@ -25,8 +25,10 @@ export const S4_RULER_CONTRACTS = Object.freeze(SLINGSHOT_KNOB_SCHEMA.map((knob)
 
 export const FORCE_LEDGER_CLASSES = Object.freeze([
   'thrust',
-  'coupling',
-  'gravity',
+  'currentCoupling',
+  'wellGravity',
+  'solarWind',
+  'bodyPush',
   'wave',
   'impulse',
   'drag',

@@ -139,7 +139,7 @@ async function run() {
       const held = await waitForPlayer('grapple-arc-v3-test', (player, snapshot) =>
         player.slingshot?.engaged && snapshot.tick >= engaged.snapshot.tick + 4);
       assert.strictEqual(held.player.deliveredThrust, 0, 'thrust must be excluded while grapple owns movement');
-      for (const component of ['thrust', 'coupling', 'gravity', 'wave', 'drag']) {
+      for (const component of ['thrust', 'currentCoupling', 'wellGravity', 'solarWind', 'bodyPush', 'wave', 'drag']) {
         const force = held.player.forceLedger.vectors[component];
         assert(Math.hypot(force.x, force.y) < 1e-6, `${component} leaked into the held arc`);
       }

@@ -175,12 +175,12 @@ function applyPlayerDriveAndFlow(player, input, dt, options = {}) {
   const beforeCouplingVY = player.vy;
   player.vx = player.vx * (1 - coupling) + finiteNumber(current.x, 0) * coupling;
   player.vy = player.vy * (1 - coupling) + finiteNumber(current.y, 0) * coupling;
-  const couplingDeltaV = {
+  const currentCouplingDeltaV = {
     x: player.vx - beforeCouplingVX,
     y: player.vy - beforeCouplingVY,
   };
 
-  return { thrustIntensity, coupling, flowSample, thrustDeltaV, couplingDeltaV };
+  return { thrustIntensity, coupling, flowSample, thrustDeltaV, currentCouplingDeltaV };
 }
 
 function clampPlayerSpeed(player, inputConfig = MOVEMENT_INPUT) {
@@ -270,8 +270,9 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
       aborted: true,
       abilityDeltaV,
       inhibitorDeltaV,
-      gravityDeltaV: { x: 0, y: 0 },
+      wellGravityDeltaV: { x: 0, y: 0 },
       solarWindDeltaV: { x: 0, y: 0 },
+      bodyPushDeltaV: { x: 0, y: 0 },
       waveDeltaV: { x: 0, y: 0 },
       brakeIntensity: 0,
       dragFactor: 1,
@@ -280,14 +281,9 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
   }
 
   const environment = options.environmentAcceleration || {};
-  const gravityDeltaV = applyAccelerationChannel(player, environment.gravity, dt);
+  const wellGravityDeltaV = applyAccelerationChannel(player, environment.wellGravity, dt);
   const solarWindDeltaV = applyAccelerationChannel(player, environment.solarWind, dt);
-  // Planetoid proximity remains attributed to the existing gravity/body-force
-  // ledger component. Applying it here preserves the accepted well -> star ->
-  // planetoid arithmetic order without hiding stellar force under gravity.
   const bodyPushDeltaV = applyAccelerationChannel(player, environment.bodyPush, dt);
-  gravityDeltaV.x += bodyPushDeltaV.x;
-  gravityDeltaV.y += bodyPushDeltaV.y;
   const waveDeltaV = applyAccelerationChannel(player, environment.wave, dt);
 
   const brake = applyPlayerBrakeAndIntegrate(player, input, dt, {
@@ -304,8 +300,9 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
     thrustDeltaV,
     abilityDeltaV,
     inhibitorDeltaV,
-    gravityDeltaV,
+    wellGravityDeltaV,
     solarWindDeltaV,
+    bodyPushDeltaV,
     waveDeltaV,
     aborted: false,
   };
@@ -317,7 +314,7 @@ function stepPlayerMovementCore(player, input, dt, options = {}) {
   return stepPlayerFreeMovement(player, input, dt, {
     ...options,
     environmentAcceleration: options.environmentAcceleration || {
-      gravity: options.externalAcceleration || { x: 0, y: 0 },
+      wellGravity: options.externalAcceleration || { x: 0, y: 0 },
       wave: { x: 0, y: 0 },
     },
   });

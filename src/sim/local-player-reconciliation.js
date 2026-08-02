@@ -41,13 +41,14 @@ function phaseKey(player = {}) {
 }
 
 function forceAcceleration(forceLedger) {
-  const coupling = forceLedger?.vectors?.coupling || {};
-  const gravity = forceLedger?.vectors?.gravity || {};
+  const currentCoupling = forceLedger?.vectors?.currentCoupling || {};
+  const wellGravity = forceLedger?.vectors?.wellGravity || {};
+  const bodyPush = forceLedger?.vectors?.bodyPush || {};
   const wave = forceLedger?.vectors?.wave || {};
   const scale = UNIT_SCALE.metersPerSimUnit;
   return {
-    x: (finite(coupling.x) + finite(gravity.x) + finite(wave.x)) / scale,
-    y: (finite(coupling.y) + finite(gravity.y) + finite(wave.y)) / scale,
+    x: (finite(currentCoupling.x) + finite(wellGravity.x) + finite(bodyPush.x) + finite(wave.x)) / scale,
+    y: (finite(currentCoupling.y) + finite(wellGravity.y) + finite(bodyPush.y) + finite(wave.y)) / scale,
   };
 }
 

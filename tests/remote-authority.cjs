@@ -574,6 +574,7 @@ async function run() {
         const star = safeSource(snapshot.world?.stars);
         const planetoid = safeSource(snapshot.world?.planetoids);
         const source = star || planetoid;
+        const forceComponent = star ? "solarWind" : "bodyPush";
         assert(source, "Expected an authoritative star or planetoid for push test");
         const offset = star ? 0.24 : 0.04;
         const placed = await postDebugPlayerState({
@@ -592,11 +593,11 @@ async function run() {
           (remotePlayer, currentSnapshot) =>
             remotePlayer.status === "alive" &&
             currentSnapshot.tick > placementTick &&
-            Number(remotePlayer.forceLedger?.vectors?.gravity?.x) > 0.01,
+            Number(remotePlayer.forceLedger?.vectors?.[forceComponent]?.x) > 0.01,
           { timeout: 8000 }
         );
-        assert(player.forceLedger.vectors.gravity.x > 0.01,
-          `Expected outward server-authored body force, got ${JSON.stringify(player.forceLedger.vectors.gravity)}`);
+        assert(player.forceLedger.vectors[forceComponent].x > 0.01,
+          `Expected outward server-authored ${forceComponent}, got ${JSON.stringify(player.forceLedger.vectors[forceComponent])}`);
       });
     });
 
