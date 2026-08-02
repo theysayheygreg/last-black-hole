@@ -42,6 +42,36 @@ For orchestration conflicts, precedence is:
 3. The owning version's decisions, roadmap, and architecture contracts.
 4. A workstream or subagent prompt.
 
+## Game-Readable Systems Contract
+
+Last Singularity is a video game, not a fluid-dynamics, orbital-mechanics, or
+real-world systems simulator. Systems, mechanics, presentation, and
+affordances prefer simple causal rules that players can learn by playing.
+Real-world accuracy is useful only when it creates clearer or more enjoyable
+play; it does not justify hidden force stacks, subtle coupling factors, or
+simulation complexity the player cannot perceive.
+
+- Prefer one obvious game rule over several physically plausible contributors.
+- An important output must be attributable in normal play: players should be
+  able to say what changed and why without a debug panel.
+- First-pass magnitudes must be unmistakable. Think **double jump**, **half
+  speed**, **twice the reach**, or a **clearly wider radius**, not a 5–15%
+  modifier that exists mainly in telemetry.
+- Presentation carries the same obligation. Important mechanics need motion,
+  VFX, audio, UI, or world response large enough to see or hear during ordinary
+  play.
+- Begin clear and bold; layer subtlety back only after the mechanic reads.
+  Never build instrumentation merely to prove an otherwise imperceptible
+  feature exists.
+- When many simultaneous modifiers affect one outcome, first reduce them to
+  one named gameplay contribution, one exclusive mode, or one discrete event.
+  Preserve complexity only when it creates a distinct decision or fantasy.
+
+Every feature goal and receipt involving gameplay, UI, VFX, audio, or other
+player-facing systems names both the intended game-scale magnitude and the cue
+that makes it readable. Reviewers treat invisible micro-effects and realism-
+driven complexity as product defects, not sophistication.
+
 ## Topology
 
 ```text
@@ -400,6 +430,7 @@ Owned write scope:
 Boundaries to preserve:
 Committed deliverable:
 Focused proof:
+Player-readable magnitude and presentation cue:
 Stop or escalation conditions:
 ```
 
