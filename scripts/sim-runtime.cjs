@@ -118,6 +118,7 @@ const {
   wellGravityVector,
 } = require("./sim/well-gravity.cjs");
 const {
+  closestPointOnToroidalSegment,
   singleCorrectionDelta: worldDisplacement,
   singleCorrectionDistance: worldDistance,
   sweptMovingCircleVsCircle,
@@ -132,6 +133,7 @@ const {
   resolveGlitchInfluence,
   createSwarmEntity,
   advanceSwarmEntity,
+  applySwarmContact,
   applySwarmContacts,
   createVesselEntity,
   advanceVesselEntity,
@@ -2879,6 +2881,43 @@ function sweptEntityContact(sweep, entity, radius) {
   return result.hit ? result : null;
 }
 
+function sweptEntityClosestApproach(sweep, entity) {
+  if (!sweep) return null;
+  return closestPointOnToroidalSegment({
+    pointX: entity.wx,
+    pointY: entity.wy,
+    startX: sweep.startX,
+    startY: sweep.startY,
+    deltaX: sweep.deltaX,
+    deltaY: sweep.deltaY,
+    worldScale: sweep.worldScale,
+  });
+}
+
+function applySweptPlanetoidPushes(player, dt, sweep, planetoids = runtime.mapState.planetoids) {
+  if (!sweep || player.slingshot?.engaged) return;
+  for (const planetoid of planetoids) {
+    if (planetoid.alive === false) continue;
+    const hit = sweptEntityContact(sweep, planetoid, PLANETOID_SERVER.shipPushRadius);
+    // Starting inside was already sampled by the normal continuous-force step.
+    if (!hit || hit.startedOverlapping) continue;
+    const closest = sweptEntityClosestApproach(sweep, planetoid);
+    if (!closest) continue;
+    const sampleDistance = Math.max(0.001, closest.distance);
+    const acceleration = proximityForce(
+      sampleDistance,
+      PLANETOID_SERVER.shipPushStrength,
+      PLANETOID_SERVER.shipPushRadius,
+    );
+    if (acceleration <= 0) continue;
+    const normalLength = Math.hypot(closest.offsetX, closest.offsetY);
+    const normalX = normalLength > 0.000001 ? -closest.offsetX / normalLength : hit.normalX;
+    const normalY = normalLength > 0.000001 ? -closest.offsetY / normalLength : hit.normalY;
+    player.vx += normalX * acceleration * dt;
+    player.vy += normalY * acceleration * dt;
+  }
+}
+
 function portalEndpointDistance(player, portal) {
   return worldDistance(
     player.wx,
@@ -5611,6 +5650,35 @@ function spawnSentries(mapState) {
   return sentries;
 }
 
+function applySentryContact(sentry, player, well, contact = player) {
+  const ws = runtime.session.worldScale;
+  const toWellX = worldDisplacement(contact.wx, well.wx, ws);
+  const toWellY = worldDisplacement(contact.wy, well.wy, ws);
+  const toWellDist = Math.hypot(toWellX, toWellY);
+  // GRAPPLED owns velocity exclusively, but contact still consumes the lunge
+  // and emits its existing consequence/noise truth.
+  if (!player.slingshot?.engaged && toWellDist > 0.001) {
+    player.vx += (toWellX / toWellDist) * SENTRY_CONFIG.bumpForce;
+    player.vy += (toWellY / toWellDist) * SENTRY_CONFIG.bumpForce;
+  }
+  emitPlayerNoise(player, SENTRY_CONFIG.bumpNoiseMeters, "IMPACT", { action: "sentry-contact" });
+  sentry.state = "recover";
+  sentry.recoverTimer = SENTRY_CONFIG.lungeRecovery;
+}
+
+function applySweptSentryContacts(player, sweep) {
+  if (!sweep) return;
+  for (const sentry of runtime.mapState.sentries) {
+    if (!sentry.alive || sentry.state !== "lunge") continue;
+    const hit = sweptEntityContact(sweep, sentry, 0.04);
+    // Endpoint overlap was already handled before player movement.
+    if (!hit || hit.startedOverlapping) continue;
+    const well = runtime.mapState.wells.find((entry) => entry.id === sentry.wellId);
+    if (!well) continue;
+    applySentryContact(sentry, player, well, { wx: hit.contactX, wy: hit.contactY });
+  }
+}
+
 function tickSentries(dt) {
   const cfg = SENTRY_CONFIG;
   const ws = runtime.session.worldScale;
@@ -5654,17 +5722,7 @@ function tickSentries(dt) {
         if (player.status !== "alive") continue;
         const pd = worldDistance(sentry.wx, sentry.wy, player.wx, player.wy, ws);
         if (pd < 0.04) {
-          // Push player toward the well
-          const toWellX = worldDisplacement(player.wx, well.wx, ws);
-          const toWellY = worldDisplacement(player.wy, well.wy, ws);
-          const toWellDist = Math.hypot(toWellX, toWellY);
-          if (toWellDist > 0.001) {
-            player.vx += (toWellX / toWellDist) * cfg.bumpForce;
-            player.vy += (toWellY / toWellDist) * cfg.bumpForce;
-          }
-          emitPlayerNoise(player, cfg.bumpNoiseMeters, "IMPACT", { action: "sentry-contact" });
-          sentry.state = "recover";
-          sentry.recoverTimer = cfg.lungeRecovery;
+          applySentryContact(sentry, player, well);
           break;
         }
       }
@@ -5697,6 +5755,42 @@ function tickSentries(dt) {
 // Drift Jellies: ambient, always present, teal glow, +0.01 signal on bump.
 // Signal Blooms (née Signal Moths): spawn near signal sources, attracted to
 // highest-signal player. Spawn rate scales with signal zone. See FAUNA.md.
+
+function faunaContactRadius(fauna) {
+  return fauna.type === "jelly" ? 0.04 : 0.03;
+}
+
+function applyFaunaContact(fauna, player, contact = player) {
+  const ws = runtime.session.worldScale;
+  const bumpForce = fauna.type === "jelly" ? FAUNA_CONFIG.jellyBumpForce : FAUNA_CONFIG.bloomBumpForce;
+  const bx = worldDisplacement(fauna.wx, contact.wx, ws);
+  const by = worldDisplacement(fauna.wy, contact.wy, ws);
+  const distance = Math.hypot(bx, by);
+  // A fauna hit remains real during a grapple, but the fixed arcade arc stays
+  // the sole owner of velocity until release.
+  if (!player.slingshot?.engaged && distance > 0.001) {
+    player.vx += (bx / distance) * bumpForce;
+    player.vy += (by / distance) * bumpForce;
+  }
+  emitPlayerNoise(player, NOISE_CONFIG.impulses.collisionMeters, "IMPACT", { action: "fauna-contact" });
+  fauna.alive = false;
+}
+
+function applySweptFaunaContacts(player, sweep) {
+  if (!sweep) return;
+  const contacts = [];
+  for (const fauna of runtime.mapState.fauna) {
+    if (!fauna.alive) continue;
+    const hit = sweptEntityContact(sweep, fauna, faunaContactRadius(fauna));
+    if (!hit || hit.startedOverlapping) continue;
+    contacts.push({ fauna, hit });
+  }
+  contacts.sort((a, b) => a.hit.t - b.hit.t || String(a.fauna.id).localeCompare(String(b.fauna.id)));
+  for (const { fauna, hit } of contacts) {
+    if (!fauna.alive) continue;
+    applyFaunaContact(fauna, player, { wx: hit.contactX, wy: hit.contactY });
+  }
+}
 
 function tickFauna(dt) {
   const cfg = FAUNA_CONFIG;
@@ -5789,18 +5883,9 @@ function tickFauna(dt) {
     for (const player of runtime.players.values()) {
       if (player.status !== "alive") continue;
       const pd = worldDistance(f.wx, f.wy, player.wx, player.wy, ws);
-      const bumpRadius = f.type === "jelly" ? 0.04 : 0.03;
+      const bumpRadius = faunaContactRadius(f);
       if (pd < bumpRadius) {
-        const bumpForce = f.type === "jelly" ? cfg.jellyBumpForce : cfg.bloomBumpForce;
-        const bx = worldDisplacement(f.wx, player.wx, ws);
-        const by = worldDisplacement(f.wy, player.wy, ws);
-        const bd = Math.hypot(bx, by);
-        if (bd > 0.001) {
-          player.vx += (bx / bd) * bumpForce;
-          player.vy += (by / bd) * bumpForce;
-        }
-        emitPlayerNoise(player, NOISE_CONFIG.impulses.collisionMeters, "IMPACT", { action: "fauna-contact" });
-        f.alive = false; // consumed on contact
+        applyFaunaContact(f, player);
         break;
       }
     }
@@ -6020,6 +6105,22 @@ function applyInhibitorContacts(contacts, cause) {
     commitPlayerOutcome(player, "dead");
     player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
   }
+}
+
+function applySweptSwarmContacts(player, sweep) {
+  if (!sweep) return;
+  const contacts = [];
+  for (const swarm of runtime.inhibitorEntities) {
+    if (swarm.kind !== "swarm" || swarm.lifecycle !== "alive") continue;
+    const hit = sweptEntityContact(sweep, swarm, swarm.contactRadius);
+    // Starting overlap was handled by the ecology contact pass before player
+    // movement; only a newly crossed aperture belongs here.
+    if (!hit || hit.startedOverlapping) continue;
+    const contact = applySwarmContact(swarm, player, { tick: runtime.tick });
+    if (contact) contacts.push({ contact, hit });
+  }
+  contacts.sort((a, b) => a.hit.t - b.hit.t || String(a.contact.entityId).localeCompare(String(b.contact.entityId)));
+  applyInhibitorContacts(contacts.map(({ contact }) => contact), "inhibitor_swarm");
 }
 
 function appendContinuousInfluence(target, contributions) {
@@ -6242,6 +6343,25 @@ function tickInhibitor(dt) {
 
 }
 
+function resolvePostMovementContacts(player, playerDt, sweep, relevance, forceLedger, extractConfirm) {
+  recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
+  if (player.status !== "alive") return false;
+  recordForceMutation(forceLedger, "impulse", player, () => {
+    // Contact sweeps use the bounded full collections rather than the
+    // start-of-tick relevance view; a fast ship can cross into an object that
+    // was not near its previous endpoint.
+    applySweptPlanetoidPushes(player, playerDt, sweep);
+    applyScavengerBump(player, relevance.scavengers, sweep);
+    applySweptSentryContacts(player, sweep);
+    applySweptFaunaContacts(player, sweep);
+  });
+  applySweptSwarmContacts(player, sweep);
+  if (player.status !== "alive") return false;
+  tickPlayerPickups(player, relevance.wrecks, sweep);
+  tickExtraction(player, extractConfirm);
+  return player.status === "alive";
+}
+
 function tickAuthorityPlayers(dt, relevance) {
   const forceLedgers = new Map();
   for (const player of runtime.players.values()) {
@@ -6300,12 +6420,7 @@ function tickAuthorityPlayers(dt, relevance) {
       player.vx = grappleVelocity.x;
       player.vy = grappleVelocity.y;
       const sweep = movementSweep(movementStartWX, movementStartWY, player);
-      recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
-      if (player.status !== "alive") continue;
-      recordForceMutation(forceLedger, "impulse", player, () => applyScavengerBump(player, relevance.scavengers, sweep));
-      tickPlayerPickups(player, relevance.wrecks, sweep);
-      tickExtraction(player, extractConfirm);
-      if (player.status !== "alive") continue;
+      if (!resolvePostMovementContacts(player, playerDt, sweep, relevance, forceLedger, extractConfirm)) continue;
       tickPlayerNoise(player, playerDt);
       continue;
     }
@@ -6339,13 +6454,7 @@ function tickAuthorityPlayers(dt, relevance) {
     player.lastDeliveredBrakeIntensity = movementStep.brakeIntensity;
     if (movementStep.aborted || player.status !== "alive") continue;
     const sweep = movementSweep(movementStartWX, movementStartWY, player);
-    recordForceMutation(forceLedger, "impulse", player, () => applySweptWellContacts(player, playerDt, sweep));
-    if (player.status !== "alive") continue;
-    recordForceMutation(forceLedger, "impulse", player, () => applyScavengerBump(player, relevance.scavengers, sweep));
-
-    tickPlayerPickups(player, relevance.wrecks, sweep);
-    tickExtraction(player, extractConfirm);
-    if (player.status !== "alive") continue;
+    if (!resolvePostMovementContacts(player, playerDt, sweep, relevance, forceLedger, extractConfirm)) continue;
     tickPlayerNoise(player, playerDt);
   }
   for (const [player, ledger] of forceLedgers) {

@@ -506,21 +506,32 @@ function applySwarmContacts(entities, players, { dt = 0, worldScale = 1, tick = 
       swarm.contactCooldowns[playerId] = Math.max(0,
         finite(swarm.contactCooldowns[playerId]) - step);
       if (distance > swarm.contactRadius || swarm.contactCooldowns[playerId] > 0) continue;
-      const before = clamp(player.hullDamage, 0, swarm.maxDamage);
-      const after = clamp(before + swarm.hullDamage, 0, swarm.maxDamage);
-      player.hullDamage = after;
-      swarm.contactCooldowns[playerId] = Math.max(0, finite(swarm.contactCooldownSeconds));
-      contacts.push({
-        entityId: swarm.id,
-        clientId: playerId,
-        damage: after - before,
-        totalDamage: after,
-        lethal: after >= swarm.maxDamage,
-        tick: Math.max(0, Math.trunc(finite(tick))),
-      });
+      const contact = applySwarmContact(swarm, player, { tick });
+      if (contact) contacts.push(contact);
     }
   }
   return contacts;
+}
+
+// Geometry belongs to the authority runtime. This single-contact seam lets an
+// endpoint check and a swept crossing share identical damage/cooldown truth.
+function applySwarmContact(swarm, player, { tick = 0 } = {}) {
+  if (!swarm || swarm.kind !== "swarm" || swarm.lifecycle !== "alive") return null;
+  if (!player || player.status !== "alive") return null;
+  const playerId = String(player.clientId || "unknown");
+  if (Math.max(0, finite(swarm.contactCooldowns[playerId])) > 0) return null;
+  const before = clamp(player.hullDamage, 0, swarm.maxDamage);
+  const after = clamp(before + swarm.hullDamage, 0, swarm.maxDamage);
+  player.hullDamage = after;
+  swarm.contactCooldowns[playerId] = Math.max(0, finite(swarm.contactCooldownSeconds));
+  return {
+    entityId: swarm.id,
+    clientId: playerId,
+    damage: after - before,
+    totalDamage: after,
+    lethal: after >= swarm.maxDamage,
+    tick: Math.max(0, Math.trunc(finite(tick))),
+  };
 }
 
 function projectSwarmEntity(entity) {
@@ -863,6 +874,7 @@ module.exports = {
   projectGlitchEntity,
   createSwarmEntity,
   advanceSwarmEntity,
+  applySwarmContact,
   applySwarmContacts,
   projectSwarmEntity,
   countLiveGlitches,

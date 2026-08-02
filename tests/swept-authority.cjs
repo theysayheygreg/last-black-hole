@@ -245,6 +245,48 @@ async function run() {
     });
   });
 
+  await runner.run("High-speed Swarm crossing resolves hull damage between snapshots", async () => {
+    const port = BASE_PORT + 5;
+    const clientId = "swept-swarm";
+    await withPlayer(port, clientId, async (authority) => {
+      await request(port, "/debug/inhibitor-state", { phase: 2 });
+      const initial = await waitFor(
+        port,
+        async () => (await request(port, "/snapshot")).body,
+        (body) => body.inhibitor?.entities?.some((entity) =>
+          entity.kind === "swarm" && entity.lifecycle === "alive"),
+      );
+      const player = initial.players.find((entry) => entry.clientId === clientId);
+      const swarm = initial.inhibitor.entities.find((entry) =>
+        entry.kind === "swarm" && entry.lifecycle === "alive");
+      const scale = initial.session.worldScale;
+      const targetX = wrap(player.wx + 0.24, scale);
+      await request(port, "/debug/inhibitor-state", {
+        entity: { id: swarm.id, wx: targetX, wy: player.wy },
+      });
+      await request(port, "/debug/player-state", {
+        clientId,
+        wx: player.wx,
+        wy: player.wy,
+        vx: 8,
+        vy: 0,
+        status: "alive",
+      });
+      await waitFor(
+        port,
+        async () => (await request(port, "/snapshot")).body,
+        (body) => body.players.some((entry) => entry.clientId === clientId && entry.hullDamage > 0),
+      );
+      const events = await readAuthorizedEvents(port, authority);
+      assert(events.events.some((event) =>
+        event.type === "player.hullDamaged" &&
+        event.payload?.clientId === clientId &&
+        event.payload?.entityId === swarm.id &&
+        event.payload?.cause === "inhibitor_swarm"),
+      "Expected swept Swarm contact to publish existing hull-damage truth");
+    });
+  });
+
   process.exit(runner.summary() ? 0 : 1);
 }
 
