@@ -840,13 +840,14 @@ async function run() {
       await parkBrowserPlayer(page, 6);
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       const snapshot = await getSnapshot();
-      const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
-      const planetoid = snapshot.world?.planetoids?.find((entry) => entry.alive !== false);
       const well = snapshot.world?.wells?.[0];
-      const anchor = star || planetoid || well;
-      assert(anchor, "Expected a star, planetoid, or well anchor for authoritative slingshot test");
+      const anchor = well;
+      assert(anchor, "Expected a well anchor for authoritative slingshot test");
       const ws = snapshot.session?.worldScale || 5;
-      const startOffset = star ? 0.18 : planetoid ? 0.09 : 0.25;
+      // The authored well is the stable public Grapple Arc fixture. Dynamic
+      // star/planetoid positions can move a browser input edge past its
+      // capture window before the authority consumes it.
+      const startOffset = 0.20;
       const startX = ((anchor.wx + startOffset) % ws + ws) % ws;
       const startY = anchor.wy;
       const reset = await postDebugPlayerState({
