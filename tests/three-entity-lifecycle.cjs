@@ -226,6 +226,28 @@ async function run() {
       'Renderer stats must expose well diagnostic primitive counts');
   });
 
+  await runner.run('Authoritative well growth uses one pooled source-bound semantic front', async () => {
+    const presentation = new WorldScenePresentation();
+    presentation.currentProjection = createWorldProjection({ x: 1, y: 1, worldScale: 5, view: 3 }, 1);
+    presentation.lastSceneState = { cameraX: 1, cameraY: 1, worldScale: 5, gridWindow: 3, cameraView: 3 };
+    presentation._beginDynamicScene();
+    const wave = {
+      id: 'wave-a', sourceWellId: 'well-a', world: { x: 1, y: 1 },
+      radius: 0.5, strength: 0.6, initialStrength: 1,
+    };
+    const well = { id: 'well-a', world: { x: 1, y: 1 } };
+    const mesh = presentation._addSourceBoundWellWavefront(wave, [well], presentation.lastSceneState);
+    assert(mesh && presentation.semanticMeshPool.length === 1,
+      'A live authoritative well wave must submit exactly one pooled semantic front');
+    assert(mesh.userData.sourceWellId === 'well-a'
+      && mesh.userData.presentationRole === 'source-bound-authoritative-well-growth-front',
+    `Wavefront must retain source identity, got ${JSON.stringify(mesh.userData)}`);
+    const omitted = presentation._addSourceBoundWellWavefront({ ...wave, sourceWellId: null }, [well], presentation.lastSceneState);
+    assert(omitted === null && presentation.semanticMeshPool.length === 1,
+      'Unbound pulse rings must not masquerade as well-growth fronts');
+    presentation.dispose();
+  });
+
   await runner.run('World scene has one direct lifecycle owner and preserves reset and family order', async () => {
     const backendSource = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
     const sceneSource = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');

@@ -25,6 +25,7 @@ import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
 import { createPresentationFrame } from './presentation/presentation-frame.js';
 import { createPresentationSceneSource } from './presentation/scene-source.js';
+import { syncRemoteWellPresentation } from './presentation/well-wave-presentation.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { GainPass } from './render/passes/gain-pass.js';
 import { AccretionPass } from './render/passes/accretion-pass.js';
@@ -2679,18 +2680,7 @@ function syncRemoteWorldState(world) {
     for (let i = 0; i < Math.min(patch.wells.length, wellSystem.wells.length); i++) {
       const remote = patch.wells[i];
       const local = wellSystem.wells[i];
-      local.wx = remote.wx;
-      local.wy = remote.wy;
-      local.mass = remote.mass;
-      local.overdriveTier = remote.overdriveTier ?? 0;
-      local.overdriveMultiplier = remote.overdriveMultiplier ?? 1;
-      local.overdriveSource = remote.overdriveSource ?? null;
-      local.overdriveTime = remote.overdriveTime ?? null;
-      if (remote.catalogId) local.catalogId = remote.catalogId;
-      if (remote.behaviorId) local.behaviorId = remote.behaviorId;
-      if (remote.catalogActivation) local.catalogActivation = remote.catalogActivation;
-      if (remote.killRadius) local.killRadius = remote.killRadius;
-      if (remote.name) local.name = remote.name;
+      syncRemoteWellPresentation(local, remote);
     }
   }
 

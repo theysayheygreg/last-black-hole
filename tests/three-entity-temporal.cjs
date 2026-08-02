@@ -84,7 +84,7 @@ async function run() {
       `Expected explicit known occlusion only when supplied: ${JSON.stringify(stats)}`);
   });
 
-  await runner.run('Renderer owns temporal sampling and removes product wave-ring submission', async () => {
+  await runner.run('Renderer owns temporal sampling and admits only named source-bound wave growth', async () => {
     const backend = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
     const renderer = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
     assert(renderer.includes('TemporalVisibilityContract'), 'Renderer must own the temporal contract');
@@ -105,6 +105,9 @@ async function run() {
       'Renderer must not claim occlusion knowledge it does not have');
     assert(!renderer.includes('addSemantic(this.entityGeometries.ring, this.entityMaterials.wave'),
       'Product mode must not submit generic wave-growth rings');
+    assert(renderer.includes('_addSourceBoundWellWavefront')
+      && renderer.includes('source-bound-authoritative-well-growth-front'),
+    'Product mode must submit the named authoritative well-growth front through the existing scene owner');
     const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
     const waveRings = fs.readFileSync(path.join(ROOT, 'src/wave-rings.js'), 'utf8');
     assert(!main.includes('waveRings.render(') && !waveRings.includes('render(ctx, camX, camY'),
@@ -136,6 +139,8 @@ async function run() {
     'Debug mode must be explicit and constrained to the semantic allowlist');
     assert(inventory.roles.hullAbilityStateMark.allowed.includes('named_hull_ability_state_mark'),
       'Hull ability marks must have a named inventory allowlist entry');
+    assert(inventory.roles.wellPulseState.allowed.includes('source_bound_authoritative_well_growth_front'),
+      'Well growth must allow only its named source-bound authoritative front');
   });
 
   const ok = runner.summary();

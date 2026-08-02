@@ -4,6 +4,7 @@
  * mutates gameplay owners.
  */
 import { MOVEMENT } from '../content/movement.js';
+import { effectiveWellVisualMass } from './well-wave-presentation.js';
 
 export function createPresentationSceneSource(input = {}) {
   const phase = input.phase;
@@ -57,6 +58,8 @@ export function createPresentationSceneSource(input = {}) {
       wx: well.wx,
       wy: well.wy,
       mass: well.mass || 1,
+      visualMass: effectiveWellVisualMass(well),
+      orbitalDir: Number.isFinite(Number(well.orbitalDir)) ? Number(well.orbitalDir) : 1,
       overdriveTier: Math.max(0, Number(well.overdriveTier) || 0),
       overdriveMultiplier: Math.max(1, Number(well.overdriveMultiplier) || 1),
       killRadius: well.killRadius || defaults.wellKillRadius,
@@ -105,8 +108,9 @@ export function createPresentationSceneSource(input = {}) {
       vy: body.vy || 0,
       pathType: body.pathType || 'orbit',
     })),
-    waveRings: (world.waveRings || []).map((ring, index) => ({
+    waveRings: (world.waveRings || []).filter((ring) => ring.alive !== false).map((ring, index) => ({
       id: ring.id || `wave-${index}`,
+      sourceWellId: ring.sourceWellId ?? null,
       sourceWX: ring.sourceWX,
       sourceWY: ring.sourceWY,
       radius: ring.radius,
