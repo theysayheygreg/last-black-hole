@@ -276,6 +276,8 @@ function normalizeEntity(family, source, index) {
         catalogId: id(source.catalogId, 'base-well'),
         behaviorId: id(source.behaviorId, 'base-well'),
         mass: Math.max(0, finite(source.mass, 1)),
+        visualMass: Math.max(0, finite(source.visualMass, source.mass || 1)),
+        orbitalDir: finite(source.orbitalDir, 1),
         overdriveTier: Math.max(0, Math.floor(finite(source.overdriveTier))),
         overdriveMultiplier: Math.max(1, finite(source.overdriveMultiplier, 1)),
         visual: Object.freeze({
@@ -287,6 +289,7 @@ function normalizeEntity(family, source, index) {
     case 'waveRings':
       return Object.freeze({
         ...base,
+        sourceWellId: source.sourceWellId == null ? null : id(source.sourceWellId, null),
         radius: Math.max(0, finite(source.radius, 0.01)),
         strength: Math.max(0, finite(source.amplitude)),
         initialStrength: Math.max(0.0001, finite(source.initialAmplitude, source.amplitude || 1)),

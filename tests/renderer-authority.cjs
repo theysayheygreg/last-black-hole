@@ -25,6 +25,7 @@ async function run() {
     projectRemoteWorldPatch,
     snapshotRunId,
   } = await import("../src/sim/remote-snapshot-presentation.js");
+  const { syncRemoteWellPresentation } = await import("../src/presentation/well-wave-presentation.js");
 
   await runner.run("remote star rows retain a valid presentation contract", async () => {
     const first = normalizeStarPresentation({
@@ -160,7 +161,7 @@ async function run() {
     const well = { id: "well-1", wx: 0.1, wy: 0.1 };
     const lootItem = { id: "scrap" };
     const patch = projectRemoteWorldPatch({
-      waveRings: [{ sourceWX: 1, sourceWY: 2, amplitude: 0.4 }],
+      waveRings: [{ id: "growth-1", sourceWellId: "well-1", sourceWX: 1, sourceWY: 2, amplitude: 0.4 }],
       wells: [well],
       wrecks: [{ id: "wreck-1", loot: [lootItem] }],
       portals: [{ id: "portal-1", type: "unstable", spawnTime: 0, lifespan: 10 }],
@@ -170,10 +171,22 @@ async function run() {
     assert(patch.wells[0] === well, "Well rows must remain available for stable-object mutation");
     assert(patch.waveRings[0].initialAmplitude === 0.4,
       "Wave rows must restore renderer defaults");
+    assert(patch.waveRings[0].sourceWellId === "well-1",
+      "Wave rows must preserve their authoritative source well identity");
     assert(patch.wrecks[0].loot[0] !== lootItem,
       "Wreck loot projection must retain independent item rows");
     assert(patch.fauna.length === 1 && patch.portals[0].timeLeft(4) === 6,
       "Dead transient rows must be removed and portals must retain their presentation interface");
+  });
+
+  await runner.run("remote well sync retains authoritative current direction", async () => {
+    const local = { orbitalDir: 1, overdriveMultiplier: 1 };
+    syncRemoteWellPresentation(local, {
+      wx: 1, wy: 2, mass: 1.2, orbitalDir: -1,
+      overdriveTier: 2, overdriveMultiplier: 1.5,
+    });
+    assert(local.orbitalDir === -1 && local.overdriveMultiplier === 1.5,
+      `Remote well direction and effective strength must reach presentation: ${JSON.stringify(local)}`);
   });
 
   await runner.run("authority texture registration keeps the shared Y contract", async () => {

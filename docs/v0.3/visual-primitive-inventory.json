@@ -37,6 +37,7 @@
         "canvas_entity_duplicate_when_three_owns_world"
       ],
       "allowlist": [
+        "source_bound_authoritative_well_growth_front",
         "named_slingshot_range_affordance",
         "named_slingshot_tether",
         "named_hull_ability_state_mark"
@@ -53,6 +54,7 @@
         "canvas_entity_duplicate_when_three_owns_world"
       ],
       "allowlist": [
+        "source_bound_authoritative_well_growth_front",
         "named_slingshot_range_affordance",
         "named_slingshot_tether",
         "named_hull_ability_state_mark",
@@ -87,12 +89,12 @@
     },
     "wellPulseState": {
       "disposition": "fabric_first",
-      "productionOwner": "FluidDisplay and src/wells.js",
-      "surface": "ASCII/fabric shader only",
-      "allowed": ["fabric_owned_well_contour"],
+      "productionOwner": "FluidDisplay, src/wells.js, and WorldScenePresentation",
+      "surface": "ASCII/fabric shader plus one source-bound authoritative growth front",
+      "allowed": ["fabric_owned_well_contour", "source_bound_authoritative_well_growth_front"],
       "forbidden": ["generic_in_match_well_growth_ring", "generic_in_match_well_pulse_ring"],
-      "activation": "shader frame state",
-      "resetDispose": "fluid/display lifecycle"
+      "activation": "shader frame state and live source-bound authority wave snapshot",
+      "resetDispose": "fluid/display lifecycle and pooled Three scene lifecycle"
     },
     "slingshotAbilitySemantic": {
       "disposition": "retain_ratified_affordance",
@@ -146,7 +148,7 @@
   "runtimePrimitives": [
     { "primitive": "CircleGeometry", "owner": "entity backing", "role": "entityCore", "disposition": "retain_contact_matte_only" },
     { "primitive": "RingGeometry", "owner": "PlayerVisualFamily", "role": "slingshotAbilitySemantic", "disposition": "retain_named_affordance_only" },
-    { "primitive": "RingGeometry", "owner": "ThreeRendererBackend", "role": "wellPulseState", "disposition": "debug_scene_only; no_product_wave_ring_submission" },
+    { "primitive": "RingGeometry", "owner": "WorldScenePresentation", "role": "wellPulseState", "disposition": "one_source_bound_authoritative_growth_front; generic_rings_forbidden" },
     { "primitive": "PlaneGeometry", "owner": "entity-assets and post quad", "role": "entityCore", "disposition": "sprite_card_or_screen_post_only" },
     { "primitive": "Line", "owner": "PlayerVisualFamily", "role": "slingshotAbilitySemantic", "disposition": "retain_tether_or_release_direction_only" },
     { "primitive": "CanvasArc", "owner": "src/main.js gameLoop", "role": "hullAbilityStateMark", "disposition": "named_state_mark_only; playing_gate" }

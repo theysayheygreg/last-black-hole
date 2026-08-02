@@ -65,7 +65,8 @@ async function run() {
       },
       wells: [{
         id: 'gravity', catalogId: 'base-well', behaviorId: 'base-well',
-        wx: 1, wy: 2, mass: 1, overdriveTier: 0, overdriveMultiplier: 1,
+        wx: 1, wy: 2, mass: 1, visualMass: 0, orbitalDir: 1,
+        overdriveTier: 0, overdriveMultiplier: 1,
         killRadius: 0.05, ringOuter: 0.125,
       }],
       stars: [{ id: 'live', wx: 2, wy: 3, mass: 1, type: 'mainSequence' }],
@@ -87,6 +88,31 @@ async function run() {
     });
     assert(source.wrecks.length === 0 && source.portals.length === 0 && source.sentries.length === 0,
       'Absent families must remain empty arrays');
+  });
+
+  await runner.run('Well growth fronts retain source identity and effective visual strength', async () => {
+    const source = sceneSource.createPresentationSceneSource({
+      phase: 'playing',
+      localPlayer: { ship: { wx: 0, wy: 0, vx: 0, vy: 0, facing: 0 } },
+      world: {
+        wells: [{ id: 'well-a', wx: 1, wy: 2, mass: 1.25, orbitalDir: -1, overdriveMultiplier: 1.5 }],
+        waveRings: [{
+          id: 'wave-a', sourceWellId: 'well-a', sourceWX: 1, sourceWY: 2,
+          radius: 0.4, amplitude: 0.6, initialAmplitude: 1,
+        }],
+      },
+    });
+    const frame = presentation.createPresentationFrame({
+      phase: 'playing',
+      scene: source,
+      camera: { x: 1, y: 2, worldScale: 5, gridWindow: 3, view: 3 },
+    });
+    assert(frame.world.wells[0].orbitalDir === -1 && frame.world.wells[0].visualMass === 1.875,
+      `Expected authoritative current and overdrive strength, got ${JSON.stringify(frame.world.wells[0])}`);
+    assert(frame.world.waveRings[0].sourceWellId === 'well-a'
+      && frame.world.waveRings[0].world.x === 1
+      && frame.world.waveRings[0].radius === 0.4,
+    `Expected one source-bound wavefront, got ${JSON.stringify(frame.world.waveRings[0])}`);
   });
 
   await runner.run('Remote authority facts win without changing source rows', async () => {

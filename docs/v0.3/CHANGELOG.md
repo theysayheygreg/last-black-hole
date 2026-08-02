@@ -1,5 +1,12 @@
 # v0.3 Changelog
 
+- **Remote well and growth-wave presentation:** the client now preserves each
+  well's authoritative orbital direction and each growth wave's source well.
+  The fabric shader uses effective overdrive mass for well intensity, while
+  the existing pooled Three semantic layer renders exactly one named,
+  source-bound front for a live authoritative well-growth wave. This changes
+  no authority force, wave, map, movement, or grapple tuning.
+
 - **Movement, physics, and fabric design review:** diagnosed the centralized
   movement stack as still too complex at player level and the fabric as pretty
   but illegible route terrain. Follow-up design correction keeps fabric

@@ -114,6 +114,7 @@ export function projectRemoteWorldPatch(world, {
       radius: remote.radius ?? 0,
       amplitude: remote.amplitude ?? 0,
       initialAmplitude: remote.initialAmplitude ?? remote.amplitude ?? 0,
+      sourceWellId: remote.sourceWellId ?? null,
       alive: remote.alive !== false,
       id: remote.id || null,
     }));

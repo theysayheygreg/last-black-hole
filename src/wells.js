@@ -8,6 +8,9 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
 import { migrateCurrentWell } from './anomaly-catalog.js';
+import { effectiveWellVisualMass } from './presentation/well-wave-presentation.js';
+
+export { effectiveWellVisualMass } from './presentation/well-wave-presentation.js';
 
 // ---- Well name generation (foreboding) ----
 
@@ -94,9 +97,10 @@ export class WellSystem {
     for (const well of this.wells) {
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
       if (authorityDriven) {
+        const visualMass = effectiveWellVisualMass(well);
         const ringRadius = Math.max(0.015 * s, well.getAccretionRadius() * well.mass * s);
         const spin = totalTime * well.getAccretionSpinRate() * well.orbitalDir;
-        const seedR = 0.15 + 0.25 * well.mass;
+        const seedR = 0.15 + 0.25 * visualMass;
         for (let i = 0; i < REMOTE_ANCHOR_POINTS; i += 1) {
           const angle = spin + (i / REMOTE_ANCHOR_POINTS) * Math.PI * 2;
           fluid.visualSplat(
@@ -158,7 +162,7 @@ export class WellSystem {
    * Get well masses matching getUVPositions() order, for gravity field visualization.
    */
   getUVMasses() {
-    return this.wells.map(w => w.mass);
+    return this.wells.map(effectiveWellVisualMass);
   }
 
   /**
