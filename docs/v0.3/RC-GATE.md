@@ -5,6 +5,33 @@
 
 ## Current Verdict
 
+### `c467916b` Playtest Build: Packaged, RC Red
+
+Exact product source `c467916b79c19028cd6d46ca6b21206a40edb8b9` is packaged as
+`0.3.1.c467916b` for local playtest only. `release:internal -- --skip-tests`
+built web, iPad web app, macOS arm64, Windows x64, and Linux x64;
+`release:status` found the matching hash-named build; and `test:package`
+booted the staged desktop authority runtime and verified the release archive.
+
+This is not RC-green. The preceding full gate reached 120/124 passing suites,
+but AgentPlay remained red on its portal controller before the final
+harness-only hazard-over-recharge priority fix. That mechanical fix has a
+focused pure regression, but AgentPlay was deliberately not rerun afterward.
+No human movement/visual/audio/Deck acceptance is implied.
+
+Artifacts:
+
+- playtest archive:
+  `builds/last-singularity-playtest-v0.3.1.c467916b.zip` (441,940,865 bytes;
+  SHA-256 `ab74b953c78d07cf376ae16eba4158782225520c44c01a2c11add2072b9f09d5`);
+- build manifest:
+  `builds/v0.3.1.c467916b/BUILD-MANIFEST.json` (SHA-256
+  `12d8a8de42d72d2da916c93fb3a1d7165f005f15643e6a1797948790e75dfacf`);
+- desktop `app.asar` for macOS, Windows, and Linux (identical SHA-256
+  `5c4ec669f1228ba6f455811eb70133ff96fb0236adb22354e0e1b0ecc9d87e17`);
+- full local checksum list:
+  `builds/v0.3.1.c467916b/SHA256SUMS.txt`.
+
 ### `00cca067` Fabric Candidate: RC Red, Not Built
 
 Exact product source `00cca0670ce6b603343483a4f5b63af9f67a42ee`

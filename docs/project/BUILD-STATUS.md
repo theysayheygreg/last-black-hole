@@ -16,6 +16,22 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
+**Current playtest build:** exact source `c467916b79c19028cd6d46ca6b21206a40edb8b9`
+is packaged as local playtest build `0.3.1.c467916b`, not an RC-green release.
+`release:internal -- --skip-tests` built web, iPad, macOS arm64, Windows x64,
+and Linux x64. `release:status` and `test:package` passed. The archive is
+`builds/last-singularity-playtest-v0.3.1.c467916b.zip` (SHA-256
+`ab74b953c78d07cf376ae16eba4158782225520c44c01a2c11add2072b9f09d5`);
+the manifest and desktop payload hashes are listed in
+`builds/v0.3.1.c467916b/SHA256SUMS.txt`.
+
+**Current RC status:** still red. The preceding full gate was 120/124, and
+AgentPlay stayed red at portal routing before the final harness-only
+hazard-clearance-over-recharge priority fix. The focused retained-state
+regression is green, but AgentPlay was intentionally not rerun after that
+mechanical fix. Treat this archive as a playtest handoff only; Greg's movement,
+visual, audio, and physical Deck review remain open.
+
 **Source status:** `codex/v0.3-ballpark-roadmap` is the current v0.3.1
 integration and release-candidate lineage. Exact product source `00cca067`
 contains the completed fabric-readability V1-V6 candidate plus the accepted

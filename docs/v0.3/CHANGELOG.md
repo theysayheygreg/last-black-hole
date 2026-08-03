@@ -1,5 +1,16 @@
 # v0.3 Changelog
 
+- **Hazard-priority playtest build:** exact source `c467916b` makes active
+  AgentPlay hazard clearance/braking override recharge coast until the ship is
+  outside dynamic clearance plus stopping margin. The retained tick-1388
+  portal state is now a pure regression. `0.3.1.c467916b` built web, iPad,
+  macOS, Windows, and Linux via `release:internal -- --skip-tests`; matching
+  `release:status` and `test:package` passed. Its playtest archive SHA-256 is
+  `ab74b953c78d07cf376ae16eba4158782225520c44c01a2c11add2072b9f09d5`.
+  This is not RC-green: the preceding full gate was 120/124, AgentPlay was
+  red before this harness-only priority fix, and it was intentionally not
+  rerun afterward.
+
 - **Fabric candidate RC receipt:** exact source `00cca067` completed one
   accepted no-retry full lane with 124 selected suites: 96 passed and 28
   failed in 280.73 seconds wall time, with zero suite retries. Twenty-three
