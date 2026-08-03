@@ -1,5 +1,12 @@
 # v0.3 Changelog
 
+- **Compact well material:** retired the twelve-point initial well-density seed
+  and four-per-tick remote density anchors that accumulated into rectangular
+  white patches. Snapshot wells now rely on the existing analytic body, a
+  compact body-relative accretion rim, and authored lane deformation. This is
+  presentation-only; mechanical accretion/current/gravity radii and authority
+  behavior are unchanged.
+
 - **Fabric readability follow-through:** ordinary current marks now occupy less
   than half their prior lane area, travel as longer coherent cyan strokes, and
   sit over a darker calm substrate. Authored current, falloff, and full-gravity

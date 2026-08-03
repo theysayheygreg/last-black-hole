@@ -1414,33 +1414,9 @@ function init() {
 }
 
 function seedInitialFluid() {
-  const [fluidCamX, fluidCamY] = getFluidCamera();
-  const halfWindow = GRID_WINDOW / 2;
-  const renderShapes = wellSystem.getRenderShapes?.() || [];
-  for (let wi = 0; wi < wellSystem.wells.length; wi++) {
-    const well = wellSystem.wells[wi];
-    const [dx, dy] = worldDisplacement(fluidCamX, fluidCamY, well.wx, well.wy);
-    const shape = renderShapes[wi] || [0.01, 0.02, 0.03, 1.0];
-    const ringExtent = Math.max(0.05, shape[2] * 1.4);
-    // Off-window UVs wrap in the splat shader; skip them here so the first
-    // frame cannot inherit ghost density from wells outside the camera window.
-    if (Math.abs(dx) > halfWindow + ringExtent || Math.abs(dy) > halfWindow + ringExtent) continue;
-    const [wellFU, wellFV] = worldToFluidUV(well.wx, well.wy);
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      const dist = 0.015 + ((i % 4) / 3) * 0.04;
-      const x = wellFU + Math.cos(angle) * dist;
-      const y = wellFV + Math.sin(angle) * dist;
-      fluid.visualSplat(
-        x, y,
-        0.001,
-        0.15 + 0.25 * well.mass,
-        0.08 + 0.15,
-        0.03 + 0.08,
-      );
-    }
-  }
-  // Deterministic ambient dye only; no random velocity/current splats.
+  // Deterministic ambient dye only. Wells are always visible through their
+  // analytic core/rim and authored lane deformation; the retired twelve-point
+  // seed accumulated into a bright rectangular patch around every well.
   for (let i = 0; i < 25; i++) {
     fluid.visualSplat(
       0.05 + ((i * 17) % 90) / 100,

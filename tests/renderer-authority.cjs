@@ -279,8 +279,11 @@ async function run() {
       "Offline movement must retain its existing FlowField path while seeded migration is deferred");
     assert(simCore.includes("authorityDriven: visualOnly"),
       "Local well/star presentation must be retained while remote force injection is disabled");
-    assert(wells.includes("if (authorityDriven) {") && wells.includes("fluid.visualSplat"),
-      "Remote well authority must keep a presentation anchor without authoring local force");
+    assert(wells.includes("if (authorityDriven) {")
+      && wells.includes("rendered analytically by FRAG_DISPLAY")
+      && wells.includes("getRenderShapes()")
+      && wells.includes("getRenderProfiles()"),
+    "Remote well authority must retain analytic snapshot presentation without local force or density anchors");
     assert(stars.includes("if (!authorityDriven)") && stars.includes("fluid.applyWellForce"),
       "Remote star authority must suppress local force while retaining normal local fallback");
   });

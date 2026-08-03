@@ -65,6 +65,9 @@ async function run() {
     assert(shader.includes('col *= mix(1.0, 0.16, coreQuiet);')
       && shader.includes('mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet))'),
     'Near-core fabric must quiet while authored gravity selectively reinforces curved lanes');
+    assert(shader.includes('min(ringInner, visualCoreRadius * 1.38)')
+      && shader.includes('min(ringOuter, visualCoreRadius * 1.78)'),
+    'Analytic accretion must remain a compact body-relative rim, not a broad halo');
   });
 
   await runner.run('upload path shares the same fixed budget owner', async () => {
@@ -76,6 +79,17 @@ async function run() {
     assert(main.includes("import { selectFabricWellIndices } from './render/fabric-well-budget.js';")
       && main.includes('const visibleIndices = selectFabricWellIndices(candidates);'),
     'Main presentation must select bounded visible wells through the shared owner');
+  });
+
+  await runner.run('legacy well density patches stay retired', async () => {
+    const wells = fs.readFileSync(path.join(ROOT, 'src/wells.js'), 'utf8');
+    const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
+    const seedStart = main.indexOf('function seedInitialFluid()');
+    const seedEnd = main.indexOf('\nfunction spawnClearance', seedStart);
+    assert(!wells.includes('REMOTE_ANCHOR_POINTS') && !wells.includes('REMOTE_ANCHOR_REPLENISHMENT'),
+      'Remote wells must not rebuild density-anchor patches');
+    assert(!main.slice(seedStart, seedEnd).includes('wellSystem.wells'),
+      'Initial fluid seed must not paint a broad per-well density patch');
   });
 
   process.exit(runner.summary() ? 0 : 1);

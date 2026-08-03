@@ -473,8 +473,11 @@ void main() {
     // Ring band: bright between inner and outer, fades to zero at both edges.
     // Outer fade: smoothstep from outer→inner (1 at inner, 0 at outer)
     // Inner fade: smoothstep from core→inner (0 at core, 1 at inner)
-    float visualRingInner = max(ringInner, visualCoreRadius * 1.28);
-    float visualRingOuter = max(ringOuter, visualCoreRadius * 1.85);
+    // Mechanical accretion radii remain inputs, but the visible band is capped
+    // to a compact body-relative rim. The old max() expansion turned the
+    // analytic treatment into a broad halo that masked deformation.
+    float visualRingInner = max(visualCoreRadius * 1.16, min(ringInner, visualCoreRadius * 1.38));
+    float visualRingOuter = max(visualRingInner * 1.18, min(ringOuter, visualCoreRadius * 1.78));
     float ringMask = smoothstep(visualRingOuter, visualRingInner, displayDist)
                    * smoothstep(visualCoreRadius * 1.03, visualRingInner, displayDist);
     float localLive = 1.0 - coreMask;

@@ -5,7 +5,7 @@ const { setFluidCamera, setWorldScale } = require('../src/coords.js');
 async function run() {
   const runner = new TestRunner('WellVisualPersistence');
 
-  await runner.run('remote wells replenish presentation without applying local force', async () => {
+  await runner.run('remote wells use analytic presentation without local force or density anchors', async () => {
     setWorldScale(5);
     setFluidCamera(2.5, 2.5);
 
@@ -30,8 +30,8 @@ async function run() {
     }
 
     assert(forceCalls === 0, `remote presentation applied ${forceCalls} local well forces`);
-    assert(visualCalls === 75 * 4,
-      `expected four bounded presentation anchors per fixed step, got ${visualCalls}`);
+    assert(visualCalls === 0,
+      `remote analytic wells must not accumulate legacy density anchors, got ${visualCalls}`);
     assert(Math.abs(effectiveWellVisualMass(wells.wells[0]) - 1.8) < 1e-12
       && Math.abs(wells.getUVMasses()[0] - 1.8) < 1e-12,
       'well shader intensity must use the same base-mass times overdrive-multiplier truth as authority');
