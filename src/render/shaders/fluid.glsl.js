@@ -296,8 +296,8 @@ void main() {
 
   // Base fabric stays quiet; the lane layer below is the only route-scale
   // current cue. This keeps local texture from impersonating gameplay flow.
-  float baseMix = 0.018 + sceneExcitation * 0.10;
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.22));
+  float baseMix = 0.004 + sceneExcitation * 0.03;
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.07));
 
   // Sparse world-anchored lanes. The coarse texture is the accepted remote
   // current; local velocity is only a fallback for title/legacy sandbox views.
@@ -339,26 +339,26 @@ void main() {
     float fullGravityWeight = 0.0;
     float coreQuiet = 0.0;
     if (nearestProfile.x > 0.0) {
-      currentWeight = 1.0 - smoothstep(nearestProfile.x * 0.55, nearestProfile.x, nearestWellDistance);
+      currentWeight = 1.0 - smoothstep(nearestProfile.x * 0.28, nearestProfile.x, nearestWellDistance);
       float gravityEnvelope = nearestProfile.y + nearestProfile.w;
-      gravityWeight = 1.0 - smoothstep(nearestProfile.y * 0.45, gravityEnvelope, nearestWellDistance);
-      fullGravityWeight = 1.0 - smoothstep(nearestProfile.z * 0.55, nearestProfile.z, nearestWellDistance);
-      coreQuiet = 1.0 - smoothstep(nearestProfile.z * 0.12, nearestProfile.z * 0.48, nearestWellDistance);
+      gravityWeight = 1.0 - smoothstep(nearestProfile.y * 0.24, gravityEnvelope, nearestWellDistance);
+      fullGravityWeight = 1.0 - smoothstep(nearestProfile.z * 0.38, nearestProfile.z * 1.08, nearestWellDistance);
+      coreQuiet = 1.0 - smoothstep(nearestProfile.z * 0.28, nearestProfile.z, nearestWellDistance);
 
       vec2 radial = nearestWellDistance > 0.0001
         ? nearestDelta / nearestWellDistance
         : vec2(1.0, 0.0);
       vec2 tangent = vec2(-radial.y, radial.x) * nearestOrbitalDir;
-      float bendAngle = nearestOrbitalDir * currentWeight * (0.42 + gravityWeight * 0.32);
+      float bendAngle = nearestOrbitalDir * currentWeight * (0.72 + gravityWeight * 0.48);
       float cosine = cos(bendAngle);
       float sine = sin(bendAngle);
       vec2 bentRadial = vec2(
         radial.x * cosine - radial.y * sine,
         radial.x * sine + radial.y * cosine
       );
-      float compression = 1.0 - gravityWeight * 0.18 - fullGravityWeight * 0.24;
+      float compression = 1.0 - gravityWeight * 0.28 - fullGravityWeight * 0.38;
       laneWorld = nearestWellWorld + bentRadial * nearestWellDistance * compression;
-      laneFlow = normalize(mix(laneFlow, tangent, currentWeight * 0.38));
+      laneFlow = normalize(mix(laneFlow, tangent, currentWeight * 0.68));
     }
 
     vec2 laneDir = normalize(laneFlow);
@@ -395,13 +395,13 @@ void main() {
     vec2 laneSide = vec2(-laneDir.y, laneDir.x);
     float across = dot(laneWorld, laneSide);
     float along = dot(laneWorld, laneDir);
-    const float laneSpacing = 0.46;
+    const float laneSpacing = 0.92;
     float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
     float laneDistance = abs(across - laneCenter);
     float splitWeight = nearestProfile.z > 0.0
       ? 1.0 - smoothstep(nearestProfile.z * 0.72, nearestProfile.z * 1.32, nearestWellDistance)
       : 0.0;
-    float splitOffset = splitWeight * nearestProfile.z * 0.72;
+    float splitOffset = splitWeight * nearestProfile.z * 1.35;
     float splitDistance = min(
       abs(across - laneCenter - splitOffset),
       abs(across - laneCenter + splitOffset)
@@ -409,12 +409,12 @@ void main() {
     laneDistance = mix(laneDistance, splitDistance, splitWeight);
     // Strength reads as longer, faster downstream strokes—not extra lanes or
     // thicker full-field coverage. The generous spacing preserves visual rest.
-    float laneWidth = mix(0.017, 0.021, laneStrength);
-    float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 1.9, laneDistance);
-    float markLength = mix(0.17, 0.62, laneStrength);
-    float markPhase = fract(along / markLength - u_time * mix(0.08, 0.68, laneStrength));
-    float markAttack = smoothstep(0.14, 0.24, markPhase);
-    float markRelease = 1.0 - smoothstep(0.64, 0.78, markPhase);
+    float laneWidth = mix(0.012, 0.016, laneStrength);
+    float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 2.1, laneDistance);
+    float markLength = mix(0.45, 1.25, laneStrength);
+    float markPhase = fract(along / markLength - u_time * mix(0.12, 0.90, laneStrength));
+    float markAttack = smoothstep(0.22, 0.28, markPhase);
+    float markRelease = 1.0 - smoothstep(0.58, 0.66, markPhase);
     float brokenMark = markAttack * markRelease;
     float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed)
       * mix(0.34, 1.0, 1.0 - coreQuiet);
@@ -459,14 +459,19 @@ void main() {
     // window; progress comes from the authority projection, not u_time.
     float telegraphScale = 1.0 + telegraph * 0.14;
     float displayDist = dist * telegraphScale;
-    float coreMask = smoothstep(coreRadius * 1.22, coreRadius * 0.82, displayDist);
-    float horizonMask = smoothstep(coreRadius * 1.18, coreRadius * 1.03, displayDist)
-                      * (1.0 - smoothstep(coreRadius * 1.03, coreRadius * 0.92, displayDist));
+    // Preserve gameplay radii as truth while guaranteeing that the authored
+    // lethal body has a compact readable silhouette at Deck resolution.
+    float visualCoreRadius = max(coreRadius, u_cameraView * 0.014);
+    float coreMask = smoothstep(visualCoreRadius * 1.18, visualCoreRadius * 0.82, displayDist);
+    float horizonMask = smoothstep(visualCoreRadius * 1.24, visualCoreRadius * 1.02, displayDist)
+                      * (1.0 - smoothstep(visualCoreRadius * 1.02, visualCoreRadius * 0.88, displayDist));
     // Ring band: bright between inner and outer, fades to zero at both edges.
     // Outer fade: smoothstep from outer→inner (1 at inner, 0 at outer)
     // Inner fade: smoothstep from core→inner (0 at core, 1 at inner)
-    float ringMask = smoothstep(ringOuter, ringInner, displayDist)
-                   * smoothstep(coreRadius * 1.03, ringInner, displayDist);
+    float visualRingInner = max(ringInner, visualCoreRadius * 1.28);
+    float visualRingOuter = max(ringOuter, visualCoreRadius * 1.85);
+    float ringMask = smoothstep(visualRingOuter, visualRingInner, displayDist)
+                   * smoothstep(visualCoreRadius * 1.03, visualRingInner, displayDist);
     float localLive = 1.0 - coreMask;
     float analyticRing = clamp(0.5 + u_wellMasses[i] * 0.36, 0.5, 1.2);
     float ringEnergy = max(ringSignal, analyticRing) + telegraph * 0.65;

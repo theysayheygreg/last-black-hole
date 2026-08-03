@@ -15,10 +15,10 @@ async function run() {
     assert(shader.includes('uniform sampler2D u_coarse'));
     assert(shader.includes('uniform vec2 u_worldCamera'));
     assert(shader.includes('vec2 coarseUV = fract(u_worldCamera'));
-    assert(shader.includes('const float laneSpacing = 0.46'));
-    assert(shader.includes('float markLength = mix(0.17, 0.62, laneStrength)'));
-    assert(shader.includes('float laneWidth = mix(0.017, 0.021, laneStrength)'));
-    assert(shader.includes('u_time * mix(0.08, 0.68, laneStrength)'));
+    assert(shader.includes('const float laneSpacing = 0.92'));
+    assert(shader.includes('float markLength = mix(0.45, 1.25, laneStrength)'));
+    assert(shader.includes('float laneWidth = mix(0.012, 0.016, laneStrength)'));
+    assert(shader.includes('u_time * mix(0.12, 0.90, laneStrength)'));
     assert(shader.includes('float markPhase = fract(along / markLength'));
     assert(shader.includes('smoothstep(0.01, 0.06, laneSpeed)'));
     assert(!shader.includes('43758.5453'), 'hash-noise cue must be retired');

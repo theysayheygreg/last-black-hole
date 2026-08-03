@@ -48,14 +48,20 @@ async function run() {
 
   await runner.run('lane shader keeps sparse rest and strength-through-motion art', async () => {
     const shader = shaders.FRAG_DISPLAY;
-    assert(shader.includes('const float laneSpacing = 0.46;'), 'Expected broad separation between fabric lanes');
-    assert(shader.includes('mix(0.017, 0.021, laneStrength)'), 'Lane strength must not substantially increase coverage');
-    assert(shader.includes('mix(0.17, 0.62, laneStrength)'), 'Stronger current must lengthen downstream marks');
-    assert(shader.includes('mix(0.08, 0.68, laneStrength)'), 'Stronger current must advance marks faster');
+    assert(shader.includes('const float laneSpacing = 0.92;'), 'Expected at least half the former lane occupancy');
+    assert(shader.includes('mix(0.012, 0.016, laneStrength)'), 'Lane strength must not substantially increase coverage');
+    assert(shader.includes('mix(0.45, 1.25, laneStrength)'), 'Stronger current must create long coherent downstream marks');
+    assert(shader.includes('mix(0.12, 0.90, laneStrength)'), 'Stronger current must advance marks faster');
     assert(shader.includes('vec3(0.08, 0.34, 0.60)') && shader.includes('vec3(0.18, 0.52, 0.78)'),
       'Lane palette must use restrained cyan/blue-white values');
-    assert(shader.includes('float baseMix = 0.018 + sceneExcitation * 0.10;'),
+    assert(shader.includes('float baseMix = 0.004 + sceneExcitation * 0.03;'),
       'Base field must preserve large dark regions outside the lanes');
+    assert(shader.includes('(0.72 + gravityWeight * 0.48)')
+      && shader.includes('gravityWeight * 0.28 - fullGravityWeight * 0.38')
+      && shader.includes('nearestProfile.z * 1.35'),
+    'Authored current/gravity/full-gravity reaches must produce broad bend, compression, and split');
+    assert(shader.includes('float visualCoreRadius = max(coreRadius, u_cameraView * 0.014);'),
+      'Lethal bodies need a bounded presentation-only minimum at Deck resolution');
   });
 
   await runner.run('upload path shares the same fixed budget owner', async () => {

@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+- **Fabric readability follow-through:** ordinary current marks now occupy less
+  than half their prior lane area, travel as longer coherent cyan strokes, and
+  sit over a darker calm substrate. Authored current, falloff, and full-gravity
+  reaches produce a much broader bend/compression/split around wells, while a
+  presentation-only minimum keeps the lethal body and compact accretion rim
+  visible at 1280x800. Gameplay radii, authority forces, Noise, and event waves
+  are unchanged.
+
 - **Fabric display correction:** `FRAG_DISPLAY` now shares one 64-well product
   budget with the renderer upload path. Conservative WebGL2 accounting drops
   the display program from at least 1,149 to 381 fragment-uniform vectors,
