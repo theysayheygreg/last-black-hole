@@ -31,7 +31,11 @@ const {
   wrappedDistance: worldDistance,
 } = require("../scripts/sim/world-geometry.cjs");
 const { recordJourneyStage } = require("./agent-play-report.cjs");
-const { planPortalApproach } = require("./agent-play-route.cjs");
+const {
+  planPortalApproach,
+  resolveAgentPlayControlPriority,
+  resolveHazardClearance,
+} = require("./agent-play-route.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
 // Agent evals are commonly run beside other authority lanes. A process-local
@@ -629,19 +633,28 @@ async function steerTo(page, clientId, target, options = {}) {
       const inwardSpeed = hazard
         ? -((player.vx || 0) * (hazard.awayX / awayMagnitude) + (player.vy || 0) * (hazard.awayY / awayMagnitude))
         : 0;
-      const dynamicClearance = hazard ? hazard.clearance + stoppingDistance : 0;
-      const hazardBrakeDistance = hazard
-        ? dynamicClearance + Math.max(0.035, route.driftMargin)
-        : 0;
-      const avoidHazard = Boolean(hazard
-        && hazard.distance <= hazardBrakeDistance
-        && inwardSpeed > -0.01);
+      const hazardClearance = hazard
+        ? resolveHazardClearance({
+          distance: hazard.distance,
+          clearance: hazard.clearance,
+          stoppingDistance,
+          driftMargin: route.driftMargin,
+          inwardSpeed,
+        })
+        : { active: false, dynamicClearance: 0, brakeDistance: 0 };
+      const avoidHazard = hazardClearance.active;
       const shouldBrake = !options.allowFlyby
         && forwardSpeed > 0.01
         && dist <= stoppingDistance + proximityBuffer;
-      if (overheated || recharging) {
+      const priority = resolveAgentPlayControlPriority({
+        hazardActive: avoidHazard,
+        recharging,
+        overheated,
+        shouldBrake,
+      });
+      if (priority.coast) {
         last.controller = {
-          mode: overheated ? "overheat-coast" : "recharge",
+          mode: priority.mode,
           x: 0,
           y: 0,
           thrust: 0,
@@ -656,18 +669,23 @@ async function steerTo(page, clientId, target, options = {}) {
         avoidHazard ? hazard.awayY / awayMagnitude : (shouldBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1)),
         {
           thrust: (!shouldBrake || avoidHazard) && fuelRatio > 0.01 && (avoidHazard || correctionMagnitude > 0.035) ? 1 : 0,
-          brake: (shouldBrake || avoidHazard) && fuelRatio > 0.01 ? 1 : 0,
+          brake: priority.brake && fuelRatio > 0.01 ? 1 : 0,
         },
       );
       last.controller = {
-        mode: avoidHazard ? "hazard-clearance" : (shouldBrake ? "brake-for-proximity" : "approach"),
+        mode: priority.mode,
         x: avoidHazard ? hazard.awayX / awayMagnitude : (shouldBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1)),
         y: avoidHazard ? hazard.awayY / awayMagnitude : (shouldBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1)),
         thrust: (!shouldBrake || avoidHazard) && fuelRatio > 0.01 && (avoidHazard || correctionMagnitude > 0.035) ? 1 : 0,
-        brake: (shouldBrake || avoidHazard) && fuelRatio > 0.01 ? 1 : 0,
+        brake: priority.brake && fuelRatio > 0.01 ? 1 : 0,
         stoppingDistance,
         proximityBuffer,
-        hazard: hazard && { ...hazard, inwardSpeed, dynamicClearance, brakeDistance: hazardBrakeDistance },
+        hazard: hazard && {
+          ...hazard,
+          inwardSpeed,
+          dynamicClearance: hazardClearance.dynamicClearance,
+          brakeDistance: hazardClearance.brakeDistance,
+        },
       };
       await sleep(110);
     }

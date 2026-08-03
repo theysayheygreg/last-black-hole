@@ -2,6 +2,8 @@ const { TestRunner, assert } = require("./helpers.cjs");
 const {
   DEFAULT_WELL_MARGIN,
   planPortalApproach,
+  resolveAgentPlayControlPriority,
+  resolveHazardClearance,
   routeHazards,
 } = require("./agent-play-route.cjs");
 
@@ -72,6 +74,25 @@ async function run() {
       wells: [{ id: "well-seam", wx: 4.9, wy: 2.5, killRadius: 0.06 }],
       worldScale: 5,
     });
+  });
+
+  await runner.run("tick-1388 hazard brake overrides recharge coast", () => {
+    const retained = resolveHazardClearance({
+      distance: 0.06800255513993635,
+      clearance: 0.19403136148227557,
+      stoppingDistance: (0.41315626759119717 ** 2) / (2 * 0.72),
+      driftMargin: 0.12,
+      inwardSpeed: 0.41315626759119717,
+    });
+    const command = resolveAgentPlayControlPriority({
+      hazardActive: retained.active,
+      recharging: true,
+      overheated: false,
+      shouldBrake: false,
+    });
+    assert(retained.active, "Retained tick-1388 state must remain inside dynamic stopping clearance");
+    assert(command.mode === "hazard-clearance" && command.brake === true && command.coast === false,
+      "Hazard clearance/braking must win over recharge coast until the dynamic margin is clear");
   });
 
   const allPassed = runner.summary();

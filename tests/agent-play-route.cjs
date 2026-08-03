@@ -50,6 +50,24 @@ function clearanceRadius(well, safetyMargin, velocity, driftLookahead) {
     + dynamicMargin({ velocity, driftLookahead });
 }
 
+function resolveHazardClearance({ distance, clearance, stoppingDistance, driftMargin, inwardSpeed }) {
+  const dynamicClearance = finiteNonNegative(clearance, 0) + finiteNonNegative(stoppingDistance, 0);
+  const brakeDistance = dynamicClearance + Math.max(0.035, finiteNonNegative(driftMargin, 0));
+  return {
+    dynamicClearance,
+    brakeDistance,
+    active: Number(distance) <= brakeDistance && Number(inwardSpeed) > -0.01,
+  };
+}
+
+function resolveAgentPlayControlPriority({ hazardActive, recharging, overheated, shouldBrake }) {
+  if (hazardActive) return { mode: "hazard-clearance", coast: false, brake: true };
+  if (overheated) return { mode: "overheat-coast", coast: true, brake: false };
+  if (recharging) return { mode: "recharge", coast: true, brake: false };
+  if (shouldBrake) return { mode: "brake-for-proximity", coast: false, brake: true };
+  return { mode: "approach", coast: false, brake: false };
+}
+
 function routeHazards({
   from,
   to,
@@ -232,6 +250,8 @@ module.exports = {
   DEFAULT_WELL_MARGIN,
   DRIFT_LOOKAHEAD_SECONDS,
   clearanceRadius,
+  resolveAgentPlayControlPriority,
+  resolveHazardClearance,
   portalCaptureRadius,
   planPortalApproach,
   routeHazards,
