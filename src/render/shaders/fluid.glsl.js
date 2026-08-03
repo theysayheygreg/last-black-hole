@@ -395,7 +395,9 @@ void main() {
     vec2 laneSide = vec2(-laneDir.y, laneDir.x);
     float across = dot(laneWorld, laneSide);
     float along = dot(laneWorld, laneDir);
-    const float laneSpacing = 0.92;
+    // At the default three-world-unit view this yields roughly one or two
+    // materially active corridors, leaving most of the field genuinely calm.
+    const float laneSpacing = 2.40;
     float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
     float laneDistance = abs(across - laneCenter);
     float splitWeight = nearestProfile.z > 0.0

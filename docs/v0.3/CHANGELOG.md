@@ -3,7 +3,9 @@
 - **Navigable fabric channels:** each sparse authored current now owns a faint
   screen-stable channel envelope about 4–5 visible ship widths across at
   gameplay zoom. Broken cyan strokes remain the directional texture inside
-  that usable space rather than a pencil-thin proxy for it. Current strength
+  that usable space rather than a pencil-thin proxy for it. Default spacing
+  produces roughly one or two active corridors across the gameplay view, with
+  genuinely calm negative space between them. Current strength
   changes emphasis and mark motion without adding lanes; the full envelope
   renders as a coherent body with soft shoulders through ASCII quantization,
   then bends and splits through the existing well deformation. Calm substrate
