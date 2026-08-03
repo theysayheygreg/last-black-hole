@@ -407,10 +407,15 @@ void main() {
       abs(across - laneCenter + splitOffset)
     );
     laneDistance = mix(laneDistance, splitDistance, splitWeight);
+    // The lethal neighborhood owns a dark material void. This suppresses the
+    // inherited excitation texture so the well body, rim, and curved approach
+    // lanes read as one cause instead of a bright anonymous patch.
+    col *= mix(1.0, 0.16, coreQuiet);
     // Strength reads as longer, faster downstream strokes—not extra lanes or
     // thicker full-field coverage. The generous spacing preserves visual rest.
     float laneWidth = mix(0.012, 0.016, laneStrength);
-    float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 2.1, laneDistance);
+    float localLaneWidth = laneWidth * mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet));
+    float laneBody = 1.0 - smoothstep(localLaneWidth, localLaneWidth * 2.1, laneDistance);
     float markLength = mix(0.45, 1.25, laneStrength);
     float markPhase = fract(along / markLength - u_time * mix(0.12, 0.90, laneStrength));
     float markAttack = smoothstep(0.22, 0.28, markPhase);
@@ -423,7 +428,7 @@ void main() {
     // Event-wave treatment remains its existing green overlay until the
     // dedicated wave/noise pass; this slice only clarifies steady current.
     laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
-    col += laneColor * laneSignal * 0.72;
+    col += laneColor * laneSignal * 0.72 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
     col += vec3(0.24, 0.82, 0.70) * waveCrest * 0.42;
   }
 

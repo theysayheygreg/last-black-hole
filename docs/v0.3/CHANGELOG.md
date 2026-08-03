@@ -5,8 +5,9 @@
   sit over a darker calm substrate. Authored current, falloff, and full-gravity
   reaches produce a much broader bend/compression/split around wells, while a
   presentation-only minimum keeps the lethal body and compact accretion rim
-  visible at 1280x800. Gameplay radii, authority forces, Noise, and event waves
-  are unchanged.
+  visible at 1280x800. The immediate lethal neighborhood also suppresses
+  anonymous excitation while curved lanes receive a local gravity-envelope
+  lift. Gameplay radii, authority forces, Noise, and event waves are unchanged.
 
 - **Fabric display correction:** `FRAG_DISPLAY` now shares one 64-well product
   budget with the renderer upload path. Conservative WebGL2 accounting drops

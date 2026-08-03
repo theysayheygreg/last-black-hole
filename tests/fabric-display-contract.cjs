@@ -62,6 +62,9 @@ async function run() {
     'Authored current/gravity/full-gravity reaches must produce broad bend, compression, and split');
     assert(shader.includes('float visualCoreRadius = max(coreRadius, u_cameraView * 0.014);'),
       'Lethal bodies need a bounded presentation-only minimum at Deck resolution');
+    assert(shader.includes('col *= mix(1.0, 0.16, coreQuiet);')
+      && shader.includes('mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet))'),
+    'Near-core fabric must quiet while authored gravity selectively reinforces curved lanes');
   });
 
   await runner.run('upload path shares the same fixed budget owner', async () => {
