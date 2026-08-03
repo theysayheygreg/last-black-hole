@@ -16,7 +16,7 @@ async function run() {
     assert(shader.includes('uniform vec2 u_worldCamera'));
     assert(shader.includes('vec2 coarseUV = fract(u_worldCamera'));
     assert(shader.includes('const float laneSpacing = 0.92'));
-    assert(shader.includes('const float channelHalfViewport = 0.055'));
+    assert(shader.includes('const float channelHalfViewport = 0.075'));
     assert(shader.includes('float channelEnvelope = 1.0 - smoothstep('));
     assert(shader.includes('channelEnvelope * channelPresence * 0.10'));
     assert(shader.includes('float markLength = mix(0.45, 1.25, laneStrength)'));

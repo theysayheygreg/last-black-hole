@@ -415,7 +415,7 @@ void main() {
     // stable fraction of the viewport so a player can place the ship inside it
     // at speed on Deck or desktop; the broken marks are texture within that
     // channel, not the only indication of its usable width.
-    const float channelHalfViewport = 0.055;
+    const float channelHalfViewport = 0.075;
     float channelHalfWidth = u_cameraView * channelHalfViewport;
     float channelEnvelope = 1.0 - smoothstep(
       channelHalfWidth * 0.72,
