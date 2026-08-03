@@ -11,6 +11,7 @@
 import { CONFIG } from './config.js';
 import { FLUID_REF_SCALE, uvScale } from './coords.js';
 import { eventWaveSourceFluidWorld } from './presentation/well-wave-presentation.js';
+import { FABRIC_WELL_UNIFORM_BUDGET } from './render/fabric-well-budget.js';
 import {
   authorityFloor,
   resampleAuthoritativeField,
@@ -478,7 +479,8 @@ export class FluidSim {
     gl.uniform1f(u['u_time'], totalTime);
 
     // Set well positions and masses for gravity field visualization
-    const count = wellPositionsUV.length;
+    // Defense in depth: every caller shares the shader's fixed product budget.
+    const count = Math.min(FABRIC_WELL_UNIFORM_BUDGET, wellPositionsUV.length);
     gl.uniform1i(u['u_wellCount'], count);
     for (let i = 0; i < count; i++) {
       const posLoc = u[`u_wellPositions[${i}]`];

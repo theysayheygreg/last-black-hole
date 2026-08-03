@@ -1,3 +1,5 @@
+import { FABRIC_WELL_UNIFORM_BUDGET } from '../fabric-well-budget.js';
+
 /**
  * Canonical WebGL2 sources for FluidSim.
  *
@@ -238,10 +240,10 @@ uniform vec3 u_normalColor;
 uniform vec3 u_nearWellColor;
 uniform vec3 u_hotWellColor;
 // Well positions + masses for gravity field visualization
-uniform vec2 u_wellPositions[256];
-uniform float u_wellMasses[256];
-uniform vec4 u_wellShape[256]; // x=core radius, y=ring inner, z=ring outer, w=orbitalDir
-uniform vec4 u_wellProfile[256]; // x=current reach, y=gravity falloff, z=full gravity, w=feather
+uniform vec2 u_wellPositions[${FABRIC_WELL_UNIFORM_BUDGET}];
+uniform float u_wellMasses[${FABRIC_WELL_UNIFORM_BUDGET}];
+uniform vec4 u_wellShape[${FABRIC_WELL_UNIFORM_BUDGET}]; // x=core radius, y=ring inner, z=ring outer, w=orbitalDir
+uniform vec4 u_wellProfile[${FABRIC_WELL_UNIFORM_BUDGET}]; // x=current reach, y=gravity falloff, z=full gravity, w=feather
 uniform int u_wellCount;
 uniform float u_densityScale;
 uniform float u_gravityScale;
@@ -294,8 +296,8 @@ void main() {
 
   // Base fabric stays quiet; the lane layer below is the only route-scale
   // current cue. This keeps local texture from impersonating gameplay flow.
-  float baseMix = 0.04 + sceneExcitation * 0.18;
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.35));
+  float baseMix = 0.018 + sceneExcitation * 0.10;
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.22));
 
   // Sparse world-anchored lanes. The coarse texture is the accepted remote
   // current; local velocity is only a fallback for title/legacy sandbox views.
@@ -312,7 +314,7 @@ void main() {
     vec2 nearestDelta = vec2(0.0);
     vec4 nearestProfile = vec4(0.0);
     float nearestOrbitalDir = 1.0;
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < ${FABRIC_WELL_UNIFORM_BUDGET}; i++) {
       if (i >= u_wellCount) break;
       // u_wellPositions is camera-relative fluid UV; restore its global
       // fluid location before comparing it with the world-anchored lane.
@@ -393,7 +395,7 @@ void main() {
     vec2 laneSide = vec2(-laneDir.y, laneDir.x);
     float across = dot(laneWorld, laneSide);
     float along = dot(laneWorld, laneDir);
-    const float laneSpacing = 0.28;
+    const float laneSpacing = 0.46;
     float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
     float laneDistance = abs(across - laneCenter);
     float splitWeight = nearestProfile.z > 0.0
@@ -405,22 +407,28 @@ void main() {
       abs(across - laneCenter + splitOffset)
     );
     laneDistance = mix(laneDistance, splitDistance, splitWeight);
-    float laneWidth = mix(0.018, 0.032, laneStrength);
-    float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 1.8, laneDistance);
-    float markLength = mix(0.16, 0.38, laneStrength);
-    float markPhase = fract(along / markLength - u_time * mix(0.12, 0.42, laneStrength));
-    float brokenMark = step(0.10, markPhase) * (1.0 - step(0.82, markPhase));
+    // Strength reads as longer, faster downstream strokes—not extra lanes or
+    // thicker full-field coverage. The generous spacing preserves visual rest.
+    float laneWidth = mix(0.017, 0.021, laneStrength);
+    float laneBody = 1.0 - smoothstep(laneWidth, laneWidth * 1.9, laneDistance);
+    float markLength = mix(0.17, 0.62, laneStrength);
+    float markPhase = fract(along / markLength - u_time * mix(0.08, 0.68, laneStrength));
+    float markAttack = smoothstep(0.14, 0.24, markPhase);
+    float markRelease = 1.0 - smoothstep(0.64, 0.78, markPhase);
+    float brokenMark = markAttack * markRelease;
     float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed)
       * mix(0.34, 1.0, 1.0 - coreQuiet);
-    vec3 laneColor = mix(vec3(0.025, 0.095, 0.11), vec3(0.07, 0.30, 0.34), laneStrength);
-    laneColor = mix(laneColor, vec3(0.11, 0.36, 0.34), gravityWeight * 0.35 + fullGravityWeight * 0.65);
+    vec3 laneColor = mix(vec3(0.018, 0.065, 0.14), vec3(0.08, 0.34, 0.60), laneStrength);
+    laneColor = mix(laneColor, vec3(0.18, 0.52, 0.78), gravityWeight * 0.35 + fullGravityWeight * 0.65);
+    // Event-wave treatment remains its existing green overlay until the
+    // dedicated wave/noise pass; this slice only clarifies steady current.
     laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
-    col += laneColor * laneSignal * 0.9;
+    col += laneColor * laneSignal * 0.72;
     col += vec3(0.24, 0.82, 0.70) * waveCrest * 0.42;
   }
 
   // === PER-WELL: dark core + one readable accretion band ===
-  for (int i = 0; i < 256; i++) {
+  for (int i = 0; i < ${FABRIC_WELL_UNIFORM_BUDGET}; i++) {
     if (i >= u_wellCount) break;
 
     vec2 diff = wrappedFluidUV - u_wellPositions[i];

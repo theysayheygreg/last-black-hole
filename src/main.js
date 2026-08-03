@@ -23,6 +23,7 @@ import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
 import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
+import { selectFabricWellIndices } from './render/fabric-well-budget.js';
 import { createPresentationFrame } from './presentation/presentation-frame.js';
 import { createPresentationSceneSource } from './presentation/scene-source.js';
 import {
@@ -291,33 +292,26 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
   // wrap would re-project into the visible region — wrong, since the
   // grid window doesn't span the full world. Their contribution comes
   // through the coarse field instead.
-  const visibleUVs = [];
-  const visibleMasses = [];
-  const visibleShapes = [];
-  const visibleProfiles = [];
-  const visibleIndices = [];
+  const candidates = [];
   const halfWindow = GRID_WINDOW / 2;
 
   for (let i = 0; i < wellSystem.wells.length; i++) {
     const well = wellSystem.wells[i];
     const shape = allShapes[i] || [0.01, 0.02, 0.03, 1.0];
-    const profile = allProfiles[i] || [0, 0, 0, 0];
     const [dx, dy] = worldDisplacement(cameraX, cameraY, well.wx, well.wy);
     const ringExtent = Math.max(0.05, shape[2] * 1.4);
     if (Math.abs(dx) <= halfWindow + ringExtent && Math.abs(dy) <= halfWindow + ringExtent) {
-      visibleUVs.push(allUVs[i]);
-      visibleMasses.push(allMasses[i]);
-      visibleShapes.push(shape);
-      visibleProfiles.push(profile);
-      visibleIndices.push(i);
+      candidates.push({ index: i, distanceSq: dx * dx + dy * dy });
     }
   }
 
+  const visibleIndices = selectFabricWellIndices(candidates);
+
   return {
-    wellUVs: visibleUVs,
-    wellMasses: visibleMasses,
-    wellShapes: visibleShapes,
-    wellProfiles: visibleProfiles,
+    wellUVs: visibleIndices.map((index) => allUVs[index]),
+    wellMasses: visibleIndices.map((index) => allMasses[index]),
+    wellShapes: visibleIndices.map((index) => allShapes[index] || [0.01, 0.02, 0.03, 1.0]),
+    wellProfiles: visibleIndices.map((index) => allProfiles[index] || [0, 0, 0, 0]),
     visibleIndices,
   };
 }

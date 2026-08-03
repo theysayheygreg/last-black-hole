@@ -5,11 +5,11 @@ const FABRIC = require('../src/content/fabric.data.json');
 const ANOMALIES = require('../src/content/anomalies.data.json');
 
 const ROOT = path.resolve(__dirname, '..');
-const shader = fs.readFileSync(path.join(ROOT, 'src/render/shaders/fluid.glsl.js'), 'utf8');
 const wellsSource = fs.readFileSync(path.join(ROOT, 'src/wells.js'), 'utf8');
 
 async function run() {
   const { WellSystem } = await import('../src/wells.js');
+  const { FRAG_DISPLAY: shader } = await import('../src/render/shaders/fluid.glsl.js');
   const runner = new TestRunner('FabricWellPresentation');
 
   await runner.run('presentation receives canonical radii and per-well signature reach', async () => {
@@ -30,7 +30,7 @@ async function run() {
   await runner.run('lane deformation is profile-driven and retired surf/halo cues are absent', async () => {
     assert(wellsSource.includes('getRenderProfiles'));
     assert(wellsSource.includes('FABRIC.wellGravity.falloffEndRadius'));
-    assert(shader.includes('u_wellProfile[256]'));
+    assert(shader.includes('u_wellProfile[64]'));
     assert(shader.includes('nearestProfile.x'));
     assert(shader.includes('nearestProfile.y'));
     assert(shader.includes('nearestProfile.z'));

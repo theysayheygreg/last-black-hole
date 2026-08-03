@@ -1,5 +1,14 @@
 # v0.3 Changelog
 
+- **Fabric display correction:** `FRAG_DISPLAY` now shares one 64-well product
+  budget with the renderer upload path. Conservative WebGL2 accounting drops
+  the display program from at least 1,149 to 381 fragment-uniform vectors,
+  below the minimum 1,024-vector contract; overflow retains the nearest visible
+  wells deterministically. Local-flow lanes now leave substantially more dark
+  rest, use sparse cyan/blue-white strokes, and communicate stronger current
+  through longer/faster downstream marks rather than green density. Authority
+  physics, field caps, Noise, event waves, entities, and HUD are unchanged.
+
 - **Hazard-priority playtest build:** exact source `c467916b` makes active
   AgentPlay hazard clearance/braking override recharge coast until the ship is
   outside dynamic clearance plus stopping margin. The retained tick-1388

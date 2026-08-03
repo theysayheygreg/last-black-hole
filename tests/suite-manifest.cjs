@@ -520,6 +520,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "FabricDisplayContract",
+    file: "fabric-display-contract.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
     name: "TitleScenePresentation",
     file: "title-scene-presentation.cjs",
     lanes: ["fast", "core", "static", "three", "full"],
