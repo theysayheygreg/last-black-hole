@@ -84,7 +84,7 @@ async function run() {
       && shader.includes('gravityWeight * 0.28 - fullGravityWeight * 0.38')
       && shader.includes('nearestProfile.z * 1.35'),
     'Authored current/gravity/full-gravity reaches must produce broad bend, compression, and split');
-    assert(shader.includes('float visualCoreRadius = max(coreRadius, u_cameraView * 0.014);'),
+    assert(shader.includes('float visualCoreRadius = max(coreRadius, u_cameraView * 0.025);'),
       'Lethal bodies need a bounded presentation-only minimum at Deck resolution');
     assert(shader.includes('col *= mix(1.0, 0.16, coreQuiet);')
       && shader.includes('mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet))'),

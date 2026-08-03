@@ -10,7 +10,10 @@
   renders as a coherent body with soft shoulders through ASCII quantization,
   then bends and splits through the existing well deformation. Calm substrate
   outside active channels is nearly black. Gameplay forces,
-  authority truth, camera behavior, and lane count are unchanged.
+  authority truth, camera behavior, and lane count are unchanged. Wells use a
+  larger presentation-only minimum silhouette at Deck scale so their compact
+  body/rim visibly causes the channel bend; mechanical core and force radii do
+  not change.
 
 - **Compact well material:** retired the twelve-point initial well-density seed
   and four-per-tick remote density anchors that accumulated into rectangular
