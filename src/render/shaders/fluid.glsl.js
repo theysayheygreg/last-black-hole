@@ -296,8 +296,8 @@ void main() {
 
   // Base fabric stays quiet; the lane layer below is the only route-scale
   // current cue. This keeps local texture from impersonating gameplay flow.
-  float baseMix = 0.004 + sceneExcitation * 0.03;
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.07));
+  float baseMix = sceneExcitation * 0.012;
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.018));
 
   // Sparse world-anchored lanes. The coarse texture is the accepted remote
   // current; local velocity is only a fallback for title/legacy sandbox views.
@@ -422,8 +422,13 @@ void main() {
       channelHalfWidth,
       laneDistance
     );
+    float channelBody = 1.0 - smoothstep(
+      channelHalfWidth * 0.42,
+      channelHalfWidth * 0.70,
+      laneDistance
+    );
     float channelPresence = smoothstep(0.01, 0.08, laneSpeed)
-      * mix(0.24, 0.78, laneStrength)
+      * mix(0.42, 1.0, laneStrength)
       * mix(0.28, 1.0, 1.0 - coreQuiet);
 
     // Strength reads as longer, faster downstream strokes—not extra lanes.
@@ -443,8 +448,16 @@ void main() {
     // Event-wave treatment remains its existing green overlay until the
     // dedicated wave/noise pass; this slice only clarifies steady current.
     laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
-    col += laneColor * channelEnvelope * channelPresence * 0.10;
+    // The body and soft shoulders must survive ASCII quantization as one
+    // coherent corridor. Without this material fill, the same mathematically
+    // wide envelope collapses into scattered one-character ticks.
+    float channelBand = channelEnvelope * 0.16 + channelBody * 0.18;
+    col += laneColor * channelBand * channelPresence;
     col += laneColor * laneSignal * 0.72 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
+    // The event front lifts the material corridor itself. It remains distinct
+    // from the circular player Noise indicator because only fabric intersected
+    // by the source wave brightens and swells.
+    col += vec3(0.24, 0.82, 0.70) * channelEnvelope * waveSwell * 0.20;
     col += vec3(0.24, 0.82, 0.70) * waveCrest * 0.42;
   }
 

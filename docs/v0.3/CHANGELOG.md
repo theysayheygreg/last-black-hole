@@ -5,7 +5,9 @@
   gameplay zoom. Broken cyan strokes remain the directional texture inside
   that usable space rather than a pencil-thin proxy for it. Current strength
   changes emphasis and mark motion without adding lanes; the full envelope
-  bends and splits through the existing well deformation. Gameplay forces,
+  renders as a coherent body with soft shoulders through ASCII quantization,
+  then bends and splits through the existing well deformation. Calm substrate
+  outside active channels is nearly black. Gameplay forces,
   authority truth, camera behavior, and lane count are unchanged.
 
 - **Compact well material:** retired the twelve-point initial well-density seed

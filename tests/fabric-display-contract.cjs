@@ -66,10 +66,14 @@ async function run() {
     assert(shader.includes('mix(0.12, 0.90, laneStrength)'), 'Stronger current must advance marks faster');
     assert(shader.includes('vec3(0.08, 0.34, 0.60)') && shader.includes('vec3(0.18, 0.52, 0.78)'),
       'Lane palette must use restrained cyan/blue-white values');
-    assert(shader.includes('float baseMix = 0.004 + sceneExcitation * 0.03;'),
+    assert(shader.includes('float baseMix = sceneExcitation * 0.012;')
+      && shader.includes('clamp(baseMix, 0.0, 0.018)'),
       'Base field must preserve large dark regions outside the lanes');
-    assert(shader.includes('channelEnvelope * channelPresence * 0.10'),
-      'The channel envelope must remain restrained beneath brighter directional marks');
+    assert(shader.includes('channelEnvelope * 0.16 + channelBody * 0.18')
+      && shader.includes('laneColor * channelBand * channelPresence'),
+      'The channel must retain a coherent body and soft shoulders through ASCII quantization');
+    assert(shader.includes('channelEnvelope * waveSwell * 0.20'),
+      'The source wave must lift the broad fabric channel rather than add a detached ring');
     assert(shader.includes('(0.72 + gravityWeight * 0.48)')
       && shader.includes('gravityWeight * 0.28 - fullGravityWeight * 0.38')
       && shader.includes('nearestProfile.z * 1.35'),
