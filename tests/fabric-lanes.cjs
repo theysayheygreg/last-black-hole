@@ -20,7 +20,7 @@ async function run() {
     assert(shader.includes('const float channelHalfViewport = 0.075'));
     assert(shader.includes('float channelEnvelope = 1.0 - smoothstep('));
     assert(shader.includes('float channelBody = 1.0 - smoothstep('));
-    assert(shader.includes('channelEnvelope * 0.16 + channelBody * 0.18'));
+    assert(shader.includes('channelEnvelope * 0.30 + channelBody * 0.28'));
     assert(shader.includes('float markLength = mix(0.45, 1.25, laneStrength)'));
     assert(shader.includes('float laneWidth = mix(0.012, 0.016, laneStrength)'));
     assert(shader.includes('u_time * mix(0.12, 0.90, laneStrength)'));

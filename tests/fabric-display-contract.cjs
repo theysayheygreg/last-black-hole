@@ -67,12 +67,12 @@ async function run() {
     assert(shader.includes('mix(0.012, 0.016, laneStrength)'), 'Lane strength must not substantially increase coverage');
     assert(shader.includes('mix(0.45, 1.25, laneStrength)'), 'Stronger current must create long coherent downstream marks');
     assert(shader.includes('mix(0.12, 0.90, laneStrength)'), 'Stronger current must advance marks faster');
-    assert(shader.includes('vec3(0.08, 0.34, 0.60)') && shader.includes('vec3(0.18, 0.52, 0.78)'),
+    assert(shader.includes('vec3(0.10, 0.42, 0.70)') && shader.includes('vec3(0.18, 0.52, 0.78)'),
       'Lane palette must use restrained cyan/blue-white values');
     assert(shader.includes('float baseMix = sceneExcitation * 0.012;')
       && shader.includes('clamp(baseMix, 0.0, 0.018)'),
       'Base field must preserve large dark regions outside the lanes');
-    assert(shader.includes('channelEnvelope * 0.16 + channelBody * 0.18')
+    assert(shader.includes('channelEnvelope * 0.30 + channelBody * 0.28')
       && shader.includes('laneColor * channelBand * channelPresence'),
       'The channel must retain a coherent body and soft shoulders through ASCII quantization');
     assert(shader.includes('smoothstep(0.002, 0.03, laneSpeed)')

@@ -451,7 +451,7 @@ void main() {
     float brokenMark = markAttack * markRelease;
     float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed)
       * mix(0.34, 1.0, 1.0 - coreQuiet);
-    vec3 laneColor = mix(vec3(0.018, 0.065, 0.14), vec3(0.08, 0.34, 0.60), laneStrength);
+    vec3 laneColor = mix(vec3(0.04, 0.16, 0.30), vec3(0.10, 0.42, 0.70), laneStrength);
     laneColor = mix(laneColor, vec3(0.18, 0.52, 0.78), gravityWeight * 0.35 + fullGravityWeight * 0.65);
     // Event-wave treatment remains its existing green overlay until the
     // dedicated wave/noise pass; this slice only clarifies steady current.
@@ -459,7 +459,7 @@ void main() {
     // The body and soft shoulders must survive ASCII quantization as one
     // coherent corridor. Without this material fill, the same mathematically
     // wide envelope collapses into scattered one-character ticks.
-    float channelBand = channelEnvelope * 0.16 + channelBody * 0.18;
+    float channelBand = channelEnvelope * 0.30 + channelBody * 0.28;
     col += laneColor * channelBand * channelPresence;
     col += laneColor * laneSignal * 0.72 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
     // The event front lifts the material corridor itself. It remains distinct
