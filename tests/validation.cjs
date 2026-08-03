@@ -54,6 +54,7 @@ const asciiPassSrc = fs.readFileSync(path.join(SRC, 'render', 'passes', 'ascii-p
 const mainSrc = fs.readFileSync(path.join(SRC, 'main.js'), 'utf8');
 const testApiSrc = fs.readFileSync(path.join(SRC, 'test-api.js'), 'utf8');
 const rendererFixturesSrc = fs.readFileSync(path.join(SRC, 'maps', 'renderer-fixtures.js'), 'utf8');
+const fabricWellBudgetSrc = fs.readFileSync(path.join(SRC, 'render', 'fabric-well-budget.js'), 'utf8');
 
 // Extract GLSL array sizes from shader source
 function findGLSLArraySize(src, name) {
@@ -210,12 +211,16 @@ const DORMANT_SIGNATURE_CONFIG_OVERRIDES = new Set([
 
 // ---- GLSL limits ----
 
-const DISPLAY_WELL_LIMIT = findGLSLArraySize(fluidShaderSrc, 'u_wellPositions');
+const displayBudgetMatch = fabricWellBudgetSrc.match(/FABRIC_WELL_UNIFORM_BUDGET\s*=\s*(\d+)/);
+const DISPLAY_WELL_LIMIT = displayBudgetMatch ? Number(displayBudgetMatch[1]) : null;
+const resolvedFluidShaderSrc = DISPLAY_WELL_LIMIT == null
+  ? fluidShaderSrc
+  : fluidShaderSrc.replaceAll('${FABRIC_WELL_UNIFORM_BUDGET}', String(DISPLAY_WELL_LIMIT));
 // There are two u_wellPositions declarations (display + dissipation) — find both
 const allLimits = [];
 const re = /uniform\s+vec2\s+u_wellPositions\[(\d+)\]/g;
 let m;
-while ((m = re.exec(fluidShaderSrc)) !== null) {
+while ((m = re.exec(resolvedFluidShaderSrc)) !== null) {
   allLimits.push(parseInt(m[1]));
 }
 
@@ -456,11 +461,15 @@ runner.run('Playable map scales and filenames match the canonical registry', () 
 
 // ---- 10. GLSL array sizes are consistent ----
 
-runner.run('Display and dissipation shader well arrays are same size', () => {
+runner.run('Display and dissipation shader well arrays fit their distinct roles', () => {
   assert(allLimits.length >= 2,
     `Expected 2 u_wellPositions declarations, found ${allLimits.length}`);
-  assert(allLimits[0] === allLimits[1],
-    `Display shader has [${allLimits[0]}] but dissipation shader has [${allLimits[1]}] — must match`);
+  assert(allLimits[0] === DISPLAY_WELL_LIMIT,
+    `Display shader has [${allLimits[0]}], expected shared budget [${DISPLAY_WELL_LIMIT}]`);
+  assert(allLimits[0] === 64,
+    `Display shader has [${allLimits[0]}] wells — its multi-array ABI must remain under the fragment-uniform floor`);
+  assert(allLimits[1] === 256,
+    `Dissipation shader has [${allLimits[1]}], expected its independent single-array capacity [256]`);
 });
 
 // ---- 11. UV-space vs world-space sanity checks ----
