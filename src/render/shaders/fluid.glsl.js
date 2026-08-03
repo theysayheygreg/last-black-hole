@@ -435,8 +435,8 @@ void main() {
       channelHalfWidth * 0.70,
       laneDistance
     );
-    float channelPresence = smoothstep(0.01, 0.08, laneSpeed)
-      * mix(0.42, 1.0, laneStrength)
+    float channelPresence = smoothstep(0.002, 0.03, laneSpeed)
+      * mix(0.62, 1.0, laneStrength)
       * mix(0.28, 1.0, 1.0 - coreQuiet);
 
     // Strength reads as longer, faster downstream strokes—not extra lanes.

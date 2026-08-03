@@ -75,6 +75,9 @@ async function run() {
     assert(shader.includes('channelEnvelope * 0.16 + channelBody * 0.18')
       && shader.includes('laneColor * channelBand * channelPresence'),
       'The channel must retain a coherent body and soft shoulders through ASCII quantization');
+    assert(shader.includes('smoothstep(0.002, 0.03, laneSpeed)')
+      && shader.includes('mix(0.62, 1.0, laneStrength)'),
+    'Any materially active current must keep its channel visible; strength changes emphasis rather than existence');
     assert(shader.includes('channelEnvelope * waveSwell * 0.20'),
       'The source wave must lift the broad fabric channel rather than add a detached ring');
     assert(shader.includes('(0.72 + gravityWeight * 0.48)')
