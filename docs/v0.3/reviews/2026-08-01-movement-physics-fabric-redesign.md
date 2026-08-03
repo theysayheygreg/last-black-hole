@@ -213,6 +213,10 @@ when camera scale changes. Authored current strength changes its emphasis and
 the speed/length of internal marks; it does not turn the channel into a binary
 rail or add more lanes. Well deformation bends, compresses, and splits the
 whole channel envelope, preserving the same placement vocabulary near gravity.
+Presentation uses the accepted current at the camera as the corridor's stable
+directional basis. It does not attempt to draw every nearby field sample as a
+separate glyph vector; that accurate-looking texture destroys the game-level
+silhouette. Movement continues to consume the full authority field.
 
 Implementation cleanup implied by this direction:
 

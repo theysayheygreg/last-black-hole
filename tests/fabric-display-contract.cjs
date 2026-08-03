@@ -50,6 +50,9 @@ async function run() {
   await runner.run('lane shader keeps sparse rest and strength-through-motion art', async () => {
     const shader = shaders.FRAG_DISPLAY;
     assert(shader.includes('const float laneSpacing = 2.40;'), 'Expected one or two broad corridors with substantial calm space');
+    assert(shader.includes('vec2 cameraFlowUV = fract(u_worldCamera);')
+      && shader.includes('texture(u_coarse, cameraFlowUV).xy'),
+    'Presentation must use one stable camera-local current rather than dissolve the corridor into per-glyph directions');
     assert(shader.includes('const float channelHalfViewport = 0.075;')
       && shader.includes('float channelHalfWidth = u_cameraView * channelHalfViewport;')
       && shader.includes('channelHalfWidth * 0.72'),

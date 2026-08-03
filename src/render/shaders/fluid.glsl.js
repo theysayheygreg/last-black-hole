@@ -303,7 +303,13 @@ void main() {
   // current; local velocity is only a fallback for title/legacy sandbox views.
   vec2 coarseUV = fract(u_worldCamera + (v_uv - vec2(0.5))
     * (u_cameraView / u_worldScale) * vec2(1.0, -1.0));
-  vec2 coarseFlow = texture(u_coarse, coarseUV).xy;
+  // One camera-local current establishes the corridor's stable direction.
+  // Sampling a different direction at every glyph made the mathematically
+  // broad lane dissolve into an illegible vector field. Nearby authored wells
+  // still bend/split the corridor below, while movement keeps using the full
+  // authority field rather than this presentation sample.
+  vec2 cameraFlowUV = fract(u_worldCamera);
+  vec2 coarseFlow = texture(u_coarse, cameraFlowUV).xy;
   vec2 laneFlow = length(coarseFlow) > 0.0001 ? coarseFlow : vel;
   float laneSpeed = length(laneFlow) * u_worldScale / u_refScale;
   float laneStrength = clamp(laneSpeed / 0.22, 0.0, 1.0);
