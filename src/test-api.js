@@ -956,6 +956,49 @@ export function initTestAPI(getState) {
       };
     },
 
+    /**
+     * Capture-only Bench seam for reviewing the existing source-bound fabric
+     * wave art. It never enters authority or claims a movement hit; the live
+     * authority crossing fixture remains the mechanical proof.
+     */
+    stageBenchFabricWaveForTest(stage = 'telegraph') {
+      const { waveRings, wellSystem, ship } = getState();
+      const well = wellSystem?.wells?.[0];
+      if (!waveRings || !well || !ship) return null;
+      const sourceWellId = well.id || 'bench-well-0';
+      ship.wx = (well.wx + 0.42) % WORLD_SCALE;
+      ship.wy = well.wy;
+      ship.vx = 0;
+      ship.vy = 0;
+      const states = {
+        telegraph: { state: 'telegraph', radius: 0, amplitude: 1, telegraphStartTime: -100, launchTime: 100 },
+        swell: { state: 'active', radius: 0.48, amplitude: 1, telegraphStartTime: 0, launchTime: 0 },
+        calm: { state: 'active', radius: 1.12, amplitude: 0.82, telegraphStartTime: 0, launchTime: 0 },
+      };
+      const selected = states[stage] || states.telegraph;
+      waveRings.rings = [{
+        id: `bench-fabric-wave-${stage}`,
+        eventId: `bench-fabric-wave-${stage}`,
+        cause: 'bench-forced-art-review',
+        sourceWellId,
+        sourceWX: well.wx,
+        sourceWY: well.wy,
+        frontWidth: 0.10,
+        initialAmplitude: 1,
+        authoritative: true,
+        alive: true,
+        ...selected,
+      }];
+      return { stage, sourceWellId, sourceWX: well.wx, sourceWY: well.wy, radius: selected.radius };
+    },
+
+    clearBenchFabricWaveForTest() {
+      const { waveRings } = getState();
+      if (!waveRings) return false;
+      waveRings.rings = [];
+      return true;
+    },
+
     getRemotePlayers() {
       const { remotePlayers } = getState();
       if (!Array.isArray(remotePlayers)) return [];

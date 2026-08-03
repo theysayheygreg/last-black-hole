@@ -137,6 +137,18 @@ async function run() {
     assert(!renderer.includes('_addSourceBoundWellWavefront') && !renderer.includes('well-growth-wavefront:'));
   });
 
+  await runner.run('Bench art staging is explicit and cannot claim authority', () => {
+    const testApi = fs.readFileSync(path.join(ROOT, 'src/test-api.js'), 'utf8');
+    assert(testApi.includes('stageBenchFabricWaveForTest'));
+    assert(testApi.includes("cause: 'bench-forced-art-review'"));
+    assert(testApi.includes('authority crossing fixture remains the mechanical proof'));
+    const seamStart = testApi.indexOf('stageBenchFabricWaveForTest');
+    const seamEnd = testApi.indexOf('clearBenchFabricWaveForTest', seamStart);
+    const seam = testApi.slice(seamStart, seamEnd);
+    assert(!seam.includes('simClient') && !seam.includes('/debug/') && !seam.includes('publishEvent'),
+      'Bench staging must remain local presentation only');
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }

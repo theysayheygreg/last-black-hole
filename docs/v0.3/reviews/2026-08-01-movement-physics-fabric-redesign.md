@@ -187,6 +187,12 @@ direction and useful carry unclear.
 Replace that vocabulary with sparse, broad, world-anchored **flow lanes**:
 
 - lanes align to the accepted local current vector, never to camera or ship;
+- each lane is a navigable channel roughly **4–5 visible ship widths** across
+  at gameplay zoom. A player must be able to place the ship in useful current
+  at speed; pencil-thin or single-character centerlines are not sufficient;
+- broken downstream marks live inside that broader low-contrast envelope and
+  communicate direction and strength. They are texture, not the lane's only
+  readable width;
 - their marks travel downstream so direction comes from motion, not arrows;
 - greater current strength makes marks longer and advances them more quickly,
   but does not fill the screen with more marks;
@@ -201,6 +207,12 @@ lane visibly produces a longer, faster world-relative traverse; crossing or
 opposing it remains possible and simply receives a different continuous carry.
 The initial target is a handful of broad readable lanes in the camera window,
 not a streamline drawn at every field sample.
+
+The channel envelope is screen-relative so Deck readability does not collapse
+when camera scale changes. Authored current strength changes its emphasis and
+the speed/length of internal marks; it does not turn the channel into a binary
+rail or add more lanes. Well deformation bends, compresses, and splits the
+whole channel envelope, preserving the same placement vocabulary near gravity.
 
 Implementation cleanup implied by this direction:
 

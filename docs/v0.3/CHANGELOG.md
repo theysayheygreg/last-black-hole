@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+- **Navigable fabric channels:** each sparse authored current now owns a faint
+  screen-stable channel envelope about 4–5 visible ship widths across at
+  gameplay zoom. Broken cyan strokes remain the directional texture inside
+  that usable space rather than a pencil-thin proxy for it. Current strength
+  changes emphasis and mark motion without adding lanes; the full envelope
+  bends and splits through the existing well deformation. Gameplay forces,
+  authority truth, camera behavior, and lane count are unchanged.
+
 - **Compact well material:** retired the twelve-point initial well-density seed
   and four-per-tick remote density anchors that accumulated into rectangular
   white patches. Snapshot wells now rely on the existing analytic body, a

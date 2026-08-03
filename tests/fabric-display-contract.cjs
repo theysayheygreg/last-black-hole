@@ -49,6 +49,15 @@ async function run() {
   await runner.run('lane shader keeps sparse rest and strength-through-motion art', async () => {
     const shader = shaders.FRAG_DISPLAY;
     assert(shader.includes('const float laneSpacing = 0.92;'), 'Expected at least half the former lane occupancy');
+    assert(shader.includes('const float channelHalfViewport = 0.055;')
+      && shader.includes('float channelHalfWidth = u_cameraView * channelHalfViewport;')
+      && shader.includes('channelHalfWidth * 0.72'),
+    'Each sparse lane needs a screen-stable navigable channel envelope, not only a pencil mark');
+    const channelPixelsAt1280 = 1280 * 0.055 * 2;
+    const shipVisibleDiameter = 12 * 2.5;
+    const channelToShipRatio = channelPixelsAt1280 / shipVisibleDiameter;
+    assert(channelToShipRatio >= 4 && channelToShipRatio <= 5,
+      `Expected a 4-5x ship channel at 1280px, got ${channelToShipRatio.toFixed(2)}x`);
     assert(shader.includes('mix(0.012, 0.016, laneStrength)'), 'Lane strength must not substantially increase coverage');
     assert(shader.includes('mix(0.45, 1.25, laneStrength)'), 'Stronger current must create long coherent downstream marks');
     assert(shader.includes('mix(0.12, 0.90, laneStrength)'), 'Stronger current must advance marks faster');
@@ -56,6 +65,8 @@ async function run() {
       'Lane palette must use restrained cyan/blue-white values');
     assert(shader.includes('float baseMix = 0.004 + sceneExcitation * 0.03;'),
       'Base field must preserve large dark regions outside the lanes');
+    assert(shader.includes('channelEnvelope * channelPresence * 0.10'),
+      'The channel envelope must remain restrained beneath brighter directional marks');
     assert(shader.includes('(0.72 + gravityWeight * 0.48)')
       && shader.includes('gravityWeight * 0.28 - fullGravityWeight * 0.38')
       && shader.includes('nearestProfile.z * 1.35'),

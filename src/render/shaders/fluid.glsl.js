@@ -411,8 +411,23 @@ void main() {
     // inherited excitation texture so the well body, rim, and curved approach
     // lanes read as one cause instead of a bright anonymous patch.
     col *= mix(1.0, 0.16, coreQuiet);
-    // Strength reads as longer, faster downstream strokes—not extra lanes or
-    // thicker full-field coverage. The generous spacing preserves visual rest.
+    // The lane is a navigable channel, not a pencil line. Keep its envelope a
+    // stable fraction of the viewport so a player can place the ship inside it
+    // at speed on Deck or desktop; the broken marks are texture within that
+    // channel, not the only indication of its usable width.
+    const float channelHalfViewport = 0.055;
+    float channelHalfWidth = u_cameraView * channelHalfViewport;
+    float channelEnvelope = 1.0 - smoothstep(
+      channelHalfWidth * 0.72,
+      channelHalfWidth,
+      laneDistance
+    );
+    float channelPresence = smoothstep(0.01, 0.08, laneSpeed)
+      * mix(0.24, 0.78, laneStrength)
+      * mix(0.28, 1.0, 1.0 - coreQuiet);
+
+    // Strength reads as longer, faster downstream strokes—not extra lanes.
+    // The generous spacing preserves dark rest between channel envelopes.
     float laneWidth = mix(0.012, 0.016, laneStrength);
     float localLaneWidth = laneWidth * mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet));
     float laneBody = 1.0 - smoothstep(localLaneWidth, localLaneWidth * 2.1, laneDistance);
@@ -428,6 +443,7 @@ void main() {
     // Event-wave treatment remains its existing green overlay until the
     // dedicated wave/noise pass; this slice only clarifies steady current.
     laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
+    col += laneColor * channelEnvelope * channelPresence * 0.10;
     col += laneColor * laneSignal * 0.72 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
     col += vec3(0.24, 0.82, 0.70) * waveCrest * 0.42;
   }
