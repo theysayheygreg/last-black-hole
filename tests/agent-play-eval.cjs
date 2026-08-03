@@ -39,6 +39,7 @@ const htmlFile = process.argv[2] || "index-a.html?renderer=three";
 const SIM_PORT = Number(process.env.LBH_AGENT_EVAL_SIM_PORT || (9200 + process.pid % 500));
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const VIEWPORT = Object.freeze({ width: 1280, height: 800, deviceScaleFactor: 1 });
+const PORTAL_ENTRY_SPEED = 0.12;
 const SHALLOWS_ROUTE = Object.freeze({
   id: "first-current",
   slingshotWellIndex: 1,
@@ -628,8 +629,9 @@ async function steerTo(page, clientId, target, options = {}) {
       const inwardSpeed = hazard
         ? -((player.vx || 0) * (hazard.awayX / awayMagnitude) + (player.vy || 0) * (hazard.awayY / awayMagnitude))
         : 0;
+      const dynamicClearance = hazard ? hazard.clearance + stoppingDistance : 0;
       const hazardBrakeDistance = hazard
-        ? hazard.clearance + Math.max(0.035, stoppingDistance + route.driftMargin)
+        ? dynamicClearance + Math.max(0.035, route.driftMargin)
         : 0;
       const avoidHazard = Boolean(hazard
         && hazard.distance <= hazardBrakeDistance
@@ -665,7 +667,7 @@ async function steerTo(page, clientId, target, options = {}) {
         brake: (shouldBrake || avoidHazard) && fuelRatio > 0.01 ? 1 : 0,
         stoppingDistance,
         proximityBuffer,
-        hazard: hazard && { ...hazard, inwardSpeed, brakeDistance: hazardBrakeDistance },
+        hazard: hazard && { ...hazard, inwardSpeed, dynamicClearance, brakeDistance: hazardBrakeDistance },
       };
       await sleep(110);
     }
@@ -686,7 +688,7 @@ async function brakeToLowSpeed(page, clientId, timeout = 5000) {
       const player = localPlayer(snapshot, clientId);
       if (!player || player.status !== "alive") return player;
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
-      if (speed < 0.12) return player;
+      if (speed < PORTAL_ENTRY_SPEED) return player;
       await setGamepadDrive(page, (player.vx || 0) / speed, (player.vy || 0) / speed, { brake: 1 });
       await sleep(100);
     }
@@ -694,6 +696,46 @@ async function brakeToLowSpeed(page, clientId, timeout = 5000) {
     await setGamepadDrive(page).catch(() => null);
   }
   return localPlayer(await getSnapshot(), clientId);
+}
+
+async function stagePortalApproach(page, clientId, portal, timeout = 12000) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  try {
+    while (Date.now() < deadline) {
+      const snapshot = await getSnapshot();
+      const player = localPlayer(snapshot, clientId);
+      assert(player?.status === "alive", "Portal approach must retain a live pilot during staging brake");
+      const worldScale = snapshot.session?.worldScale || 3;
+      const route = planPortalApproach({
+        player,
+        portal,
+        wells: snapshot.world?.wells || [],
+        worldScale,
+        velocity: player,
+      });
+      const speed = Math.hypot(player.vx || 0, player.vy || 0);
+      const stoppingDistance = speed > 0 ? (speed * speed) / (2 * 0.72) : 0;
+      const hazard = route.nearestHazard;
+      const requiredClearance = hazard ? hazard.clearance + stoppingDistance + 0.035 : 0;
+      last = { speed, stoppingDistance, hazard, requiredClearance };
+      if (speed <= PORTAL_ENTRY_SPEED && (!hazard || hazard.distance > requiredClearance)) {
+        return player;
+      }
+      const awayMagnitude = Math.hypot(hazard?.awayX || 0, hazard?.awayY || 0) || 1;
+      const mustClear = Boolean(hazard && hazard.distance <= requiredClearance);
+      await setGamepadDrive(
+        page,
+        mustClear ? hazard.awayX / awayMagnitude : (speed > 0 ? player.vx / speed : 0),
+        mustClear ? hazard.awayY / awayMagnitude : (speed > 0 ? player.vy / speed : 0),
+        { thrust: mustClear && player.deltaVRatio > 0.01 ? 1 : 0, brake: speed > 0.01 ? 1 : 0 },
+      );
+      await sleep(100);
+    }
+  } finally {
+    await setGamepadDrive(page).catch(() => null);
+  }
+  throw new Error(`Portal staging could not reach safe entry speed/clearance: ${JSON.stringify(last)}`);
 }
 
 async function rechargeForManeuver(page, clientId, minimumRatio = 0.42, timeout = 10000) {
@@ -862,11 +904,16 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   const { match: initialPortal } = await waitForWorld((snapshot) =>
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
+  // Salvage and the mandatory public pulse can leave a real residual current.
+  // Start the precision leg only once normal brake input has brought the ship
+  // below the authored entry speed and outside stopping clearance for every
+  // currently published well.
+  await stagePortalApproach(page, clientId, initialPortal);
   const portalApproach = {
     // These values guide a natural approach; authoritative
     // portalInteraction.ready owns acceptance of the public capture contract.
     radius: 0.04,
-    maxCruiseSpeed: 0.18,
+    maxCruiseSpeed: 0.14,
     portalId: initialPortal.id,
     timeout: 70000,
     keepControl: true,
