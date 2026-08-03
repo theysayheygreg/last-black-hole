@@ -133,6 +133,10 @@ class BrowserPage extends EventEmitter {
   constructor(session) {
     super();
     this.session = session;
+    // Keep a bounded, structured boot receipt separate from page errors. Test
+    // assertions intentionally use their own error policy, while a failed
+    // module request must still explain why __TEST_API never materialized.
+    this.diagnostics = [];
     this.keyboard = {
       down: (code) => this._dispatchKey(code, "keyDown"),
       up: (code) => this._dispatchKey(code, "keyUp"),
@@ -168,23 +172,54 @@ class BrowserPage extends EventEmitter {
   _wireEvents() {
     this.session.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
       const text = exceptionDetails?.exception?.description || exceptionDetails?.text || "Runtime exception";
+      this._recordDiagnostic("runtime.exception", { text });
       this.emit("pageerror", new Error(text));
     });
     this.session.on("Runtime.consoleAPICalled", ({ type, args }) => {
       const text = (args || []).map((arg) => arg.value ?? arg.description ?? "").join(" ");
+      if (type === "error") this._recordDiagnostic("console.error", { text });
       this.emit("console", { type: () => type, text: () => text });
     });
     this.session.on("Log.entryAdded", ({ entry }) => {
       if (entry?.level === "error") {
+        this._recordDiagnostic("log.error", { text: entry.text || "" });
         this.emit("console", { type: () => "error", text: () => entry.text || "" });
       }
     });
+    this.session.on("Network.loadingFailed", ({ requestId, type, errorText, blockedReason, canceled }) => {
+      this._recordDiagnostic("network.loadingFailed", {
+        requestId,
+        resourceType: type,
+        errorText,
+        blockedReason: blockedReason || null,
+        canceled: Boolean(canceled),
+      });
+    });
+    this.session.on("Network.responseReceived", ({ type, response }) => {
+      if (Number(response?.status) >= 400) {
+        this._recordDiagnostic("network.httpError", {
+          resourceType: type,
+          status: response.status,
+          url: response.url,
+        });
+      }
+    });
+  }
+
+  _recordDiagnostic(kind, details) {
+    this.diagnostics.push({ kind, ...details });
+    if (this.diagnostics.length > 80) this.diagnostics.shift();
+  }
+
+  getDiagnostics() {
+    return this.diagnostics.slice();
   }
 
   async init(viewport = DEFAULT_VIEWPORT) {
     await this.session.send("Page.enable");
     await this.session.send("Runtime.enable");
     await this.session.send("Log.enable");
+    await this.session.send("Network.enable");
     await this.setViewport(viewport);
   }
 

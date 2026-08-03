@@ -295,7 +295,7 @@ async function launchGame(htmlFile = "index.html") {
   // Wait a moment for WebGL init
   await new Promise((r) => setTimeout(r, 2000));
 
-  return { browser, page, errors };
+  return { browser, page, errors, diagnostics: () => page.getDiagnostics?.() || [] };
 }
 
 async function resetBrowserState(page, { reload = false, waitMs = 2000 } = {}) {

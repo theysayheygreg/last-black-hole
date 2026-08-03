@@ -271,6 +271,20 @@ async function capturePage(page, outputDir, label) {
   return path.basename(filepath);
 }
 
+async function captureFailureReceipt(page, browserErrors, diagnostics) {
+  const boot = await page.evaluate(() => ({
+    bootState: window.__LBH_BOOT_STATE__ || null,
+    bootError: document.querySelector("#boot-error, main pre")?.textContent || null,
+    testApiPresent: Boolean(window.__TEST_API),
+    phase: window.__TEST_API?.getGamePhase?.() || null,
+  })).catch((error) => ({ inspectionError: error.message }));
+  return {
+    boot,
+    pageErrors: browserErrors.slice(-12),
+    browserDiagnostics: diagnostics().slice(-24),
+  };
+}
+
 async function waitForPhase(page, phase, timeout = 12000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, {
     timeout,
@@ -1257,9 +1271,14 @@ async function run() {
           try {
             await withFreshGame(
               withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
-              async ({ page, errors }) => {
-                await runJourney(page, outputDir, report, errors);
-                assertNoBrowserErrors(errors, "Journey complete");
+              async ({ page, errors, diagnostics }) => {
+                try {
+                  await runJourney(page, outputDir, report, errors);
+                  assertNoBrowserErrors(errors, "Journey complete");
+                } catch (error) {
+                  report.failureReceipt = await captureFailureReceipt(page, errors, diagnostics);
+                  throw error;
+                }
               },
               { resetState: true },
             );
@@ -1279,7 +1298,14 @@ async function run() {
         await withFreshSimServer(SIM_PORT, async () => {
           await withFreshGame(
             withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
-            async ({ page, errors }) => runDeathJourney(page, outputDir, report, errors),
+            async ({ page, errors, diagnostics }) => {
+              try {
+                await runDeathJourney(page, outputDir, report, errors);
+              } catch (error) {
+                report.failureReceipt = await captureFailureReceipt(page, errors, diagnostics);
+                throw error;
+              }
+            },
             { resetState: true },
           );
         }, { idleShutdownMs: 30000 });
