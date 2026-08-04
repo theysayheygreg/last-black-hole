@@ -191,7 +191,10 @@ export function profileSurfaceLayout(width, height, footerActions = []) {
   const innerX = panel.x + UI_DECK_GEOMETRY.panel.paddingX;
   const rowW = panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
   const footer = measuredPanelFooter(panel, footerActions, UI_DECK_GEOMETRY.panel.gap);
-  const rowStartY = panel.y + 94;
+  // The former 48px title offset left unused air above the pilot rows. A
+  // compact heading block recovers that space for wrapped action rails while
+  // preserving the 58px minimum row and a full 16px heading-to-row gutter.
+  const rowStartY = panel.y + 80;
   const rowGap = UI_DECK_GEOMETRY.panel.gap;
   const rowBudget = (footer.y - UI_DECK_GEOMETRY.separation - rowStartY - rowGap * 2) / 3;
   const rowH = Math.max(UI_DECK_GEOMETRY.listRow.minHeight, Math.min(74, rowBudget));
@@ -204,7 +207,7 @@ export function profileSurfaceLayout(width, height, footerActions = []) {
   return {
     panel,
     rows,
-    heading: rect(innerX, panel.y + 48, rowW, UI_DECK_GEOMETRY.heading.minHeight),
+    heading: rect(innerX, panel.y + 24, rowW, UI_DECK_GEOMETRY.heading.minHeight),
     footer,
     nameOverlay: rect(panel.x + (panel.w - 440) / 2, footer.y - UI_DECK_GEOMETRY.separation - 76, 440, 76),
     deleteOverlay: rect(panel.x + (panel.w - 400) / 2, footer.y - UI_DECK_GEOMETRY.separation - 68, 400, 68),

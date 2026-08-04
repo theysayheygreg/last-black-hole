@@ -76,6 +76,11 @@ const assert = require('assert');
     { descriptor: prompts.actionDescriptor('delete', deckOptions), verb: 'delete' },
     { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'back out' },
   ];
+  const deleteProfileActions = [
+    { descriptor: prompts.actionDescriptor('navigate', deckOptions), verb: 'choose cancel / delete' },
+    { descriptor: prompts.actionDescriptor('confirm', deckOptions), verb: 'cancel' },
+    { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'cancel' },
+  ];
   const home = layout.deckPanelLayout(960, 720, 'home', 960, { rightFooterActions: homeActions, footerGap: 10 });
   assertSurface('home panels', [home.left, home.center, home.right]);
   assert(layout.rectContains(home.right, home.rightFooter, geometry.panel.paddingX), 'home right footer escaped its panel');
@@ -94,6 +99,11 @@ const assert = require('assert');
     assert(layout.rectContains(profile.panel, profile.deleteOverlay, geometry.panel.paddingX), `${width}px profile delete overlay escaped panel`);
     assert(!layout.rectsOverlap(profile.nameOverlay, profile.footer, 0), `${width}px profile name overlay overlaps footer`);
     assert(!layout.rectsOverlap(profile.deleteOverlay, profile.footer, 0), `${width}px profile delete overlay overlaps footer`);
+    const deleteProfile = layout.profileSurfaceLayout(width, height, deleteProfileActions);
+    assert(deleteProfile.rows.every((row) => row.h >= geometry.listRow.minHeight), `${width}px delete-confirmation shrank a pilot row`);
+    assert(deleteProfile.rows.every((row) => !layout.rectsOverlap(row, deleteProfile.footer, geometry.separation)), `${width}px delete-confirmation rows overlap footer`);
+    assert(layout.rectContains(deleteProfile.panel, deleteProfile.footer, geometry.panel.paddingX), `${width}px delete-confirmation footer escaped panel`);
+    assert(!layout.rectsOverlap(deleteProfile.deleteOverlay, deleteProfile.footer, 0), `${width}px delete-confirmation overlay overlaps footer`);
   }
   const title = layout.titleSurfaceLayout(1280, 720, 'left');
   assert(layout.rectContains({ x: title.panelX, y: title.panelY, w: title.panelW, h: title.panelH }, title.commandRect), 'title command escaped panel');
