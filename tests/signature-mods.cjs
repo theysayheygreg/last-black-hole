@@ -1,4 +1,6 @@
 const { TestRunner, assert, startSimServer, stopSimServer } = require('./helpers.cjs');
+const path = require('path');
+const { pathToFileURL } = require('url');
 const { SEEDED_SIGNATURES } = require('../scripts/content/signatures.cjs');
 const {
   SIGNATURE_MOD_RANGES,
@@ -14,6 +16,7 @@ const { wellGravityVector } = require('../scripts/sim/well-gravity.cjs');
 
 const SIM_PORT = 8815;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
+const ROOT = path.resolve(__dirname, '..');
 const SEEDS = {
   deep_gravity: 1,
   thin_space: 2,
@@ -53,6 +56,9 @@ async function getJson(route, options) {
 
 async function run() {
   const runner = new TestRunner('SignatureMods');
+  const { resolveClientSensorRange } = await import(
+    pathToFileURL(path.join(ROOT, 'src', 'sim', 'remote-snapshot-presentation.js')).href,
+  );
 
   await runner.run('all authored signature values resolve once into bounded frozen authority modifiers', () => {
     for (const signature of SEEDED_SIGNATURES) {
@@ -110,6 +116,19 @@ async function run() {
       killRadiusForMass: () => 0.1,
     });
     approximately(grown.after.mass, 1.07, 'deep gravity schedule growth');
+  });
+
+  await runner.run('Dark Run reduces the authority-projected client sensor reach', () => {
+    const darkRun = resolveSignatureMods(
+      SEEDED_SIGNATURES.find((signature) => signature.id === 'dark_run'),
+    );
+    const normalReach = resolveClientSensorRange(1, { sensorRangeMultiplier: 1 });
+    const darkRunReach = resolveClientSensorRange(1, {
+      sensorRangeMultiplier: darkRun.sensorRangeMult,
+    });
+
+    approximately(darkRunReach, 0.6, 'Dark Run client sensor reach');
+    assert(darkRunReach < normalReach, 'Dark Run must reduce the client sensor edge');
   });
 
   await runner.run('Shallows direct and Expanse coarse gravity honor the same multiplier', () => {

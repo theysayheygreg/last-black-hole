@@ -8,6 +8,12 @@ export function snapshotRunId(snapshot) {
   return snapshot?.runId || snapshot?.session?.runId || null;
 }
 
+export function resolveClientSensorRange(baseSensorRange, session = null) {
+  const base = Math.max(0, Number(baseSensorRange) || 0);
+  const scale = Number(session?.sensorRangeMultiplier);
+  return base * (Number.isFinite(scale) && scale >= 0 ? scale : 1);
+}
+
 export function classifyRemoteSnapshot(previous, incoming) {
   const previousRunId = snapshotRunId(previous);
   const incomingRunId = snapshotRunId(incoming);

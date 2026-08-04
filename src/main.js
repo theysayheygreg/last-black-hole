@@ -80,6 +80,7 @@ import {
   classifyRemoteSnapshot,
   projectRemoteSnapshot,
   projectRemoteWorldPatch,
+  resolveClientSensorRange,
   snapshotRunId,
 } from './sim/remote-snapshot-presentation.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
@@ -2315,7 +2316,13 @@ function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
   if (rng() > weight) return;
 
   // Spawn at the edge of sensor range, roughly opposite the player's motion
-  const sensorEdge = 0.9 * (ship.brain?.sensorRange || CONFIG.ship?.sensorRange || 0.9);
+  const baseSensorRange = ship.brain?.sensorRange || CONFIG.ship?.sensorRange || 0.9;
+  const sensorRangeMultiplier = remoteSession.active
+    ? remoteSession.snapshot?.session?.sensorRangeMultiplier
+    : 1;
+  const sensorEdge = 0.9 * resolveClientSensorRange(baseSensorRange, {
+    sensorRangeMultiplier,
+  });
   const motionAngle = Math.atan2(shipVY, shipVX);
   const jitter = (rng() - 0.5) * 0.8; // ±0.4 rad
   const angle = motionAngle + Math.PI + jitter;
