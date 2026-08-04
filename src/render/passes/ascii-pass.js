@@ -112,6 +112,8 @@ export class ASCIIPass extends Pass {
     gl.uniform1f(this.uniforms.u_gridWindow, ctx.gridWindow);
     gl.uniform1f(this.uniforms.u_cameraView, ctx.cameraView ?? 1);
     gl.uniform1f(this.uniforms.u_viewAspect, ctx.viewAspect ?? 1);
+    gl.uniform2fv(this.uniforms.u_worldCamera, ctx.worldCameraUV ?? [0.5, 0.5]);
+    gl.uniform1f(this.uniforms.u_worldScale, ctx.worldScale ?? 3);
     gl.uniform1f(this.uniforms.u_dirThreshold, ctx.dirThreshold ?? 0.01);
     gl.uniform1f(this.uniforms.u_dirBlendRange, ctx.dirBlendRange ?? 0.03);
     gl.uniform1f(this.uniforms.u_glitchIntensity, ctx.glitchIntensity ?? 0);

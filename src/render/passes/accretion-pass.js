@@ -37,6 +37,7 @@
 // Output is HDR — white-hot band exceeds 1.0 so BloomPass catches it.
 
 import { Pass } from '../composer.js';
+import { GLSL_COORDS } from '../shaders/fluid.glsl.js';
 
 const MAX_WELLS = 32;  // title screens + small maps never exceed this
 
@@ -51,11 +52,15 @@ uniform vec2 u_camOffset;             // camera center in fluid UV
 uniform float u_gridWindow;           // world-units spanned by the fluid grid texture
 uniform float u_cameraView;           // world-units visible on each axis
 uniform float u_viewAspect;           // retained for pass ABI while the window stays square
+uniform vec2 u_worldCamera;           // globally anchored camera fluid UV
+uniform float u_worldScale;           // authoritative world span
 uniform float u_strength;             // master blend for the radial color
 uniform int u_gameplayPalette;        // title blackbody versus bounded in-match threat read
 
 in vec2 v_uv;
 out vec4 fragColor;
+
+${GLSL_COORDS}
 
 // Blackbody-inspired temperature ramp. t: -1 = core, 0 = hottest ring,
 // +1 = far outer. Sequential smoothstep mixes produce smooth bands.
@@ -97,16 +102,22 @@ void main() {
   // Screen-space UV → fluid UV (same square transform FluidDisplayPass uses).
   vec2 cameraOffset = (v_uv - vec2(0.5) + vec2(u_viewAspect * 0.0, 0.0)) * u_cameraView;
   vec2 fluidUV = u_camOffset + cameraOffset / u_gridWindow;
-  vec2 wrapped = fract(fluidUV);
+  vec2 fluidGlobalUV = lbhCameraRelativeFluidUVToGlobalFluidUV(
+    fluidUV, u_worldCamera, u_gridWindow, u_worldScale
+  );
 
   // Find contribution from each well. Additive: if wells overlap, their
   // color contributions sum (rare in practice since maps space wells out).
   vec3 accretion = vec3(0.0);
   for (int i = 0; i < ${MAX_WELLS}; i++) {
     if (i >= u_wellCount) break;
-    vec2 diff = wrapped - u_wellUV[i];
-    diff = diff - round(diff);           // toroidal wrap
-    float dist = length(diff) * u_gridWindow;  // world-space distance
+    vec2 wellGlobalUV = lbhCameraRelativeFluidUVToGlobalFluidUV(
+      u_wellUV[i], u_worldCamera, u_gridWindow, u_worldScale
+    );
+    vec2 wellDeltaWorld = lbhGlobalFluidUvDeltaToWorld(
+      fluidGlobalUV, wellGlobalUV, u_worldScale
+    );
+    float dist = length(wellDeltaWorld);
 
     vec3 radii = u_wellRadii[i];
     float coreR  = radii.x;
@@ -161,6 +172,8 @@ export class AccretionPass extends Pass {
     gl.uniform1f(this.prog.uniforms.u_gridWindow, ctx.gridWindow);
     gl.uniform1f(this.prog.uniforms.u_cameraView, ctx.cameraView ?? 1);
     gl.uniform1f(this.prog.uniforms.u_viewAspect, ctx.viewAspect ?? 1);
+    gl.uniform2fv(this.prog.uniforms.u_worldCamera, ctx.worldCameraUV ?? [0.5, 0.5]);
+    gl.uniform1f(this.prog.uniforms.u_worldScale, ctx.worldScale ?? 3);
     gl.uniform1f(this.prog.uniforms.u_strength, this.strength);
     gl.uniform1i(this.prog.uniforms.u_gameplayPalette, this.gameplayPalette ? 1 : 0);
 

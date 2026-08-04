@@ -246,12 +246,13 @@ const TITLE_RENDER_TUNING = {
 };
 const GAMEPLAY_RENDER_TUNING = {
   fluidGain: 1.0,
-  // Gameplay retains a lower-strength corona than title. It is visual-only:
-  // the compact FluidDisplay void still owns the lethal-body read.
-  accretionStrength: 0.40,
+  // FluidDisplay owns the single gameplay well body, rim, and plume. Keep the
+  // title-only radial composition in the chain but dormant during a match so
+  // it cannot paint a second landmark around camera-window seam positions.
+  accretionStrength: 0.0,
   bloom: { threshold: 0.90, knee: 0.3, strength: 0.75, blurRadius: 3.0 },
   vignette: { strength: 0.6, radius: 0.45, softness: 0.65 },
-  chromaticAberration: { strength: 0.002, falloff: 2.8 },
+  chromaticAberration: { strength: 0.0, falloff: 2.8 },
   scanlines: { intensity: 0.09, frequency: 1.5 },
 };
 const CLIENT_PERF_PROFILE = CLIENT_PERF_PROFILES.fixedGrid;
@@ -1598,10 +1599,9 @@ function loadScene(map, { seed = 1 } = {}) {
   // 8. Seed fresh fluid
   seedInitialFluid();
 
-  // 9. AccretionPass owns a presentation-only corona. Title keeps its
-  //    authored composition; gameplay derives a smaller landmark corona from
-  //    the same compact body shapes as FluidDisplay. Neither changes hit,
-  //    gravity, current, or authority radii.
+  // 9. Title owns the optional radial accretion composition. Gameplay keeps
+  //    exactly one analytic well owner in FluidDisplay; neither visual path
+  //    changes hit, gravity, current, or authority radii.
   const gameplayCoronaRadii = wellSystem.getCoronaRadii(CAMERA_VIEW);
   sceneAccretionRadii = wellSystem.wells.map((_, index) => (
     currentMap.titleAccretionRadii?.[index] || gameplayCoronaRadii[index] || [0.08, 0.16, 0.28]
@@ -4942,6 +4942,8 @@ function gameLoop(now) {
       wellUVs,
       wellRadii: visibleAccretionRadii,
       camFU, camFV,
+      worldCameraUV: worldToGlobalFluidUV(camX, camY),
+      worldScale: WORLD_SCALE,
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,
       viewAspect,
@@ -4957,6 +4959,8 @@ function gameLoop(now) {
       glitchIntensity: getGlitchIntensity(),
       inhibitorData: inhData,
       camFU, camFV,
+      worldCameraUV: worldToGlobalFluidUV(camX, camY),
+      worldScale: WORLD_SCALE,
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,
       viewAspect,

@@ -42,7 +42,7 @@ async function run() {
     assert(!shader.includes('gravityContour'), 'gravity contour vocabulary must be retired');
   });
 
-  await runner.run('well body and wider corona have separate presentation roles', async () => {
+  await runner.run('well body is the sole gameplay presentation owner', async () => {
     const { wellCoronaRadii } = await import('../src/wells.js');
     const compactBody = [0.075, 0.09, 0.133, 1];
     const [core, peak, outer] = wellCoronaRadii(compactBody, 3);
@@ -51,14 +51,14 @@ async function run() {
     assert(outer >= compactBody[2] * 2.65, 'landmark corona must exceed the compact analytic rim');
     const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
     const accretion = fs.readFileSync(path.join(ROOT, 'src/render/passes/accretion-pass.js'), 'utf8');
-    assert(main.includes('accretionStrength: 0.40'), 'gameplay must render a restrained well corona');
+    assert(main.includes('accretionStrength: 0.0'), 'gameplay must not paint a second radial corona over FluidDisplay wells');
     assert(main.includes('wellSystem.getCoronaRadii(CAMERA_VIEW)'), 'gameplay corona must derive from well presentation shapes');
-    assert(main.includes('accretionPass.gameplayPalette = !isTitle && !rendererFixtureActive'),
-      'title must preserve its authored blackbody spectrum while gameplay uses its danger palette');
+    assert(main.includes('FluidDisplay; neither visual path'),
+      'title must preserve its authored blackbody spectrum while gameplay keeps one analytic well owner');
     assert(accretion.includes('vec3 gameplayTempRamp(float t)')
       && accretion.includes('u_gameplayPalette == 1 ? gameplayTempRamp(t) : tempRamp(t)'),
       'gameplay corona must stay red/orange and avoid title-white energy');
-    assert(main.includes('Neither changes hit,') && main.includes('gravity, current, or authority radii'),
+    assert(main.includes('neither visual path') && main.includes('gravity, current, or authority radii'),
       'well corona must remain explicitly presentation-only');
   });
 

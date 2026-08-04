@@ -1,5 +1,19 @@
 # v0.3 Changelog
 
+- **Fabric spatial-material correction:** gameplay now has one analytic well
+  owner. The display shader measures well bodies and plumes through the
+  globally anchored world torus; it no longer wraps a second time inside the
+  camera-local fluid window, which had re-imaged off-window wells as phantom
+  landmarks. The title keeps its authored Accretion composition, while the
+  dormant gameplay pass cannot add a second corona. ASCII glyph phase is now
+  world-anchored and the moving backdrop lattice plus gameplay chromatic
+  fringe are retired. Corridors retain the locked 50% calm, 1.50 spacing, and
+  0.125 half viewport grammar but carry a quieter layered blue-violet material
+  with a small calm-space indigo mottle rather than one uniform magnetic-field
+  mat. Well curvature is now a brief middle-shoulder bend instead of an orbit
+  diagram. This is renderer-only: no authority coordinates, forces, movement,
+  map content, or interaction ranges changed.
+
 - **Fabric/well visual-presence recovery:** broad current corridors now carry a
   deliberately brighter blue-violet body, bounded interior glyph rhythm, and
   longer luminance variation while calm space remains dark. Cyan stays

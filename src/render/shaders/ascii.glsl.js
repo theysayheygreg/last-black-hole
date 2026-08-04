@@ -10,6 +10,7 @@
 // selection).
 
 import { canvasFont } from '../../ui/typography.js';
+import { GLSL_COORDS } from './fluid.glsl.js';
 
 export const FRAG_ASCII = `#version 300 es
 precision highp float;
@@ -28,6 +29,8 @@ uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored n
 uniform float u_gridWindow;   // world-units spanned by the fluid grid (for world-anchored noise)
 uniform float u_cameraView;   // world-units visible on each axis; matches the square fluid window
 uniform float u_viewAspect;   // retained for pass ABI; ignored while the fluid window is square
+uniform vec2 u_worldCamera;   // camera center in globally anchored fluid UV
+uniform float u_worldScale;   // authoritative world span for stable glyph phase
 uniform float u_dirThreshold; // speed threshold for directional character selection
 uniform float u_dirBlendRange; // speed window where direction emerges through shimmer
 uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions + wake shock)
@@ -43,6 +46,8 @@ const float INHIBITOR_VESSEL_ROW = 5.0;
 
 in vec2 v_uv;
 out vec4 fragColor;
+
+${GLSL_COORDS}
 
 void main() {
   float cellW = u_cellSize;
@@ -66,8 +71,14 @@ void main() {
   vec2 cameraOffset = (cellCenter - vec2(0.5) + vec2(u_viewAspect * 0.0, 0.0)) * u_cameraView;
   vec2 fluidUV = u_camOffset + cameraOffset / u_gridWindow;
   vec2 wrappedFluidUV = fract(fluidUV);
+  // The glyph grid can remain pixel-aligned, but its phase must come from
+  // global world position. Sampling the local fluid window here made the
+  // extra ASCII texture slide over stable fabric whenever the camera moved.
+  vec2 globalFluidUV = lbhCameraRelativeFluidUVToGlobalFluidUV(
+    fluidUV, u_worldCamera, u_gridWindow, u_worldScale
+  );
   vec2 cellsPerScreen = u_resolution / vec2(cellW, cellH);
-  vec2 worldCell = floor(wrappedFluidUV * cellsPerScreen * u_gridWindow);
+  vec2 worldCell = floor(globalFluidUV * u_worldScale * (cellsPerScreen / u_cameraView));
   vec2 anchoredCell = worldCell;
   float noise = fract(sin(dot(anchoredCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
   float noise2 = fract(sin(dot(anchoredCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);

@@ -8,6 +8,7 @@ async function run() {
   const runner = new TestRunner('FabricDisplayContract');
   const budget = await import(path.join(ROOT, 'src/render/fabric-well-budget.js'));
   const shaders = await import(path.join(ROOT, 'src/render/shaders/fluid.glsl.js'));
+  const ascii = await import(path.join(ROOT, 'src/render/shaders/ascii.glsl.js'));
   const entityScale = await import(path.join(ROOT, 'src/render-three/entity-presentation-scale.js'));
 
   await runner.run('display well uniforms fit the WebGL2 minimum fragment budget', async () => {
@@ -85,37 +86,47 @@ async function run() {
     assert(shader.includes('float baseMix = sceneExcitation * 0.004;')
       && shader.includes('clamp(baseMix, 0.0, 0.006)'),
       'Calm field must remain dark outside meaningful current material');
-    assert(shader.includes('channelEnvelope * 0.52 + channelBody * 0.58')
+    assert(shader.includes('channelEnvelope * 0.34 + channelBody * 0.42')
       && shader.includes('laneColor * channelBand * channelPresence'),
-      'The channel must retain a visibly strong coherent body and soft shoulders through ASCII quantization');
+      'The channel must retain a quieter coherent body and soft shoulders through ASCII quantization');
     assert(shader.includes('smoothstep(0.001, 0.018, laneSpeed)')
       && shader.includes('mix(0.76, 1.0, laneStrength)'),
       'Any materially active current must keep its channel visible; strength changes emphasis rather than existence');
     assert(shader.includes('float glyphCell = floor(along / max(markLength * 0.62, 0.075))')
-      && shader.includes('float variedAsciiWeave = fineAsciiWeave * glyphBrightness;')
-      && shader.includes('float glyphCrossGrain = 1.0 - smoothstep('),
-    'Corridor-local material must recover a bounded family of glyph rhythm and luminance variants');
+      && shader.includes('float glyphBrightness = mix(0.78, 1.10, step(1.5, glyphVariant));')
+      && !shader.includes('glyphCrossGrain'),
+    'Corridor-local material must retain bounded glyph rhythm without cross-grain multiplication');
     assert(shader.includes('waveColor * channelEnvelope * waveSwell * 0.28'),
       'The source wave must lift the broad fabric channel rather than add a detached ring');
-    assert(shader.includes('(0.72 + gravityWeight * 0.48)')
-      && shader.includes('gravityWeight * 0.28 - fullGravityWeight * 0.38')
-      && shader.includes('nearestProfile.z * 1.35'),
-    'Authored current/gravity/full-gravity reaches must produce broad bend, compression, and split');
+    assert(shader.includes('float shoulderIn = smoothstep(nearestProfile.x * 0.76, nearestProfile.x * 0.46, nearestWellDistance);')
+      && shader.includes('float shoulderOut = 1.0 - smoothstep(nearestProfile.x * 0.20, nearestProfile.x * 0.38, nearestWellDistance);')
+      && shader.includes('currentWeight * 0.24')
+      && shader.includes('nearestProfile.z * 0.68'),
+    'Wells must briefly bend and split nearby corridors through a narrow shoulder, not draw an orbit diagram');
     assert(shader.includes('float visualCoreRadius = max(coreRadius * 1.90, u_cameraView * 0.068);'),
       'Lethal bodies need a large dominant presentation-only void at Deck resolution');
-    assert(shader.includes('col *= mix(1.0, 0.16, coreQuiet);')
-      && shader.includes('mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet))'),
-    'Near-core fabric must quiet while authored gravity selectively reinforces curved lanes');
+    assert(shader.includes('mix(0.28, 1.0, 1.0 - coreQuiet)')
+      && shader.includes('mix(1.0, 1.20, gravityWeight * (1.0 - coreQuiet))'),
+    'Near-core fabric must quiet while authored gravity only modestly reinforces curved lanes');
     assert(shader.includes('min(ringInner, visualCoreRadius * 1.36)')
       && shader.includes('min(ringOuter, visualCoreRadius * 1.86)'),
       'Analytic accretion must remain a compact body-relative rim, not a broad halo');
-    assert(shader.includes('vec2 cameraRelativeFluidUVToGlobalFluidUV(vec2 cameraRelativeUV)')
-      && shader.includes('cameraRelativeFluidUVToGlobalFluidUV(u_wellPositions[i])'),
-    'Every camera-relative well coordinate must use one shared global-fluid conversion seam');
+    assert(shader.includes('vec2 lbhCameraRelativeFluidUVToGlobalFluidUV(')
+      && shader.includes('vec2 lbhGlobalFluidUvDeltaToWorld(')
+      && shader.includes('vec2 wellDeltaWorld = lbhGlobalFluidUvDeltaToWorld(')
+      && !shader.includes('wrappedFluidUV - u_wellPositions[i]'),
+    'Every analytic well must use the shared global-fluid delta rather than re-wrap the local camera window');
     assert(shader.includes('vec2 plumeAxis = normalize(vec2(0.86, 0.50 * orbitalDir));')
       && shader.includes('float plumeReach = visualCoreRadius * (2.55 + min(ringEnergy, 1.0) * 0.20);')
       && shader.includes('float plumeMask = plumeSpine * plumeStart * plumeEnd * plumeRagged;'),
     'Wells must own one orbital-direction-keyed asymmetric hot accretion plume');
+    assert(shader.includes('vec2 calmMottleCell = floor(coarseUV * u_worldScale * 4.0);')
+      && shader.includes('float calmMottle = smoothstep(0.91, 0.99, calmMottleHash) * (1.0 - corridorPresence);'),
+    'Calm space needs a sparse world-anchored indigo material layer without becoming another lane');
+    assert(ascii.FRAG_ASCII.includes("import") === false
+      && ascii.FRAG_ASCII.includes('lbhCameraRelativeFluidUVToGlobalFluidUV(')
+      && ascii.FRAG_ASCII.includes('vec2 worldCell = floor(globalFluidUV * u_worldScale * (cellsPerScreen / u_cameraView));'),
+    'ASCII glyph phase must use the shared global world conversion, not camera-local wrapped UV');
   });
 
   await runner.run('upload path shares the same fixed budget owner', async () => {
@@ -138,6 +149,26 @@ async function run() {
       'Remote wells must not rebuild density-anchor patches');
     assert(!main.slice(seedStart, seedEnd).includes('wellSystem.wells'),
       'Initial fluid seed must not paint a broad per-well density patch');
+  });
+
+  await runner.run('gameplay has no second corona or motion-distortion owner', async () => {
+    const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
+    const accretion = fs.readFileSync(path.join(ROOT, 'src/render/passes/accretion-pass.js'), 'utf8');
+    const threeScene = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
+    const presentationStyle = fs.readFileSync(path.join(ROOT, 'src/presentation/presentation-style.js'), 'utf8');
+    assert(main.includes('accretionStrength: 0.0') && main.includes('chromaticAberration: { strength: 0.0'),
+      'FluidDisplay must be the sole gameplay well owner and gameplay chromatic fringe must stay disabled');
+    assert(accretion.includes('lbhGlobalFluidUvDeltaToWorld(')
+      && !accretion.includes('diff = diff - round(diff)'),
+    'The title accretion pass must share the same global world-torus delta when it is active');
+    assert(!threeScene.includes('_buildBackdropLayers()')
+      && !threeScene.includes('screen-anchored-parallax-grid'),
+    'The moving screen-space backdrop lattice must be absent from the Three scene');
+    assert(!presentationStyle.includes('motionWarp: 0.004')
+      && !presentationStyle.includes('motionWarp: 0.007')
+      && !presentationStyle.includes('chromaticMotion: 0.0018')
+      && !presentationStyle.includes('chromaticMotion: 0.0025'),
+    'Three presentation must not warp or split the scene while the camera moves');
   });
 
   process.exit(runner.summary() ? 0 : 1);

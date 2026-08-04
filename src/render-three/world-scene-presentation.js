@@ -11,7 +11,7 @@ import { WreckVisualFamily } from './entities/wreck-visual-family.js';
 import { WorldSpriteVisualFamily } from './entities/world-sprite-visual-family.js';
 import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
-import { createWorldProjection, normalizedWorldPhase, wrappedAxisDelta, wrappedWorldVector } from './world-projection.js';
+import { createWorldProjection, wrappedAxisDelta, wrappedWorldVector } from './world-projection.js';
 import { resolveEntityPresentationScale, SPRITE_CARD_SCALE } from './entity-presentation-scale.js';
 
 function clamp(n, min, max) {
@@ -35,11 +35,6 @@ function collectTemporalSpriteExpectations(frame = {}) {
     for (const entity of frame.world?.[family] || []) add(family, entity);
   }
   return expected;
-}
-
-function seededUnit(index) {
-  const x = Math.sin(index * 12.9898 + 78.233) * 43758.5453;
-  return x - Math.floor(x);
 }
 
 function renderQualityOpacityScale(renderQuality) {
@@ -162,7 +157,6 @@ export class WorldScenePresentation {
     this.lastPresentationPhase = null;
     this.lastPresentationRunId = null;
 
-    this._buildBackdropLayers();
     this._buildForegroundLayers();
     this.vfxManager = new VfxManager({
       screenGroup: this.screenVfxGroup,
@@ -202,60 +196,6 @@ export class WorldScenePresentation {
     this.temporalFrameId = null;
     this.lastPresentationPhase = phase;
     this.lastPresentationRunId = runId || this.lastPresentationRunId;
-  }
-
-  _buildBackdropLayers() {
-    const grid = new THREE.Group();
-    grid.name = 'subtle-depth-grid';
-    const gridMat = new THREE.LineBasicMaterial({
-      color: 0x24415f,
-      transparent: true,
-      opacity: 0.16,
-      depthWrite: false,
-    });
-    const positions = [];
-    const extent = 1.35;
-    const step = 0.18;
-    for (let x = -extent; x <= extent + 0.001; x += step) {
-      positions.push(x, -extent, -0.03, x, extent, -0.03);
-    }
-    for (let y = -extent; y <= extent + 0.001; y += step) {
-      positions.push(-extent, y, -0.03, extent, y, -0.03);
-    }
-    const gridGeom = new THREE.BufferGeometry();
-    gridGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const gridLines = new THREE.LineSegments(gridGeom, gridMat);
-    gridLines.name = 'screen-anchored-parallax-grid';
-    gridLines.renderOrder = 1;
-    grid.add(gridLines);
-
-    this.farStars = this._createStarLayer('far-star-depth', 96, -0.18, 0x36506d, 1.4, 1.4);
-    this.nearStars = this._createStarLayer('near-star-depth', 38, -0.02, 0x6d859f, 1.9, 1.15);
-    this.backgroundGroup.add(grid, this.farStars, this.nearStars);
-  }
-
-  _createStarLayer(name, count, z, color, size, spread) {
-    const positions = [];
-    for (let i = 0; i < count; i++) {
-      const x = (seededUnit(i * 3 + 1) * 2 - 1) * spread;
-      const y = (seededUnit(i * 3 + 2) * 2 - 1) * spread;
-      positions.push(x, y, z + seededUnit(i * 3 + 3) * 0.04);
-    }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const mat = new THREE.PointsMaterial({
-      color,
-      size,
-      sizeAttenuation: false,
-      transparent: true,
-      opacity: 0.28,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    const points = new THREE.Points(geom, mat);
-    points.name = name;
-    points.renderOrder = 2;
-    return points;
   }
 
   _buildForegroundLayers() {
@@ -549,14 +489,6 @@ export class WorldScenePresentation {
     this.targetMotion.set(targetX, targetY).multiplyScalar(parallaxStrength);
     this.motion.lerp(this.targetMotion, 0.22);
 
-    const phaseX = normalizedWorldPhase(camX, worldScale);
-    const phaseY = normalizedWorldPhase(camY, worldScale);
-    this.backgroundGroup.position.x = -phaseX * 0.10 * parallaxStrength - this.motion.x * 0.65;
-    this.backgroundGroup.position.y = phaseY * 0.10 * parallaxStrength - this.motion.y * 0.65;
-    this.farStars.position.x = -phaseX * 0.08 * parallaxStrength;
-    this.farStars.position.y = phaseY * 0.08 * parallaxStrength;
-    this.nearStars.position.x = -phaseX * 0.15 * parallaxStrength - this.motion.x * 0.8;
-    this.nearStars.position.y = phaseY * 0.15 * parallaxStrength - this.motion.y * 0.8;
     this.lensRing.rotation.z = totalTime * 0.015 + (this.motion.x - this.motion.y) * 1.4;
     const motionLen = this.motion.length();
     this.lensRing.material.opacity = (0.035 + clamp(motionLen * 1.1, 0, 0.055)) * (renderQualityOpacityScale(this.renderQuality));

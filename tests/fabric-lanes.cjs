@@ -30,7 +30,7 @@ async function run() {
     assert(shader.includes('const float channelHalfViewport = 0.125'));
     assert(shader.includes('float channelEnvelope = 1.0 - smoothstep('));
     assert(shader.includes('float channelBody = 1.0 - smoothstep('));
-    assert(shader.includes('channelEnvelope * 0.52 + channelBody * 0.58'));
+    assert(shader.includes('channelEnvelope * 0.34 + channelBody * 0.42'));
     assert(shader.includes('float mediumFilament = 1.0 - smoothstep('));
     assert(shader.includes('float fineAsciiWeave = fineThread * markAttack * markRelease * channelEnvelope;'));
     assert(shader.includes('float decorativeHistory = (sceneExcitation * 0.46 + ringSignal * 0.18)'));
@@ -40,6 +40,9 @@ async function run() {
     assert(shader.includes('smoothstep(0.01, 0.06, laneSpeed)'));
     assert(!shader.includes('43758.5453'), 'hash-noise cue must be retired');
     assert(!shader.includes('flowLight'), 'global speed-brightening cue must be retired');
+    assert(shader.includes('float calmMottleHash = fract(sin(dot(calmMottleCell, vec2(19.19, 47.73))) * 17831.29);')
+      && shader.includes('(1.0 - corridorPresence)'),
+    'Calm-space material must be sparse, global, and excluded from current corridors');
   });
 
   await runner.run('diagnostic corridor math holds 4-5 ship widths at 0, 45, and 90 degrees', async () => {
