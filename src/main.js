@@ -173,7 +173,7 @@ import {
 import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
 import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
 import { deckPanelLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
-import { formatHullStats, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
+import { formatHullStats, formatHullStatStrip, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
 import { measureActionFooter } from './ui/action-footer-layout.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
@@ -5994,13 +5994,25 @@ function gameLoop(now) {
         currentCoupling: (hullDefinition.currentCoupling || 1) * (movementStats.currentCoupling || 1),
         deltaVMax: (hullDefinition.deltaVMax || 0) * (deltaVStats.deltaVCapacityMult || 1),
       });
+      const compactStatStrip = centerPanel.w < 460;
+      const shipPreviewScale = compactStatStrip ? 0.84 : 1.08;
+      const shipPreviewX = centerPanel.x + centerPanel.w * 0.71;
+      const hullStatStrip = formatHullStatStrip(hullStats, { compact: compactStatStrip });
+      // The portrait owns the right third of this panel at Deck width.  Keep
+      // stats inside the remaining rail; compact labels preserve the actual
+      // values instead of letting a fitted sentence disappear under the art.
+      const hullStatWidth = Math.max(120, Math.min(
+        centerTextW * 0.58,
+        shipPreviewX - centerX - (112 * shipPreviewScale / 2) - 18,
+      ));
       ctx.font = canvasFont(9);
       ctx.fillStyle = roleColor('flow', 0.78);
-      ctx.fillText(fitUiText(ctx, `BASE / FITTED  ${hullStats[0].label} ${hullStats[0].base} / ${hullStats[0].fitted}   ${hullStats[1].label} ${hullStats[1].base} / ${hullStats[1].fitted}`, centerTextW * 0.72), centerX, centerY + 38);
+      ctx.fillText('BASE / FITTED', centerX, centerY + 38);
+      ctx.fillText(fitUiText(ctx, hullStatStrip[0], hullStatWidth), centerX, centerY + 50);
       ctx.fillStyle = roleColor('salvage', 0.78);
-      ctx.fillText(fitUiText(ctx, `${hullStats[2].label} ${hullStats[2].base} / ${hullStats[2].fitted}   ${hullStats[3].label} ${hullStats[3].base} / ${hullStats[3].fitted}`, centerTextW * 0.72), centerX, centerY + 50);
-      drawHomeShipSprite(ctx, centerPanel.x + centerPanel.w * 0.71, centerPanel.y + 142, {
-        scale: 1.08,
+      ctx.fillText(fitUiText(ctx, hullStatStrip[1], hullStatWidth), centerX, centerY + 61);
+      drawHomeShipSprite(ctx, shipPreviewX, centerPanel.y + 142, {
+        scale: shipPreviewScale,
         hullType,
         role: 'flow',
         alpha: 0.98,
@@ -6011,7 +6023,7 @@ function gameLoop(now) {
       // This dense strip has three independent text bands. Measure the hull
       // control footer before continuing so its glyphs cannot sit on the rig
       // tracks or loadout heading.
-      let sy = centerY + 78;
+      let sy = centerY + 88;
       drawSectionLabel(ctx, 'flight hull', centerX, sy, { role: 'flow', alpha: 0.86 });
       sy += 24;
       for (const publicHullId of PUBLIC_HULL_IDS) {

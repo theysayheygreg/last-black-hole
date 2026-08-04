@@ -66,3 +66,20 @@ export function formatHullStats(base = {}, fitted = {}) {
     fitted: percent ? `${Math.round(Number(fittedValue || 0) * 100)}%` : `${Math.round(Number(fittedValue || 0))}`,
   }));
 }
+
+// Ship selection reserves its right side for the hull portrait.  These concise
+// labels keep the whole Base/Fitted strip readable in that remaining rail,
+// rather than squeezing a prose sentence beneath the art.
+export function formatHullStatStrip(stats = [], { compact = false } = {}) {
+  const read = (index) => stats[index] || { base: '--', fitted: '--' };
+  const pair = (leftLabel, left, rightLabel, right) => (
+    `${leftLabel} ${left.base}/${left.fitted}  //  ${rightLabel} ${right.base}/${right.fitted}`
+  );
+  const labels = compact
+    ? ['THR', 'DRG', 'FLOW', 'TANK']
+    : ['THRUST', 'DRAG', 'COUPLING', 'TANK'];
+  return [
+    pair(labels[0], read(0), labels[1], read(1)),
+    pair(labels[2], read(2), labels[3], read(3)),
+  ];
+}

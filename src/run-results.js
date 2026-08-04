@@ -144,6 +144,29 @@ export function buildRunResultsViewModel({
   };
 }
 
+// The terminal report is a learning surface after a run.  Keep the row
+// contract explicit so the renderer can never leave a label behind when a
+// result payload does not have a meaningful value for it.
+export function buildRunSummaryRows(view = {}) {
+  const rows = [
+    ['survival', view.survival, 'text'],
+    ['noise max', view.noiseSummary, 'flow'],
+    ['noise time', view.noiseTimeSummary, 'flow'],
+    ['ecology', view.ecologyLabel, 'inhibitor'],
+  ];
+  if (view.wellsVisited != null) rows.push(['wells visited', String(view.wellsVisited), 'text']);
+  if (view.deathCause) rows.push(['cause', view.deathCause, 'danger']);
+  return rows
+    .filter(([, value]) => String(value ?? '').trim().length > 0)
+    .map(([label, value, valueRole]) => ({ label, value: String(value), valueRole }));
+}
+
+export function buildRunLedgerRows(view = {}) {
+  const label = view.tone === 'extract' ? 'credited' : 'residue';
+  const value = Number.isFinite(Number(view.emEarned)) ? `${Math.max(0, Math.round(Number(view.emEarned)))} EM` : '';
+  return value ? [{ label, value, valueRole: 'salvage' }] : [];
+}
+
 export function drawRunResultsOverlay(ctx, canvas, {
   view,
   rawTime = 0,
@@ -238,32 +261,31 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
   drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, `+${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
 
+  const summaryValueWidth = Math.max(1, columnW - 128);
   let y = panelY + 160;
 
   drawSectionLabel(ctx, 'RUN SUMMARY', leftX, y, { role, alpha: contentAlpha });
   y += 25;
-  drawKeyValueRow(ctx, 'survival', view.survival, leftX, y, { alpha: contentAlpha });
-  y += 18;
-  drawKeyValueRow(ctx, 'noise max', view.noiseSummary, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
-  y += 18;
-  drawKeyValueRow(ctx, 'noise time', view.noiseTimeSummary, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
-  y += 18;
-  drawKeyValueRow(ctx, 'ecology', view.ecologyLabel, leftX, y, { alpha: contentAlpha, valueRole: 'inhibitor' });
-  y += 18;
-  if (view.wellsVisited != null) {
-    drawKeyValueRow(ctx, 'wells visited', String(view.wellsVisited), leftX, y, { alpha: contentAlpha });
-    y += 18;
-  }
-  if (view.deathCause) {
-    y += 8;
-    drawKeyValueRow(ctx, 'cause', view.deathCause, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
+  for (const row of buildRunSummaryRows(view)) {
+    drawKeyValueRow(ctx, row.label, row.value, leftX, y, {
+      alpha: contentAlpha,
+      valueRole: row.valueRole,
+      valueWidth: summaryValueWidth,
+    });
     y += 18;
   }
 
   y += 18;
   drawSectionLabel(ctx, 'LEDGER', leftX, y, { role: 'salvage', alpha: contentAlpha });
   y += 25;
-  drawKeyValueRow(ctx, success ? 'credited' : 'residue', `${view.emEarned} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
+  for (const row of buildRunLedgerRows(view)) {
+    drawKeyValueRow(ctx, row.label, row.value, leftX, y, {
+      alpha: contentAlpha,
+      valueRole: row.valueRole,
+      valueWidth: summaryValueWidth,
+    });
+    y += 18;
+  }
 
   let ry = panelY + 160;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });
@@ -271,11 +293,13 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items`, rightX, ry, {
     alpha: contentAlpha,
     valueRole: success ? 'salvage' : 'danger',
+    valueWidth: summaryValueWidth,
   });
   ry += 22;
   drawKeyValueRow(ctx, 'salvage value', `${view.cargoValue} EM`, rightX, ry, {
     alpha: contentAlpha,
     valueRole: success ? 'salvage' : 'danger',
+    valueWidth: summaryValueWidth,
   });
   ry += 22;
   ctx.textAlign = 'left';

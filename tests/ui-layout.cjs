@@ -7,6 +7,7 @@ const assert = require('assert');
   const layout = await import('../src/ui/layout-contract.js');
   const primitives = await import('../src/ui/canvas-primitives.js');
   const loadout = await import('../src/ui/loadout-presentation.js');
+  const runResults = await import('../src/run-results.js');
 
   const geometry = tokens.UI_DECK_GEOMETRY;
   const separated = (a, b, gap = geometry.separation) => (
@@ -139,6 +140,31 @@ const assert = require('assert');
   assert(itemEffects.includes('cargo slots +1'), 'item effect should retain additive slot identity');
   assert.strictEqual(loadout.formatSlotIdentity({ subcategory: 'equippable' }), 'artifact slot');
   assert.strictEqual(loadout.formatSlotIdentity({ subcategory: 'consumable' }), 'hotbar slot');
+  const hullStatStrip = loadout.formatHullStatStrip(loadout.formatHullStats(
+    { thrustScale: 0.7, dragScale: 0.85, currentCoupling: 1.6, deltaVMax: 60 },
+    { thrustScale: 0.7, dragScale: 0.85, currentCoupling: 1.6, deltaVMax: 60 },
+  ));
+  assert.deepStrictEqual(hullStatStrip, [
+    'THRUST 70%/70%  //  DRAG 85%/85%',
+    'COUPLING 160%/160%  //  TANK 60/60',
+  ], 'ship stat strip must retain all fitted values in its portrait-safe rail');
+  assert.deepStrictEqual(loadout.formatHullStatStrip(loadout.formatHullStats(
+    { thrustScale: 0.7, dragScale: 0.85, currentCoupling: 1.6, deltaVMax: 60 },
+    { thrustScale: 0.7, dragScale: 0.85, currentCoupling: 1.6, deltaVMax: 60 },
+  ), { compact: true }), [
+    'THR 70%/70%  //  DRG 85%/85%',
+    'FLOW 160%/160%  //  TANK 60/60',
+  ], 'compact ship stat strip must retain values instead of clipping under portrait art');
+  const resultRows = runResults.buildRunSummaryRows({
+    survival: '1:04',
+    noiseSummary: '640m · IMPACT',
+    noiseTimeSummary: '30s heard · 8s tracked',
+    ecologyLabel: 'PHASE 3 · GLITCH 2',
+    deathCause: 'well: Charybdis',
+  });
+  const ledgerRows = runResults.buildRunLedgerRows({ tone: 'death', emEarned: 16 });
+  assert(resultRows.every((row) => row.label && row.value), 'result summary cannot render an empty labeled row');
+  assert(ledgerRows.every((row) => row.label && row.value), 'result ledger cannot render an empty labeled row');
   const hud = layout.hudSurfaceLayout(960, 720);
   assertSurface('HUD surfaces', [hud.vitals, hud.portals, hud.actions, hud.interaction]);
 

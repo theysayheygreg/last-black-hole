@@ -13,6 +13,13 @@
   no authority/sim forces, well radii, carry, waves, camera, or interaction
   behavior changed.
 
+- **Terminal results and ship stat clarity:** results now give every visible
+  summary/ledger label a bounded current value, omitting a row only when the
+  authority result has no meaningful value.  Ship select now keeps Base/Fitted
+  thrust, drag, coupling, and tank values in a portrait-safe two-line rail at
+  Deck and compact home widths rather than truncating the strip beneath hull
+  art.
+
 - **Body-aware interaction contacts:** authoritative pickups and exfil now use
   one compact gameplay volume: semantic range/aperture plus the physical ship
   body and a small `0.012` near-miss allowance.
