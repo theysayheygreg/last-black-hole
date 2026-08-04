@@ -6,6 +6,7 @@ import {
   UI_TYPOGRAPHY,
 } from './design-tokens.js';
 import { canvasFont } from './typography.js';
+import { measureActionFooter } from './action-footer-layout.js';
 import { applyCanvasTextShadow, drawGeneratedFrame } from './asset-kit.js';
 
 const ROLE_COLORS = {
@@ -298,29 +299,18 @@ export function drawActionFooter(ctx, x, y, actions, {
   backing = true,
   backingRole = 'flow',
 } = {}) {
-  let cursor = Number(x) || 0;
-  const startX = cursor;
-  let top = Number(y) || 0;
-  const placed = [];
-  for (const entry of Array.isArray(actions) ? actions : []) {
-    const descriptor = entry?.descriptor || entry;
-    const verb = entry?.verb || '';
-    const estimatedWidth = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, resultWidth(verb, descriptor)) + gap;
-    if (cursor > startX && cursor + estimatedWidth > startX + maxWidth) {
-      cursor = startX;
-      top += lineHeight;
-    }
-    placed.push({ descriptor, verb, x: cursor, y: top, w: Math.max(estimatedWidth, UI_DECK_GEOMETRY.actionGlyph.minWidth) });
-    cursor += estimatedWidth;
-  }
+  const startX = Number(x) || 0;
+  const startY = Number(y) || 0;
+  const measured = measureActionFooter(actions, { gap, maxWidth, lineHeight });
+  const placed = measured.placed.map((entry) => ({ ...entry, x: startX + entry.x, y: startY + entry.y }));
   if (backing && placed.length > 0) {
     const right = Math.min(startX + maxWidth, Math.max(...placed.map((entry) => entry.x + entry.w)));
     const bottom = Math.max(...placed.map((entry) => entry.y + UI_DECK_GEOMETRY.actionGlyph.minHeight));
     drawUiPanel(ctx, {
       x: startX - UI_DECK_GEOMETRY.actionGlyph.paddingX,
-      y: Number(y) - 6,
+      y: startY - 6,
       w: Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, right - startX + UI_DECK_GEOMETRY.actionGlyph.paddingX * 2),
-      h: Math.max(UI_DECK_GEOMETRY.actionGlyph.minHeight, bottom - Number(y) + 12),
+      h: Math.max(UI_DECK_GEOMETRY.actionGlyph.minHeight, bottom - startY + 12),
     }, { role: backingRole, fillAlpha: 0.16 * alpha, borderAlpha: 0.22 * alpha, cornerLength: 10 });
   }
   for (const entry of placed) {
@@ -328,13 +318,6 @@ export function drawActionFooter(ctx, x, y, actions, {
       verb: entry.verb, alpha, color,
     });
   }
-}
-
-function resultWidth(verb, descriptor) {
-  const copy = String(verb || '').trim().toLowerCase();
-  const duplicate = copy === String(descriptor?.actionId || '').toLowerCase()
-    || copy === String(descriptor?.fallbackLabel || '').trim().toLowerCase();
-  return UI_DECK_GEOMETRY.actionGlyph.minWidth + (copy && !duplicate ? UI_DECK_GEOMETRY.actionGlyph.gap + copy.length * 8 : 0);
 }
 
 export function drawCommandButton(ctx, rect, label, {

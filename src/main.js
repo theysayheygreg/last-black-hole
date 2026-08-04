@@ -760,8 +760,40 @@ function confirmProfileDeletion() {
   setNameInputBuffer(generatePilotName());
 }
 
-function threePanelLayout(width, height, kind, viewportWidth = width) {
-  const layout = deckPanelLayout(width, height, kind, viewportWidth);
+function profileActions(promptOptions = currentPromptOptions()) {
+  return deleteConfirmSlot >= 0
+    ? [
+      { descriptor: actionDescriptor('navigate', promptOptions), verb: 'choose cancel / delete' },
+      { descriptor: actionDescriptor('confirm', promptOptions), verb: deleteConfirmChoice },
+      { descriptor: actionDescriptor('back', promptOptions), verb: 'cancel' },
+    ]
+    : [
+      { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
+      { descriptor: actionDescriptor('confirm', promptOptions), verb: 'load / create' },
+      { descriptor: actionDescriptor('delete', promptOptions), verb: 'delete' },
+      { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
+    ];
+}
+
+function homeActions(promptOptions = currentPromptOptions()) {
+  return [
+    { descriptor: actionDescriptor('tabs', promptOptions), verb: 'switch tabs' },
+    { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
+    { descriptor: actionDescriptor('confirm', promptOptions), verb: 'use' },
+    { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
+  ];
+}
+
+function mapSelectActions(promptOptions = currentPromptOptions()) {
+  return [
+    { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
+    { descriptor: actionDescriptor('reroll', promptOptions), verb: 'new seed' },
+    { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
+  ];
+}
+
+function threePanelLayout(width, height, kind, viewportWidth = width, options = {}) {
+  const layout = deckPanelLayout(width, height, kind, viewportWidth, options);
   return { ...layout, leftW: layout.left.w, rightW: layout.right.w, centerW: layout.center.w };
 }
 
@@ -797,8 +829,8 @@ function getUiMotionStateForTest() {
     profileDelete: gamePhase === 'profileSelect' ? { slot: deleteConfirmSlot, choice: deleteConfirmChoice } : null,
     layout: (gamePhase === 'home' || gamePhase === 'mapSelect')
       ? gamePhase === 'mapSelect'
-        ? mapSelectSurfaceLayout(overlayCanvas.width, overlayCanvas.height, window.innerWidth, MAP_SELECT_ENTRIES.length)
-        : threePanelLayout(overlayCanvas.width, overlayCanvas.height, 'home', window.innerWidth)
+        ? mapSelectSurfaceLayout(overlayCanvas.width, overlayCanvas.height, window.innerWidth, MAP_SELECT_ENTRIES.length, mapSelectActions())
+        : threePanelLayout(overlayCanvas.width, overlayCanvas.height, 'home', window.innerWidth, { rightFooterActions: homeActions(), footerGap: 10 })
       : null,
   };
 }
@@ -5740,7 +5772,8 @@ function gameLoop(now) {
   // === PROFILE SELECT SCREEN ===
   if (!rendererFixtureActive && gamePhase === 'profileSelect') {
     const cx = overlayCanvas.width / 2;
-    const profileLayout = profileSurfaceLayout(overlayCanvas.width, overlayCanvas.height);
+    const profileFooterActions = profileActions();
+    const profileLayout = profileSurfaceLayout(overlayCanvas.width, overlayCanvas.height, profileFooterActions);
 
     ctx.save();
     const w = overlayCanvas.width, h = overlayCanvas.height;
@@ -5812,49 +5845,37 @@ function gameLoop(now) {
 
     // Name input overlay
     if (nameInputActive) {
-      drawUiPanel(ctx, { x: cx - 220, y: profileLayout.panel.y + profileLayout.panel.h - 92, w: 440, h: 76 }, {
+      drawUiPanel(ctx, profileLayout.nameOverlay, {
         role: 'flow', fillAlpha: 0.86, borderAlpha: 0.62, cornerLength: 22,
       });
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
       ctx.font = canvasFont(12);
-      ctx.fillText('type pilot name', cx, profileLayout.panel.y + profileLayout.panel.h - 67);
+      ctx.fillText('type pilot name', cx, profileLayout.nameOverlay.y + 25);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
       ctx.font = canvasFont(18);
       const blink = Math.sin(totalTime * 6) > 0 ? '|' : '';
-      ctx.fillText(nameInputBuffer + blink, cx, profileLayout.panel.y + profileLayout.panel.h - 37);
+      ctx.fillText(nameInputBuffer + blink, cx, profileLayout.nameOverlay.y + 55);
     }
 
     // Delete confirmation overlay
     if (deleteConfirmSlot >= 0) {
-      drawUiPanel(ctx, { x: cx - 200, y: profileLayout.panel.y + profileLayout.panel.h - 82, w: 400, h: 68 }, {
+      drawUiPanel(ctx, profileLayout.deleteOverlay, {
         role: 'danger', fillAlpha: 0.86, borderAlpha: 0.64, cornerLength: 22,
       });
       ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
       ctx.font = canvasFont(13);
-      ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, profileLayout.panel.y + profileLayout.panel.h - 54);
+      ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, profileLayout.deleteOverlay.y + 28);
       ctx.font = canvasFont(12);
       ctx.fillStyle = deleteConfirmChoice === 'cancel' ? 'rgba(255, 255, 255, 0.98)' : 'rgba(180, 180, 200, 0.62)';
-      ctx.fillText('[ CANCEL ]', cx - 74, profileLayout.panel.y + profileLayout.panel.h - 28);
+      ctx.fillText('[ CANCEL ]', cx - 74, profileLayout.deleteOverlay.y + 54);
       ctx.fillStyle = deleteConfirmChoice === 'delete' ? 'rgba(255, 150, 120, 0.98)' : 'rgba(180, 180, 200, 0.62)';
-      ctx.fillText('[ DELETE ]', cx + 74, profileLayout.panel.y + profileLayout.panel.h - 28);
+      ctx.fillText('[ DELETE ]', cx + 74, profileLayout.deleteOverlay.y + 54);
     }
 
     // Controls hint: glyphs remain separate from the selected action label.
-    const profileFooterActions = deleteConfirmSlot >= 0
-      ? [
-        { descriptor: actionDescriptor('navigate', currentPromptOptions()), verb: 'choose cancel / delete' },
-        { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: deleteConfirmChoice },
-        { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'cancel' },
-      ]
-      : [
-        { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'move' },
-        { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'load / create' },
-        { descriptor: actionDescriptor('delete', currentPromptOptions()), verb: 'delete' },
-        { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back out' },
-      ];
-    drawActionFooter(ctx, profileLayout.footer.x, profileLayout.footer.y, profileFooterActions, {
+    drawActionFooter(ctx, profileLayout.footer.drawX, profileLayout.footer.drawY, profileFooterActions, {
       alpha: 0.76,
-      maxWidth: profileLayout.footer.w,
+      maxWidth: profileLayout.footer.contentWidth,
       backing: true,
       backingRole: 'flow',
     });
@@ -5877,7 +5898,12 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const panelLayout = threePanelLayout(w, h, 'home', window.innerWidth);
+    const homePromptOptions = currentPromptOptions();
+    const homeFooterActions = homeActions(homePromptOptions);
+    const panelLayout = threePanelLayout(w, h, 'home', window.innerWidth, {
+      rightFooterActions: homeFooterActions,
+      footerGap: 10,
+    });
     const { gap, panelH } = panelLayout;
     const { left: leftPanel, center: centerPanel, right: rightPanel } = panelLayout;
 
@@ -6300,7 +6326,6 @@ function gameLoop(now) {
     const sidebarX = rightPanel.x + UI_DECK_GEOMETRY.panel.paddingX;
     const sidebarW = rightPanel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
     let sideY = rightPanel.y + 58;
-    const homePromptOptions = currentPromptOptions();
     const launchActive = homeTab === 4;
     if (launchActive) {
       drawCommandButtonMotion(ctx, {
@@ -6359,12 +6384,8 @@ function gameLoop(now) {
       ctx.fillStyle = roleColor('muted', 0.74);
       ctx.fillText(fitUiText(ctx, 'map briefing opens on confirm', sidebarW), sidebarX, sideY);
     }
-    drawActionFooter(ctx, panelLayout.rightFooter.x, panelLayout.rightFooter.y, [
-      { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'switch tabs' },
-      { descriptor: actionDescriptor('select', homePromptOptions), verb: 'move' },
-      { descriptor: actionDescriptor('confirm', homePromptOptions), verb: 'use' },
-      { descriptor: actionDescriptor('back', homePromptOptions), verb: 'back out' },
-    ], { alpha: 0.72, gap: 10, maxWidth: panelLayout.rightFooter.w, backing: true, backingRole: 'flow' });
+    drawActionFooter(ctx, panelLayout.rightFooter.drawX, panelLayout.rightFooter.drawY, homeFooterActions,
+      { alpha: 0.72, gap: 10, maxWidth: panelLayout.rightFooter.contentWidth, backing: true, backingRole: 'flow' });
 
     ctx.restore();
   }
@@ -6389,7 +6410,8 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const panelLayout = mapSelectSurfaceLayout(w, h, window.innerWidth, MAP_SELECT_ENTRIES.length);
+    const mapFooterActions = mapSelectActions(promptOptions);
+    const panelLayout = mapSelectSurfaceLayout(w, h, window.innerWidth, MAP_SELECT_ENTRIES.length, mapFooterActions);
     const { left: listPanel, center: previewPanel, right: briefPanel } = panelLayout;
 
     drawTerminalWindow(ctx, listPanel, {
@@ -6462,11 +6484,8 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    drawActionFooter(ctx, panelLayout.footer.x, panelLayout.footer.y, [
-      { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
-      { descriptor: actionDescriptor('reroll', promptOptions), verb: 'new seed' },
-      { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
-    ], { alpha: 0.82, gap: 10, maxWidth: panelLayout.footer.w, backing: true, backingRole: surveyRole });
+    drawActionFooter(ctx, panelLayout.footer.drawX, panelLayout.footer.drawY, mapFooterActions,
+      { alpha: 0.82, gap: 10, maxWidth: panelLayout.footer.contentWidth, backing: true, backingRole: surveyRole });
 
     const centerX = previewPanel.x + pad;
     ctx.font = canvasFont(21, { role: 'display', weight: '800' });

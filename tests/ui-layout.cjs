@@ -3,6 +3,7 @@ const assert = require('assert');
 (async () => {
   const tokens = await import('../src/ui/design-tokens.js');
   const prompts = await import('../src/ui/input-prompts.js');
+  const footerLayout = await import('../src/ui/action-footer-layout.js');
   const layout = await import('../src/ui/layout-contract.js');
   const loadout = await import('../src/ui/loadout-presentation.js');
 
@@ -62,14 +63,38 @@ const assert = require('assert');
   assert(buttonPrompt.w >= geometry.actionGlyph.minWidth && buttonPrompt.h >= geometry.actionGlyph.minHeight, 'glyph bounds fell below minimum geometry');
   assert(layout.rectContains({ x: 40, y: 120, w: geometry.button.minWidth, h: geometry.actionGlyph.minHeight }, buttonPrompt), 'glyph escaped prompt bounds');
 
-  const home = layout.deckPanelLayout(960, 720, 'home', 960);
+  const deckOptions = { deck: true };
+  const homeActions = [
+    { descriptor: prompts.actionDescriptor('tabs', deckOptions), verb: 'switch tabs' },
+    { descriptor: prompts.actionDescriptor('select', deckOptions), verb: 'move' },
+    { descriptor: prompts.actionDescriptor('confirm', deckOptions), verb: 'use' },
+    { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'back out' },
+  ];
+  const profileActions = [
+    { descriptor: prompts.actionDescriptor('select', deckOptions), verb: 'move' },
+    { descriptor: prompts.actionDescriptor('confirm', deckOptions), verb: 'load / create' },
+    { descriptor: prompts.actionDescriptor('delete', deckOptions), verb: 'delete' },
+    { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'back out' },
+  ];
+  const home = layout.deckPanelLayout(960, 720, 'home', 960, { rightFooterActions: homeActions, footerGap: 10 });
   assertSurface('home panels', [home.left, home.center, home.right]);
-  assert(layout.rectContains(home.left, home.leftFooter, geometry.panel.paddingX), 'home left footer escaped its panel');
   assert(layout.rectContains(home.right, home.rightFooter, geometry.panel.paddingX), 'home right footer escaped its panel');
+  assert.strictEqual(home.rightFooter.rowCount, 3, '960px Home action rail must reserve all three wrapped rows');
+  assert.strictEqual(home.rightFooter.rowCount, footerLayout.measureActionFooter(homeActions, { gap: 10, maxWidth: home.rightFooter.contentWidth }).rowCount,
+    'Home layout and renderer wrapping diverged');
   assert(layout.rectContains(home.center, { ...home.center, x: home.center.x + geometry.panel.paddingX, y: home.center.y + geometry.panel.paddingY, w: home.center.w - geometry.panel.paddingX * 2, h: home.center.h - geometry.panel.paddingY * 2 }), 'home content escaped panel');
-  const profile = layout.profileSurfaceLayout(960, 720);
-  assert(profile.rows.every((row) => layout.rectContains(profile.panel, row, geometry.panel.paddingX)), 'profile row escaped panel padding');
-  assert(layout.rectContains(profile.panel, profile.footer, geometry.panel.paddingX), 'profile footer escaped panel padding');
+  const homeDeck = layout.deckPanelLayout(1280, 800, 'home', 1280, { rightFooterActions: homeActions, footerGap: 10 });
+  assert.strictEqual(homeDeck.rightFooter.rowCount, 2, '1280px Home action rail should reserve two wrapped rows');
+  for (const [width, height] of [[960, 720], [1280, 800]]) {
+    const profile = layout.profileSurfaceLayout(width, height, profileActions);
+    assert(profile.rows.every((row) => layout.rectContains(profile.panel, row, geometry.panel.paddingX)), `${width}px profile row escaped panel padding`);
+    assert(layout.rectContains(profile.panel, profile.footer, geometry.panel.paddingX), `${width}px profile footer escaped panel padding`);
+    assert(profile.rows.every((row) => !layout.rectsOverlap(row, profile.footer, geometry.separation)), `${width}px profile rows overlap footer`);
+    assert(layout.rectContains(profile.panel, profile.nameOverlay, geometry.panel.paddingX), `${width}px profile name overlay escaped panel`);
+    assert(layout.rectContains(profile.panel, profile.deleteOverlay, geometry.panel.paddingX), `${width}px profile delete overlay escaped panel`);
+    assert(!layout.rectsOverlap(profile.nameOverlay, profile.footer, 0), `${width}px profile name overlay overlaps footer`);
+    assert(!layout.rectsOverlap(profile.deleteOverlay, profile.footer, 0), `${width}px profile delete overlay overlaps footer`);
+  }
   const title = layout.titleSurfaceLayout(1280, 720, 'left');
   assert(layout.rectContains({ x: title.panelX, y: title.panelY, w: title.panelW, h: title.panelH }, title.commandRect), 'title command escaped panel');
   assert(layout.rectContains({ x: title.panelX, y: title.panelY, w: title.panelW, h: title.panelH }, title.footerRect), 'title prompt rail escaped panel');

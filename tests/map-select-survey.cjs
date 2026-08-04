@@ -10,6 +10,7 @@ async function run() {
   const survey = await import(pathToFileURL(path.join(ROOT, 'src/ui/map-select-survey.js')).href);
   const layout = await import(pathToFileURL(path.join(ROOT, 'src/ui/layout-contract.js')).href);
   const tokens = await import(pathToFileURL(path.join(ROOT, 'src/ui/design-tokens.js')).href);
+  const prompts = await import(pathToFileURL(path.join(ROOT, 'src/ui/input-prompts.js')).href);
   const mapLoader = await import(pathToFileURL(path.join(ROOT, 'src/maps/playable-map-loader.js')).href);
   const mapScales = await import(pathToFileURL(path.join(ROOT, 'src/content/map-scales.js')).href);
   const maps = mapLoader.PLAYABLE_MAPS.map(({ map }) => ({ MAP: map }));
@@ -81,11 +82,17 @@ async function run() {
   assert.strictEqual(locked.surveyPreview, null, 'locked selection must not preview hidden layout');
   assert.strictEqual(locked.entry.available, false);
 
-  const surface = layout.mapSelectSurfaceLayout(960, 720, 960, 6);
+  const mapActions = [
+    { descriptor: prompts.actionDescriptor('select', { deck: true }), verb: 'move' },
+    { descriptor: prompts.actionDescriptor('reroll', { deck: true }), verb: 'new seed' },
+    { descriptor: prompts.actionDescriptor('back', { deck: true }), verb: 'back out' },
+  ];
+  const surface = layout.mapSelectSurfaceLayout(960, 720, 960, 6, mapActions);
   assert(surface.rows.length === 6, 'Map Select must contain six destination rows');
   for (const row of surface.rows) assert(layout.rectContains(surface.left, row, surface.pad), 'destination row escaped left panel');
   assert(surface.rows.every((row, index) => !surface.rows.some((other, otherIndex) => index !== otherIndex && layout.rectsOverlap(row, other, 0))), 'destination rows overlap');
   assert(surface.rows.every((row) => !layout.rectsOverlap(row, surface.footer, 0)), 'destination rows overlap footer');
+  assert.strictEqual(surface.footer.rowCount, 3, '960px Map Select action rail must reserve all three wrapped rows');
   assert(layout.rectContains(surface.right, surface.command, surface.pad), 'command escaped right panel');
   assert(layout.rectContains(surface.right, surface.briefStatus.scale, surface.pad), 'scale status escaped briefing panel');
   assert(layout.rectContains(surface.right, surface.briefStatus.risk, surface.pad), 'risk status escaped briefing panel');
@@ -98,6 +105,12 @@ async function run() {
   };
   assert(layout.rectContains(surface.right, glyph), 'controller glyph escaped right panel');
   assert(!layout.rectsOverlap(surface.left, surface.center, 0) && !layout.rectsOverlap(surface.center, surface.right, 0), 'three panels overlap');
+
+  const deckSurface = layout.mapSelectSurfaceLayout(1280, 800, 1280, 6, mapActions);
+  assert.strictEqual(deckSurface.footer.rowCount, 2, '1280px Map Select action rail should reserve two wrapped rows');
+  assert(deckSurface.rows.every((row) => layout.rectContains(deckSurface.left, row, deckSurface.pad)), 'Deck destination row escaped left panel');
+  assert(deckSurface.rows.every((row) => !layout.rectsOverlap(row, deckSurface.footer, 0)), 'Deck destination rows overlap footer');
+  assert(layout.rectContains(deckSurface.left, deckSurface.footer, deckSurface.pad), 'Deck Map Select footer escaped panel');
 
   console.log('MapSelectSurvey: canonical metadata, schema, seed, state, scale, and layout assertions passed for all 3 maps.');
 }

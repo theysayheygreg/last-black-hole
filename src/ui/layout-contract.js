@@ -1,4 +1,5 @@
 import { UI_DECK_GEOMETRY } from './design-tokens.js';
+import { measureActionFooter } from './action-footer-layout.js';
 
 export function rect(x = 0, y = 0, w = 0, h = 0) {
   return { x: Number(x) || 0, y: Number(y) || 0, w: Number(w) || 0, h: Number(h) || 0 };
@@ -89,7 +90,27 @@ export function glyphBounds(container, size = UI_DECK_GEOMETRY.actionGlyph.minHe
   );
 }
 
-export function deckPanelLayout(width, height, kind = 'home', viewportWidth = width) {
+function measuredPanelFooter(panel, actions, gap = 10) {
+  const x = panel.x + UI_DECK_GEOMETRY.panel.paddingX;
+  const w = panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
+  const contentWidth = Math.max(1, w - UI_DECK_GEOMETRY.actionGlyph.paddingX * 2);
+  const measured = measureActionFooter(actions, { gap, maxWidth: contentWidth });
+  const h = measured.height;
+  const y = panel.y + panel.h - UI_DECK_GEOMETRY.panel.paddingX - h;
+  return {
+    ...rect(x, y, w, h),
+    drawX: x + UI_DECK_GEOMETRY.actionGlyph.paddingX,
+    drawY: y + 6,
+    contentWidth,
+    rowCount: measured.rowCount,
+  };
+}
+
+export function deckPanelLayout(width, height, kind = 'home', viewportWidth = width, {
+  leftFooterActions = [],
+  rightFooterActions = [],
+  footerGap = 10,
+} = {}) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
   const compact = viewportWidth < 984;
@@ -110,23 +131,16 @@ export function deckPanelLayout(width, height, kind = 'home', viewportWidth = wi
   const left = rect(marginX, top, leftW, panelH);
   const center = rect(left.x + left.w + gap, top, centerW, panelH);
   const right = rect(center.x + center.w + gap, top, rightW, panelH);
-  // Controller/keyboard affordances routinely need two rows at Deck scale.
-  // Reserve the second row up front instead of letting a wrapped footer leak
-  // through the panel frame.
-  const footerHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight * 2
-    + UI_DECK_GEOMETRY.panel.gap + 12;
-  const footerY = bottom - UI_DECK_GEOMETRY.panel.paddingX - footerHeight;
   return {
     compact, width: w, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH,
     left, center, right,
-    footerHeight,
-    leftFooter: rect(left.x + UI_DECK_GEOMETRY.panel.paddingX, footerY, left.w - UI_DECK_GEOMETRY.panel.paddingX * 2, footerHeight),
-    rightFooter: rect(right.x + UI_DECK_GEOMETRY.panel.paddingX, footerY, right.w - UI_DECK_GEOMETRY.panel.paddingX * 2, footerHeight),
+    leftFooter: measuredPanelFooter(left, leftFooterActions, footerGap),
+    rightFooter: measuredPanelFooter(right, rightFooterActions, footerGap),
   };
 }
 
-export function mapSelectSurfaceLayout(width, height, viewportWidth = width, entryCount = 6) {
-  const panels = deckPanelLayout(width, height, 'map', viewportWidth);
+export function mapSelectSurfaceLayout(width, height, viewportWidth = width, entryCount = 6, footerActions = []) {
+  const panels = deckPanelLayout(width, height, 'map', viewportWidth, { leftFooterActions: footerActions });
   const pad = UI_DECK_GEOMETRY.panel.paddingX;
   const count = Math.max(1, Math.floor(Number(entryCount) || 1));
   const footer = panels.leftFooter;
@@ -168,7 +182,7 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
   };
 }
 
-export function profileSurfaceLayout(width, height) {
+export function profileSurfaceLayout(width, height, footerActions = []) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
   const panelW = Math.min(560, Math.max(500, w * 0.42));
@@ -176,21 +190,24 @@ export function profileSurfaceLayout(width, height) {
   const panel = rect((w - panelW) / 2, Math.max(72, (h - panelH) * 0.44), panelW, panelH);
   const innerX = panel.x + UI_DECK_GEOMETRY.panel.paddingX;
   const rowW = panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2;
-  const rowH = Math.max(64, UI_DECK_GEOMETRY.listRow.minHeight + 16);
+  const footer = measuredPanelFooter(panel, footerActions, UI_DECK_GEOMETRY.panel.gap);
+  const rowStartY = panel.y + 94;
   const rowGap = UI_DECK_GEOMETRY.panel.gap;
+  const rowBudget = (footer.y - UI_DECK_GEOMETRY.separation - rowStartY - rowGap * 2) / 3;
+  const rowH = Math.max(UI_DECK_GEOMETRY.listRow.minHeight, Math.min(74, rowBudget));
   const rows = Array.from({ length: 3 }, (_, index) => rect(
     innerX,
-    panel.y + 94 + index * (rowH + rowGap),
+    rowStartY + index * (rowH + rowGap),
     rowW,
     rowH,
   ));
-  const footerHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight * 2
-    + UI_DECK_GEOMETRY.panel.gap + 12;
   return {
     panel,
     rows,
     heading: rect(innerX, panel.y + 48, rowW, UI_DECK_GEOMETRY.heading.minHeight),
-    footer: rect(innerX, panel.y + panel.h - UI_DECK_GEOMETRY.panel.paddingX - footerHeight, rowW, footerHeight),
+    footer,
+    nameOverlay: rect(panel.x + (panel.w - 440) / 2, footer.y - UI_DECK_GEOMETRY.separation - 76, 440, 76),
+    deleteOverlay: rect(panel.x + (panel.w - 400) / 2, footer.y - UI_DECK_GEOMETRY.separation - 68, 400, 68),
   };
 }
 
