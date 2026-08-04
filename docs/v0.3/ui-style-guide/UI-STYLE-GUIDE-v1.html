@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LAST SINGULARITY — UI Style Reference v1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ============ tokens (generated from src/ui/design-tokens.js) ============ */
+  :root{
+    --void:#000021; --field:#000421;
+    --panel-bg:rgba(0,2,10,0.78); --panel-backing:rgba(0,0,8,0.56);
+    --icon-backing:rgba(0,0,8,0.68);
+    --stroke:rgba(0,226,255,0.32);
+    --text:rgba(234,247,255,0.94); --muted:rgba(154,180,206,0.72);
+    --bone:#FFF4DA;
+    --cyan:#00E2FF; --cyan-a:rgba(0,226,255,0.9); --cyan-dim:rgba(0,226,255,0.58);
+    --amber:#FFB938; --amber-a:rgba(255,185,56,0.92);
+    --red:#FF3336; --red-a:rgba(255,51,54,0.95);
+    --magenta:#FF3EB5; --magenta-a:rgba(255,62,181,0.95);
+    --violet:#B84CFF; --green:#38F58A;
+    --sel-border:rgba(0,226,255,0.95); --sel-fill:rgba(0,226,255,0.14);
+    --mono:"Monaspace Neon","JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--void);color:var(--text);font-family:var(--mono);
+       font-size:12px;line-height:1.5;padding:42px 64px;max-width:1440px;margin:0 auto}
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,244,218,0.025) 0 1px,transparent 1px 4px)}
+  h1{font-size:28px;font-weight:800;letter-spacing:0;text-transform:uppercase}
+  .sub{color:var(--muted);margin-top:4px}
+  section{margin-top:56px}
+  .seclabel{color:var(--muted);font-size:10px;text-transform:uppercase;margin-bottom:16px}
+  .seclabel::before{content:"-- "}.seclabel::after{content:" --"}
+  h2{font-size:18px;font-weight:700;text-transform:uppercase;color:var(--text);margin-bottom:4px}
+  .note{color:var(--muted);font-size:12px;max-width:860px;margin-bottom:20px}
+  .grid{display:grid;gap:16px}
+  /* panel + brackets */
+  .panel{position:relative;background:var(--panel-bg);border:1px solid var(--stroke);
+         border-radius:2px;padding:18px 22px}
+  .panel.bracketed::before,.panel.bracketed::after,
+  .panel.bracketed .bk::before,.panel.bracketed .bk::after{
+    content:"";position:absolute;width:14px;height:14px;border:1px solid rgba(0,226,255,0.75)}
+  .panel.bracketed::before{top:-3px;left:-3px;border-width:1px 0 0 1px}
+  .panel.bracketed::after{top:-3px;right:-3px;border-width:1px 1px 0 0}
+  .panel.bracketed .bk::before{bottom:-3px;left:-3px;border-width:0 0 1px 1px}
+  .panel.bracketed .bk::after{bottom:-3px;right:-3px;border-width:0 1px 1px 0}
+  /* swatches */
+  .swgrid{grid-template-columns:repeat(auto-fill,minmax(196px,1fr))}
+  .sw{border:1px solid var(--stroke);border-radius:2px;overflow:hidden;background:var(--field)}
+  .sw .chip{height:56px}
+  .sw .meta{padding:8px 10px;font-size:10px;color:var(--muted)}
+  .sw .meta b{display:block;color:var(--text);font-size:12px;font-weight:700;text-transform:lowercase}
+  .sw .meta code{color:var(--muted)}
+  .law{border-left:3px solid var(--cyan-a);background:var(--panel-backing);
+       padding:10px 14px;margin-top:10px;max-width:860px}
+  .law b{color:var(--cyan-a);text-transform:uppercase;font-size:10px}
+  /* type scale */
+  .typerow{display:flex;align-items:baseline;gap:24px;border-bottom:1px dashed rgba(0,226,255,0.12);
+           padding:10px 0}
+  .typerow .tok{width:180px;color:var(--muted);font-size:10px;flex:none}
+  .typerow .floor{margin-left:auto;font-size:10px;color:var(--amber-a);flex:none}
+  /* spacing */
+  .space-demo{display:flex;align-items:flex-end;gap:20px}
+  .space-demo .bar{background:var(--sel-fill);border:1px solid var(--stroke);width:34px;
+    display:flex;align-items:flex-end;justify-content:center;color:var(--muted);font-size:9px}
+  /* components */
+  .kv{display:flex;justify-content:space-between;max-width:320px;padding:3px 0}
+  .kv .k{color:var(--muted);font-size:10px}
+  .kv .v{font-size:13px}
+  .row58{display:flex;align-items:center;gap:12px;min-height:58px;padding:9px 16px;
+         border:1px solid transparent;border-radius:2px;background:var(--panel-backing)}
+  .row58.sel{border:2px solid var(--sel-border);background:var(--sel-fill)}
+  .row58 .ic{width:44px;height:44px;background:var(--icon-backing);border:1px solid var(--stroke);
+             display:flex;align-items:center;justify-content:center;color:var(--cyan-a);flex:none}
+  .row58 .t{font-size:15px}
+  .row58 .m{font-size:10px;color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;justify-content:center;min-width:118px;height:26px;
+        border:1px solid var(--stroke);background:var(--sel-fill);font-size:11px;
+        text-transform:uppercase;margin-right:10px}
+  .pill.amber{border-color:rgba(255,185,56,0.5);background:rgba(255,185,56,0.12);color:var(--amber-a)}
+  .pill.red{border-color:rgba(255,51,54,0.5);background:rgba(255,51,54,0.10);color:var(--red-a)}
+  .gauge{display:flex;gap:2px;height:14px;width:220px}
+  .gauge i{flex:1;background:rgba(0,226,255,0.14)}
+  .gauge i.on{background:var(--cyan-a)}
+  .gauge.amber i.on{background:var(--amber-a)}
+  .contbar{height:14px;width:220px;background:rgba(0,226,255,0.14);position:relative}
+  .contbar::after{content:"";position:absolute;inset:0;width:62%;background:var(--cyan-a)}
+  .slab{display:inline-flex;align-items:center;justify-content:center;min-width:240px;height:56px;
+        border:1px solid var(--sel-border);background:var(--sel-fill);font-size:18px;font-weight:700;
+        text-transform:uppercase;position:relative;padding:0 24px;
+        box-shadow:inset 3px 0 0 var(--cyan-a);animation:ready 2.4s ease-in-out infinite}
+  @keyframes ready{0%,100%{opacity:.75}50%{opacity:1}}
+  .slab.still{animation:none}
+  .chip{display:inline-flex;align-items:center;justify-content:center;min-width:32px;height:32px;
+        border:1px solid var(--stroke);background:var(--panel-backing);font-size:10px;padding:0 8px}
+  .cap{font-size:12px;color:var(--muted);text-transform:lowercase;margin:0 18px 0 8px}
+  .toast{width:320px;padding:8px 12px;background:var(--panel-backing);margin-top:8px;font-size:13px}
+  .toast.threat{border-left:3px solid var(--magenta-a);color:var(--magenta-a)}
+  .toast.threat2{border-left:3px solid var(--red-a);color:var(--red-a)}
+  .toast.system{border-left:3px solid rgba(154,180,206,0.5)}
+  .toast.loot{font-size:12px;color:var(--amber-a)}
+  /* do / don't */
+  .dd{grid-template-columns:1fr 1fr;max-width:1000px}
+  .dd .cell{border:1px solid var(--stroke);border-radius:2px;background:var(--field);padding:16px}
+  .dd .tag{font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:10px;display:block}
+  .dd .do .tag{color:var(--green)} .dd .dont .tag{color:var(--red-a)}
+  .dd .dont{border-color:rgba(255,51,54,0.35)}
+  .strike{position:relative}
+  .strike::after{content:"";position:absolute;left:-4px;right:-4px;top:50%;
+    border-top:1px solid var(--red-a);transform:rotate(-4deg)}
+  /* wireframes */
+  .wf{position:relative;background:var(--field);border:1px solid var(--stroke);height:360px;
+      display:flex;gap:10px;padding:20px 32px;font-size:9px;color:var(--muted)}
+  .wf .p{border:1px dashed rgba(0,226,255,0.45);display:flex;align-items:center;
+         justify-content:center;text-align:center;background:rgba(0,226,255,0.04)}
+  .dim{position:absolute;color:var(--amber-a);font-size:9px}
+  .hero-t{color:var(--cyan-a)}
+  table{border-collapse:collapse;font-size:12px}
+  th,td{border:1px solid rgba(0,226,255,0.18);padding:6px 12px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:500}
+  .tier-badge{display:inline-block;border:1px solid var(--stroke);padding:1px 8px;font-size:10px;
+              color:var(--cyan-a);margin-right:8px}
+  .rubric td:first-child{color:var(--cyan-a);font-weight:700}
+  .gate{color:var(--amber-a)}
+  .fontnote{border:1px dashed rgba(255,185,56,0.4);padding:10px 14px;color:var(--amber-a);
+            font-size:11px;max-width:860px;margin-top:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Last Singularity — UI Style Reference <span style="color:var(--cyan-a)">v1</span></h1>
+  <div class="sub">canonical visual spec // compare any screenshot straight across against this page //
+  text spec: docs/v0.3/UI-STYLE-GUIDE-v1.md // ratified 2026-08-04</div>
+  <div class="fontnote">⚠ font provenance: this page renders in your installed mono fallback.
+  In-product faces are <b>Oxanium</b> (display) and <b>Monaspace Neon</b> (UI). Sizes, weights,
+  spacing, and casing on this page are exact; letterforms are approximate unless those fonts are installed.</div>
+</header>
+
+<!-- ================= COLOR ================= -->
+<section>
+  <div class="seclabel">01 · color</div>
+  <h2>Palette — nothing outside this table ships</h2>
+  <p class="note">Every swatch is the exact shipped value. A screen shows void + neutrals +
+  at most <b>two</b> active role colors.</p>
+  <div class="grid swgrid">
+    <div class="sw"><div class="chip" style="background:#000021"></div><div class="meta"><b>void</b><code>#000021</code> · the universe, clear color</div></div>
+    <div class="sw"><div class="chip" style="background:#000421"></div><div class="meta"><b>field</b><code>#000421</code> · matte blocks, near-black fills</div></div>
+    <div class="sw"><div class="chip" style="background:rgba(0,2,10,0.78);border-bottom:1px solid var(--stroke)"></div><div class="meta"><b>panel fill</b><code>rgba(0,2,10,.78)</code></div></div>
+    <div class="sw"><div class="chip" style="background:rgba(0,0,8,0.56)"></div><div class="meta"><b>panel backing</b><code>rgba(0,0,8,.56)</code> · footers, sub-panels</div></div>
+    <div class="sw"><div class="chip" style="display:flex;align-items:center;justify-content:center"><div style="width:80%;border-top:1px solid var(--stroke)"></div></div><div class="meta"><b>structure stroke</b><code>rgba(0,226,255,.32)</code> · 1px, always</div></div>
+    <div class="sw"><div class="chip" style="display:flex;align-items:center;justify-content:center;color:rgba(234,247,255,0.94);font-size:15px">reading text</div><div class="meta"><b>text primary</b><code>rgba(234,247,255,.94)</code></div></div>
+    <div class="sw"><div class="chip" style="display:flex;align-items:center;justify-content:center;color:rgba(154,180,206,0.72);font-size:12px">labels · captions</div><div class="meta"><b>text muted</b><code>rgba(154,180,206,.72)</code></div></div>
+    <div class="sw"><div class="chip" style="display:flex;align-items:center;justify-content:center;color:#FFF4DA;font-size:15px">bone warm</div><div class="meta"><b>bone</b><code>#FFF4DA</code> · wordmark, artifact identity</div></div>
+    <div class="sw"><div class="chip" style="background:#00E2FF"></div><div class="meta"><b>route cyan</b><code>#00E2FF</code> · route · extraction · selection · structure. <b style="color:var(--red-a)">nothing else</b></div></div>
+    <div class="sw"><div class="chip" style="background:#FFB938"></div><div class="meta"><b>value amber</b><code>#FFB938</code> · EM · salvage · warning timer. never selection</div></div>
+    <div class="sw"><div class="chip" style="background:#FF3336"></div><div class="meta"><b>danger red</b><code>#FF3336</code> · lethal · critical · destructive confirm. the only red</div></div>
+    <div class="sw"><div class="chip" style="background:#FF3EB5"></div><div class="meta"><b>inhibitor magenta</b><code>#FF3EB5</code> · inhibitor ecology only</div></div>
+    <div class="sw"><div class="chip" style="background:#B84CFF"></div><div class="meta"><b>anomaly violet</b><code>#B84CFF</code> · anomaly / data-core identity</div></div>
+    <div class="sw"><div class="chip" style="background:#38F58A"></div><div class="meta"><b>ecology green</b><code>#38F58A</code> · uncommon tier · ability ready</div></div>
+  </div>
+
+  <div class="law"><b>tier colors</b> — identical everywhere an item appears:
+    <span style="color:rgba(234,247,255,0.82)">■ common</span> ·
+    <span style="color:var(--green)">■ uncommon</span> ·
+    <span style="color:var(--cyan-a)">■ rare</span> ·
+    <span style="color:var(--amber-a)">■ unique</span> ·
+    <span class="strike" style="color:gold">■ gold rgb(255,215,0)</span> <span style="color:var(--red-a)">banned</span>
+  </div>
+  <div class="grid dd" style="margin-top:16px">
+    <div class="cell do"><span class="tag">do — cost is neutral, flips red only when unaffordable</span>
+      <div class="kv"><span class="k">next: current coupling +0.1</span><span class="v" style="color:var(--muted)">cost: 300 EM</span></div>
+      <div class="kv"><span class="k">next: well resistance +0.1</span><span class="v" style="color:var(--red-a)">cost: 300 EM · insufficient</span></div>
+    </div>
+    <div class="cell dont"><span class="tag">don't — red price on an affordable upgrade</span>
+      <div class="kv"><span class="k">next: current coupling +0.1</span><span class="v" style="color:var(--red-a)">cost: 300 EM</span></div>
+      <div class="kv"><span class="k" style="color:var(--red-a)">red = lethal. a price is not a threat.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TYPE ================= -->
+<section>
+  <div class="seclabel">02 · typography</div>
+  <h2>The scale — no other sizes exist</h2>
+  <p class="note">Letter-spacing 0. Tabular figures. ALLCAPS for titles and terminal moments only;
+  lowercase everything else.</p>
+  <div class="panel bracketed"><span class="bk"></span>
+    <div class="typerow"><span class="tok">micro · 9px · texture only</span><span style="font-size:9px;color:var(--muted)">nav 786:673 // derelict signature indexed</span><span class="floor">never decision data</span></div>
+    <div class="typerow"><span class="tok">small · 10px</span><span style="font-size:10px;color:var(--muted)">list metadata, captions, section labels</span></div>
+    <div class="typerow"><span class="tok">body · 12px</span><span style="font-size:12px">list rows, descriptions, footers — menu floor</span><span class="floor">menu floor ≥12</span></div>
+    <div class="typerow"><span class="tok">emphasis · 13px</span><span style="font-size:13px">key/value values, toast text</span></div>
+    <div class="typerow"><span class="tok">couch · 15px</span><span style="font-size:15px">HUD secondary at deck distance</span></div>
+    <div class="typerow"><span class="tok">button · 18px · 700</span><span style="font-size:18px;font-weight:700">BEGIN DROP · HEAT 62%</span><span class="floor">in-play number floor ≥18</span></div>
+    <div class="typerow"><span class="tok">value · 24px · 700</span><span style="font-size:24px;font-weight:700">7:59 &nbsp; 61%</span></div>
+    <div class="typerow"><span class="tok">heading · 28px · 700</span><span style="font-size:28px;font-weight:700;text-transform:uppercase">Survey Reconstruction</span></div>
+    <div class="typerow"><span class="tok">outcome · 38px · 800</span><span style="font-size:38px;font-weight:800;color:var(--red-a);text-shadow:0 0 8px rgba(255,51,54,0.4);text-transform:uppercase">Consumed by Charybdis</span></div>
+    <div class="typerow" style="border-bottom:none"><span class="tok">wordmark · 50px · 800</span><span style="font-size:50px;font-weight:800;text-transform:uppercase;text-shadow:0 0 12px rgba(0,226,255,0.35)">Last Singularity</span></div>
+  </div>
+  <div class="grid dd" style="margin-top:16px">
+    <div class="cell do"><span class="tag">do — lowercase steady-state readouts</span>
+      <div style="font-size:13px">noise 330m · falling</div>
+      <div style="font-size:12px;color:var(--muted)">hear exfil tone to reveal distance</div>
+    </div>
+    <div class="cell dont"><span class="tag">don't — uppercase as a default voice</span>
+      <div style="font-size:13px">NOISE 330M · FALLING</div>
+      <div style="font-size:12px;color:var(--red-a)">uppercase is reserved for titles, outcomes, warnings</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SPACING / PANEL ================= -->
+<section>
+  <div class="seclabel">03 · spacing · strokes · surfaces</div>
+  <h2>Spacing scale + panel anatomy</h2>
+  <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start">
+    <div>
+      <p class="note">every gap is one of these:</p>
+      <div class="space-demo">
+        <div class="bar" style="height:4px"></div><div class="bar" style="height:8px">8</div>
+        <div class="bar" style="height:12px">12</div><div class="bar" style="height:16px">16</div>
+        <div class="bar" style="height:24px">24</div><div class="bar" style="height:32px">32</div>
+        <div class="bar" style="height:48px">48</div>
+      </div>
+      <p class="note" style="margin-top:16px">outer margins 64/42 · panel gap 20 · panel padding 22/18<br>
+      row ≥58px · button ≥240×56 · icon 44×44 · separation ≥10</p>
+    </div>
+    <div style="flex:1;min-width:380px">
+      <div class="panel bracketed"><span class="bk"></span>
+        <div class="seclabel" style="margin-bottom:8px">instrument panel</div>
+        <div style="font-size:12px;color:var(--muted)">1px stroke · radius ≤2 · corner brackets 12–18px arms mark <b style="color:var(--text)">instruments</b>.
+        plain 1px rects mark sub-regions. no drop shadows — depth is fill layering:
+        void → field → panel → backing. scanlines: bone-white, alpha .018–.035, 4px spacing (this page runs them).
+        colored glow only on: wordmark, outcome banner, engaged critical state.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= COMPONENTS ================= -->
+<section>
+  <div class="seclabel">04 · components — drawn to spec</div>
+  <h2>Component library</h2>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1100px">
+    <div class="panel">
+      <div class="seclabel" style="margin-bottom:6px">section label · key/value</div>
+      <div class="kv"><span class="k">exotic matter</span><span class="v" style="color:var(--amber-a)">340 EM</span></div>
+      <div class="kv"><span class="k">best survival</span><span class="v">6:12</span></div>
+      <div class="kv"><span class="k">extractions</span><span class="v" style="color:var(--green)">3</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="seclabel" style="margin-bottom:6px">status pills — facts, never buttons</div>
+      <span class="pill">5x5</span><span class="pill amber">+152 EM</span><span class="pill red">high</span>
+    </div>
+
+    <div class="panel">
+      <div class="seclabel" style="margin-bottom:6px">list row · 58px min · selected state</div>
+      <div class="row58"><div class="ic">◈</div><div><div class="t">the shallows</div><div class="m">5x5 // available</div></div></div>
+      <div class="row58 sel" style="margin-top:8px"><div class="ic">◈</div><div><div class="t">the expanse</div><div class="m">15x15 // available</div></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="seclabel" style="margin-bottom:6px">gauges — segmented only, label + number always</div>
+      <div class="kv" style="max-width:none"><span class="k">vault</span><span class="v">14/25</span></div>
+      <div class="gauge"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+      <div class="kv" style="max-width:none;margin-top:12px"><span class="k" style="color:var(--red-a)">banned: continuous bar for a bounded count</span></div>
+      <div class="contbar strike"></div>
+    </div>
+
+    <div class="panel">
+      <div class="seclabel" style="margin-bottom:6px">command slab · ≥240×56 · sine pulse ≥2s, never blink</div>
+      <div class="slab">begin drop</div>
+      <div style="margin-top:12px"><span class="chip">A</span><span class="cap">confirm</span>
+      <span class="chip">B</span><span class="cap">back out</span>
+      <span class="strike"><span class="chip"></span></span><span class="cap" style="color:var(--red-a)">orphan chip — banned</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="seclabel" style="margin-bottom:6px">toast tiers — severity evicts upward only</div>
+      <div class="toast threat">thrust contact · vessel</div>
+      <div class="toast threat2">cargo full — 2 items left behind</div>
+      <div class="toast system">joining live cycle on the expanse</div>
+      <div class="toast loot">+ drowned core · +2 items</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HIERARCHY ================= -->
+<section>
+  <div class="seclabel">05 · information hierarchy</div>
+  <h2>Four tiers · one hero per screen</h2>
+  <div style="display:flex;gap:24px;flex-wrap:wrap">
+  <div class="panel bracketed" style="flex:1;min-width:420px"><span class="bk"></span>
+    <div style="margin:6px 0 14px"><span class="tier-badge">T1 hero</span>
+      <span style="font-size:24px;font-weight:700;color:var(--cyan-a)">61%</span>
+      <span style="font-size:10px;color:var(--muted)"> — biggest type, first role color, most void</span></div>
+    <div style="margin-bottom:12px"><span class="tier-badge">T2 decision</span>
+      <span style="font-size:13px">gravity wells 2–5 · risk medium</span>
+      <span style="font-size:10px;color:var(--muted)"> — 13–18px, gauges, pills</span></div>
+    <div style="margin-bottom:12px"><span class="tier-badge">T3 support</span>
+      <span style="font-size:11px;color:var(--muted)">a fractured stretch of dying space…</span></div>
+    <div><span class="tier-badge">T4 texture</span>
+      <span style="font-size:9px;color:rgba(154,180,206,0.45)">coordinates: unknown // drift: nominal</span>
+      <span style="font-size:10px;color:var(--muted)"> — ≤0.5 alpha, never role-colored, never animated</span></div>
+  </div>
+  <div style="flex:1;min-width:380px">
+    <table>
+      <tr><th>screen</th><th>the hero (tier 1)</th></tr>
+      <tr><td>title</td><td class="hero-t">wordmark</td></tr>
+      <tr><td>home / ship</td><td class="hero-t">the hull</td></tr>
+      <tr><td>map select</td><td class="hero-t">the survey plot</td></tr>
+      <tr><td>in-play</td><td class="hero-t">the world itself — HUD is edge tier-2; center 60% belongs to the game</td></tr>
+      <tr><td>results</td><td class="hero-t">the outcome word</td></tr>
+    </table>
+    <p class="note" style="margin-top:10px">budgets: ≤12 tier-1–3 elements per menu panel ·
+    ≤10 persistent HUD nodes per corner-column, ~25 total · a fact renders <b>once</b> per screen.</p>
+  </div>
+  </div>
+</section>
+
+<!-- ================= WIREFRAMES ================= -->
+<section>
+  <div class="seclabel">06 · screen skeletons</div>
+  <h2>Three-panel terminal (home · map select)</h2>
+  <div class="wf">
+    <span class="dim" style="top:4px;left:32px">margins 64 / 42</span>
+    <span class="dim" style="top:4px;right:32px">canvas 1280×720</span>
+    <div class="p" style="width:200px">left rail<br>190–220px<br><br>identity + list rows 58px</div>
+    <div class="p" style="flex:1">center · remainder (≥320px)<br><br><span class="hero-t">HERO LIVES HERE</span><br><br>heading → hero → sections → footer</div>
+    <div class="p" style="width:300px">right rail<br>284–336px<br><br>briefing / instruments<br>command slab bottom</div>
+    <span class="dim" style="bottom:4px;left:44%">panel gap 20px — the void between panels is part of the design</span>
+  </div>
+  <h2 style="margin-top:32px">In-play HUD — corners only, center is the game</h2>
+  <div class="wf" style="display:block">
+    <div class="p" style="position:absolute;top:16px;left:32px;width:220px;height:64px">timer block<br>value 24px</div>
+    <div class="p" style="position:absolute;top:96px;left:32px;width:220px;height:110px">vitals<br>≤6 nodes</div>
+    <div class="p" style="position:absolute;bottom:96px;left:32px;width:240px;height:88px">toasts ≤8<br>severity tiers</div>
+    <div class="p" style="position:absolute;bottom:16px;left:32px;width:200px;height:56px">cargo</div>
+    <div class="p" style="position:absolute;top:16px;right:32px;width:240px;height:72px">route objective</div>
+    <div class="p" style="position:absolute;bottom:16px;right:32px;width:260px;height:130px">abilities<br>numbers ≥18px</div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(0,226,255,0.35);font-size:14px">CENTER 60% = WORLD · nothing persistent here except the interaction prompt (bottom-center)</div>
+    <span class="dim" style="top:4px;right:44%">edge margin 24px · no two blocks may ever collide (test: 8 toasts + full inventory + max contacts)</span>
+  </div>
+</section>
+
+<!-- ================= DO / DONT GALLERY ================= -->
+<section>
+  <div class="seclabel">07 · do / don't</div>
+  <h2>Side-by-side rulings</h2>
+  <div class="grid dd">
+    <div class="cell do"><span class="tag">do — one fact, once</span>
+      <div class="kv" style="max-width:none"><span class="k">vault</span><span class="v">14/25</span></div>
+      <div class="gauge" style="margin-top:4px"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="cell dont"><span class="tag">don't — vault occupancy three times on one screen</span>
+      <div style="font-size:10px;color:var(--muted)">tab subtitle: 14/25 VAULT</div>
+      <div style="font-size:13px;margin:4px 0">header: VAULT 14/25</div>
+      <div class="gauge"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="cell do"><span class="tag">do — fiction voice at the seams</span>
+      <div style="font-size:15px">signal lost — the survey cannot reach this cycle</div>
+      <div style="font-size:12px;color:var(--muted)">return to the deck to reconnect</div>
+    </div>
+    <div class="cell dont"><span class="tag">don't — netcode vocabulary on player surfaces</span>
+      <div style="font-size:15px">AUTHORITY RECOVERY</div>
+      <div style="font-size:12px;color:var(--red-a)">"local authority ready" · "no product authority claim" · "used: effectId" — banned strings</div>
+    </div>
+    <div class="cell do"><span class="tag">do — state chip for a binary fact</span>
+      <div><span class="pill" style="min-width:90px">hull: nominal</span><span class="pill red" style="min-width:90px">hull: critical</span></div>
+    </div>
+    <div class="cell dont"><span class="tag">don't — an 18px gauge encoding one bit</span>
+      <div class="contbar strike" style="height:18px"></div>
+      <div style="font-size:10px;color:var(--red-a);margin-top:4px">a bar that is only ever full or empty is a lie about resolution</div>
+    </div>
+    <div class="cell do"><span class="tag">do — texture styled as texture</span>
+      <div style="font-size:9px;color:rgba(154,180,206,0.45)">data freighter // cs-84 "umbra" · seed 8F7A-91C2-K3LQ · cycle 17</div>
+    </div>
+    <div class="cell dont"><span class="tag">don't — constants dressed as live readouts</span>
+      <div style="font-size:13px">DROP WINDOW READY</div>
+      <div style="font-size:10px;color:var(--red-a);margin-top:4px">if it cannot change, it is tier-4 texture — 9px, half-alpha, off to the side</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= RUBRIC ================= -->
+<section>
+  <div class="seclabel">08 · review rubric — quick card</div>
+  <h2>Pass/fail by looking · <span class="gate">amber = gate</span></h2>
+  <p class="note">Full remedies in the MD §10. Verdict: SHIP / SHIP WITH WAIVER (ids) / REWORK (gate ids).
+  Re-review checks only failed ids + H1.</p>
+  <table class="rubric">
+    <tr><th>id</th><th>check by looking</th><th>fail when</th></tr>
+    <tr><td class="gate">H1</td><td>hero answers the screen's sentence in 1s</td><td>two elements compete</td></tr>
+    <tr><td class="gate">H2</td><td>count tier-1–3 per panel</td><td>&gt; 12</td></tr>
+    <tr><td>H3</td><td>any fact rendered twice?</td><td>duplicate beyond world-space pair</td></tr>
+    <tr><td class="gate">C1</td><td>count active role colors · roles on-meaning</td><td>&gt; 2, red price, amber selection…</td></tr>
+    <tr><td>C2</td><td>sample 3 colors against the palette</td><td>off-palette value</td></tr>
+    <tr><td class="gate">T1</td><td>smallest actionable text</td><td>&lt;12px menu · &lt;18px in-play numbers</td></tr>
+    <tr><td>T2</td><td>sizes on scale · casing lawful</td><td>off-scale, uppercase readouts</td></tr>
+    <tr><td class="gate">L1</td><td>rects match the layout contract</td><td>hand-placed panels, sub-58px rows</td></tr>
+    <tr><td>L2</td><td>worst-case collision test</td><td>any overlap</td></tr>
+    <tr><td class="gate">V1</td><td>read every string aloud</td><td>banned vocab, raw ids, untaught jargon</td></tr>
+    <tr><td>V2</td><td>constants dressed as readouts</td><td>any</td></tr>
+    <tr><td>G1</td><td>gauges labeled+numbered · chips captioned</td><td>naked gauge, one-bit bar, orphan chip</td></tr>
+    <tr><td class="gate">S1</td><td>empty / loading / failure captured</td><td>any state blank or ambiguous</td></tr>
+    <tr><td>M1</td><td>watch 10s at rest</td><td>anything moving without a state change</td></tr>
+    <tr><td>M2</td><td>toggle reduced-motion</td><td>any motion survives</td></tr>
+    <tr><td>A1</td><td>controls advertised once, both families</td><td>twice, missing, or kb-only</td></tr>
+  </table>
+</section>
+
+<footer style="margin-top:64px;padding-top:16px;border-top:1px solid var(--stroke)">
+  <span style="font-size:9px;color:rgba(154,180,206,0.45)">ui style reference v1 · orrery · 2026-08-04 ·
+  supersedes UI-VISUAL-SYSTEM.md + VISUAL-STYLE-GUIDE-v0.3.md · fidelity bar for plot density:
+  concept-map-select-*.png · this page obeys its own rules</span>
+</footer>
+
+</body>
+</html>
