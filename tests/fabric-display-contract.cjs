@@ -98,9 +98,11 @@ async function run() {
     'Corridor-local material must retain bounded glyph rhythm without cross-grain multiplication');
     assert(shader.includes('waveColor * channelEnvelope * waveSwell * 0.28'),
       'The source wave must lift the broad fabric channel rather than add a detached ring');
-    assert(shader.includes('float shoulderIn = smoothstep(nearestProfile.x * 0.76, nearestProfile.x * 0.46, nearestWellDistance);')
-      && shader.includes('float shoulderOut = 1.0 - smoothstep(nearestProfile.x * 0.20, nearestProfile.x * 0.38, nearestWellDistance);')
+    assert(shader.includes('float shoulderInner = smoothstep(nearestProfile.x * 0.20, nearestProfile.x * 0.38, nearestWellDistance);')
+      && shader.includes('float shoulderOuter = 1.0 - smoothstep(nearestProfile.x * 0.46, nearestProfile.x * 0.76, nearestWellDistance);')
       && shader.includes('currentWeight * 0.24')
+      && shader.includes('smoothstep(nearestProfile.z * 0.44, nearestProfile.z * 0.62, nearestWellDistance)')
+      && shader.includes('1.0 - smoothstep(nearestProfile.z * 0.82, nearestProfile.z * 1.16, nearestWellDistance)')
       && shader.includes('nearestProfile.z * 0.68'),
     'Wells must briefly bend and split nearby corridors through a narrow shoulder, not draw an orbit diagram');
     assert(shader.includes('float visualCoreRadius = max(coreRadius * 1.90, u_cameraView * 0.068);'),

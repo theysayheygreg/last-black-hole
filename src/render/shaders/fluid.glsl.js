@@ -413,9 +413,9 @@ void main() {
     if (nearestProfile.x > 0.0) {
       // Corridors only bend through the middle shoulder of a well.  The quiet
       // core stays a destination hazard, not the center of a field diagram.
-      float shoulderIn = smoothstep(nearestProfile.x * 0.76, nearestProfile.x * 0.46, nearestWellDistance);
-      float shoulderOut = 1.0 - smoothstep(nearestProfile.x * 0.20, nearestProfile.x * 0.38, nearestWellDistance);
-      currentWeight = shoulderIn * shoulderOut;
+      float shoulderInner = smoothstep(nearestProfile.x * 0.20, nearestProfile.x * 0.38, nearestWellDistance);
+      float shoulderOuter = 1.0 - smoothstep(nearestProfile.x * 0.46, nearestProfile.x * 0.76, nearestWellDistance);
+      currentWeight = shoulderInner * shoulderOuter;
       float gravityEnvelope = nearestProfile.y + nearestProfile.w;
       gravityWeight = 1.0 - smoothstep(nearestProfile.y * 0.24, gravityEnvelope, nearestWellDistance);
       fullGravityWeight = 1.0 - smoothstep(nearestProfile.z * 0.38, nearestProfile.z * 1.08, nearestWellDistance);
@@ -479,8 +479,8 @@ void main() {
     float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
     float laneDistance = abs(across - laneCenter);
     float splitWeight = nearestProfile.z > 0.0
-      ? smoothstep(nearestProfile.z * 1.16, nearestProfile.z * 0.82, nearestWellDistance)
-        * (1.0 - smoothstep(nearestProfile.z * 0.44, nearestProfile.z * 0.62, nearestWellDistance))
+      ? smoothstep(nearestProfile.z * 0.44, nearestProfile.z * 0.62, nearestWellDistance)
+        * (1.0 - smoothstep(nearestProfile.z * 0.82, nearestProfile.z * 1.16, nearestWellDistance))
       : 0.0;
     float splitOffset = splitWeight * nearestProfile.z * 0.68;
     float splitDistance = min(
