@@ -57,6 +57,24 @@ function point(source = {}, xKey = 'wx', yKey = 'wy') {
   return Object.freeze({ x: finite(source[xKey]), y: finite(source[yKey]) });
 }
 
+function hasFinitePoint(source = {}, xKey = 'wx', yKey = 'wy') {
+  return optionalFinite(source?.[xKey]) !== undefined
+    && optionalFinite(source?.[yKey]) !== undefined;
+}
+
+function optionalPoint(source = {}, xKey = 'wx', yKey = 'wy') {
+  if (!hasFinitePoint(source, xKey, yKey)) return null;
+  return Object.freeze({ x: Number(source[xKey]), y: Number(source[yKey]) });
+}
+
+function optionalPointWithAge(source = {}, xKey = 'wx', yKey = 'wy') {
+  const value = optionalPoint(source, xKey, yKey);
+  return value ? Object.freeze({
+    ...value,
+    ageSeconds: Math.max(0, finite(source.ageSeconds)),
+  }) : null;
+}
+
 function velocity(source = {}) {
   const x = finite(source.vx);
   const y = finite(source.vy);
@@ -405,11 +423,8 @@ function normalizeEntity(family, source, index) {
           remainingSeconds: Math.max(0, finite(source.inbound.remainingSeconds)),
         }) : null,
         awareness: text(source.awareness, source.kind === 'vessel' ? 'STRATEGIC' : 'NONE'),
-        target: source.target ? point(source.target, 'wx', 'wy') : null,
-        lastHeard: source.lastHeard ? Object.freeze({
-          ...point(source.lastHeard, 'wx', 'wy'),
-          ageSeconds: Math.max(0, finite(source.lastHeard.ageSeconds)),
-        }) : null,
+        target: optionalPoint(source.target, 'wx', 'wy'),
+        lastHeard: optionalPointWithAge(source.lastHeard, 'wx', 'wy'),
         listensToNoise: source.listensToNoise === true,
         noiseListenerState: text(source.noiseListenerState, 'QUIET'),
         noiseSearchState: text(source.noiseSearchState, 'IDLE'),
@@ -445,7 +460,14 @@ function normalizeWorld(scene = {}) {
   const world = {};
   for (const family of WORLD_FAMILIES) {
     const list = Array.isArray(scene[family]) ? scene[family] : [];
-    world[family] = Object.freeze(list.map((entry, index) => normalizeEntity(family, entry || {}, index)));
+    const xKey = family === 'waveRings' ? 'sourceWX' : 'wx';
+    const yKey = family === 'waveRings' ? 'sourceWY' : 'wy';
+    // A renderer must never invent an origin object from an incomplete row.
+    // Dropping the bounded presentation row is honest until authority provides
+    // usable world coordinates again.
+    world[family] = Object.freeze(list.flatMap((entry, index) => (
+      hasFinitePoint(entry, xKey, yKey) ? [normalizeEntity(family, entry, index)] : []
+    )));
   }
   world.titleBackdrop = scene.isTitleBackdrop === true;
   world.semanticField = Object.freeze({

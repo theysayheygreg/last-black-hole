@@ -11,7 +11,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance,
-         worldDirectionTo, wrapWorld, uvScale, shouldCull } from './coords.js';
+         worldDirectionTo, worldDisplacement, wrapWorld, uvScale, shouldCull } from './coords.js';
 import { wellGravityVector } from './physics.js';
 
 // ---- CONFIG block to add to config.js ----
@@ -601,7 +601,11 @@ export class ScavengerSystem {
         scav.deathWell = well;
         scav.deathStartWX = scav.wx;
         scav.deathStartWY = scav.wy;
-        scav.deathAngle = Math.atan2(scav.wy - well.wy, scav.wx - well.wx);
+        // The local sandbox still wraps like authority. Derive the initial
+        // spiral bearing through the seam so its first frame stays beside the
+        // well that actually consumed the scavenger.
+        const [dx, dy] = worldDisplacement(well.wx, well.wy, scav.wx, scav.wy);
+        scav.deathAngle = Math.atan2(dy, dx);
         scav.vx = 0;
         scav.vy = 0;
         return;
