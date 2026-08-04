@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { pathToFileURL } = require('node:url');
 const sharp = require('sharp');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -54,7 +55,7 @@ const ATLASES = {
   },
 };
 
-const TIER_COLORS = ['#dcecff', '#36f58a', '#00e2ff', '#ffb938'];
+let TIER_COLORS;
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -198,6 +199,8 @@ async function writeItemIcons() {
 }
 
 async function main() {
+  const { UI_PALETTE } = await import(pathToFileURL(path.join(ROOT, 'src', 'ui', 'palette-tokens.js')).href);
+  TIER_COLORS = [UI_PALETTE.textPrimaryBase, UI_PALETTE.ecology, UI_PALETTE.route, UI_PALETTE.value];
   ensureDir(OUTPUT_DIR);
   const atlases = {};
   for (const [key, atlas] of Object.entries(ATLASES)) atlases[key] = await writeAtlas(key, atlas);

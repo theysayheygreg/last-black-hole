@@ -44,8 +44,10 @@ async function run() {
   assert(!prompts.menuHint({ deck: true }).includes('keycap'), "Deck menu hint must not use keyboard glyphs");
 
   const index = read("index-a.html");
-  includes(index, "--lbh-couch-body: 15px", "HUD must keep a couch-readable body-size target");
-  includes(index, "--lbh-gauge-height: 16px", "HUD gauges must stay at least text-sized on Deck");
+  const tokenCss = read("src/ui/design-tokens.css");
+  includes(index, "src/ui/design-tokens.css", "Entrypoint must consume generated UI tokens");
+  includes(tokenCss, "--lbh-couch-body: 15px", "HUD must keep a couch-readable body-size target");
+  includes(tokenCss, "--lbh-gauge-height: 16px", "HUD gauges must stay at least text-sized on Deck");
   const hullRule = index.match(/#hud-hull-bar\s*\{[^}]*width:\s*100%;\s*height:\s*(?:var\(--lbh-gauge-height\)|(\d+)px)/);
   assert(hullRule, "hud-hull-bar must fill its readable status rail");
   if (hullRule[1]) assert(Number(hullRule[1]) >= 16, "hud-hull-bar must stay at least 16px tall on Deck");

@@ -1,41 +1,45 @@
 // Canonical UI token bridge.
 //
-// DESIGN-SYSTEM.md is the human-readable source of truth.
+// docs/v0.3/UI-STYLE-GUIDE-v1.md is the human-readable source of truth.
 // This file is the implementation-side token bundle that keeps HUD/overlay
 // code from re-inventing colors, shadows, and spacing ad hoc.
 
+import { DISPLAY_FONT_STACK, UI_FONT_STACK, GLYPH_FONT_STACK } from './typography.js';
 export { DISPLAY_FONT_STACK, UI_FONT_STACK, GLYPH_FONT_STACK } from './typography.js';
+import { UI_PALETTE, UI_ROLE_ALPHA, colorWithAlpha } from './palette-tokens.js';
+export { UI_PALETTE, UI_ROLE_ALPHA } from './palette-tokens.js';
 
 export const UI_COLORS = {
-  void: '#000021',
-  panelBackground: 'rgba(0, 2, 10, 0.78)',
-  panelBacking: 'rgba(0, 0, 8, 0.56)',
-  iconBacking: 'rgba(0, 0, 8, 0.68)',
-  panelBorder: 'rgba(0, 226, 255, 0.32)',
-  panelText: 'rgba(234, 247, 255, 0.94)',
-  mutedText: 'rgba(154, 180, 206, 0.72)',
+  void: UI_PALETTE.void,
+  field: UI_PALETTE.field,
+  panelBackground: UI_PALETTE.panelFill,
+  panelBacking: UI_PALETTE.panelBacking,
+  iconBacking: UI_PALETTE.iconBacking,
+  panelBorder: UI_PALETTE.structure,
+  panelText: UI_PALETTE.textPrimary,
+  mutedText: UI_PALETTE.textMuted,
   timerNormal: 'rgba(234, 247, 255, 0.9)',
-  timerWarning: 'rgba(255, 185, 56, 0.95)',
-  timerCritical: 'rgba(255, 51, 54, 0.95)',
-  danger: 'rgba(255, 51, 54, 0.95)',
-  portal: 'rgba(0, 226, 255, 0.9)',
-  portalDim: 'rgba(0, 226, 255, 0.58)',
-  salvage: 'rgba(255, 185, 56, 0.92)',
-  signal: 'rgba(0, 226, 255, 0.9)',
+  timerWarning: colorWithAlpha(UI_PALETTE.value, 0.95),
+  timerCritical: colorWithAlpha(UI_PALETTE.danger, UI_ROLE_ALPHA.danger),
+  danger: colorWithAlpha(UI_PALETTE.danger, UI_ROLE_ALPHA.danger),
+  portal: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.routeActive),
+  portalDim: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.routeDim),
+  salvage: colorWithAlpha(UI_PALETTE.value, UI_ROLE_ALPHA.value),
+  signal: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.routeActive),
   signalLabel: 'rgba(0, 226, 255, 0.62)',
   warningText: 'rgba(234, 247, 255, 0.95)',
-  selectionBorder: 'rgba(0, 226, 255, 0.95)',
-  selectionBackground: 'rgba(0, 226, 255, 0.14)',
+  selectionBorder: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.selectionBorder),
+  selectionBackground: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.selectionFill),
   terminalRowBackground: 'rgba(0, 14, 30, 0.36)',
   terminalRowBorder: 'rgba(0, 226, 255, 0.18)',
   terminalRowMuted: 'rgba(154, 180, 206, 0.62)',
   terminalPillBackground: 'rgba(0, 226, 255, 0.14)',
   terminalPillBorder: 'rgba(0, 226, 255, 0.34)',
   terminalPillText: 'rgba(234, 247, 255, 0.88)',
-  inhibitor: 'rgba(255, 62, 181, 0.95)',
+  inhibitor: colorWithAlpha(UI_PALETTE.inhibitor, UI_ROLE_ALPHA.inhibitor),
   inhibitorVessel: 'rgba(255, 70, 150, 1)',
-  anomaly: 'rgba(184, 76, 255, 0.94)',
-  ecology: 'rgba(56, 245, 138, 0.9)',
+  anomaly: colorWithAlpha(UI_PALETTE.anomaly, UI_ROLE_ALPHA.anomaly),
+  ecology: colorWithAlpha(UI_PALETTE.ecology, UI_ROLE_ALPHA.ecology),
 };
 
 export const UI_SHADOWS = {
@@ -144,15 +148,58 @@ export const UI_DECK_GEOMETRY = {
 };
 
 export const UI_TIERS = {
-  common: 'rgba(234, 247, 255, 0.82)',
-  uncommon: 'rgba(56, 245, 138, 0.9)',
-  rare: 'rgba(0, 226, 255, 0.92)',
-  unique: 'rgba(255, 185, 56, 0.95)',
+  common: colorWithAlpha(UI_PALETTE.textPrimaryBase, 0.82),
+  uncommon: colorWithAlpha(UI_PALETTE.ecology, 0.9),
+  rare: colorWithAlpha(UI_PALETTE.route, 0.92),
+  unique: colorWithAlpha(UI_PALETTE.value, 0.95),
 };
 
 export const UI_CATEGORIES = {
   salvage: 'rgba(255, 185, 56, 0.92)',
   component: 'rgba(0, 226, 255, 0.9)',
   dataCore: 'rgba(184, 76, 255, 0.94)',
-  artifact: 'rgba(255, 244, 218, 0.95)',
+  artifact: colorWithAlpha(UI_PALETTE.bone, 0.95),
 };
+
+// Compatibility adapter for the current DOM surface. CSS is generated from
+// these named tokens; the generator owns serialization, not design values.
+export const UI_CSS_VARIABLES = Object.freeze({
+  'font-display': DISPLAY_FONT_STACK,
+  'font-ui': UI_FONT_STACK,
+  'font-glyph': GLYPH_FONT_STACK,
+  'font-mono': 'var(--lbh-font-ui)',
+  void: UI_COLORS.void,
+  'panel-bg': UI_COLORS.panelBackground,
+  'panel-backing': UI_COLORS.panelBacking,
+  'panel-shadow': UI_SHADOWS.panel,
+  'text-shadow': UI_SHADOWS.panelText,
+  'panel-border': UI_COLORS.panelBorder,
+  'text-primary': UI_COLORS.panelText,
+  'text-muted': UI_COLORS.mutedText,
+  'timer-normal': UI_COLORS.timerNormal,
+  'timer-glow': colorWithAlpha(UI_PALETTE.route, 0.28),
+  noise: UI_COLORS.signal,
+  'noise-label': UI_COLORS.signalLabel,
+  danger: UI_COLORS.danger,
+  ecology: UI_COLORS.ecology,
+  inhibitor: UI_COLORS.inhibitor,
+  'inhibitor-glow': colorWithAlpha(UI_PALETTE.inhibitor, 0.55),
+  portal: UI_COLORS.portal,
+  salvage: UI_COLORS.salvage,
+  'track-bg': colorWithAlpha(UI_PALETTE.field, 0.7),
+  'warning-shadow': colorWithAlpha(UI_PALETTE.void, 0.8),
+  'panel-radius': `${UI_SPACING.panelRadius}px`,
+  'edge-margin': `${UI_SPACING.edge}px`,
+  'couch-micro': '13px',
+  'couch-small': '14px',
+  'couch-body': `${UI_TYPOGRAPHY.couchBody}px`,
+  'couch-button': `${UI_TYPOGRAPHY.couchButton}px`,
+  'gauge-height': '16px',
+  'hud-gap': '8px',
+  'deck-panel-pad-y': `${UI_DECK_GEOMETRY.panel.paddingY}px`,
+  'deck-panel-pad-x': `${UI_DECK_GEOMETRY.panel.paddingX}px`,
+  'deck-panel-gap': '10px',
+  'deck-row-min': `${UI_DECK_GEOMETRY.listRow.minHeight}px`,
+  'deck-icon-min': `${UI_DECK_GEOMETRY.iconCell.minWidth}px`,
+  'deck-value-min': `${UI_DECK_GEOMETRY.valueBlock.minHeight}px`,
+});

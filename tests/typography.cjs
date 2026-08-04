@@ -12,6 +12,7 @@ const { pathToFileURL } = require('url');
 
 const ROOT = path.resolve(__dirname, '..');
 const SRC = path.join(ROOT, 'src');
+const tokenCss = fs.readFileSync(path.join(SRC, 'ui', 'design-tokens.css'), 'utf8');
 
 class TestRunner {
   constructor(suiteName) {
@@ -99,9 +100,10 @@ runner.run('Entrypoint declares self-hosted font faces and CSS roles', () => {
     assert(indexSrc.includes(`font-family: '${family}'`), `Missing @font-face for ${family}`);
     assert(indexSrc.includes(`url('./${rel}')`), `Missing ${family} source path ${rel}`);
   }
-  assert(indexSrc.includes('--lbh-font-display'), 'Missing display font CSS variable');
-  assert(indexSrc.includes('--lbh-font-ui'), 'Missing UI font CSS variable');
-  assert(indexSrc.includes('--lbh-font-glyph'), 'Missing glyph font CSS variable');
+  assert(indexSrc.includes('src/ui/design-tokens.css'), 'Entrypoint must consume generated design tokens');
+  assert(tokenCss.includes('--lbh-font-display'), 'Missing display font CSS variable');
+  assert(tokenCss.includes('--lbh-font-ui'), 'Missing UI font CSS variable');
+  assert(tokenCss.includes('--lbh-font-glyph'), 'Missing glyph font CSS variable');
 });
 
 runner.run('Typography module keeps display, UI, and glyph roles separate', () => {
