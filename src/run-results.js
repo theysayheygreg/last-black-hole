@@ -140,11 +140,14 @@ export function buildRunResultsViewModel({
     deathCause: !extracted && runResult?.deathCause
       ? (deathEntityLabel ? `${runResult.deathCause}: ${deathEntityLabel}` : runResult.deathCause)
       : null,
-    aiLines: aiOutcomes.slice(0, 4).map((ai) => {
-      const personality = ai.personality || ai.name || 'rival';
-      const hull = ai.hullType || 'unknown';
+    aiLines: aiOutcomes
+      .filter((ai) => ai && (ai.personality || ai.name) && ai.hullType && ai.outcome)
+      .slice(0, 4)
+      .map((ai) => {
+      const personality = ai.personality || ai.name;
+      const hull = ai.hullType;
       const cargoCount = Number.isFinite(Number(ai.cargoCount)) ? ` / ${ai.cargoCount} cargo` : '';
-      return `${personality} (${hull}) ${ai.outcome || 'unknown'}${cargoCount}`;
+      return `${personality} (${hull}) ${ai.outcome}${cargoCount}`;
     }),
     notableLines: notables.slice(0, 3).map((entry) => entry.description || entry.name || String(entry.type || 'notable')),
     mapContext,
@@ -168,7 +171,7 @@ export function buildRunSummaryRows(view = {}) {
 }
 
 export function buildRunLedgerRows(view = {}) {
-  const label = view.tone === 'extract' ? 'credited' : 'residue';
+  const label = view.tone === 'extract' ? 'credited' : 'residue (survival credit)';
   const value = Number.isFinite(Number(view.emEarned)) ? `${Math.max(0, Math.round(Number(view.emEarned)))} EM` : '';
   return value ? [{ label, value, valueRole: 'salvage' }] : [];
 }
@@ -255,7 +258,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     reducedMotion: motion.reducedMotion,
   }));
   ctx.font = canvasFont(15);
-  ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 84);
+  ctx.fillText(success ? 'aperture confirmed' : 'telemetry retained', cx, panelY + 84);
 
   const contentAlpha = motionProgress(reveal, {
     delay: 0.65,
@@ -265,7 +268,6 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
   drawStatusPill(ctx, { x: cx - 138, y: panelY + 114, w: 118, h: 26 }, mapLabel, { role, alpha: contentAlpha });
   drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
-  drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, `+${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
 
   const summaryValueWidth = Math.max(1, columnW - 128);
   let y = panelY + 160;

@@ -56,7 +56,7 @@ import { AudioEngine } from './audio.js';
 import { AudioRouter } from './audio/audio-router.js';
 import { buildRunBriefing } from './run-briefing.js';
 import { InventorySystem } from './inventory.js';
-import { ProfileManager, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
+import { ProfileManager, generatePilotName, sanitizePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { buildRunResultsViewModel, drawRunResultsOverlay } from './run-results.js';
 import {
@@ -65,6 +65,8 @@ import {
   buildValidSurveySelection,
   drawLockedSurveyTopology,
   drawSurveyTopology,
+  projectSurveyTerminal,
+  resolveTopologySignature,
   surveyScaleForMap,
 } from './ui/map-select-survey.js';
 import { FlowField } from './sim/flow-field.js';
@@ -139,7 +141,7 @@ import {
   placePresentationLabels,
   safeObjectLabel,
 } from './ui/presentation-layout.js';
-import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
+import { HULL_DEFINITIONS, PUBLIC_HULL_IDS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
 import { drawItemIcon, drawShipSprite, preloadShipSprites } from './ui/asset-kit.js';
@@ -174,7 +176,7 @@ import {
 import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
 import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
 import { deckPanelLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
-import { formatHullStats, formatHullStatStrip, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
+import { formatHullStats, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
 import { measureActionFooter } from './ui/action-footer-layout.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
@@ -804,7 +806,7 @@ function homeActions(promptOptions = currentPromptOptions()) {
 function mapSelectActions(promptOptions = currentPromptOptions()) {
   return [
     { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
-    { descriptor: actionDescriptor('reroll', promptOptions), verb: 'new seed' },
+    { descriptor: actionDescriptor('reroll', promptOptions), verb: 'new survey' },
     { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
   ];
 }
@@ -3634,7 +3636,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   }), layout.textWidth), layout.textX, layout.titleY + 42);
   ctx.font = canvasFont(13);
   ctx.fillStyle = roleColor('text', 0.78 * textReveal);
-  ctx.fillText(fitUiText(ctx, typeOnText('surf the currents. escape the void.', {
+  ctx.fillText(fitUiText(ctx, typeOnText('read the current. find an aperture.', {
     time: readyTimer,
     delay: 0.64,
     duration: 0.72,
@@ -3657,8 +3659,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
 
   if (readyAlpha > 0) {
     drawCommandButtonMotion(ctx, layout.commandRect, 'select pilot', {
-      // The title command owns the action label; the shared prompt rail below
-      // it keeps controller select and title exit together on Deck.
+      // The title command owns selection; the footer retains only exit.
       action: null,
       role: 'flow',
       active: true,
@@ -3669,7 +3670,6 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
       commandPulse: motion.commandPulse,
     });
     drawActionFooter(ctx, layout.footerRect.x, layout.footerRect.y, [
-      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'select pilot' },
       { descriptor: actionDescriptor('quit', currentPromptOptions()), verb: 'exit' },
     ], { alpha: 0.86, gap: 14, maxWidth: layout.footerRect.w, backing: true, backingRole: 'flow' });
   }
@@ -3682,7 +3682,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.fillStyle = roleColor('muted', 0.46 * textReveal);
   ctx.font = canvasFont(10);
   ctx.textAlign = 'center';
-  ctx.fillText('v0.3 // visual systems online', layout.versionRect.x + layout.versionRect.w / 2, layout.versionRect.y + 16);
+  ctx.fillText('survey terminal v0.3', layout.versionRect.x + layout.versionRect.w / 2, layout.versionRect.y + 16);
   ctx.restore();
 }
 
@@ -5939,10 +5939,10 @@ function gameLoop(now) {
       ctx.font = canvasFont(11);
       ctx.fillStyle = roleColor(role, active ? 0.75 : 0.36);
       const tabCopy = i === 0 ? 'loadout / hull'
-        : i === 1 ? `${vaultCount}/${vaultCapacity} vault`
+        : i === 1 ? 'salvage hold'
           : i === 2 ? 'rig tuning'
             : i === 3 ? 'records / echoes'
-              : 'risk gate';
+              : 'route commit';
       ctx.fillText(fitUiText(ctx, tabCopy.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 42);
     }
 
@@ -5962,9 +5962,6 @@ function gameLoop(now) {
       ctx.fillStyle = HULL_LABEL_COLORS[hullName] || roleColor('flow', 0.86);
       ctx.font = canvasFont(20, { role: 'display', weight: '700' });
       ctx.fillText(hullName, centerX, centerY);
-      ctx.font = canvasFont(12);
-      ctx.fillStyle = roleColor('muted', 0.82);
-      ctx.fillText(`${equippedCount}/2 artifacts // ${consumableCount}/2 hotbar`, centerX, centerY + 23);
       const movementStats = inventorySystem?.getMovementStats?.() || {};
       const deltaVStats = inventorySystem?.getDeltaVStats?.() || {};
       const hullDefinition = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
@@ -5977,7 +5974,6 @@ function gameLoop(now) {
       const compactStatStrip = centerPanel.w < 460;
       const shipPreviewScale = compactStatStrip ? 0.84 : 1.08;
       const shipPreviewX = centerPanel.x + centerPanel.w * 0.71;
-      const hullStatStrip = formatHullStatStrip(hullStats, { compact: compactStatStrip });
       // The portrait owns the right third of this panel at Deck width.  Keep
       // stats inside the remaining rail; compact labels preserve the actual
       // values instead of letting a fitted sentence disappear under the art.
@@ -5985,12 +5981,13 @@ function gameLoop(now) {
         centerTextW * 0.58,
         shipPreviewX - centerX - (112 * shipPreviewScale / 2) - 18,
       ));
-      ctx.font = canvasFont(9);
-      ctx.fillStyle = roleColor('flow', 0.78);
-      ctx.fillText('BASE / FITTED', centerX, centerY + 38);
-      ctx.fillText(fitUiText(ctx, hullStatStrip[0], hullStatWidth), centerX, centerY + 50);
-      ctx.fillStyle = roleColor('salvage', 0.78);
-      ctx.fillText(fitUiText(ctx, hullStatStrip[1], hullStatWidth), centerX, centerY + 61);
+      for (const [index, stat] of hullStats.entries()) {
+        drawKeyValueRow(ctx, stat.label, `${stat.base} → ${stat.fitted}`, centerX, centerY + 27 + index * 17, {
+          labelWidth: compactStatStrip ? 86 : 104,
+          valueWidth: Math.max(32, hullStatWidth - (compactStatStrip ? 86 : 104)),
+          valueRole: stat.base === stat.fitted ? 'text' : 'salvage',
+        });
+      }
       drawHomeShipSprite(ctx, shipPreviewX, centerPanel.y + 142, {
         scale: shipPreviewScale,
         hullType,
@@ -6032,13 +6029,15 @@ function gameLoop(now) {
         { alpha: 0.64, gap: 10, maxWidth: hullFooterWidth });
       sy = hullFooterY + hullFooter.height + 16;
 
-      const rigDefinitions = Object.values(RIG_TRACKS[hullType] || {});
-      const rigLevels = Array.isArray(p.rigLevels) ? p.rigLevels : [];
-      ctx.font = canvasFont(10);
-      ctx.fillStyle = roleColor('ecology', 0.78);
-      ctx.fillText(fitUiText(ctx, rigDefinitions.map((track, index) =>
-        `${String(track.name).toUpperCase()} ${rigLevels[index] || 0}/${MAX_RIG_LEVEL}`
-      ).join('  //  '), centerTextW * 0.66), centerX, sy);
+      const shipRigTracks = profileManager.getRigProgression()?.tracks || [];
+      const rigCellW = (centerTextW * 0.72) / Math.max(1, shipRigTracks.length);
+      shipRigTracks.forEach((track, index) => {
+        drawKeyValueRow(ctx, String(track.label).toLowerCase(), `${track.level || 0}/${track.maxLevel}`, centerX + index * rigCellW, sy, {
+          labelWidth: Math.max(68, rigCellW - 34),
+          valueWidth: 32,
+          valueRole: 'ecology',
+        });
+      });
       sy += 22;
 
       drawSectionLabel(ctx, 'loadout', centerX, sy, { role: 'salvage', alpha: 0.86 });
@@ -6178,16 +6177,12 @@ function gameLoop(now) {
       ctx.fillStyle = roleColor('flow', 0.92);
       ctx.font = canvasFont(18, { weight: '700' });
       ctx.fillText(`RIG: ${String(rig?.hullType || p.hullType || 'drifter').toUpperCase()}`, centerX, centerY);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = roleColor('salvage', 0.9);
-      ctx.fillText(`${p.exoticMatter} EM`, centerX + centerTextW, centerY);
-      ctx.textAlign = 'left';
       ctx.font = canvasFont(12);
       let uy = centerY + 34;
       for (let ti = 0; ti < tracks.length; ti++) {
         const track = tracks[ti];
         const rank = track.level || 0;
-        const maxLevel = Math.max(0, Math.min(MAX_RIG_LEVEL, Number(track.maxLevel ?? MAX_RIG_LEVEL) || 0));
+        const maxLevel = Math.max(0, Number(track.maxLevel) || 0);
         const selected = (ti === homeRigCursor);
         const cost = profileManager.getRigUpgradeCost(ti);
         const canAfford = profileManager.canAffordRigUpgrade(ti);
@@ -6201,23 +6196,26 @@ function gameLoop(now) {
           railWidth: selected ? 4 : 2,
         });
 
-        const filledBars = '#'.repeat(Math.min(rank, maxLevel));
-        const emptyBars = '-'.repeat(Math.max(0, maxLevel - rank));
-        const bars = maxLevel > 0 ? `${filledBars}${emptyBars}` : 'prototype';
         ctx.fillStyle = selected ? roleColor('text', 0.92) : roleColor('muted', 0.70);
-        ctx.fillText(`${track.label.padEnd(12)} ${bars}  ${Math.min(rank, maxLevel)}/${maxLevel}`, centerX + 4, uy);
+        ctx.fillText(String(track.label).toLowerCase(), centerX + 4, uy);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${Math.min(rank, maxLevel)}/${maxLevel}`, centerX + centerTextW - 8, uy);
+        ctx.textAlign = 'left';
+        drawSegmentedGauge(ctx, { x: centerX + 4, y: uy + 7, w: 132, h: 12 }, {
+          value: rank, max: maxLevel, segments: Math.max(1, maxLevel), role: 'flow', alpha: 0.86,
+        });
         ctx.fillStyle = roleColor('muted', 0.74);
-        ctx.fillText(fitUiText(ctx, track.focus, centerTextW - 26), centerX + 22, uy + 15);
+        ctx.fillText(fitUiText(ctx, track.focus, centerTextW - 180), centerX + 152, uy + 17);
 
         if (cost) {
-          ctx.fillStyle = canAfford ? roleColor('ecology', 0.78) : roleColor('danger', 0.58);
+          ctx.fillStyle = canAfford ? roleColor('muted', 0.78) : roleColor('danger', 0.76);
           const action = selected && canAfford ? { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'buy' } : null;
           const actionX = centerX + centerTextW - 98;
           ctx.fillText(fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM`, Math.max(56, (action ? actionX : centerX + centerTextW) - (centerX + 22) - 8)), centerX + 22, uy + 31);
           if (action) drawActionPrompt(ctx, { x: actionX, y: uy + 3, w: 90, h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, action.descriptor, { verb: action.verb, alpha: 0.82, color: roleColor('flow') });
         } else {
-          ctx.fillStyle = roleColor('salvage', 0.72);
-          ctx.fillText(maxLevel < MAX_RIG_LEVEL ? 'CURRENT CAP' : 'MAX', centerX + 22, uy + 31);
+          ctx.fillStyle = roleColor('muted', 0.72);
+          ctx.fillText('max', centerX + 22, uy + 31);
         }
 
         uy += 60;
@@ -6308,9 +6306,16 @@ function gameLoop(now) {
 
     } else if (homeTab === 4) {
       // === LAUNCH subscreen ===
+      const launchEntry = currentMapSelectEntry();
+      const launchSelection = launchEntry?.available ? currentMapSelectSurvey() : null;
+      const launchTerminal = launchSelection ? projectSurveyTerminal(launchSelection.surveyPreview, {
+        seed: previewSeed,
+        mapClass: launchEntry.id,
+        cycle: totalRuns + 1,
+      }) : null;
       ctx.textAlign = 'center';
-      drawHomeShipSprite(ctx, centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 - 68, {
-        scale: 1.38,
+      drawHomeShipSprite(ctx, centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 - 92, {
+        scale: 1.2,
         hullType,
         role: 'salvage',
         alpha: 0.96,
@@ -6318,10 +6323,11 @@ function gameLoop(now) {
       });
       ctx.fillStyle = roleColor('text', 0.94);
       ctx.font = canvasFont(24, { role: 'display', weight: '800' });
-      ctx.fillText('DROP WINDOW READY', centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 78);
+      ctx.fillText(String(launchEntry?.label || launchEntry?.map?.name || 'route unresolved').toLowerCase(), centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 38);
       ctx.fillStyle = roleColor('muted', 0.76);
-      ctx.font = canvasFont(13);
-      ctx.fillText('choose a route, manage the heat, steal from the dark', centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 106);
+      ctx.font = canvasFont(12);
+      ctx.fillText(`seed ${launchTerminal?.chrome.seedSerial || 'unresolved'} · ${hullType} hull`, centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 66);
+      ctx.fillText(`loadout ${equippedCount + consumableCount}/4 · ${launchEntry?.available ? 'route ready for survey' : 'route withheld'}`, centerPanel.x + centerPanel.w / 2, centerPanel.y + centerPanel.h / 2 + 88);
       }
     } else {
       ctx.textAlign = 'center';
@@ -6366,7 +6372,10 @@ function gameLoop(now) {
       ? UI_DECK_GEOMETRY.button.minHeight + UI_DECK_GEOMETRY.button.gap + UI_DECK_GEOMETRY.actionGlyph.minHeight + 18
       : 82;
     const valueWidth = Math.max(64, sidebarW - 136);
-    drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM`, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'salvage' });
+    const affordableRigLevel = Boolean(profileManager.getRigProgression()?.tracks?.some((track) => (
+      track.level < track.maxLevel && profileManager.canAffordRigUpgrade(track.index)
+    )));
+    drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM · ${affordableRigLevel ? 'rig level affordable' : 'next rig held'}`, sidebarX, sideY, { labelWidth: 104, valueWidth: Math.max(64, sidebarW - 104), valueRole: 'salvage' });
     sideY += 24;
     drawKeyValueRow(ctx, 'vault value', `${profileVaultValue(p)} EM`, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'salvage' });
     sideY += 24;
@@ -6383,15 +6392,6 @@ function gameLoop(now) {
       role: equippedCount + consumableCount >= 2 ? 'ecology' : 'salvage',
       label: 'loadout',
       alpha: 0.9,
-    });
-    sideY += 42;
-    drawSegmentedGauge(ctx, { x: sidebarX, y: sideY, w: sidebarW, h: 13 }, {
-      value: vaultCapacity ? vaultCount : 0,
-      max: Math.max(1, vaultCapacity),
-      segments: 8,
-      role: vaultCount >= vaultCapacity ? 'danger' : 'salvage',
-      label: 'vault',
-      alpha: 0.86,
     });
     sideY += 52;
     if (launchActive) {
@@ -6412,6 +6412,11 @@ function gameLoop(now) {
     const selection = currentMapSelectSurvey();
     const preview = selection.surveyPreview;
     const locked = selection.state === 'locked';
+    const surveyTerminal = locked ? null : projectSurveyTerminal(preview, {
+      seed: previewSeed,
+      mapClass: selection.entry.id,
+      cycle: (Number(profileManager.active?.totalExtractions) || 0) + (Number(profileManager.active?.totalDeaths) || 0) + 1,
+    });
     const surveyRole = locked ? 'danger' : preview.riskBand === 'HIGH' ? 'danger' : preview.riskBand === 'MEDIUM' ? 'salvage' : 'flow';
     const promptOptions = currentPromptOptions();
 
@@ -6474,11 +6479,13 @@ function gameLoop(now) {
       ctx.fillStyle = roleColor(entry.available === false ? 'muted' : role, selected ? 0.36 : 0.18);
       ctx.lineWidth = selected ? 1.5 : 1;
       ctx.strokeRect(iconX - 15, iconY - 15, 30, 30);
-      const glyphCells = entry.available === false ? 4 : registry.topology.miniGlyphCells;
+      const topologySignature = entry.available === false ? null : resolveTopologySignature(entry.id);
+      const glyphRows = topologySignature?.rows || ['010', '101', '010'];
+      const glyphCells = glyphRows.length;
       for (let gy = 0; gy < glyphCells; gy++) {
         for (let gx = 0; gx < glyphCells; gx++) {
-          if ((gx * 7 + gy * 11 + i * 5) % (entry.available === false ? 3 : 4) === 0) continue;
-          ctx.fillRect(iconX - 10 + gx * (20 / glyphCells), iconY - 10 + gy * (20 / glyphCells), 2, 2);
+          if (glyphRows[gy]?.[gx] !== '1') continue;
+          ctx.fillRect(iconX - 10 + gx * (20 / glyphCells), iconY - 10 + gy * (20 / glyphCells), 2.5, 2.5);
         }
       }
       if (entry.available === false) {
@@ -6504,15 +6511,41 @@ function gameLoop(now) {
       { alpha: 0.82, gap: 10, maxWidth: panelLayout.footer.contentWidth, backing: true, backingRole: surveyRole });
 
     const centerX = previewPanel.x + pad;
+    if (!locked && surveyTerminal) {
+      ctx.font = canvasFont(9);
+      ctx.fillStyle = roleColor('muted', 0.48);
+      ctx.fillText(
+        `${surveyTerminal.chrome.terminal} // seed ${surveyTerminal.chrome.seedSerial} · cycle ${surveyTerminal.chrome.cycle} // signal ${surveyTerminal.chrome.signal.toLowerCase()}`,
+        centerX,
+        previewPanel.y + 18,
+      );
+    }
     ctx.font = canvasFont(21, { role: 'display', weight: '800' });
     ctx.fillStyle = roleColor('text', 0.96);
-    ctx.fillText('SURVEY RECONSTRUCTION', centerX, previewPanel.y + 34);
+    ctx.fillText('SURVEY RECONSTRUCTION', centerX, previewPanel.y + 42);
     if (locked) {
       drawLockedSurveyTopology(ctx, previewPanel, { alpha: 0.96, motionTime: uiMotionTimer, reducedMotion: motion.reducedMotion });
     } else {
       drawSurveyTopology(ctx, previewPanel, preview, { alpha: 0.96, motionTime: uiMotionTimer, reducedMotion: motion.reducedMotion });
-      drawSegmentedGauge(ctx, { x: centerX, y: previewPanel.y + previewPanel.h - 25, w: Math.max(96, previewPanel.w * 0.30), h: 10 }, { value: preview.density.value, max: 1, segments: 8, role: 'flow', label: 'density', alpha: 0.82 });
-      drawSegmentedGauge(ctx, { x: centerX + Math.max(118, previewPanel.w * 0.36), y: previewPanel.y + previewPanel.h - 25, w: Math.max(96, previewPanel.w * 0.30), h: 10 }, { value: preview.uncertainty.value, max: 1, segments: 8, role: 'anomaly', label: 'uncertainty', alpha: 0.82 });
+      const legendX = previewPanel.x + previewPanel.w - 126;
+      let legendY = previewPanel.y + 72;
+      ctx.font = canvasFont(10);
+      for (const item of surveyTerminal.density.legend) {
+        ctx.fillStyle = roleColor(item.id === 'anomaly' ? 'anomaly' : item.id === 'dense' ? 'salvage' : 'muted', 0.72);
+        ctx.fillText(`${item.mark === 'contour' ? '◎' : item.mark === 'dots' ? '··' : item.mark === 'burst' ? '※' : item.mark === 'empty' ? '○' : '--'} ${item.label.toLowerCase()}`, legendX, legendY);
+        legendY += 16;
+      }
+      ctx.fillStyle = roleColor('muted', 0.64);
+      ctx.fillText('//// unstable zones', legendX, legendY + 4);
+      const densityW = Math.max(160, previewPanel.w * 0.42);
+      drawSegmentedGauge(ctx, { x: centerX, y: previewPanel.y + previewPanel.h - 25, w: densityW, h: 10 }, {
+        value: surveyTerminal.density.filledSegments,
+        max: surveyTerminal.density.segments,
+        segments: surveyTerminal.density.segments,
+        role: 'flow',
+        label: 'density low → high',
+        alpha: 0.82,
+      });
     }
 
     const briefX = briefPanel.x + pad;
@@ -6559,7 +6592,11 @@ function gameLoop(now) {
         role: surveyRole, alpha: 0.88, minWidth: panelLayout.briefStatus.risk.w,
       });
       drawKeyValueRow(ctx, 'signature', preview.signature.name, briefX, briefing.signatureY, { labelWidth: 88, valueRole: 'anomaly' });
-      ctx.font = canvasFont(10);
+      if (preview.signature.mechanical) {
+        ctx.font = canvasFont(12);
+        ctx.fillStyle = roleColor('muted', 0.82);
+        ctx.fillText(fitUiText(ctx, preview.signature.mechanical, briefW), briefX, briefing.signatureEffectY);
+      }
       ctx.fillStyle = roleColor('muted', 0.74);
       const descriptionLines = wrapUiText(ctx, preview.description, briefW, { maxLines: briefing.descriptionLines });
       descriptionLines.forEach((line, index) => {
@@ -6567,21 +6604,32 @@ function gameLoop(now) {
       });
       drawSectionLabel(ctx, 'possible contents', briefX, briefing.contentsY, { role: 'flow', alpha: 0.86 });
       const contactY = briefing.contactY;
-      for (const [index, family] of preview.possibleContactFamilies.entries()) {
-        const y = contactY + index * briefing.contactRowStep;
-        ctx.font = canvasFont(10, { weight: '700' });
+      for (const [index, family] of surveyTerminal.contacts.entries()) {
+        const contactColumnW = briefW / briefing.contactColumns;
+        const contactX = briefX + (index % briefing.contactColumns) * contactColumnW;
+        const y = contactY + Math.floor(index / briefing.contactColumns) * briefing.contactRowStep;
+        ctx.font = canvasFont(12, { weight: '700' });
         ctx.fillStyle = roleColor(family.role, 0.86);
-        const rangeLabel = `${family.range.min}-${family.range.max}`;
-        const labelWidth = briefing.contactDescription ? Math.max(100, briefW - 64) : Math.max(92, briefW - 46);
-        ctx.fillText(fitUiText(ctx, family.label, labelWidth), briefX, y);
+        ctx.fillText(family.glyph, contactX, y);
+        const rangeLabel = family.range.label;
+        const labelWidth = Math.max(48, contactColumnW - 74);
+        ctx.fillText(fitUiText(ctx, family.label.toLowerCase(), labelWidth), contactX + 20, y);
+        drawSegmentedGauge(ctx, { x: contactX + 20, y: y + 7, w: Math.min(76, contactColumnW - 44), h: 8 }, {
+          value: family.magnitude.filledSegments,
+          max: family.magnitude.segments,
+          segments: family.magnitude.segments,
+          role: family.role,
+          alpha: 0.76,
+        });
         ctx.textAlign = 'right';
         ctx.fillStyle = roleColor('text', 0.82);
-        ctx.fillText(rangeLabel, briefX + briefW, y);
+        ctx.fillText(rangeLabel, contactX + contactColumnW - 2, y);
         ctx.textAlign = 'left';
         if (briefing.contactDescription) {
-          ctx.font = canvasFont(10);
+          const sourceFamily = preview.possibleContactFamilies[index];
+          ctx.font = canvasFont(12);
           ctx.fillStyle = roleColor('muted', 0.68);
-          ctx.fillText(fitUiText(ctx, family.description, briefW), briefX, y + 16);
+          ctx.fillText(fitUiText(ctx, sourceFamily?.description || '', Math.max(64, briefW - 108)), briefX + 108, y + 16);
         }
       }
       const authorityY = briefing.authorityY;
@@ -6605,6 +6653,17 @@ function gameLoop(now) {
       ctx.font = canvasFont(26, { role: 'display', weight: '800' });
       ctx.fillStyle = roleColor('flow', 0.96);
       ctx.fillText(`${preview.confidence}%`, briefX, briefing.confidenceValueY);
+      const waveX = briefX + 76;
+      const waveY = briefing.confidenceValueY - 8;
+      ctx.strokeStyle = roleColor('flow', 0.64);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let point = 0; point < 9; point++) {
+        const x = waveX + point * Math.max(8, (briefW - 82) / 8);
+        const y = waveY + Math.sin((point + previewSeed % 11) * 1.7) * (3 + preview.confidence / 18);
+        if (point === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
       drawCommandButtonMotion(ctx, { x: briefX, y: commandY, w: briefW, h: UI_DECK_GEOMETRY.button.minHeight }, remoteControl?.hasLiveSession ? 'join live cycle' : 'begin drop', {
         action: actionDescriptor('confirm', promptOptions), role: surveyRole === 'danger' ? 'salvage' : surveyRole,
         active: true, alpha: 0.96, progress: contentReveal, pulseTime: (totalTime % 1.45) / 1.45,

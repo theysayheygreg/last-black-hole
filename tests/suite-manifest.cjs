@@ -746,6 +746,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "UIWaveC",
+    file: "ui-wave-c.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
     name: "SoloAuthorityLaunch",
     file: "solo-authority-launch.cjs",
     lanes: ["fast", "core", "static", "authority", "full"],

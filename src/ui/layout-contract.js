@@ -171,12 +171,13 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
   const statusGap = UI_DECK_GEOMETRY.panel.gap;
   const statusWidth = Math.max(1, (panels.right.w - pad * 2 - statusGap) / 2);
   const authorityY = command.y - (compactBrief ? 94 : 96);
-  const descriptionLineY = panels.right.y + (compactBrief ? 145 : 188);
+  const descriptionLineY = panels.right.y + (compactBrief ? 160 : 202);
   const descriptionLineHeight = compactBrief ? 12 : 13;
-  const descriptionLines = 2;
-  const contentsY = panels.right.y + (compactBrief ? 174 : 222);
-  const contactY = panels.right.y + (compactBrief ? 194 : 252);
-  const contactRowStep = compactBrief ? 20 : 39;
+  const descriptionLines = compactBrief ? 1 : 4;
+  const contentsY = panels.right.y + (compactBrief ? 184 : 269);
+  const contactY = panels.right.y + (compactBrief ? 208 : 293);
+  const contactColumns = compactBrief ? 2 : 1;
+  const contactRowStep = compactBrief ? 36 : 28;
   const briefing = {
     compact: compactBrief,
     titleY: panels.right.y + (compactBrief ? 40 : 58),
@@ -184,13 +185,15 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
     statusTop,
     statusHeight,
     signatureY: panels.right.y + (compactBrief ? 125 : 163),
+    signatureEffectY: panels.right.y + (compactBrief ? 143 : 181),
     descriptionLineY,
     descriptionLineHeight,
     descriptionLines,
     contentsY,
     contactY,
+    contactColumns,
     contactRowStep,
-    contactDescription: !compactBrief,
+    contactDescription: false,
     authorityY,
     confidenceLabelY: command.y - 56,
     confidenceValueY: command.y - 22,

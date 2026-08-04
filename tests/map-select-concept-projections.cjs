@@ -16,10 +16,12 @@ const ROOT = path.resolve(__dirname, '..');
       { id: 'derelict', label: 'DERELICT FIELDS', role: 'salvage', range: { min: 3, max: 8 } },
     ],
   };
-  const terminal = survey.projectSurveyTerminal(preview, { seed: 42, mapClass: 'expanse' });
+  const terminal = survey.projectSurveyTerminal(preview, { seed: 42, mapClass: 'expanse', cycle: 17 });
   assert.deepStrictEqual(Object.keys(terminal).sort(), ['chrome', 'confidence', 'contacts', 'density', 'topologySignature']);
   assert.match(terminal.chrome.seedSerial, /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
   assert.strictEqual(terminal.chrome.seedSerial, survey.projectSurveyTerminal(preview, { seed: 42, mapClass: 'expanse' }).chrome.seedSerial);
+  assert.strictEqual(terminal.chrome.cycle, 17);
+  assert(!Object.hasOwn(terminal.chrome, 'link'), 'survey projection must not fabricate connectivity');
   assert.notStrictEqual(terminal.chrome.seedSerial, survey.projectSurveyTerminal(preview, { seed: 43, mapClass: 'expanse' }).chrome.seedSerial);
   assert.strictEqual(terminal.confidence, preview.confidence);
   assert(!Object.hasOwn(terminal, 'uncertainty'), 'confidence must remain the single summary statistic');

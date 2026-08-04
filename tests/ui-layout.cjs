@@ -131,7 +131,8 @@ const assert = require('assert');
     assert(!layout.rectsOverlap(map.briefing.titleBounds, scaleBounds, geometry.separation), `${width}x${height} scale pill overlaps title`);
     assert(!layout.rectsOverlap(map.briefing.titleBounds, riskBounds, geometry.separation), `${width}x${height} risk pill overlaps title`);
     assert(map.briefing.signatureY > scaleBounds.y + scaleBounds.h, `${width}x${height} signature row must clear scale card`);
-    assert(map.briefing.contactY + map.briefing.contactRowStep * 3 < map.briefing.authorityY,
+    const contactRows = Math.ceil(4 / map.briefing.contactColumns);
+    assert(map.briefing.contactY + map.briefing.contactRowStep * (contactRows - 1) + tokens.UI_DECK.minGaugeHeight + 7 < map.briefing.authorityY,
       `${width}x${height} possible contents collide with authority band`);
     assert(layout.rectContains(map.right, map.briefing.commandPrompt, geometry.panel.paddingX), `${width}x${height} map CTA prompt escaped briefing panel`);
   }

@@ -10,6 +10,7 @@ async function run() {
   const survey = await import(pathToFileURL(path.join(ROOT, 'src/ui/map-select-survey.js')).href);
   const layout = await import(pathToFileURL(path.join(ROOT, 'src/ui/layout-contract.js')).href);
   const tokens = await import(pathToFileURL(path.join(ROOT, 'src/ui/design-tokens.js')).href);
+  const primitives = await import(pathToFileURL(path.join(ROOT, 'src/ui/canvas-primitives.js')).href);
   const prompts = await import(pathToFileURL(path.join(ROOT, 'src/ui/input-prompts.js')).href);
   const mapLoader = await import(pathToFileURL(path.join(ROOT, 'src/maps/playable-map-loader.js')).href);
   const mapScales = await import(pathToFileURL(path.join(ROOT, 'src/content/map-scales.js')).href);
@@ -94,9 +95,11 @@ async function run() {
   assert(surface.rows.every((row) => !layout.rectsOverlap(row, surface.footer, 0)), 'destination rows overlap footer');
   assert.strictEqual(surface.footer.rowCount, 3, '960px Map Select action rail must reserve all three wrapped rows');
   assert(layout.rectContains(surface.right, surface.command, surface.pad), 'command escaped right panel');
-  assert(layout.rectContains(surface.right, surface.briefStatus.scale, surface.pad), 'scale status escaped briefing panel');
-  assert(layout.rectContains(surface.right, surface.briefStatus.risk, surface.pad), 'risk status escaped briefing panel');
-  assert(!layout.rectsOverlap(surface.briefStatus.scale, surface.briefStatus.risk, 0), 'briefing status pills overlap');
+  const scaleBounds = primitives.statusPillBounds(surface.briefStatus.scale, { minWidth: surface.briefStatus.scale.w });
+  const riskBounds = primitives.statusPillBounds(surface.briefStatus.risk, { minWidth: surface.briefStatus.risk.w });
+  assert(layout.rectContains(surface.right, scaleBounds, surface.pad), 'scale status escaped briefing panel');
+  assert(layout.rectContains(surface.right, riskBounds, surface.pad), 'risk status escaped briefing panel');
+  assert(!layout.rectsOverlap(scaleBounds, riskBounds, 0), 'briefing status pills overlap');
   const glyph = {
     x: surface.command.x + tokens.UI_DECK_GEOMETRY.button.paddingX,
     y: surface.command.y + surface.command.h + tokens.UI_DECK_GEOMETRY.button.gap,

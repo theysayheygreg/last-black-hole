@@ -139,6 +139,7 @@ function safeSignature(signature) {
   return {
     id: String(signature?.id || 'unresolved'),
     name: String(signature?.name || 'UNRESOLVED SIGNATURE'),
+    mechanical: String(signature?.mechanical || ''),
   };
 }
 
@@ -372,15 +373,13 @@ function seedSerial(seed, mapClass) {
   return `${body.slice(0, 4)}-${body.slice(4, 8)}-${body.slice(8, 12)}`;
 }
 
-export function projectSurveyChrome({ seed, mapClass, confidence = 0 } = {}) {
+export function projectSurveyChrome({ seed, mapClass, confidence = 0, cycle = 1 } = {}) {
   const safeConfidence = clamp(Math.round(Number(confidence) || 0), 0, 100);
-  const normalizedSeed = Math.max(1, Math.floor(Number(seed) || 1));
   return {
     terminal: 'SURVEY TERMINAL v0.3',
     seedSerial: seedSerial(seed, mapClass),
-    cycle: normalizedSeed % 100,
+    cycle: Math.max(1, Math.floor(Number(cycle) || 1)),
     signal: safeConfidence >= 70 ? 'STRONG' : safeConfidence >= 40 ? 'PARTIAL' : 'WEAK',
-    link: safeConfidence > 0 ? 'STABLE' : 'NO CARRIER',
     confidence: safeConfidence,
   };
 }
@@ -425,12 +424,12 @@ export function projectSurveyContacts(families = []) {
   });
 }
 
-export function projectSurveyTerminal(preview, { seed, mapClass } = {}) {
+export function projectSurveyTerminal(preview, { seed, mapClass, cycle } = {}) {
   if (!preview) return null;
   const resolvedMapClass = mapClass || preview.mapClass?.id;
   return {
     topologySignature: resolveTopologySignature(resolvedMapClass),
-    chrome: projectSurveyChrome({ seed, mapClass: resolvedMapClass, confidence: preview.confidence }),
+    chrome: projectSurveyChrome({ seed, mapClass: resolvedMapClass, confidence: preview.confidence, cycle }),
     density: projectSurveyDensity(preview.density),
     contacts: projectSurveyContacts(preview.possibleContactFamilies),
     // Confidence is deliberately the only summary statistic. Uncertainty
@@ -506,7 +505,21 @@ export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime =
       const scale = 1 - ring * 0.17;
       drawSurveyContour(ctx, x, y, rx * scale, ry * scale, index * 17 + ring, color, isVoid ? 0.26 : 0.66 - ring * 0.1, isVoid || isInterference);
     }
+    const dotCount = isVoid ? 4 : 7 + Math.round(region.density * 18);
+    ctx.fillStyle = color.replace(/,\s*[^,)]+\)$/, ', 0.42)');
+    for (let dot = 0; dot < dotCount; dot++) {
+      const dotX = x + (surveyNoise(index * 31 + dot * 5.1) - 0.5) * rx * 1.7;
+      const dotY = y + (surveyNoise(index * 47 + dot * 7.3) - 0.5) * ry * 1.7;
+      ctx.fillRect(dotX, dotY, 1.5, 1.5);
+    }
     if (isInterference) {
+      ctx.strokeStyle = 'rgba(255, 62, 181, 0.34)';
+      for (let hatch = -2; hatch <= 2; hatch++) {
+        ctx.beginPath();
+        ctx.moveTo(x - rx, y + hatch * 8 + ry * 0.45);
+        ctx.lineTo(x + rx, y + hatch * 8 - ry * 0.45);
+        ctx.stroke();
+      }
       for (let mark = 0; mark < 4; mark++) {
         const offsetX = (surveyNoise(index * 7 + mark) - 0.5) * rx * 1.4;
         const offsetY = (surveyNoise(index * 11 + mark) - 0.5) * ry * 1.4;
@@ -514,6 +527,13 @@ export function drawSurveyTopology(ctx, rect, preview, { alpha = 1, motionTime =
         ctx.fillRect(x + offsetX, y + offsetY, 18 + mark * 7, 2);
       }
     }
+  }
+  const redactionCount = Math.max(1, Math.round(preview.uncertainty.value * 4));
+  for (let block = 0; block < redactionCount; block++) {
+    const blockX = plot.x + surveyNoise(block * 19 + grid) * Math.max(1, plot.w - 66);
+    const blockY = plot.y + surveyNoise(block * 23 + grid) * Math.max(1, plot.h - 18);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+    ctx.fillRect(blockX, blockY, 38 + block * 7, 8 + (block % 2) * 4);
   }
   const uncertaintyBars = Math.round(preview.uncertainty.value * 10);
   for (let i = 0; i < uncertaintyBars; i++) {
