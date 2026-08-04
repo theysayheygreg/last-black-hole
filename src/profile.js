@@ -4,9 +4,9 @@
  * 3 save slots in localStorage. Each stores:
  *   - Pilot name, timestamps
  *   - Exotic matter (currency)
- *   - Vault items (capped, expandable via upgrade)
+ *   - Vault items (fixed-cap storage)
  *   - Equipped loadout (2 equip + 2 consumable)
- *   - Upgrade ranks (thrust/hull/coupling/drag/sensor/vault)
+ *   - Legacy upgrade ranks retained only for save compatibility
  *   - Lifetime stats
  *
  * The profile is the single source of truth for between-run state.
@@ -15,10 +15,6 @@
 
 import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
 import { PUBLIC_HULL_IDS, RIG_TRACKS as HULL_RIG_TRACKS } from './content/hulls.js';
-import {
-  TUNING_CONTRACTS,
-  normalizeProfileDragUpgradeRank,
-} from './content/tuning.js';
 import { sanitizeRetiredItems } from './content/items.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
@@ -30,6 +26,7 @@ const EQUIPPED_SLOT_COUNT = 2;
 const CONSUMABLE_SLOT_COUNT = 2;
 const DEFAULT_HULL_TYPE = 'drifter';
 const RIG_SLOT_COUNT = 3;
+const MAX_RECENT_ECHOES = 8;
 export const MAX_RIG_LEVEL = BALANCE.progression.maxRigLevel;
 
 // ---- Random name generation ----
@@ -98,6 +95,7 @@ function createDefaultProfile(name) {
     totalItemsSold: 0,
     bestSurvivalTime: 0,
     totalExoticMatterEarned: 0,
+    recentEchoes: [],
   };
 }
 
@@ -127,11 +125,26 @@ function normalizeRigLevels(rigLevels = []) {
   });
 }
 
+function normalizeRecentEchoes(echoes = []) {
+  if (!Array.isArray(echoes)) return [];
+  return echoes
+    .filter((echo) => echo && typeof echo === 'object' && String(echo.fragment || '').trim())
+    .slice(0, MAX_RECENT_ECHOES)
+    .map((echo) => ({
+      fragment: String(echo.fragment).slice(0, 240),
+      pilotName: String(echo.pilotName || 'unknown').slice(0, MAX_NAME_LENGTH),
+      hullType: normalizeHullType(echo.hullType),
+      deathCause: echo.deathCause ? String(echo.deathCause).slice(0, 80) : null,
+      survivalTime: Math.max(0, Number(echo.survivalTime) || 0),
+    }));
+}
+
 function normalizeProfileShape(profile = {}) {
   const defaults = createDefaultProfile(profile.name);
   const next = { ...defaults, ...profile };
+  // Old saves retain this inert record so profile migrations never discard it.
+  // The shipped progression surface is now the authority-backed rig only.
   next.upgrades = { ...defaults.upgrades, ...(profile.upgrades || {}) };
-  next.upgrades.drag = normalizeProfileDragUpgradeRank(next.upgrades.drag);
   next.hullType = normalizeHullType(profile.hullType, profile.shipType);
   next.shipType = next.hullType;
   next.rigLevels = normalizeRigLevels(profile.rigLevels);
@@ -139,37 +152,13 @@ function normalizeProfileShape(profile = {}) {
     ? sanitizeRetiredItems(profile.vault).filter(Boolean)
     : defaults.vault;
   next.loadout = normalizeLoadoutShape(profile.loadout);
+  next.recentEchoes = normalizeRecentEchoes(profile.recentEchoes);
   return next;
 }
 
 function normalizeEmCredit(value) {
   return Math.max(0, Math.round(Number(value) || 0));
 }
-
-// ---- Vault capacity per upgrade rank ----
-
-const VAULT_CAPACITY = [25, 35, 50, 75];
-
-// ---- Upgrade definitions ----
-
-export const UPGRADE_TRACKS = {
-  thrust:   { label: 'thrust',   desc: 'ship acceleration',          statKey: 'ship.thrustAccel', multPerRank: 0.15 },
-  hull:     { label: 'hull',     desc: 'well contact grace period',  statKey: null,               multPerRank: 0 },
-  coupling: { label: 'coupling', desc: 'fluid current influence',    statKey: 'ship.fluidCoupling', multPerRank: 0.10 },
-  drag:     { label: 'drag',     desc: 'velocity damping (lower)',   statKey: null,              multPerRank: -TUNING_CONTRACTS.profileDragUpgrade.reductionPerRank },
-  sensor:   { label: 'sensor',   desc: 'detection range',            statKey: null,               multPerRank: 0 },
-  vault:    { label: 'vault',    desc: 'storage capacity',           statKey: null,               multPerRank: 0 },
-};
-
-// EM costs per rank (all tracks except vault).
-// Balance target: rank 1 after 1-2 extractions, rank 3 after 5-8 per track,
-// full max (all tracks) after 25-30 extractions.
-const RANK_COSTS = BALANCE.progression.profileUpgradeCosts;
-
-// Vault track has its own cost schedule (EM only, steep — this is the EM sink)
-const VAULT_RANK_COSTS = BALANCE.progression.vaultUpgradeCosts;
-
-export const MAX_RANK = BALANCE.progression.maxProfileRank;
 
 // Adapt the canonical hull manifest once for the ordered profile UI shape.
 export const RIG_TRACKS = Object.fromEntries(
@@ -187,22 +176,22 @@ const RIG_LEVEL_COSTS = BALANCE.progression.rigLevelCosts;
 
 export const RIG_LEVEL_EFFECTS = {
   drifter: [
-    ['current coupling +0.1', 'flow lock aligns 0.5s faster', 'current coupling +0.1', 'flow lock aligns 0.5s faster', 'flow lock signal halved'],
-    ['well resistance +0.1', 'signal masking in accretion shadows', 'well resistance +0.1', 'show well kill radius', 'eddy brake cooldown -5s'],
-    ['salvage reach +0.1', 'wreck tier estimate in HUD', 'salvage reach +0.1', '+1 extraction item chance', 'slip stream masking +50%'],
+    ['current coupling +0.1', 'flow lock aligns 0.5s faster', 'current coupling +0.1', 'flow lock aligns 0.5s faster', 'flow lock noise halved'],
+    ['well resistance +0.1', 'noise masking in accretion shadows', 'well resistance +0.1', 'show well kill radius', 'eddy brake cooldown -5s'],
+    ['salvage reach +0.1', 'wreck tier estimate in HUD', 'salvage reach +0.1', '+1 extraction item chance', null],
   ],
   breacher: [
     ['thrust output +0.05', 'thrust output +0.1', '+5s burn fuel', 'burn recharge +50%', 'burn thrust x2.5'],
     ['well resistance +0.1', 'control recovery +0.15', 'momentum shield threshold -10%', 'shield charge on first burn', 'shockwave stun +1s'],
-    ['salvage reach +0.05', 'salvage reach +0.1', 'pickup at 70% speed', 'death cargo scatters further', 'loot signal spikes -30%'],
+    ['salvage reach +0.05', 'salvage reach +0.1', null, 'death cargo scatters further', 'loot noise spikes -30%'],
   ],
   resonant: [
     ['pulse radius +10%', 'eddy duration +2s', 'eddies pull wrecks', '+1 max eddy', 'team-visible eddies'],
     ['pulse cooldown -5%', 'tap cooldown -5s', 'pulse cooldown -20% near anchor', 'anchor persists through death', 'frequency shift cooldown -15s'],
-    ['dampening slow +10%', 'eddies reduce signal inside', 'dampening slow +10%', 'eddies block inhibitor form 1', 'form 3 vessel slow'],
+    [],
   ],
   shroud: [
-    ['signal decay +5%', '+0.1 signalDecayMult', 'wake cloak cooldown -10s', 'scavengers never detect ghost trail', 'wake cloak works at THRESHOLD'],
+    ['noise decay +5%', '+0.1 noiseDecayMult', 'wake cloak cooldown -10s', 'scavengers never detect ghost trail', 'wake cloak works at THRESHOLD'],
     ['+0.1 sensorRange', 'see inhibitor tracking target', '+0.1 sensorRange', 'see wreck contents', 'see player equipped items'],
     ['+1 decoy charge', 'decoy duration +4s', 'decoy cooldown -20s', 'decoys attract fauna', 'remote decoy placement'],
   ],
@@ -384,6 +373,14 @@ export class ProfileManager {
     return true;
   }
 
+  setRecentEchoes(echoes) {
+    const p = this.active;
+    if (!p) return [];
+    p.recentEchoes = normalizeRecentEchoes(echoes);
+    this.save();
+    return p.recentEchoes.map((echo) => ({ ...echo }));
+  }
+
   getRigProgression() {
     const p = this.active;
     if (!p) return null;
@@ -484,65 +481,6 @@ export class ProfileManager {
     p.lastPlayed = new Date().toISOString();
     this.save();
     return emCredited;
-  }
-
-  // ---- Upgrades ----
-
-  /** Get upgrade cost for a track at its next rank. Returns { em, componentTarget } or null if maxed. */
-  getUpgradeCost(track) {
-    const p = this.active;
-    if (!p) return null;
-    const currentRank = p.upgrades[track] ?? 0;
-    if (currentRank >= MAX_RANK) return null;
-
-    if (track === 'vault') {
-      return { em: VAULT_RANK_COSTS[currentRank].em, componentTarget: null };
-    }
-    const cost = RANK_COSTS[currentRank];
-    const componentTarget = cost.component ? `${track}.${currentRank + 1}` : null;
-    // e.g., 'thrust.2' for rank 2 upgrade
-    return { em: cost.em, componentTarget };
-  }
-
-  /** Check if player can afford an upgrade (has EM and component in vault). */
-  canAffordUpgrade(track) {
-    const p = this.active;
-    if (!p) return false;
-    const cost = this.getUpgradeCost(track);
-    if (!cost) return false;
-    if (p.exoticMatter < cost.em) return false;
-    if (cost.componentTarget) {
-      // Must have the matching component in vault
-      return p.vault.some(item => item.upgradeTarget === cost.componentTarget);
-    }
-    return true;
-  }
-
-  /** Perform an upgrade. Consumes EM and component. Returns true on success. */
-  performUpgrade(track) {
-    const p = this.active;
-    if (!p || !this.canAffordUpgrade(track)) return false;
-    const cost = this.getUpgradeCost(track);
-
-    // Consume EM
-    p.exoticMatter -= cost.em;
-
-    // Consume component from vault
-    if (cost.componentTarget) {
-      const idx = p.vault.findIndex(item => item.upgradeTarget === cost.componentTarget);
-      if (idx >= 0) p.vault.splice(idx, 1);
-    }
-
-    // Increment rank
-    p.upgrades[track]++;
-
-    // Vault upgrade: increase capacity
-    if (track === 'vault') {
-      p.vaultCapacity = VAULT_CAPACITY[p.upgrades.vault] ?? VAULT_CAPACITY[VAULT_CAPACITY.length - 1];
-    }
-
-    this.save();
-    return true;
   }
 
   // ---- Persistence ----

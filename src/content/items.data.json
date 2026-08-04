@@ -1,26 +1,13 @@
 {
   "ARTIFACT_SPECIAL_IDS": [
-    "autoDecoys",
-    "burnFuel",
-    "burnRecharge",
-    "burnReverseWells",
-    "deathTeleport",
     "eddyDuration",
     "emergencyMassLock",
-    "ghostTrailBeacon",
     "ghostWreckLoot",
     "inhibitorBlindPing",
-    "instantFlowLock",
     "maxEddies",
     "overloadBleed",
-    "pulseInvert",
-    "pulseStandingWave",
-    "recallBeacon",
     "signalAfterimage",
-    "swarmDrainImmunity",
-    "thrustSignalZero",
-    "universalDampening",
-    "wakeCloakCooldown"
+    "thrustSignalZero"
   ],
   "CONSUMABLE_EFFECT_IDS": [
     "breachFlare",
@@ -33,6 +20,21 @@
   ],
   "RETIRED_CONSUMABLE_EFFECT_IDS": [
     "timeSlowLocal"
+  ],
+  "RETIRED_ARTIFACT_IDS": [
+    "burn-canister",
+    "harmonic-anchor",
+    "phase-veil",
+    "cargo-brace-mk2",
+    "tidal-resonator",
+    "burn-extender",
+    "gravity-lens",
+    "echo-chamber",
+    "void-anchor",
+    "singularity-drive",
+    "laminar-flow-core",
+    "inhibitor-resonance",
+    "temporal-displacement"
   ],
   "ITEM_CATALOG": {
     "1": [
@@ -152,18 +154,6 @@
           18,
           25
         ]
-      },
-      {
-        "id": "burn-canister",
-        "name": "Burn Canister",
-        "tier": 1,
-        "affinity": "breacher",
-        "coefficients": {},
-        "value": [
-          18,
-          25
-        ],
-        "special": "burnFuel+3"
       },
       {
         "id": "quiet-suture",
@@ -512,54 +502,6 @@
         ]
       },
       {
-        "id": "harmonic-anchor",
-        "name": "Harmonic Anchor",
-        "tier": 3,
-        "affinity": "resonant",
-        "coefficients": {},
-        "value": [
-          250,
-          380
-        ],
-        "special": "eddyDuration+4,maxEddies+2"
-      },
-      {
-        "id": "phase-veil",
-        "name": "Phase Veil",
-        "tier": 3,
-        "affinity": "shroud",
-        "coefficients": {},
-        "value": [
-          240,
-          360
-        ],
-        "special": "ghostTrailBeacon,wakeCloakCooldown-15"
-      },
-      {
-        "id": "cargo-brace-mk2",
-        "name": "Cargo Brace Mk II",
-        "tier": 3,
-        "affinity": "hauler",
-        "coefficients": {},
-        "value": [
-          230,
-          340
-        ],
-        "special": "swarmDrainImmunity3"
-      },
-      {
-        "id": "tidal-resonator",
-        "name": "Tidal Resonator",
-        "tier": 3,
-        "affinity": null,
-        "coefficients": {},
-        "value": [
-          200,
-          300
-        ],
-        "special": "pulseStandingWave"
-      },
-      {
         "id": "well-skimmer",
         "name": "Well Skimmer",
         "tier": 3,
@@ -615,18 +557,6 @@
           230,
           350
         ]
-      },
-      {
-        "id": "burn-extender",
-        "name": "Burn Extender",
-        "tier": 3,
-        "affinity": "breacher",
-        "coefficients": {},
-        "value": [
-          250,
-          370
-        ],
-        "special": "burnFuel+15,burnRecharge×2"
       },
       {
         "id": "sensor-array",
@@ -691,66 +621,6 @@
     ],
     "4": [
       {
-        "id": "gravity-lens",
-        "name": "Gravity Lens",
-        "tier": 4,
-        "affinity": "resonant",
-        "coefficients": {},
-        "value": [
-          800,
-          1200
-        ],
-        "special": "pulseInvert"
-      },
-      {
-        "id": "echo-chamber",
-        "name": "Echo Chamber",
-        "tier": 4,
-        "affinity": "shroud",
-        "coefficients": {},
-        "value": [
-          900,
-          1300
-        ],
-        "special": "autoDecoys"
-      },
-      {
-        "id": "void-anchor",
-        "name": "Void Anchor",
-        "tier": 4,
-        "affinity": null,
-        "coefficients": {},
-        "value": [
-          800,
-          1100
-        ],
-        "special": "recallBeacon"
-      },
-      {
-        "id": "singularity-drive",
-        "name": "Singularity Drive",
-        "tier": 4,
-        "affinity": "breacher",
-        "coefficients": {},
-        "value": [
-          1000,
-          1500
-        ],
-        "special": "burnReverseWells"
-      },
-      {
-        "id": "laminar-flow-core",
-        "name": "Laminar Flow Core",
-        "tier": 4,
-        "affinity": "drifter",
-        "coefficients": {},
-        "value": [
-          900,
-          1300
-        ],
-        "special": "instantFlowLock"
-      },
-      {
         "id": "salvage-titan",
         "name": "Salvage Titan",
         "tier": 4,
@@ -763,30 +633,6 @@
           1200
         ],
         "special": "ghostWreckLoot"
-      },
-      {
-        "id": "inhibitor-resonance",
-        "name": "Inhibitor Resonance",
-        "tier": 4,
-        "affinity": null,
-        "coefficients": {},
-        "value": [
-          850,
-          1200
-        ],
-        "special": "universalDampening"
-      },
-      {
-        "id": "temporal-displacement",
-        "name": "Temporal Displacement",
-        "tier": 4,
-        "affinity": null,
-        "coefficients": {},
-        "value": [
-          900,
-          1300
-        ],
-        "special": "deathTeleport"
       },
       {
         "id": "cinder-geometry",

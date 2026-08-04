@@ -4,6 +4,7 @@ const path = require("path");
 const { TestRunner, assert } = require("./helpers.cjs");
 
 const ROOT = path.join(__dirname, "..");
+const catalogData = require("../src/content/items.data.json");
 
 async function loadItemsModule() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-items-"));
@@ -62,6 +63,22 @@ async function run() {
       assert(item, `Missing catalog item ${id}`);
       assert(item.special || Object.keys(item.coefficients || {}).length > 0,
         `${id} should carry coefficients or a special marker`);
+    }
+  });
+
+  await runner.run("Inert artifact records are retired from every loot tier", async () => {
+    const retired = [
+      "burn-canister", "harmonic-anchor", "phase-veil", "cargo-brace-mk2", "tidal-resonator",
+      "burn-extender", "gravity-lens", "echo-chamber", "void-anchor", "singularity-drive",
+      "laminar-flow-core", "inhibitor-resonance", "temporal-displacement",
+    ];
+    assert(JSON.stringify(catalogData.RETIRED_ARTIFACT_IDS) === JSON.stringify(retired),
+      `Expected the declared retired artifact set, got ${JSON.stringify(catalogData.RETIRED_ARTIFACT_IDS)}`);
+    const liveIds = new Set(Object.values(items.ITEM_CATALOG_BY_TIER).flat().map((item) => item.id));
+    for (const id of retired) assert(!liveIds.has(id), `${id} must not remain droppable`);
+    for (const item of Object.values(items.ITEM_CATALOG_BY_TIER).flat()) {
+      assert(Object.keys(item.coefficients || {}).length > 0 || item.special,
+        `${item.id} must retain a real coefficient or implemented special`);
     }
   });
 

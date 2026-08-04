@@ -116,11 +116,6 @@
           "cooldown": 20,
           "turbulenceDuration": 2,
           "slowFactor": 0.5
-        },
-        "slipStream": {
-          "type": "passive",
-          "followDist": 0.1,
-          "signalReduction": 0.3
         }
       }
     },
@@ -161,9 +156,6 @@
           "type": "passive",
           "speedThreshold": 0.8,
           "wellPullReduction": 0.25
-        },
-        "smashGrab": {
-          "type": "passive"
         }
       }
     },
@@ -202,10 +194,6 @@
         "frequencyShift": {
           "type": "active",
           "cooldown": 45
-        },
-        "dampeningField": {
-          "type": "passive",
-          "inhibitorSlowFactor": 0.3
         }
       }
     },

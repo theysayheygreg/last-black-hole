@@ -78,6 +78,7 @@ export function buildRunResultsViewModel({
   fallbackSurvivalTime = 0,
   fallbackRunDurationSeconds = 0,
   fallbackEmEarned = 0,
+  settlement = null,
 } = {}) {
   const outcome = normalizeOutcome(runResult?.outcome, phase);
   const extracted = outcome === 'extracted';
@@ -123,12 +124,18 @@ export function buildRunResultsViewModel({
     noiseTimeTrackedSeconds,
     noiseTimeSummary: `${Math.round(noiseTimeHeardSeconds)}s heard · ${Math.round(noiseTimeTrackedSeconds)}s tracked`,
     ecologyLabel,
-    wellsVisited: runResult?.wellsVisited ?? null,
     cargo,
     cargoTitle: extracted ? 'CARGO EXTRACTED' : 'CARGO LOST',
     cargoCount: cargo.length,
     cargoValue: totalCargoValue(cargo),
     cargoLabels: cargo.map(itemLabel),
+    settlement: extracted && settlement ? {
+      depositedCount: Math.max(0, Number(settlement.depositedCount) || 0),
+      overflowCount: Math.max(0, Number(settlement.overflowCount) || 0),
+      overflowValue: Math.max(0, Math.round(Number(settlement.overflowValue) || 0)),
+      vaultCount: Math.max(0, Number(settlement.vaultCount) || 0),
+      vaultCapacity: Math.max(0, Number(settlement.vaultCapacity) || 0),
+    } : null,
     emEarned,
     deathCause: !extracted && runResult?.deathCause
       ? (deathEntityLabel ? `${runResult.deathCause}: ${deathEntityLabel}` : runResult.deathCause)
@@ -154,7 +161,6 @@ export function buildRunSummaryRows(view = {}) {
     ['noise time', view.noiseTimeSummary, 'flow'],
     ['ecology', view.ecologyLabel, 'inhibitor'],
   ];
-  if (view.wellsVisited != null) rows.push(['wells visited', String(view.wellsVisited), 'text']);
   if (view.deathCause) rows.push(['cause', view.deathCause, 'danger']);
   return rows
     .filter(([, value]) => String(value ?? '').trim().length > 0)
@@ -184,7 +190,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const success = view.tone === 'extract';
   const role = success ? 'extract' : 'danger';
   const continueRole = success ? 'extract' : 'flow';
-  const continueLabel = success ? 'review salvage' : 'return home';
+  const continueLabel = 'return home';
   const accent = roleColor(role, 0.95);
   const lingerFrac = clamp01(rawTime / lingerDuration);
   const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
@@ -302,6 +308,22 @@ export function drawRunResultsOverlay(ctx, canvas, {
     valueWidth: summaryValueWidth,
   });
   ry += 22;
+  if (view.settlement) {
+    drawKeyValueRow(ctx, 'vault deposit', `${view.settlement.depositedCount} items`, rightX, ry, {
+      alpha: contentAlpha,
+      valueRole: 'salvage',
+      valueWidth: summaryValueWidth,
+    });
+    ry += 22;
+    if (view.settlement.overflowCount > 0) {
+      drawKeyValueRow(ctx, 'overflow sold', `${view.settlement.overflowCount} / +${view.settlement.overflowValue} EM`, rightX, ry, {
+        alpha: contentAlpha,
+        valueRole: 'salvage',
+        valueWidth: summaryValueWidth,
+      });
+      ry += 22;
+    }
+  }
   ctx.textAlign = 'left';
   ctx.font = canvasFont(13);
   const cargoLines = view.cargoLabels.length > 0

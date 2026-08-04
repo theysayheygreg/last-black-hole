@@ -343,7 +343,7 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused' | 'recovery'
+let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'playing' | 'dead' | 'escaped' | 'paused' | 'recovery'
 let loadingStartTime = 0;
 let loadingMapName = '';
 let deathTimer = 0;
@@ -462,14 +462,9 @@ let remoteFauna = [];
 let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
-let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
-let hullGraceUsed = false;  // hull rank 2+: one free survive per run
 
-// Profile + meta/home screen
+// Profile + home screen
 const profileManager = new ProfileManager();
-let metaExtractedItems = []; // items from the extraction, shown on meta screen
-let metaEmCredited = 0;      // actual profile EM delta from the last extraction
-let metaPhaseTimer = 0;      // animation timer for meta screen
 let profileCursor = 0;       // profile select cursor (0-2)
 let homeTab = 0;             // home screen tab (see HOME_TABS)
 let homeShipCursor = 0;      // ship subscreen cursor (0-1 equip, 2-3 consumable)
@@ -481,6 +476,7 @@ let nameInputBuffer = '';    // current typed name
 let deleteConfirmSlot = -1;  // which slot is pending delete confirmation (-1 = none)
 let deleteConfirmChoice = 'cancel'; // destructive confirmation defaults to the safe action
 let recentEchoes = [];
+let homeChronicleOffset = 0;
 
 const HOME_TABS = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
 const PUBLIC_HULL_COPY = Object.freeze({
@@ -572,6 +568,18 @@ function recordChronicleRun(runResult, fallback = {}) {
   appendProfileRunRecord(runResultToChronicleRecord(runResult, fallback));
 }
 
+function syncRecentEchoesFromProfile() {
+  recentEchoes = Array.isArray(profileManager.active?.recentEchoes)
+    ? profileManager.active.recentEchoes.map((echo) => ({ ...echo })).slice(0, 8)
+    : [];
+  homeChronicleOffset = 0;
+}
+
+function appendRecentEcho(echo) {
+  const next = [echo, ...recentEchoes].filter(Boolean).slice(0, 8).map((entry) => ({ ...entry }));
+  recentEchoes = profileManager.active ? profileManager.setRecentEchoes(next) : next;
+}
+
 function buildChronicleViewModel() {
   const p = profileManager.active;
   if (!p) return null;
@@ -617,7 +625,8 @@ function buildChronicleViewModel() {
       deathCause: record.deathEntityId ? `${record.deathCause}: ${record.deathEntityId}` : record.deathCause || null,
       notable: record.notable || null,
     })),
-    echoes: recentEchoes.slice(0, 4),
+    echoes: recentEchoes.slice(homeChronicleOffset, homeChronicleOffset + 4),
+    echoOffset: homeChronicleOffset,
   };
 }
 
@@ -641,7 +650,28 @@ function currentRunResultsViewModel() {
       outcome: gamePhase === 'escaped' ? 'extracted' : gamePhase === 'dead' ? 'dead' : 'abandoned',
       survivalTime: simState.runEndTime,
     }),
+    settlement: extractionSettlementPreview(),
   });
+}
+
+function extractionSettlementPreview() {
+  if (gamePhase !== 'escaped') return null;
+  const profile = profileManager.active;
+  if (!profile) return null;
+  const cargo = Array.isArray(lastRunResult?.cargoExtracted)
+    ? lastRunResult.cargoExtracted.filter(Boolean)
+    : (inventorySystem?.getCargoItems?.() || []).filter(Boolean);
+  const vaultCount = Array.isArray(profile.vault) ? profile.vault.length : 0;
+  const vaultCapacity = Math.max(0, Number(profile.vaultCapacity) || 0);
+  const depositedCount = Math.max(0, Math.min(cargo.length, vaultCapacity - vaultCount));
+  const overflow = cargo.slice(depositedCount);
+  return {
+    depositedCount,
+    overflowCount: overflow.length,
+    overflowValue: overflow.reduce((sum, item) => sum + (Number(item?.value) || 0), 0),
+    vaultCount: vaultCount + depositedCount,
+    vaultCapacity,
+  };
 }
 
 function profileVaultValue(profile) {
@@ -702,22 +732,6 @@ function transitionTiming() {
     duration,
     handoff: duration * 0.38,
   };
-}
-
-function salvageReportTiming() {
-  const itemCount = Math.min(metaExtractedItems.length, 8);
-  const summary = 0.5 + itemCount * 0.1 + 0.5;
-  return { summary, readyAt: summary + 0.8 };
-}
-
-function salvageReportDisplayTime() {
-  const motion = currentUiMotionSettings();
-  const ready = salvageReportTiming().readyAt;
-  return motion.reducedMotion ? Math.max(metaPhaseTimer, ready + 0.5) : metaPhaseTimer;
-}
-
-function isSalvageReportReady() {
-  return salvageReportDisplayTime() > salvageReportTiming().readyAt;
 }
 
 function profilePromptText() {
@@ -826,7 +840,6 @@ function getUiMotionStateForTest() {
     focusPulseTimer: uiFocusPulseTimer,
     settings: currentUiMotionSettings(),
     transition: { active: transitionActive, timer: transitionTimer, ...transitionTiming(), glitchIntensity: getTransitionGlitchIntensity() },
-    salvageReport: { timer: metaPhaseTimer, displayTime: salvageReportDisplayTime(), ready: isSalvageReportReady(), ...salvageReportTiming() },
     profilePrompt: gamePhase === 'profileSelect' ? profilePromptText() : null,
     profileDelete: gamePhase === 'profileSelect' ? { slot: deleteConfirmSlot, choice: deleteConfirmChoice } : null,
     layout: (gamePhase === 'home' || gamePhase === 'mapSelect')
@@ -1158,6 +1171,7 @@ function init() {
       e.preventDefault();
       if (e.key === 'Enter') {
         profileManager.createProfile(profileCursor, nameInputBuffer);
+        syncRecentEchoesFromProfile();
         nameInputActive = false;
         gamePhase = 'home';
         homeTab = 0;
@@ -1301,6 +1315,7 @@ function init() {
       getChronicleViewModel: buildChronicleViewModel,
       setRecentEchoes: (echoes) => {
         recentEchoes = Array.isArray(echoes) ? echoes.map((echo) => ({ ...echo })).slice(0, 8) : [];
+        if (profileManager.active) recentEchoes = profileManager.setRecentEchoes(recentEchoes);
       },
       setEndScreenTimers: ({ death = deathTimer, escape = escapeTimer } = {}) => {
         deathTimer = death;
@@ -1568,8 +1583,6 @@ function loadScene(map, { seed = 1 } = {}) {
   shieldActive = false;
   localAbilityState = null;
   _starFlashTimer = 0;
-  hullGraceTimer = 0;
-  hullGraceUsed = false;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -1821,16 +1834,6 @@ function startGame(map, seed = null) {
     else if (edge === 2) { sx = 0.1; sy = scavRng() * WORLD_SCALE; }
     else { sx = WORLD_SCALE - 0.1; sy = scavRng() * WORLD_SCALE; }
     scavengerSystem.spawn(sx, sy, archetype);
-  }
-
-  // Apply the profile's client-visible movement multipliers at run start.
-  // Authority movement owns drag through the shared PlayerBrain contract.
-  const prof = profileManager.active;
-  if (prof) {
-    const thrustMult = 1 + prof.upgrades.thrust * 0.15;
-    CONFIG.ship.thrustAccel *= thrustMult;
-    const couplingMult = 1 + prof.upgrades.coupling * 0.10;
-    CONFIG.ship.fluidCoupling *= couplingMult;
   }
 
   gamePhase = 'playing';
@@ -2629,13 +2632,13 @@ function applyRemoteEvents(events) {
         if (isLocal && payload.isEcho && payload.echoFragment) {
           const hull = payload.echoHullType || 'unknown';
           const name = payload.echoPilotName || 'unknown';
-          recentEchoes = [{
+          appendRecentEcho({
             fragment: payload.echoFragment,
             pilotName: name,
             hullType: hull,
             deathCause: payload.echoDeathCause || null,
             survivalTime: payload.echoSurvivalTime || 0,
-          }, ...recentEchoes].slice(0, 8);
+          });
           // Main fragment line
           showWarning(`"${payload.echoFragment}"`, 'rgba(255, 217, 102, 0.95)', 4200);
           // Attribution as a delayed second warning
@@ -3990,7 +3993,6 @@ function applyHullToShip({ refill = true } = {}) {
     wellResistScale: hullDef.wellResistScale ?? 1.0,
     refill,
   });
-  ship.applyProfileDragUpgrade(profileManager.active?.upgrades?.drag);
   if (inventorySystem) {
     ship.applyMovementItemBonus(inventorySystem.getMovementStats());
     ship.applyDeltaVItemBonus(inventorySystem.getDeltaVStats());
@@ -4190,6 +4192,7 @@ function gameLoop(now) {
       if (!transitionActive && confirmNow && !_prevConfirm) {
         if (profileManager.hasProfile(profileCursor)) {
           profileManager.loadProfile(profileCursor);
+          syncRecentEchoesFromProfile();
           audioEngine.playEvent('menuConfirm');
           audioEngine.setContext('menu');
           gamePhase = 'home';
@@ -4299,9 +4302,18 @@ function gameLoop(now) {
           audioEngine.playEvent('cantAfford');
         }
       }
+    } else if (homeTab === 3) { // CHRONICLE
+      const maxOffset = Math.max(0, recentEchoes.length - 4);
+      if (upNow && !_prevUp && homeChronicleOffset > 0) {
+        homeChronicleOffset--;
+        audioEngine.playEvent('menuMove');
+      }
+      if (downNow && !_prevDown && homeChronicleOffset < maxOffset) {
+        homeChronicleOffset++;
+        audioEngine.playEvent('menuMove');
+      }
     } else if (homeTab === 4) { // LAUNCH
       if (confirmNow && !_prevConfirm) {
-        // Apply upgrades and go to map select
         gamePhase = 'mapSelect';
       }
     }
@@ -4424,50 +4436,50 @@ function gameLoop(now) {
         });
       }
       if (gamePhase === 'escaped' && escapeTimer > endScreenUnlock) {
-        // Extract cargo → profile vault, then transition to home
-        metaExtractedItems = inventorySystem.extractCargo();
-        metaEmCredited = Math.max(0, Math.round(Number(lastRunResult?.emEarned) || 0));
+        // Extraction resolves before Home. The terminal result already shows
+        // the cargo and vault outcome, so there is no second report phase.
+        const extractedItems = inventorySystem.extractCargo();
         if (remoteSession.active) {
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave after extraction failed:', err);
             }).finally(() => {
-              gamePhase = 'meta';
-              metaPhaseTimer = 0;
+              recordChronicleRun(lastRunResult, {
+                outcome: 'extracted',
+                survivalTime: simState.runEndTime,
+                cargo: extractedItems,
+              });
+              loadTitleScene();
+              gamePhase = 'home';
+              homeTab = 0;
+              homePhaseTimer = 0;
+              audioEngine.setContext('menu');
             });
           });
         } else {
           const extractionCredit = profileManager.recordExtraction(simState.runEndTime);
-          const overflow = profileManager.storeItems(metaExtractedItems.map(i => ({ ...i })));
+          const overflow = profileManager.storeItems(extractedItems.map(i => ({ ...i })));
           let overflowCredit = 0;
           // Sell overflow items automatically (vault full)
           for (const item of overflow) {
             overflowCredit += profileManager.addEM(item.value || 0);
           }
-          metaEmCredited = extractionCredit + overflowCredit;
           // Save loadout
           profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
-          recordChronicleRun(lastRunResult, {
+          recordChronicleRun({ ...(lastRunResult || {}), emEarned: extractionCredit + overflowCredit }, {
             outcome: 'extracted',
             survivalTime: simState.runEndTime,
-            emEarned: metaEmCredited,
-            cargo: metaExtractedItems,
+            emEarned: extractionCredit + overflowCredit,
+            cargo: extractedItems,
           });
           triggerTransition(() => {
-            gamePhase = 'meta';
-            metaPhaseTimer = 0;
+            loadTitleScene();
+            gamePhase = 'home';
+            homeTab = 0;
+            homePhaseTimer = 0;
+            audioEngine.setContext('menu');
           });
         }
-      }
-      if (gamePhase === 'meta') {
-        // Go to home screen after viewing salvage report
-        if (isSalvageReportReady()) triggerTransition(() => {
-          loadTitleScene();
-          gamePhase = 'home';
-          homeTab = 0;
-          homePhaseTimer = 0;
-          audioEngine.setContext('menu');
-        });
       }
     }
 
@@ -4688,52 +4700,19 @@ function gameLoop(now) {
       wreckSystem.checkWellConsumption(wellSystem, waveRings);
 
       const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
-      const hullRank = profileManager.active?.upgrades?.hull ?? 0;
-      // Hull grace period: rank 1 = 0.3s, rank 2 = 0.4s, rank 3 = 0.5s
-      const hullGraceDuration = hullRank > 0 ? 0.2 + hullRank * 0.1 : 0;
-      // Hull rank 2+: one free survive per run (like built-in shield)
-      const hullHasFreePass = hullRank >= 2 && !hullGraceUsed;
-
       if (killingWell) {
         if (shieldActive) {
           // Shield burst consumable: survive one contact
           shieldActive = false;
           showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
           audioEngine.playEvent('shieldAbsorb');
-        } else if (hullHasFreePass && hullGraceTimer <= 0) {
-          // Hull free pass: first contact this run is forgiven
-          hullGraceUsed = true;
-          hullGraceTimer = 0.5;
-          showWarning('hull absorbed impact!', 'rgba(100, 255, 180, 0.95)', 2000);
-        } else if (hullGraceDuration > 0 && hullGraceTimer <= 0) {
-          // Start grace period — player has a moment to escape
-          hullGraceTimer = hullGraceDuration;
-        } else if (hullGraceTimer > 0) {
-          // Still in grace period — count down
-          hullGraceTimer -= dt;
-          if (hullGraceTimer <= 0) {
-            // Grace expired while still in kill zone — die
-            gamePhase = 'dead';
-            deathTimer = 0;
-            freezeRunEnd(simState);
-            ship.setThrust(false);
-            markTerminalPresentation('dead');
-            audioEngine.playEvent('death');
-          }
         } else {
-          // No hull upgrade, no shield — instant death
           gamePhase = 'dead';
           deathTimer = 0;
           freezeRunEnd(simState);
           ship.setThrust(false);
           markTerminalPresentation('dead');
           audioEngine.playEvent('death');
-        }
-      } else {
-        // Left kill zone — reset grace timer
-        if (hullGraceTimer > 0) {
-          hullGraceTimer = 0;
-          showWarning('escaped!', 'rgba(100, 255, 180, 0.9)', 1500);
         }
       }
 
@@ -4803,7 +4782,6 @@ function gameLoop(now) {
   }
 
   updateTitleAttractScene();
-  if (gamePhase === 'meta') metaPhaseTimer += dt;
   updateUiMotion(rawDt);
 
   _prevConfirm = confirmNow;
@@ -5259,10 +5237,8 @@ function gameLoop(now) {
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 6;
 
-      // Sensor upgrade extends detection range: rank 0 = 0.15/0.4, rank 3 = 0.3/0.85
-      const sensorRank = profileManager.active?.upgrades?.sensor ?? 0;
-      const fadeNear = 0.15 + sensorRank * 0.05;
-      const fadeFar = 0.4 + sensorRank * 0.15;
+      const fadeNear = 0.15;
+      const fadeFar = 0.4;
 
       function labelAlpha(dist) {
         if (dist < fadeNear) return 1.0;
@@ -5400,18 +5376,6 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    // Hull grace warning — red screen edge pulse when in kill zone
-    if (hullGraceTimer > 0) {
-      const w = overlayCanvas.width, h = overlayCanvas.height;
-      const urgency = 0.5 + 0.5 * Math.sin(totalTime * 12);
-      const grad = ctx.createRadialGradient(w/2, h/2, Math.min(w,h) * 0.3, w/2, h/2, Math.min(w,h) * 0.6);
-      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      grad.addColorStop(1, `rgba(255, 30, 0, ${0.25 * urgency})`);
-      ctx.save();
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-      ctx.restore();
-    }
 
     // Well proximity warning — subtle red vignette as ship approaches wells
     if (gamePhase === 'playing') {
@@ -5967,7 +5931,7 @@ function gameLoop(now) {
       ctx.fillStyle = roleColor(role, active ? 0.75 : 0.36);
       const tabCopy = i === 0 ? 'loadout / hull'
         : i === 1 ? `${vaultCount}/${vaultCapacity} vault`
-          : i === 2 ? 'upgrade tracks'
+          : i === 2 ? 'rig tuning'
             : i === 3 ? 'records / echoes'
               : 'risk gate';
       ctx.fillText(fitUiText(ctx, tabCopy.toUpperCase(), row.w - UI_DECK_GEOMETRY.listRow.paddingX * 2), row.x + UI_DECK_GEOMETRY.listRow.paddingX, row.y + 42);
@@ -6307,6 +6271,15 @@ function gameLoop(now) {
 
       cyLine += 8;
       drawSectionLabel(ctx, 'echoes recovered', centerX, cyLine, { role: 'salvage', alpha: 0.84 });
+      if (recentEchoes.length > 4) {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = roleColor('muted', 0.68);
+        ctx.font = canvasFont(10);
+        const start = homeChronicleOffset + 1;
+        const end = Math.min(recentEchoes.length, homeChronicleOffset + 4);
+        ctx.fillText(`${start}-${end}/${recentEchoes.length}  ↑↓ SCROLL`, centerX + centerTextW, cyLine);
+        ctx.textAlign = 'left';
+      }
       cyLine += 20;
       ctx.font = canvasFont(11);
       if (chronicle.echoes.length === 0) {
@@ -6646,117 +6619,6 @@ function gameLoop(now) {
       motionSettings: currentUiMotionSettings(),
       promptOptions: currentPromptOptions(),
     });
-  }
-
-  // === META SCREEN (between runs) ===
-  if (!rendererFixtureActive && gamePhase === 'meta') {
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
-    const t = salvageReportDisplayTime();
-
-    const w = overlayCanvas.width, h = overlayCanvas.height;
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.82)';
-    ctx.fillRect(0, 0, w, h);
-    drawScanlines(ctx, w, h);
-    ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 12;
-
-    const motion = currentUiMotionSettings();
-    const windowState = sampleTerminalWindow(uiMotionTimer, {
-      duration: motion.windowDuration,
-      reducedMotion: motion.reducedMotion,
-    });
-    const metaPanelRect = { x: cx - 200, y: cy - 180, w: 400, h: 340 };
-    drawTerminalWindow(ctx, metaPanelRect, {
-      state: windowState,
-      origin: 'bottom-left',
-      role: 'flow',
-      fillAlpha: 0.90,
-      borderAlpha: 0.34,
-      cornerLength: 34,
-    });
-    ctx.globalAlpha *= windowState.content;
-
-    // Title
-    if (t > 0.2) {
-      const a = Math.min((t - 0.2) * 2, 1);
-      ctx.fillStyle = `rgba(100, 255, 255, ${a})`;
-      ctx.font = canvasFont(28, { role: 'display', weight: '700' });
-      ctx.fillText('SALVAGE REPORT', cx, cy - 155);
-    }
-
-    // Extracted items
-    if (t > 0.5 && metaExtractedItems.length > 0) {
-      ctx.font = canvasFont(13);
-      const maxShow = Math.min(metaExtractedItems.length, 8);
-      let itemY = cy - 120;
-      for (let i = 0; i < maxShow; i++) {
-        const item = metaExtractedItems[i];
-        const a = Math.min((t - 0.5 - i * 0.1) * 3, 1);
-        if (a <= 0) continue;
-        const row = itemCompoundLayout({ x: cx - 172, y: itemY - 24, textWidth: 306, textHeight: 18 });
-        drawItemIcon(ctx, item, row.icon, { state: 'vault', alpha: a });
-        const color = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
-        ctx.fillStyle = color.replace(/[\d.]+\)$/, `${a})`);
-        const category = item.category || item.subcategory || item.type || 'salvage';
-        ctx.textAlign = 'left';
-        ctx.fillText(fitUiText(ctx, `${item.name} [${category}] - ${item.value}`, 306), row.text.x, row.text.y);
-        ctx.textAlign = 'center';
-        itemY += row.advance;
-      }
-      if (metaExtractedItems.length > 8) {
-        ctx.fillStyle = `rgba(150, 150, 170, ${Math.min((t - 1.3) * 2, 0.6)})`;
-        ctx.fillText(`...and ${metaExtractedItems.length - 8} more`, cx, itemY);
-        itemY += UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.separation;
-      }
-    }
-
-    // Vault summary
-    const summaryT = salvageReportTiming().summary;
-    if (t > summaryT) {
-      const a = Math.min((t - summaryT) * 2, 1);
-      const totalValue = metaExtractedItems.reduce((sum, i) => sum + (i.value || 0), 0);
-      ctx.font = canvasFont(15);
-
-      let sy = cy + 30;
-      ctx.fillStyle = `rgba(255, 220, 100, ${a})`;
-      ctx.fillText(`+${metaEmCredited} exotic matter`, cx, sy);
-      sy += 25;
-      ctx.fillStyle = `rgba(180, 180, 200, ${a * 0.8})`;
-      ctx.fillText(`salvage value: ${totalValue} EM`, cx, sy);
-      sy += 20;
-      const prof = profileManager.active;
-      ctx.fillText(`ledger: ${prof?.exoticMatter ?? 0} EM  |  ${prof?.totalExtractions ?? 0} extractions`, cx, sy);
-      sy += 20;
-      const mins = Math.floor((prof?.bestSurvivalTime ?? 0) / 60);
-      const secs = Math.floor((prof?.bestSurvivalTime ?? 0) % 60);
-      ctx.fillText(`best survival: ${mins}:${String(secs).padStart(2, '0')}`, cx, sy);
-    }
-
-    // Prompt
-    const promptT = salvageReportTiming().readyAt;
-    if (t > promptT) {
-      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
-      drawCommandButtonMotion(ctx, {
-        x: cx - 150,
-        y: cy + 92,
-        w: 300,
-        h: 42,
-      }, 'drop back in', {
-        action: actionDescriptor('confirm', currentPromptOptions()),
-        role: 'flow',
-        active: true,
-        alpha: blink * Math.min((t - promptT) * 2, 1),
-        progress: Math.min((t - promptT) * 2, 1),
-        pulseTime: (totalTime % 1.45) / 1.45,
-        reducedMotion: motion.reducedMotion,
-        commandPulse: motion.commandPulse,
-      });
-    }
-
-    ctx.restore();
   }
 
   // === PAUSE MENU ===

@@ -2159,7 +2159,6 @@ function cloneProfileLoadout(profile) {
 
 function buildRunResult(player, outcome) {
   const cargoItems = player.cargo.filter(Boolean);
-  const cargoValue = cargoItems.reduce((s, item) => s + (item.value || 0), 0);
   const survivalTime = runtime.simTime;
   const survivalBonus = survivalBonusEm(survivalTime);
   const isExtraction = outcome === 'escaped';
@@ -2203,7 +2202,7 @@ function buildRunResult(player, outcome) {
   }
 
   // Earnings
-  const emEarned = runEmEarned({ outcome, cargoValue, survivalTime });
+  const emEarned = runEmEarned({ outcome, survivalTime });
   const cargoExtracted = isExtraction ? cargoItems.map(i => ({ ...i })) : [];
   const cargoLost = !isExtraction ? cargoItems.map(i => ({ ...i })) : [];
   const notables = [];

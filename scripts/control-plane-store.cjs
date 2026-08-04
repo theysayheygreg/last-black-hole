@@ -28,6 +28,7 @@ const DEFAULT_UPGRADES = {
 };
 
 const DEFAULT_VAULT_CAPACITY = 25;
+const MAX_RECENT_ECHOES = 8;
 
 function nowIso() {
   return new Date().toISOString();
@@ -56,6 +57,7 @@ function createProfileSkeleton(profileId, name = "Pilot") {
     totalItemsSold: 0,
     bestSurvivalTime: 0,
     totalExoticMatterEarned: 0,
+    recentEchoes: [],
   };
 }
 
@@ -102,6 +104,9 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
     totalItemsSold: Number.isFinite(Number(snapshot.totalItemsSold)) ? Number(snapshot.totalItemsSold) : base.totalItemsSold,
     bestSurvivalTime: Number.isFinite(Number(snapshot.bestSurvivalTime)) ? Number(snapshot.bestSurvivalTime) : base.bestSurvivalTime,
     totalExoticMatterEarned: Number.isFinite(Number(snapshot.totalExoticMatterEarned)) ? Number(snapshot.totalExoticMatterEarned) : base.totalExoticMatterEarned,
+    recentEchoes: Array.isArray(snapshot.recentEchoes)
+      ? snapshot.recentEchoes.filter((echo) => echo && typeof echo === "object" && String(echo.fragment || "").trim()).slice(0, MAX_RECENT_ECHOES).map((echo) => ({ ...echo }))
+      : [],
   };
 }
 

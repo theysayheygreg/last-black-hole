@@ -9,6 +9,17 @@
   cannot publish an authority opening or a HUD aperture countdown. Final exfil
   remains the unchanged 60-second last chance.
 
+- **Progression honesty and direct results:** thirteen zero-coefficient,
+  unimplemented artifact records no longer drop; saved occurrences are retired
+  harmlessly. The unused profile-upgrade ladder no longer changes local
+  thrust, drag, coupling, sensing, hull grace, or vault capacity; legacy rank
+  data remains only so existing profiles migrate safely. Extraction settlement
+  is now readable in the terminal result itself (cargo, vault deposit, and
+  overflow auto-sale) and confirm returns directly Home. The old separate
+  Salvage Report phase is gone. Chronicle echo fragments now persist per pilot
+  with a bounded scrollback, while the summary no longer claims an unsupported
+  wells-visited statistic.
+
 - **Suite manifest completeness:** every top-level executable v0.3 test is now
   either an intentional lane entry or a documented diagnostic/capture/release
   exclusion. A fast/core/static/full guard fails as soon as a new test file is

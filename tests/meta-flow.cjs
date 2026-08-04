@@ -317,9 +317,6 @@ async function run() {
       });
       await waitForPhase(page, "escaped");
       await tapConfirm(page);
-      await waitForPhase(page, "meta");
-      await waitFor(page, () => window.__TEST_API.getUiMotionState().salvageReport.ready === true, { timeout: 4000 });
-      await tapConfirm(page);
       await waitForPhase(page, "home");
 
       const chronicle = await page.evaluate(() => window.__TEST_API.getChronicleView());
@@ -329,7 +326,7 @@ async function run() {
       assert(chronicle.records[0].cargoCount === 1, `Expected cargo count 1, got ${chronicle.records[0].cargoCount}`);
     });
 
-    await runner.run("Reduced-motion salvage report is settled and transition corruption stays off", async () => {
+    await runner.run("Reduced-motion result returns directly home without a salvage detour", async () => {
       await bootstrapCleanPage(page);
       await page.evaluate(() => {
         window.__TEST_API.createTestProfile("Reduced Pilot");
@@ -350,16 +347,8 @@ async function run() {
       assert(transition.glitchIntensity === 0, `Expected reduced-motion shader corruption off, got ${transition.glitchIntensity}`);
 
       await sleep(500);
-      const metaPhase = await page.evaluate(() => window.__TEST_API.getGamePhase());
-      assert(metaPhase === "meta", `Expected reduced-motion result transition to reach meta, got ${metaPhase}`);
-      await waitFor(page, () => window.__TEST_API.getUiMotionState().salvageReport.ready === true, { timeout: 2000 });
-      const report = await page.evaluate(() => window.__TEST_API.getUiMotionState().salvageReport);
-      assert(report.ready === true && report.displayTime > report.readyAt,
-        `Expected settled visible salvage CTA, got ${JSON.stringify(report)}`);
-      await tapConfirm(page);
-      await sleep(500);
       const homePhase = await page.evaluate(() => window.__TEST_API.getGamePhase());
-      assert(homePhase === "home", `Expected ready salvage CTA to accept confirm, got ${homePhase}`);
+      assert(homePhase === "home", `Expected direct return home after result, got ${homePhase}`);
     });
 
     const filepath = await screenshot(page, "meta-flow");

@@ -3,7 +3,7 @@
  *
  * Three slot types:
  *   - Cargo (8 slots) — items picked up during a run. Lost on death, kept on extract.
- *   - Equipped (2 slots) — equippable artifacts set at meta screen. Persist across runs.
+ *   - Equipped (2 slots) — equippable artifacts managed from Home. Persist across runs.
  *   - Consumables (2 slots) — one-use items, d-pad to activate. Lost on use or death.
  *
  * Dropping an item creates a mini-wreck at the ship's position.
@@ -235,7 +235,7 @@ export class InventorySystem {
 
   /**
    * Extract: return all cargo items and clear. Called when player extracts.
-   * These go to the vault in the meta screen.
+   * These return to the Home vault after extraction.
    */
   extractCargo() {
     const items = this.getCargoItems();
@@ -251,7 +251,7 @@ export class InventorySystem {
     this.consumables.fill(null);
     this.droppedItems = [];
     this.usedConsumables = [];
-    // Note: equipped persists across runs — only cleared via meta screen
+    // Equipped items persist across runs until changed from Home.
   }
 
   /**

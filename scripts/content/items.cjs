@@ -3,6 +3,7 @@
 // catalog cannot drift between client preview and authoritative sim.
 const data = require("../../src/content/items.data.json");
 const RETIRED_ITEM_IDS = new Set([
+  ...data.RETIRED_ARTIFACT_IDS,
   ...data.RETIRED_CONSUMABLE_IDS,
   ...data.RETIRED_CONSUMABLE_EFFECT_IDS,
 ]);
@@ -12,6 +13,7 @@ module.exports = {
   CONSUMABLE_EFFECT_IDS: data.CONSUMABLE_EFFECT_IDS,
   RETIRED_CONSUMABLE_IDS: data.RETIRED_CONSUMABLE_IDS,
   RETIRED_CONSUMABLE_EFFECT_IDS: data.RETIRED_CONSUMABLE_EFFECT_IDS,
+  RETIRED_ARTIFACT_IDS: data.RETIRED_ARTIFACT_IDS,
   ITEM_CATALOG: data.ITEM_CATALOG,
   CONSUMABLE_CATALOG: data.CONSUMABLE_CATALOG,
   isRetiredItem(item) {
