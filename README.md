@@ -16,7 +16,7 @@ The entire game renders through a live ASCII fluid shader - the terminal look is
 
 ## Versions
 
-**Now - v0.2.2.** The current playable line: full run loop (pilots, loadouts, drop, loot, extract, death), server-authoritative simulation even in local play, two hulls with distinct movement identities, gravity slingshots, AI rivals and scavengers, the signal/escalation system, and Steam Deck support. Weekly builds ship from this line.
+**Now - v0.2.2.** The current playable line: full run loop (pilots, loadouts, drop, loot, extract, death), server-authoritative simulation even in local play, two hulls with distinct movement identities, gravity slingshots, AI rivals and scavengers, the signal/escalation system, and Steam Deck support. Public builds ship from this line.
 
 **In development - v0.3 "Ballpark."** A top-to-bottom second pass on every system: movement and physics feel, seeded per-match worlds built from an encounter catalog instead of fixed layouts, a match director that escalates the collapse in phases, and staged unlocks worth fighting over. In active development on the `codex/v0.3-ballpark-roadmap` branch.
 
@@ -33,42 +33,70 @@ The entire game renders through a live ASCII fluid shader - the terminal look is
 | Linux x64 / Steam Deck | Run the installer below or download the Linux release zip |
 | Local desktop from source | Clone the repo and run `npm run play` |
 
-### Install latest
+### Install the current build — v0.2.2
 
-Linux, macOS, or SteamOS/Steam Deck:
+The current playable line. One command per platform; the installer downloads
+the pinned release, verifies its SHA-256, and installs user-locally while
+preserving saves.
+
+Linux, macOS, or SteamOS/Steam Deck (on Deck: Konsole in Desktop Mode — the
+installer also registers **Last Singularity** as a non-Steam game for Gaming
+Mode):
 
 ```sh
-curl -fsSL https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/install.sh | sh
+curl -fsSL https://github.com/theysayheygreg/last-black-hole/releases/download/v0.2.2-final/install.sh | sh -s -- --version v0.2.2-final
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/install.ps1 | iex
+$installer = [scriptblock]::Create((irm https://github.com/theysayheygreg/last-black-hole/releases/download/v0.2.2-final/install.ps1))
+& $installer -Version v0.2.2-final
 ```
 
-The installer downloads the current public weekly release, verifies its
-SHA-256, and updates a user-local install while preserving saves. On Steam Deck,
-run it from Konsole in Desktop Mode; it also registers **Last Singularity** as a
-non-Steam game for Gaming Mode.
-
-Want a previous final build? The
-[Old Versions](docs/public/OLD-VERSIONS.md) page keeps immutable, version-pinned
-one-click installers and checksums. Historical installs use separate folders,
-saves, logs, launchers, and Steam shortcuts so they can live beside the current
-game.
-
-Downloaded platform packages include `START-HERE.md` with direct launch
-instructions. Steam Deck details and troubleshooting live in the
-[Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
-
-### Download a weekly build
-
-Grab the latest from [Releases -> Weekly Playables](https://github.com/theysayheygreg/last-black-hole/releases):
+Prefer a direct download? Grab the platform zip from the
+[v0.2.2 release](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.2.2-final):
 
 - **macOS:** unzip, then run `Run Last Singularity.command` (or open `Last Singularity.app`).
 - **Windows:** unzip, then run `Last Singularity.exe`.
 - **Linux:** unzip, then run the `Last Singularity` binary.
+
+Downloaded packages include `START-HERE.md` with direct launch instructions.
+Steam Deck details and troubleshooting live in the
+[Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
+
+### Install the v0.3 beta — BETA
+
+The in-development v0.3 "Ballpark" line as a release candidate. **Beta means
+beta:** systems are being rebalanced and reworked build to build, visuals and
+audio are mid-pass, and things will be rough. It installs completely alongside
+the current game — separate folder, saves, launcher, and Steam shortcut — so
+it never touches your v0.2 install.
+
+Linux, macOS, or SteamOS/Steam Deck:
+
+```sh
+curl -fsSL https://github.com/theysayheygreg/last-black-hole/releases/download/v0.3.1-rc.4838e6ed/install.sh | sh -s -- \
+  --version v0.3.1-rc.4838e6ed \
+  --name "Last Singularity BETA" \
+  --slug last-singularity-beta
+```
+
+Windows PowerShell:
+
+```powershell
+$installer = [scriptblock]::Create((irm https://github.com/theysayheygreg/last-black-hole/releases/download/v0.3.1-rc.4838e6ed/install.ps1))
+& $installer -Version v0.3.1-rc.4838e6ed -Name "Last Singularity BETA" -Slug last-singularity-beta
+```
+
+Direct beta zips live on the
+[v0.3.1 RC release](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.3.1-rc.4838e6ed).
+
+### Older versions
+
+The [Old Versions](docs/public/OLD-VERSIONS.md) page keeps immutable,
+version-pinned one-click installers and checksums for every displaced public
+line, each with separate folders, saves, and launchers.
 
 ### Build from source
 
