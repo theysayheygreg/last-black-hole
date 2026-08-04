@@ -2,6 +2,12 @@
 
 > no countdown timer. the universe dies through its own physics.
 
+> **Historical schedule note:** the fixed 10-minute arc and legacy numeric
+> examples below predate v0.3's map-relative schedule. Current v0.3 growth is
+> reach-first: mass growth widens the shared gravity/current envelope while
+> baseline pull remains at seeded `baseMass`; only Vessel overdrive increases
+> strength. `killRadius` is an independent existing curve.
+
 ---
 
 ## Design Intent
@@ -18,18 +24,19 @@ The only true global is the run elapsed time (needed for portal wave scheduling)
 
 Each well grows independently based on its own behavior:
 
-**Passive growth:** slow mass accumulation over time. Rate varies per well (map-defined or randomized at spawn).
+**Passive growth:** slow mass accumulation over time. Rate varies per well (map-defined or seeded at spawn).
 ```javascript
 well.growthRate = 0.015 + Math.random() * 0.01;  // per 45s, varies 0.015–0.025
 ```
 
 **Active growth:** wells gain mass when they consume entities:
-- Planetoid consumed: +0.04 mass (already implemented)
+- Planetoid consumed: +0.08 mass (already implemented)
 - Wreck consumed (well grows into wreck): +0.1 mass (significant — wrecks are big)
 - These create spikes that the player can observe and react to
 
-**Effects of growth:**
-- Fluid gravity pull scales with mass (already implemented)
+**v0.3 effects of growth:**
+- Gravity full/falloff reach and the derived rotational-current reach expand
+  together; baseline pull strength stays at seeded base mass
 - Kill radius grows: `killRadius = baseKillRadius * (1 + (mass - startMass) * 0.3)`
 - Accretion disk grows visually (already scales with mass)
 - Wave ring amplitude on growth events scales with mass (already implemented)

@@ -98,6 +98,8 @@ export function syncRemoteWellPresentation(local, remote) {
   local.wx = remote.wx;
   local.wy = remote.wy;
   local.mass = remote.mass;
+  local.baseMass = remote.baseMass ?? local.baseMass;
+  local.reachMultiplier = remote.reachMultiplier ?? local.reachMultiplier;
   local.orbitalDir = finite(remote.orbitalDir, finite(local.orbitalDir, 1));
   local.overdriveTier = remote.overdriveTier ?? 0;
   local.overdriveMultiplier = remote.overdriveMultiplier ?? 1;

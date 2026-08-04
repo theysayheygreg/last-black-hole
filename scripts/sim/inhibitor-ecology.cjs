@@ -4,6 +4,7 @@ const { simUnitsToMeters } = require("../content/units.cjs");
 const { NOISE_CONFIG, resolveThreatWarningBudget } = require("./noise-radius.cjs");
 const { playerBodyRadius } = require("./interaction-volumes.cjs");
 const INHIBITOR_ECOLOGY_DATA = require("../../src/content/inhibitor-ecology.data.json");
+const { wellStrengthMass } = require("../../src/content/well-growth.js");
 
 const POPULATION_CONFIG = INHIBITOR_ECOLOGY_DATA.population;
 
@@ -870,9 +871,7 @@ function applyWellOverdrive(wellOrOptions, maybeOptions = {}) {
 }
 
 function effectiveWellMass(well) {
-  const baseMass = Math.max(0, finite(well?.mass, 1));
-  const multiplier = Math.max(1, finite(well?.overdriveMultiplier, 1));
-  return baseMass * multiplier;
+  return wellStrengthMass(well);
 }
 
 function summarizeEcologyEncounters(ecology = {}) {

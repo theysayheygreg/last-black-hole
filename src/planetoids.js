@@ -189,6 +189,8 @@ export class PlanetoidSystem {
           if (dist < well.killRadius) {
             // Consumed by well — add mass, spawn wave, remove planetoid
             well.mass += cfg.mass;
+            well.updateKillRadius();
+            well.updateReach();
             if (waveRings) {
               // Wave amplitude = 5× planetoid mass. Makes consumption visually dramatic.
               waveRings.spawn(well.wx, well.wy, cfg.mass * 5);

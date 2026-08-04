@@ -26,6 +26,7 @@
     "minimumGravityFraction": 0.15,
     "falloffCurve": "smoothstep",
     "featherRadius": 0.12,
+    "growthReachPerMass": 0.5,
     "falloff": 1.5
   },
   "wellCurrent": {

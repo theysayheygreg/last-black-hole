@@ -89,12 +89,16 @@ authored from rotational fabric current. Each well owns a lethal core,
 falloff shape; radial gravity is zero beyond its localized envelope after a
 short derived feather. Gravity strength remains a separate authored control.
 
-The first growth implementation changes **reach only**: growth expands the
-full-strength and falloff radii while baseline gravity strength remains fixed.
-Large wells or large-map variants may later author greater strength explicitly,
-but ordinary growth must not simultaneously enlarge the field and increase its
-force. Add strength variation sparingly and only when the player can read the
-distinction.
+Implemented on 2026-08-04. The first growth implementation changes **reach
+only**: each well stores a seeded `baseMass` and `reachMultiplier`; scheduled,
+star-, wreck-, and planetoid-consumption growth scale the full-strength and
+falloff radii by the shared `0.50x` reach-per-mass step while baseline gravity
+strength remains fixed. `killRadius` remains its independent existing curve.
+Vessel overdrive is the sole sanctioned runtime strength multiplier: it makes a
+well angrier, not bigger. Large wells or large-map variants may later author
+greater strength explicitly, but ordinary growth must not simultaneously
+enlarge the field and increase its force. Add strength variation sparingly and
+only when the player can read the distinction.
 
 ### Wider Rotational Well Current
 

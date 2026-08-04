@@ -14,6 +14,7 @@ const WELL_GRAVITY_PARAMS = Object.freeze({
     minimumGravityFraction: FABRIC.wellGravity.minimumGravityFraction,
     falloffCurve: FABRIC.wellGravity.falloffCurve,
     featherRadius: FABRIC.wellGravity.featherRadius,
+    growthReachPerMass: FABRIC.wellGravity.growthReachPerMass,
     falloff: FABRIC.wellGravity.falloff,
     rangeMode: "localized",
     maxRange: FABRIC.wellGravity.falloffEndRadius + FABRIC.wellGravity.featherRadius,

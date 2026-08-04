@@ -106,6 +106,7 @@ export class LocalSandboxSimCore {
         if (well) {
           well.mass += well.growthRate;
           well.updateKillRadius();
+          well.updateReach();
           this.waveRings.spawn(well.wx, well.wy, evtCfg.growthWaveAmplitude * well.mass, {
             sourceWellId: well.id ?? well.name ?? null,
             cause: 'well-growth',

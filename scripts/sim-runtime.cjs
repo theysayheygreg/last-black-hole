@@ -11,6 +11,7 @@ const { getMapDurationSeconds, getPortalPlacementPolicy } = require("./content/m
 const { createRNGStreams } = require("./rng-stream.cjs");
 const { sanitizeRetiredItems } = require("./content/items.cjs");
 const { FABRIC } = require("./content/fabric.cjs");
+const { resolveWellReachMultiplier } = require("../src/content/well-growth.js");
 const SEEDED_GEN = require("./seeded-generation.cjs");
 const {
   buildCoarseFlowField,
@@ -343,6 +344,10 @@ function applyRunSeed(rngStreams, mapState, session) {
   for (let i = 0; i < mapState.wells.length; i++) {
     const well = mapState.wells[i];
     well.mass *= rngStreams.range('wellMass', 0.85, 1.15);
+    // The seeded mass is this run's field-strength baseline. Ordinary
+    // accretion widens reach; Vessel overdrive is the strength exception.
+    well.baseMass = well.mass;
+    well.reachMultiplier = 1;
     well.growthRate *= rngStreams.range('wellGrowth', 0.80, 1.20);
     well.orbitalDir = rngStreams.float('wellDir') > 0.5 ? 1 : -1;
     well.name = rngStreams.pick('wellNames', WELL_NAMES);
@@ -1041,6 +1046,8 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     ...well,
     catalogId: anomalyCatalog.cast[index]?.catalogId,
     baseKillRadius: well.killRadius,
+    baseMass: well.mass,
+    reachMultiplier: 1,
     startMass: well.mass,
     growthRate: ((well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE)
       * (anomalyCatalog.cast[index]?.fabricSignature?.parameters?.growthRateMultiplier ?? 1),
@@ -2824,22 +2831,26 @@ function applyWellGrowth(well, {
   sourceEntityType = null,
   scheduledTime = null,
   waveAmplitude,
+  waveAmplitudeUsesGrowthMultiplier = true,
 } = {}) {
   const growth = calculateWellGrowth({
     well,
     massDelta,
     killRadiusForMass: wellKillRadiusForMass,
+    growthReachPerMass: FABRIC.wellGravity.growthReachPerMass,
   });
   well.mass = growth.after.mass;
   well.killRadius = growth.after.killRadius;
+  well.reachMultiplier = growth.after.reachMultiplier;
   const growthWaveMultiplier = well.fabricSignature?.parameters?.growthWaveAmplitudeMultiplier ?? 1;
   const ring = spawnWaveRing(
     well.wx,
     well.wy,
-    (waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass) * growthWaveMultiplier,
+    (waveAmplitude ?? WAVE_SERVER.growthWaveAmplitude * well.mass)
+      * (waveAmplitudeUsesGrowthMultiplier ? growthWaveMultiplier : 1),
     well.id,
     {
-      cause: source === "star-consumption" ? "consumption" : "well-growth",
+      cause: String(source || "").endsWith("-consumption") ? "consumption" : "well-growth",
       eventId: `${source || "well-growth"}:${sourceEntityId || well.id}:${runtime.tick}`,
     },
   );
@@ -3022,15 +3033,19 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
       const dist = worldDistance(wreck.wx, wreck.wy, well.wx, well.wy, ws);
       if (dist < well.killRadius) {
         wreck.alive = false;
-        well.mass += 0.1;
-        well.killRadius = wellKillRadiusForMass(well);
-        spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass, well.id, {
-          cause: "consumption",
-          eventId: `consumption:wreck:${wreck.id}:${runtime.tick}`,
+        const growthEvent = applyWellGrowth(well, {
+          massDelta: 0.1,
+          source: "wreck-consumption",
+          reason: "wreck-consumed",
+          sourceEntityId: wreck.id,
+          sourceEntityType: "wreck",
+          waveAmplitude: WAVE_SERVER.growthWaveAmplitude * (well.mass + 0.1),
+          waveAmplitudeUsesGrowthMultiplier: false,
         });
         publishEvent("wreck.consumed", {
           wreckId: wreck.id,
           wellId: well.id,
+          wellGrowthEventSeq: growthEvent.seq,
         });
         break;
       }
@@ -3046,17 +3061,21 @@ function tickPlanetoids(dt, planetoids = runtime.mapState.planetoids) {
       const dist = worldDistance(planetoid.wx, planetoid.wy, well.wx, well.wy, runtime.session.worldScale);
       if (dist < well.killRadius) {
         planetoid.alive = false;
-        well.mass += 0.08;
-        well.killRadius = wellKillRadiusForMass(well);
-        spawnWaveRing(well.wx, well.wy, 0.2, well.id, {
-          cause: "consumption",
-          eventId: `consumption:planetoid:${planetoid.id}:${runtime.tick}`,
+        const growthEvent = applyWellGrowth(well, {
+          massDelta: 0.08,
+          source: "planetoid-consumption",
+          reason: "planetoid-consumed",
+          sourceEntityId: planetoid.id,
+          sourceEntityType: "planetoid",
+          waveAmplitude: 0.2,
+          waveAmplitudeUsesGrowthMultiplier: false,
         });
         publishEvent("planetoid.consumed", {
           planetoidId: planetoid.id,
           wellId: well.id,
           wx: well.wx,
           wy: well.wy,
+          wellGrowthEventSeq: growthEvent.seq,
         });
         break;
       }
@@ -3336,7 +3355,16 @@ function resolveWellGravity(player, flowSample) {
     );
     for (const { entity: well } of wells) {
       const direction = worldDirection(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
-      const gravity = wellGravityVector("player", direction, effectiveWellMass(well));
+      const signatureReach = Number(well.fabricSignature?.parameters?.gravityReachMultiplier);
+      const reach = resolveWellReachMultiplier(well, FABRIC.wellGravity.growthReachPerMass)
+        * (Number.isFinite(signatureReach) && signatureReach > 0 ? signatureReach : 1);
+      const gravity = wellGravityVector("player", direction, effectiveWellMass(well), {
+        referenceDistance: SERVER_WELLS.referenceDistance * reach,
+        maxRange: SERVER_WELLS.maxRange * reach,
+        fullGravityRadius: SERVER_WELLS.fullGravityRadius * reach,
+        falloffEndRadius: SERVER_WELLS.maxRange * reach,
+        featherRadius: SERVER_WELLS.featherRadius * reach,
+      });
       pullX += gravity.x * signatureGravityMultiplier;
       pullY += gravity.y * signatureGravityMultiplier;
     }

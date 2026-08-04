@@ -8,6 +8,7 @@ const {
 } = require("./sim/world-geometry.cjs");
 const { sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
+const { resolveWellReachMultiplier, wellStrengthMass } = require("../src/content/well-growth.js");
 const FORCE_MIN_DIST = FABRIC.wellGravity.minimumDistance;
 
 function clamp01(value) {
@@ -19,12 +20,6 @@ function signatureMultiplier(well, name) {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
-function effectiveWellMass(well) {
-  const baseMass = Math.max(0, Number(well?.mass) || 0);
-  const overdrive = Math.max(1, Number(well?.overdriveMultiplier) || 1);
-  return baseMass * overdrive;
-}
-
 function broadOrbitalCurrentSpeed(
   dist,
   strength,
@@ -33,10 +28,11 @@ function broadOrbitalCurrentSpeed(
   maxRange,
   fullGravityRadius = FABRIC.wellGravity.fullGravityRadius,
   falloffEndRadius = FABRIC.wellGravity.falloffEndRadius,
+  referenceRadius = FABRIC.wellGravity.fullGravityRadius,
 ) {
   if (dist < 0.001 || dist > maxRange) return 0;
-  const referenceRadius = Math.max(FORCE_MIN_DIST, Number(fullGravityRadius) || FORCE_MIN_DIST);
-  const baseSpeed = strength * mass / Math.pow(referenceRadius, falloff);
+  const baseReference = Math.max(FORCE_MIN_DIST, Number(referenceRadius) || FORCE_MIN_DIST);
+  const baseSpeed = strength * mass / Math.pow(baseReference, falloff);
   if (dist <= falloffEndRadius) return baseSpeed;
   const t = Math.max(0, Math.min(1, (dist - falloffEndRadius) / Math.max(0.001, maxRange - falloffEndRadius)));
   const eased = t * t * (3 - 2 * t);
@@ -107,14 +103,18 @@ function buildCoarseFlowField({
         }
 
         const dir = well.orbitalDir || 1;
+        const growthReach = resolveWellReachMultiplier(well, FABRIC.wellGravity.growthReachPerMass);
+        const gravityReach = growthReach * signatureMultiplier(well, 'gravityReachMultiplier');
+        const currentReach = growthReach * signatureMultiplier(well, 'currentReachMultiplier');
         const currentAccel = broadOrbitalCurrentSpeed(
           dist,
           wellCurrentScale * signatureMultiplier(well, 'currentStrengthMultiplier'),
-          effectiveWellMass(well) || 1,
+          wellStrengthMass(well) || 1,
           wellCurrentFalloff,
-          wellCurrentMaxRange * signatureMultiplier(well, 'currentReachMultiplier'),
+          wellCurrentMaxRange * currentReach,
+          wellGravityFullRadius * gravityReach,
+          wellCurrentFalloffEnd * growthReach,
           wellGravityFullRadius,
-          wellCurrentFalloffEnd,
         );
         if (currentAccel > 0) {
           currentX += (-dy / dist) * dir * currentAccel;
@@ -125,15 +125,16 @@ function buildCoarseFlowField({
           }
         }
 
-        const gravityStrength = wellGravityMagnitude("player", dist, effectiveWellMass(well) || 1, {
+        const gravityStrength = wellGravityMagnitude("player", dist, wellStrengthMass(well) || 1, {
           strength: wellGravityScale * signatureMultiplier(well, 'gravityStrengthMultiplier'),
           falloff: wellGravityFalloff,
-          maxRange: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),
-          fullGravityRadius: wellGravityFullRadius * signatureMultiplier(well, 'gravityReachMultiplier'),
-          falloffEndRadius: wellGravityMaxRange * signatureMultiplier(well, 'gravityReachMultiplier'),
+          referenceDistance: FABRIC.wellGravity.referenceDistance * gravityReach,
+          maxRange: wellGravityMaxRange * gravityReach,
+          fullGravityRadius: wellGravityFullRadius * gravityReach,
+          falloffEndRadius: wellGravityMaxRange * gravityReach,
           minimumGravityFraction: wellGravityMinimumFraction,
           falloffCurve: wellGravityFalloffCurve,
-          featherRadius: wellGravityFeatherRadius * signatureMultiplier(well, 'gravityReachMultiplier'),
+          featherRadius: wellGravityFeatherRadius * gravityReach,
           rangeMode: "localized",
         });
         gravityX += (dx / dist) * gravityStrength;

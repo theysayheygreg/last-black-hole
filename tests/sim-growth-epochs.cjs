@@ -17,6 +17,9 @@ const { calculateWellGrowth, createWellGrowthEvent } = require("../scripts/sim/w
 const { createRNGStreams } = require("../scripts/rng-stream.cjs");
 const { buildCoarseFlowField } = require("../scripts/coarse-flow-field.cjs");
 const { createSeededSea } = require("../scripts/sim/seeded-sea.cjs");
+const { wellGravityMagnitude } = require("../scripts/sim/well-gravity.cjs");
+const { wellStrengthMass } = require("../src/content/well-growth.js");
+const FABRIC = require("../src/content/fabric.data.json");
 
 function wellFixture() {
   return {
@@ -26,6 +29,8 @@ function wellFixture() {
     wx: 1,
     wy: 1,
     mass: 1.5,
+    baseMass: 1.5,
+    reachMultiplier: 1,
     killRadius: 0.06,
     startMass: 1.5,
     baseKillRadius: 0.06,
@@ -119,10 +124,64 @@ async function run() {
     assert.deepStrictEqual(waveBase.cells, waveRetuned.cells, "retired live wave parameter must not alter the coarse field");
   });
 
-  await runner.run("scheduled and star-consumption growth events identify only the changed well", () => {
+  await runner.run("reach-first growth widens one envelope without making ordinary pull or current stronger", () => {
     const well = wellFixture();
-    const before = { mass: well.mass, killRadius: well.killRadius };
-    const growth = calculateWellGrowth({ well, massDelta: 0.02, killRadiusForMass: (candidate) => candidate.baseKillRadius * (1 + (candidate.mass - candidate.startMass) * 0.3) });
+    const growth = calculateWellGrowth({
+      well,
+      massDelta: 0.2,
+      killRadiusForMass: (candidate) => candidate.baseKillRadius * (1 + (candidate.mass - candidate.startMass) * 0.3),
+      growthReachPerMass: FABRIC.wellGravity.growthReachPerMass,
+    });
+    assert(growth.after.reachMultiplier > growth.before.reachMultiplier, "growth must widen the per-well reach state");
+    assert.strictEqual(wellStrengthMass({ ...well, ...growth.after }), wellStrengthMass(well), "ordinary growth must not increase field strength mass");
+
+    const gravityAtRatio = (candidate, ratio) => {
+      const reach = candidate.reachMultiplier;
+      const fullRadius = FABRIC.wellGravity.fullGravityRadius * reach;
+      const falloffEndRadius = FABRIC.wellGravity.falloffEndRadius * reach;
+      const distance = fullRadius + (falloffEndRadius - fullRadius) * ratio;
+      return wellGravityMagnitude("player", distance, wellStrengthMass(candidate), {
+        referenceDistance: FABRIC.wellGravity.referenceDistance * reach,
+        fullGravityRadius: fullRadius,
+        falloffEndRadius,
+        featherRadius: FABRIC.wellGravity.featherRadius * reach,
+      });
+    };
+    const beforeState = { ...well, ...growth.before };
+    const afterState = { ...well, ...growth.after };
+    assert(Math.abs(gravityAtRatio(beforeState, 0.5) - gravityAtRatio(afterState, 0.5)) < 1e-12,
+      "gravity at the same normalized reach position must stay constant");
+
+    const toField = (candidate) => buildCoarseFlowField({
+      worldScale: 6,
+      cellSize: 0.01,
+      wells: [{ ...well, ...candidate, wx: 3, wy: 3, orbitalDir: 1 }],
+      waveRings: [],
+      seededSea: null,
+    });
+    const sampleAtRatio = (field, candidate, ratio) => {
+      const fullRadius = FABRIC.wellGravity.fullGravityRadius * candidate.reachMultiplier;
+      const falloffEndRadius = FABRIC.wellGravity.falloffEndRadius * candidate.reachMultiplier;
+      const distance = fullRadius + (falloffEndRadius - fullRadius) * ratio;
+      return field.cells[Math.floor(3 / field.cellSize) * field.columns + Math.floor((3 + distance) / field.cellSize)];
+    };
+    const beforeCoarse = sampleAtRatio(toField(beforeState), beforeState, 0.5);
+    const afterCoarse = sampleAtRatio(toField(afterState), afterState, 0.5);
+    assert(Math.abs(beforeCoarse.gravityY - afterCoarse.gravityY) < 0.01,
+      "coarse gravity must match the direct reach-first strength contract");
+    assert(Math.abs(beforeCoarse.currentX - afterCoarse.currentX) < 0.01,
+      "coarse current must retain strength while its envelope grows");
+  });
+
+  await runner.run("all four growth sources identify only the changed well", () => {
+    const well = wellFixture();
+    const before = { mass: well.mass, killRadius: well.killRadius, reachMultiplier: well.reachMultiplier };
+    const growth = calculateWellGrowth({
+      well,
+      massDelta: 0.02,
+      killRadiusForMass: (candidate) => candidate.baseKillRadius * (1 + (candidate.mass - candidate.startMass) * 0.3),
+      growthReachPerMass: FABRIC.wellGravity.growthReachPerMass,
+    });
     const scheduled = createWellGrowthEvent({
       well,
       source: "schedule",
@@ -148,12 +207,38 @@ async function run() {
     assert.strictEqual(scheduled.sourceEntityId, null);
     assert.strictEqual(scheduled.before.mass, 1.5);
     assert.strictEqual(scheduled.after.mass, 1.52);
+    assert(scheduled.after.reachMultiplier > scheduled.before.reachMultiplier);
     assert.strictEqual(scheduled.tellId, "well-growth");
     assert.strictEqual(consumed.wellId, "well-a");
     assert.strictEqual(consumed.sourceEntityId, "star-7");
     assert.strictEqual(consumed.sourceEntityType, "star");
     assert.strictEqual(consumed.scheduledTime, null);
     assert.strictEqual(consumed.after.mass, 2);
+    const wreck = createWellGrowthEvent({
+      well,
+      source: "wreck-consumption",
+      reason: "wreck-consumed",
+      sourceEntityId: "wreck-7",
+      sourceEntityType: "wreck",
+      eventTime: 92.2,
+      waveId: "wave-wreck-7",
+      before,
+      after: growth.after,
+    });
+    const planetoid = createWellGrowthEvent({
+      well,
+      source: "planetoid-consumption",
+      reason: "planetoid-consumed",
+      sourceEntityId: "planetoid-7",
+      sourceEntityType: "planetoid",
+      eventTime: 93.2,
+      waveId: "wave-planetoid-7",
+      before,
+      after: growth.after,
+    });
+    assert.deepStrictEqual([scheduled, consumed, wreck, planetoid].map((event) => event.source), [
+      "schedule", "star-consumption", "wreck-consumption", "planetoid-consumption",
+    ]);
   });
 
   await runner.run("snapshot-shaped truth survives presentation normalization without payload leakage", async () => {
@@ -210,16 +295,23 @@ async function run() {
     assert(!epochs.includes("Math.random"), "collapse epoch contract must use no random source");
     assert(!epochs.includes("player"), "collapse epoch state must not be per-player");
     assert(runtime.includes("applyWellGrowth(well"), "authority must route both growth causes through the shared helper");
+    assert(runtime.includes("resolveWellReachMultiplier(well"), "direct Shallows gravity must read the per-well reach state");
   });
 
-  await runner.run("star consumption emits exactly one associated growth wave", () => {
+  await runner.run("every consumption source emits exactly one associated growth wave", () => {
     const runtime = fs.readFileSync(path.join(__dirname, "../scripts/sim-runtime.cjs"), "utf8");
     const helperStart = runtime.indexOf("function applyWellGrowth(");
     const helperEnd = runtime.indexOf("function tickWaveRings(", helperStart);
     const starStart = runtime.indexOf("function tickStars(");
     const starEnd = runtime.indexOf("function tickWrecks(", starStart);
+    const wreckStart = runtime.indexOf("function tickWrecks(");
+    const wreckEnd = runtime.indexOf("function tickPlanetoids(", wreckStart);
+    const planetoidStart = runtime.indexOf("function tickPlanetoids(");
+    const planetoidEnd = runtime.indexOf("function resolveStarSolarWind(", planetoidStart);
     const growthHelper = runtime.slice(helperStart, helperEnd);
     const starConsumption = runtime.slice(starStart, starEnd);
+    const wreckConsumption = runtime.slice(wreckStart, wreckEnd);
+    const planetoidConsumption = runtime.slice(planetoidStart, planetoidEnd);
     const waveSpawns = (source) => (source.match(/\bspawnWaveRing\(/g) || []).length;
 
     assert.strictEqual(waveSpawns(growthHelper), 1, "well growth must create the associated wave");
@@ -228,6 +320,22 @@ async function run() {
     const consumedEvent = starConsumption.indexOf('publishEvent("star.consumed"');
     assert(growthCall >= 0 && growthCall < consumedEvent, "well.grew must publish before star.consumed");
     assert(starConsumption.includes("wellGrowthEventSeq: growthEvent.seq"), "star.consumed must carry the growth event sequence");
+    for (const [label, source, event] of [
+      ["wreck", wreckConsumption, "wreck.consumed"],
+      ["planetoid", planetoidConsumption, "planetoid.consumed"],
+    ]) {
+      assert.strictEqual(waveSpawns(source), 0, `${label} consumption must not create a second wave`);
+      const growthCall = source.indexOf("const growthEvent = applyWellGrowth(well");
+      const consumedEvent = source.indexOf(`publishEvent(\"${event}\"`);
+      assert(growthCall >= 0 && growthCall < consumedEvent, `${label} well.grew must publish before ${event}`);
+      assert(source.includes("wellGrowthEventSeq: growthEvent.seq"), `${event} must carry the growth event sequence`);
+    }
+    assert(wreckConsumption.includes("waveAmplitude: WAVE_SERVER.growthWaveAmplitude * (well.mass + 0.1)")
+      && wreckConsumption.includes("waveAmplitudeUsesGrowthMultiplier: false"),
+    "wreck consumption must preserve its existing wave amplitude");
+    assert(planetoidConsumption.includes("waveAmplitude: 0.2")
+      && planetoidConsumption.includes("waveAmplitudeUsesGrowthMultiplier: false"),
+    "planetoid consumption must preserve its existing wave amplitude");
   });
 
   const passed = runner.summary();

@@ -1,14 +1,12 @@
 import { CONFIG } from '../config.js';
+import { FABRIC } from '../content/fabric.js';
+import { resolveWellReachMultiplier, wellStrengthMass } from '../content/well-growth.js';
 import { fluidVelToWorld, worldDirectionTo, worldToFluidUV } from '../coords.js';
 import { inversePowerForce, orbitalCurrentSpeed } from '../physics.js';
 import { emptyFlowSample, normalizeFlowSample } from './flow-sample.js';
 
 function wrapUV(value) {
   return ((value % 1) + 1) % 1;
-}
-
-function effectiveWellMass(well) {
-  return (well.mass || 1) * Math.max(1, Number(well.overdriveMultiplier) || 1);
 }
 
 export class FlowField {
@@ -48,19 +46,20 @@ export class FlowField {
     for (const well of wells) {
       const dirToWell = worldDirectionTo(wx, wy, well.wx, well.wy);
       if (dirToWell.dist < 0.001) continue;
+      const reach = resolveWellReachMultiplier(well, FABRIC.wellGravity.growthReachPerMass);
       const orbital = orbitalCurrentSpeed(
         dirToWell.dist,
         wellCfg.currentStrength ?? 0.3,
-        effectiveWellMass(well),
+        wellStrengthMass(well),
         wellCfg.currentFalloff ?? wellCfg.shipPullFalloff ?? 1.5,
-        currentRange
+        currentRange * reach
       );
       const gravity = inversePowerForce(
         dirToWell.dist,
         wellCfg.shipPullStrength ?? 0.6,
-        effectiveWellMass(well),
+        wellStrengthMass(well),
         wellCfg.shipPullFalloff ?? 1.5,
-        wellRange
+        wellRange * reach
       );
       const orbitalDir = well.orbitalDir || 1;
       const tx = -dirToWell.ny * orbitalDir;
@@ -71,7 +70,7 @@ export class FlowField {
       }
       gravityX += dirToWell.nx * gravity;
       gravityY += dirToWell.ny * gravity;
-      hazard = Math.max(hazard, 1 - Math.max(0, dirToWell.dist - (well.killRadius || 0.04)) / Math.max(0.001, wellRange));
+      hazard = Math.max(hazard, 1 - Math.max(0, dirToWell.dist - (well.killRadius || 0.04)) / Math.max(0.001, wellRange * reach));
       if (orbital > bestCurrent) {
         bestCurrent = orbital;
         sourceWellId = well.name || null;

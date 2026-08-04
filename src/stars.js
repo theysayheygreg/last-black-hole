@@ -185,6 +185,7 @@ export class StarSystem {
             // 50% of star mass converts to well growth (the rest is "radiated away").
             well.mass += star.mass * 0.5;
             well.updateKillRadius();
+            well.updateReach();
             if (waveRings) {
               // 3× star mass = very large wave. This is the biggest wave event
               // in the game — a dramatic shockwave visible across the map.

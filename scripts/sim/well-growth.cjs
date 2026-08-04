@@ -1,4 +1,5 @@
 const { ANOMALY_EVENT_CONTRACTS } = require("../content/anomalies.cjs");
+const { calculateWellReachMultiplier, wellBaseMass } = require("../../src/content/well-growth.js");
 
 function finite(value, label) {
   const number = Number(value);
@@ -12,18 +13,24 @@ function nonNegative(value, label) {
   return number;
 }
 
-function calculateWellGrowth({ well, massDelta, killRadiusForMass }) {
+function calculateWellGrowth({ well, massDelta, killRadiusForMass, growthReachPerMass }) {
   if (!well || typeof well !== "object") throw new TypeError("well is required");
   if (typeof killRadiusForMass !== "function") throw new TypeError("killRadiusForMass is required");
   const delta = nonNegative(massDelta, "massDelta");
   const before = {
     mass: nonNegative(well.mass, "well.mass"),
     killRadius: nonNegative(well.killRadius, "well.killRadius"),
+    reachMultiplier: nonNegative(well.reachMultiplier ?? 1, "well.reachMultiplier"),
   };
   const afterMass = before.mass + delta;
   const after = {
     mass: afterMass,
     killRadius: nonNegative(killRadiusForMass({ ...well, mass: afterMass }), "afterKillRadius"),
+    reachMultiplier: calculateWellReachMultiplier({
+      mass: afterMass,
+      baseMass: wellBaseMass(well),
+      growthReachPerMass,
+    }),
   };
   return { before, after };
 }
@@ -60,8 +67,16 @@ function createWellGrowthEvent({
     reason: String(reason),
     sourceEntityId: sourceEntityId == null ? null : String(sourceEntityId),
     sourceEntityType: sourceEntityType == null ? null : String(sourceEntityType),
-    before: { mass: beforeMass, killRadius: nonNegative(before?.killRadius, "before.killRadius") },
-    after: { mass: afterMass, killRadius: nonNegative(after?.killRadius, "after.killRadius") },
+    before: {
+      mass: beforeMass,
+      killRadius: nonNegative(before?.killRadius, "before.killRadius"),
+      reachMultiplier: nonNegative(before?.reachMultiplier ?? 1, "before.reachMultiplier"),
+    },
+    after: {
+      mass: afterMass,
+      killRadius: nonNegative(after?.killRadius, "after.killRadius"),
+      reachMultiplier: nonNegative(after?.reachMultiplier ?? 1, "after.reachMultiplier"),
+    },
     scheduledTime: scheduledTime == null ? null : nonNegative(scheduledTime, "scheduledTime"),
     eventTime: eventAt,
     waveId: String(waveId),

@@ -221,6 +221,7 @@ export class WreckSystem {
           wreck.alive = false;
           well.mass += 0.1;
           well.updateKillRadius();
+          well.updateReach();
           if (waveRings) {
             waveRings.spawn(well.wx, well.wy, 0.5);
           }

@@ -7,6 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { FABRIC } from './content/fabric.js';
+import { calculateWellReachMultiplier, resolveWellReachMultiplier, wellStrengthMass } from './content/well-growth.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
 import { migrateCurrentWell } from './anomaly-catalog.js';
 import { effectiveWellVisualMass } from './presentation/well-wave-presentation.js';
@@ -56,7 +57,14 @@ export class Well {
     this.id = opts.id ?? null;
     this.name = generateWellName();
     this.mass = opts.mass ?? 1.0;
+    this.baseMass = opts.baseMass ?? this.mass;
     this.startMass = this.mass;  // for kill radius growth calculation
+    this.reachMultiplier = opts.reachMultiplier ?? calculateWellReachMultiplier({
+      mass: this.mass,
+      baseMass: this.baseMass,
+      growthReachPerMass: FABRIC.wellGravity.growthReachPerMass,
+    });
+    this.overdriveMultiplier = opts.overdriveMultiplier ?? 1;
     this.orbitalDir = opts.orbitalDir ?? 1;
     this.accretionRate = opts.accretionRate ?? null;
     this.accretionRadius = opts.accretionRadius ?? null;
@@ -80,6 +88,14 @@ export class Well {
   updateKillRadius() {
     const massDelta = Math.max(0, this.mass - this.startMass);
     this.killRadius = this.baseKillRadius * (1 + massDelta * CONFIG.universe.wellKillRadiusGrowth);
+  }
+
+  updateReach() {
+    this.reachMultiplier = calculateWellReachMultiplier({
+      mass: this.mass,
+      baseMass: this.baseMass,
+      growthReachPerMass: FABRIC.wellGravity.growthReachPerMass,
+    });
   }
 
   getVoidRadius() { return this.voidRadius ?? CONFIG.wells.voidRadius ?? 0.001; }
@@ -120,7 +136,7 @@ export class WellSystem {
       }
       fluid.applyWellForce(
         [fu, fv],
-        cfg.gravity * well.mass * Math.pow(s, cfg.falloff),
+        cfg.gravity * wellStrengthMass(well) * Math.pow(s, cfg.falloff),
         cfg.falloff,
         cfg.fluidClampRadius,
         cfg.orbitalStrength * well.orbitalDir,
@@ -238,13 +254,15 @@ export class WellSystem {
         return Number.isFinite(value) && value > 0 ? value : 1;
       };
       const gravityReach = multiplier('gravityReachMultiplier');
+      const growthReach = resolveWellReachMultiplier(well, FABRIC.wellGravity.growthReachPerMass);
       return [
         FABRIC.wellGravity.falloffEndRadius
           * FABRIC.wellCurrent.currentReachMultiplier
-          * multiplier('currentReachMultiplier'),
-        FABRIC.wellGravity.falloffEndRadius * gravityReach,
-        FABRIC.wellGravity.fullGravityRadius * gravityReach,
-        FABRIC.wellGravity.featherRadius * gravityReach,
+          * multiplier('currentReachMultiplier')
+          * growthReach,
+        FABRIC.wellGravity.falloffEndRadius * gravityReach * growthReach,
+        FABRIC.wellGravity.fullGravityRadius * gravityReach * growthReach,
+        FABRIC.wellGravity.featherRadius * gravityReach * growthReach,
       ];
     });
   }

@@ -116,6 +116,7 @@ export class TitleScenePresentation {
       if (well) {
         well.mass += well.growthRate;
         well.updateKillRadius();
+        well.updateReach();
         this.waveRings.spawn(
           well.wx,
           well.wy,
