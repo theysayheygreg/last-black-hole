@@ -1,5 +1,15 @@
 # v0.3 Changelog
 
+- **Well/fabric camera lock:** camera scrolling now moves the local fluid
+  texture by the same camera-relative UV displacement used by the well, Three,
+  and canvas projections. The prior source-sampling sign was inverted, so
+  accumulated fabric moved opposite to the camera while analytic well centers
+  stayed correct. The global coarse-field projection also keeps its existing
+  Y-up space instead of inverting it a second time around the camera. Shared
+  helpers cover ordinary and toroidal seam motion; gameplay and the title
+  prototype both consume them. No authority wells, forces, movement, well
+  shape, or fabric-density tuning changed.
+
 - **Selected route restart:** remote restarts now carry the Map Select route
   and preview seed through the normal authority launch handoff instead of
   reusing the previous session's map id, seed, or signature. The focused

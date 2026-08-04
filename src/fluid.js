@@ -638,9 +638,9 @@ export class FluidSim {
   }
 
   /**
-   * Translate fluid contents by (uvDx, uvDy) — used to keep world-
-   * stationary currents stable when the camera-anchored grid scrolls.
-   * Run once per frame with the camera's UV delta.
+   * Translate fluid contents by the camera-derived texture offset — used to
+   * keep world-stationary currents stable when the camera-anchored grid
+   * scrolls. Run once per frame with the shared coordinate projection.
    *
    * Texels scrolling in from outside the source range read from the
    * coarse field at the corresponding world position, which carries the
@@ -650,7 +650,7 @@ export class FluidSim {
    * visualDensity scroll with empty inflow. They're cosmetic and don't
    * carry world-scale velocity memory.
    */
-  _translateVelocity(uvDx, uvDy, camera, gridWindow, worldScale) {
+  _translateVelocity(textureOffsetU, textureOffsetV, camera, gridWindow, worldScale) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.translate);
     gl.uniform1i(u['u_source'], 0);
@@ -660,7 +660,7 @@ export class FluidSim {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.coarseField.read.tex);
     gl.uniform1i(u['u_useCoarse'], 1);
-    gl.uniform2f(u['u_delta'], uvDx, uvDy);
+    gl.uniform2f(u['u_textureOffset'], textureOffsetU, textureOffsetV);
     gl.uniform2f(u['u_camera'], camera[0], camera[1]);
     gl.uniform1f(u['u_gridWindow'], gridWindow);
     gl.uniform1f(u['u_worldScale'], worldScale);
@@ -671,7 +671,7 @@ export class FluidSim {
   // Density buffers don't have world-scale truth — they're cosmetic
   // emissions (wakes, splats). Use plain translate without coarse-field
   // inflow; leading-edge cosmetic content just arrives empty.
-  _translateBufferEmpty(buffer, uvDx, uvDy) {
+  _translateBufferEmpty(buffer, textureOffsetU, textureOffsetV) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.translate);
     gl.uniform1i(u['u_source'], 0);
@@ -681,7 +681,7 @@ export class FluidSim {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, buffer.read.tex);
     gl.uniform1i(u['u_useCoarse'], 0);
-    gl.uniform2f(u['u_delta'], uvDx, uvDy);
+    gl.uniform2f(u['u_textureOffset'], textureOffsetU, textureOffsetV);
     gl.uniform2f(u['u_camera'], 0, 0);
     gl.uniform1f(u['u_gridWindow'], 1.0);
     gl.uniform1f(u['u_worldScale'], 1.0);
@@ -689,11 +689,11 @@ export class FluidSim {
     buffer.swap();
   }
 
-  translate(uvDx, uvDy, camera, gridWindow, worldScale) {
-    if (uvDx === 0 && uvDy === 0) return;
-    this._translateVelocity(uvDx, uvDy, camera, gridWindow, worldScale);
-    this._translateBufferEmpty(this.density, uvDx, uvDy);
-    this._translateBufferEmpty(this.visualDensity, uvDx, uvDy);
+  translate(textureOffsetU, textureOffsetV, camera, gridWindow, worldScale) {
+    if (textureOffsetU === 0 && textureOffsetV === 0) return;
+    this._translateVelocity(textureOffsetU, textureOffsetV, camera, gridWindow, worldScale);
+    this._translateBufferEmpty(this.density, textureOffsetU, textureOffsetV);
+    this._translateBufferEmpty(this.visualDensity, textureOffsetU, textureOffsetV);
   }
 
   /**

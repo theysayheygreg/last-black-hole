@@ -98,6 +98,86 @@ async function run() {
     coords.setWorldScale(3);
   });
 
+  await runner.run("Camera scroll keeps world-anchored fabric at the same projected well", async () => {
+    const coords = await import("../src/coords.js");
+    const epsilon = 1e-9;
+    const assertClose = (actual, expected, label) => {
+      assert(Math.abs(actual - expected) < epsilon,
+        `${label}: expected ${expected}, got ${actual}`);
+    };
+    const assertStationaryPoint = (previousCamera, nextCamera, point, label) => {
+      coords.setFluidCamera(previousCamera[0], previousCamera[1]);
+      const before = coords.worldToFluidUV(point[0], point[1]);
+      const offset = coords.fluidTextureOffsetForCameraMove(
+        previousCamera[0], previousCamera[1], nextCamera[0], nextCamera[1],
+      );
+      coords.setFluidCamera(nextCamera[0], nextCamera[1]);
+      const after = coords.worldToFluidUV(point[0], point[1]);
+      assertClose(after[0], before[0] + offset[0], `${label} U`);
+      assertClose(after[1], before[1] + offset[1], `${label} V`);
+    };
+
+    coords.setWorldScale(25);
+    assertStationaryPoint([10.0, 10.0], [10.35, 9.72], [10.8, 9.4], "ordinary camera move");
+    assertStationaryPoint([24.9, 0.1], [0.1, 24.9], [0.2, 24.8], "toroidal seam move");
+    coords.setFluidCamera(0, 0);
+    coords.setWorldScale(3);
+
+    const fs = require("fs");
+    const mainSource = fs.readFileSync(require.resolve("../src/main.js"), "utf8");
+    const titleSource = fs.readFileSync(require.resolve("../src/render/title-prototype.js"), "utf8");
+    assert(mainSource.includes("fluidTextureOffsetForCameraMove"),
+      "Gameplay camera scroll must use the shared fluid texture projection");
+    assert(titleSource.includes("fluidTextureOffsetForCameraMove"),
+      "Title camera scroll must use the shared fluid texture projection");
+  });
+
+  await runner.run("Fabric coarse field, well center, and camera agree across offsets and seams", async () => {
+    const coords = await import("../src/coords.js");
+    const wrappedDifference = (actual, expected) => {
+      let difference = actual - expected;
+      if (difference > 0.5) difference -= 1;
+      if (difference < -0.5) difference += 1;
+      return difference;
+    };
+    const assertWrappedClose = (actual, expected, label) => {
+      assert(Math.abs(wrappedDifference(actual, expected)) < 1e-9,
+        `${label}: expected ${expected}, got ${actual}`);
+    };
+    const cases = [
+      { camera: [10.00, 10.00], well: [10.80, 9.40] },
+      { camera: [10.35, 9.72], well: [10.80, 9.40] },
+      { camera: [24.90, 0.10], well: [0.20, 24.80] },
+    ];
+
+    coords.setWorldScale(25);
+    for (const { camera, well } of cases) {
+      coords.setFluidCamera(camera[0], camera[1]);
+      const localWellUV = coords.worldToFluidUV(well[0], well[1]);
+      const restoredGlobal = coords.fluidWindowUVToGlobalFluidUV(
+        localWellUV[0], localWellUV[1], camera[0], camera[1],
+      );
+      const expectedGlobal = coords.worldToGlobalFluidUV(well[0], well[1]);
+      assertWrappedClose(restoredGlobal[0], expectedGlobal[0], "well U");
+      assertWrappedClose(restoredGlobal[1], expectedGlobal[1], "well V");
+
+      // This is the retired shader mapping: its second Y inversion reflects
+      // a well about the camera and must fail whenever they differ in Y.
+      const cameraGlobal = coords.worldToGlobalFluidUV(camera[0], camera[1]);
+      const legacyMirroredV = ((cameraGlobal[1]
+        - (localWellUV[1] - 0.5) * coords.GRID_WINDOW / coords.WORLD_SCALE) % 1 + 1) % 1;
+      assert(Math.abs(wrappedDifference(legacyMirroredV, expectedGlobal[1])) > 1e-3,
+        "The retired coarse-field Y mapping unexpectedly aligned away from the camera center");
+    }
+    coords.setFluidCamera(0, 0);
+    coords.setWorldScale(3);
+
+    const fs = require("fs");
+    const shader = fs.readFileSync(require.resolve("../src/render/shaders/fluid.glsl.js"), "utf8");
+    assert(shader.includes("* vec2(1.0, 1.0));"),
+      "Fluid display coarse-field projection must preserve its shared Y-up coordinate space");
+  });
+
   await startServer();
 
   let browser, page, errors;

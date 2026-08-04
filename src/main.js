@@ -113,9 +113,9 @@ import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { DEFAULT_PLAYABLE_MAP, MAP_LIST, PLAYABLE_MAPS } from './maps/playable-map-loader.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
-import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldYToFluidTextureV, worldToScreen, screenToWorld,
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToGlobalFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
-         setFluidCamera, getFluidCamera } from './coords.js';
+         setFluidCamera, getFluidCamera, fluidTextureOffsetForCameraMove } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { getMapDurationSeconds } from './content/map-scales.js';
@@ -4829,17 +4829,12 @@ function gameLoop(now) {
   //     inflow; it never regenerates a client-side well baseline.
   if (fluid) {
     const [prevFcamX, prevFcamY] = getFluidCamera();
-
-    let dCamX = camX - prevFcamX;
-    let dCamY = camY - prevFcamY;
-    const half = WORLD_SCALE / 2;
-    if (dCamX > half) dCamX -= WORLD_SCALE;
-    if (dCamX < -half) dCamX += WORLD_SCALE;
-    if (dCamY > half) dCamY -= WORLD_SCALE;
-    if (dCamY < -half) dCamY += WORLD_SCALE;
-    if (dCamX !== 0 || dCamY !== 0) {
+    const [textureOffsetU, textureOffsetV] = fluidTextureOffsetForCameraMove(
+      prevFcamX, prevFcamY, camX, camY,
+    );
+    if (textureOffsetU !== 0 || textureOffsetV !== 0) {
       fluid.translate(
-        dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW,
+        textureOffsetU, textureOffsetV,
         [camX, camY], GRID_WINDOW, WORLD_SCALE,
       );
       setFluidCamera(camX, camY);
@@ -4936,7 +4931,7 @@ function gameLoop(now) {
         .filter(Boolean),
       camFU, camFV,
       worldScale: WORLD_SCALE,
-      worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],
+      worldCameraUV: worldToGlobalFluidUV(camX, camY),
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,
       viewAspect,

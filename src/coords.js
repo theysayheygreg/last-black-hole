@@ -106,6 +106,22 @@ export function getFluidCamera() {
   return [_fluidCameraX, _fluidCameraY];
 }
 
+/**
+ * Return the UV displacement a world-anchored fluid texture needs when its
+ * camera window moves from `previous` to `next`.
+ *
+ * `FluidSim.translate()` samples `source = output - textureOffset`, so this
+ * is the *new minus old* camera-relative fluid position of a stationary world
+ * point. Keeping that sign here prevents the texture from drifting opposite
+ * the well, Three, and canvas projections as the camera follows the ship.
+ */
+export function fluidTextureOffsetForCameraMove(previousX, previousY, nextX, nextY, gridWindow = GRID_WINDOW) {
+  const span = Math.max(0.001, Number.isFinite(gridWindow) ? gridWindow : GRID_WINDOW);
+  const [worldDX, worldDY] = worldDisplacement(previousX, previousY, nextX, nextY);
+  // World X maps directly to fluid U; world Y-down maps inversely to fluid V.
+  return [-worldDX / span, worldDY / span];
+}
+
 // ---- World <-> Fluid UV ----
 
 /**
@@ -154,6 +170,35 @@ export function fluidUVToWorld(fu, fv) {
 /** Convert normalized world Y (top-left, down) to texture V (bottom-left, up). */
 export function worldYToFluidTextureV(worldY) {
   return 1 - worldY;
+}
+
+/**
+ * Convert a world point into the globally anchored coarse-field UV space.
+ * Both components use the GPU's Y-up convention and wrap into [0, 1), so this
+ * is safe to compare with the shader's `fract()`-wrapped fluid positions.
+ */
+export function worldToGlobalFluidUV(wx, wy) {
+  const scale = Math.max(0.001, WORLD_SCALE);
+  const x = wrapWorld(wx) / scale;
+  const y = worldYToFluidTextureV(wrapWorld(wy) / scale);
+  return [((x % 1) + 1) % 1, ((y % 1) + 1) % 1];
+}
+
+/**
+ * Restore a camera-window fluid UV to globally anchored coarse-field UV.
+ * This mirrors the shader bridge from a local well uniform to its global
+ * position, including the one Y-down-world to Y-up-fluid conversion already
+ * embodied by `worldToFluidUV()`.
+ */
+export function fluidWindowUVToGlobalFluidUV(fluidU, fluidV, cameraX, cameraY, gridWindow = GRID_WINDOW) {
+  const span = Math.max(0.001, Number.isFinite(gridWindow) ? gridWindow : GRID_WINDOW);
+  const [cameraU, cameraV] = worldToGlobalFluidUV(cameraX, cameraY);
+  const offsetU = (Number(fluidU) - 0.5) * span / WORLD_SCALE;
+  const offsetV = (Number(fluidV) - 0.5) * span / WORLD_SCALE;
+  return [
+    ((cameraU + offsetU) % 1 + 1) % 1,
+    ((cameraV + offsetV) % 1 + 1) % 1,
+  ];
 }
 
 // ---- World <-> Screen ----

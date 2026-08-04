@@ -314,8 +314,10 @@ void main() {
   // Rich but bounded world-anchored corridors. The coarse texture is the
   // accepted remote current; local velocity is only a fallback for title or
   // legacy sandbox views where no authority texture exists.
+  // v_uv and u_worldCamera are both fluid Y-up. A second Y flip here would
+  // mirror the coarse fabric around the camera and detach it from well centers.
   vec2 coarseUV = fract(u_worldCamera + (v_uv - vec2(0.5))
-    * (u_cameraView / u_worldScale) * vec2(1.0, -1.0));
+    * (u_cameraView / u_worldScale) * vec2(1.0, 1.0));
   float screenAspect = max(0.5, u_viewAspect);
   // Filter at a bounded camera-relative footprint. This remains one broad
   // planning direction, but it is no longer a single camera-center sample.
@@ -677,12 +679,13 @@ void main() {
   fragColor = u_clearValue;
 }`;
 
-// Translate the source texture by u_delta (in UV) and write to the
-// target. The grid is camera-anchored; when the camera moves we shift
-// existing fluid contents by the camera's UV delta so currents stay
-// world-stationary. Texels that scroll in from outside the source
-// range read from the coarse field, which carries remembered world flow
-// plus a well-driven baseline.
+// Translate a source texture by u_textureOffset (in UV) and write to the
+// target. The grid is camera-anchored; coords.js supplies the new-minus-old
+// fluid position of a world-stationary point. Because we sample
+// `source = output - offset`, that sign keeps fluid history attached to the
+// same wells as the camera moves. Texels that scroll in from outside the
+// source range read the coarse field, which carries remembered world flow plus
+// a well-driven baseline.
 //
 // World position from grid v_uv:
 //   worldPos = (camera) + (v_uv - 0.5) * gridWindow
@@ -692,7 +695,7 @@ precision highp float;
 uniform sampler2D u_source;
 uniform sampler2D u_coarse;
 uniform int u_useCoarse;
-uniform vec2 u_delta;
+uniform vec2 u_textureOffset;
 uniform vec2 u_camera;        // camera world position
 uniform float u_gridWindow;
 uniform float u_worldScale;
@@ -700,7 +703,7 @@ in vec2 v_uv;
 out vec4 fragColor;
 ${GLSL_COORDS}
 void main() {
-  vec2 src = v_uv - u_delta;
+  vec2 src = v_uv - u_textureOffset;
   if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
     if (u_useCoarse == 0) {
       fragColor = vec4(0.0);

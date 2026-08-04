@@ -94,7 +94,7 @@ async function run() {
     assert(fluid.includes('this.coarseField.read.tex'));
     assert(pass.includes('ctx.worldCameraUV'));
     assert(pass.includes('ctx.worldScale'));
-    assert(main.includes('worldCameraUV: [camX / WORLD_SCALE'));
+    assert(main.includes('worldCameraUV: worldToGlobalFluidUV(camX, camY)'));
   });
 
   const allPassed = runner.summary();

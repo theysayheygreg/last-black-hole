@@ -33,8 +33,8 @@ import { FluidSim } from '../fluid.js';
 import { WellSystem } from '../wells.js';
 import { PlanetoidSystem } from '../planetoids.js';
 import { applySceneOverrides } from '../scene-config.js';
-import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldToFluidUV, worldYToFluidTextureV, setWorldScale,
-         setFluidCamera, getFluidCamera } from '../coords.js';
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldToFluidUV, worldToGlobalFluidUV, setWorldScale,
+         setFluidCamera, getFluidCamera, fluidTextureOffsetForCameraMove } from '../coords.js';
 import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
 import { Composer } from './composer.js';
@@ -305,11 +305,12 @@ function frame(now) {
   // --- Sync fluid camera. Offline title retains its existing local well flow. ---
   {
     const [prevFcamX, prevFcamY] = getFluidCamera();
-    const dCamX = camX - prevFcamX;
-    const dCamY = camY - prevFcamY;
-    if (dCamX !== 0 || dCamY !== 0) {
+    const [textureOffsetU, textureOffsetV] = fluidTextureOffsetForCameraMove(
+      prevFcamX, prevFcamY, camX, camY,
+    );
+    if (textureOffsetU !== 0 || textureOffsetV !== 0) {
       fluid.translate(
-        dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW,
+        textureOffsetU, textureOffsetV,
         [camX, camY], GRID_WINDOW, WORLD_SCALE,
       );
       setFluidCamera(camX, camY);
@@ -330,7 +331,7 @@ function frame(now) {
       wellUVs, wellMasses, wellShapes, wellProfiles,
       camFU, camFV,
       worldScale: WORLD_SCALE,
-      worldCameraUV: [camX / WORLD_SCALE, worldYToFluidTextureV(camY / WORLD_SCALE)],
+      worldCameraUV: worldToGlobalFluidUV(camX, camY),
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,
       viewAspect,
