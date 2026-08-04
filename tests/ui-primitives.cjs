@@ -128,7 +128,7 @@ async function run() {
       'Expected shared canvas font usage');
   });
 
-  await runner.run('Command buttons separate action labels from input prompts', async () => {
+  await runner.run('Command buttons omit uncaptained support chips', async () => {
     const ctx = createRecordingContext();
     mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', {
       action: { actionId: 'confirm', inputFamily: 'keyboard', glyphKind: 'keycap', fallbackLabel: 'Space' },
@@ -136,7 +136,7 @@ async function run() {
     const labels = ctx.calls.filter((call) => call[0] === 'fillText');
     const action = labels.find((call) => call[1] === 'CONTINUE');
     assert(action, 'Expected clean button action label');
-    assert(ctx.calls.some((call) => call[0] === 'arcTo' || (call[0] === 'rect' && call[3] >= 24)), 'Expected a drawn keycap glyph below the button');
+    assert(!labels.some((call) => call[1] === 'Space'), 'Captionless command support emitted an orphan keycap');
     assert(!labels.some((call) => call[1] === 'SPACE CONTINUE'), 'Input prompt must be graphical, not plain fused text');
   });
 
@@ -154,6 +154,16 @@ async function run() {
     mod.drawActionPrompt(keyboardContext, { x: 20, y: 10, w: 150, h: 28 }, keyboardDescriptor, { verb: 'launch when ready' });
     const keyboardLabels = keyboardContext.calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
     assert(keyboardLabels.includes('Q/E'), 'Keyboard prompt must keep the shared descriptor label');
+
+    const duplicateContext = createRecordingContext();
+    const backDescriptor = prompts.actionDescriptor('back', { mode: 'keyboard' });
+    const result = mod.drawActionPrompt(duplicateContext, { x: 20, y: 10, w: 150, h: 28 }, backDescriptor, { verb: 'back' });
+    const duplicateLabels = duplicateContext.calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
+    assert(result.copy && duplicateLabels.includes('ESC') && duplicateLabels.includes('BACK'), 'Same-word action lost its explicit caption');
+
+    const blankContext = createRecordingContext();
+    const blank = mod.drawActionPrompt(blankContext, { x: 20, y: 10, w: 150, h: 28 }, backDescriptor);
+    assert(blank.glyph === null && !blankContext.calls.some((call) => call[0] === 'fillText'), 'Blank action prompt emitted a glyph');
   });
 
   const allPassed = runner.summary();

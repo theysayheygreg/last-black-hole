@@ -251,6 +251,31 @@ export function profileSurfaceLayout(width, height, footerActions = []) {
   };
 }
 
+export function interruptSurfaceLayout(width, height, kind = 'pause', footerActions = []) {
+  const w = Math.max(1, Number(width) || 1);
+  const h = Math.max(1, Number(height) || 1);
+  const isPause = kind === 'pause';
+  const panelW = Math.min(560, Math.max(1, w - 48));
+  const targetH = isPause ? 400 : 300;
+  const panelH = Math.min(targetH, Math.max(1, Math.min(h - 48, h * 0.75)));
+  const panel = rect((w - panelW) / 2, (h - panelH) / 2, panelW, panelH);
+  const pad = UI_DECK_GEOMETRY.panel.paddingX;
+  const innerX = panel.x + pad;
+  const innerW = panel.w - pad * 2;
+  const footer = measuredPanelFooter(panel, footerActions, UI_DECK_GEOMETRY.panel.gap);
+  const heading = rect(innerX, panel.y + 24, innerW, UI_DECK_GEOMETRY.heading.minHeight);
+  const status = rect(innerX, heading.y + heading.h + UI_DECK_GEOMETRY.separation, innerW, isPause ? 48 : 78);
+  const rows = isPause
+    ? Array.from({ length: 2 }, (_, index) => rect(
+      innerX,
+      status.y + status.h + UI_DECK_GEOMETRY.panel.gap + index * (UI_DECK_GEOMETRY.listRow.minHeight + UI_DECK_GEOMETRY.panel.gap),
+      innerW,
+      UI_DECK_GEOMETRY.listRow.minHeight,
+    ))
+    : [];
+  return { panel, pad, heading, status, rows, footer };
+}
+
 export function titleSurfaceLayout(width, height, layout = 'left') {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);

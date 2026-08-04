@@ -200,6 +200,23 @@ export function hideHUD() {
   if (_warningsEl) _warningsEl.replaceChildren();
 }
 
+export function projectHUDPhase(phase) {
+  if (phase === 'playing') return 'shown';
+  if (phase === 'dead' || phase === 'escaped') return 'terminal';
+  return 'hidden';
+}
+
+let _presentedHudPhase = null;
+
+export function syncHUDPhase(phase) {
+  const presentation = projectHUDPhase(phase);
+  if (_presentedHudPhase === phase) return presentation;
+  _presentedHudPhase = phase;
+  if (presentation === 'shown') showHUD();
+  else if (presentation === 'hidden') hideHUD();
+  return presentation;
+}
+
 function applyRect(el, bounds) {
   if (!el || !bounds) return;
   el.style.left = `${Math.round(bounds.x)}px`;

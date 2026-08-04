@@ -13,10 +13,6 @@ const SHOULDER_LABELS = new Set(['L1', 'R1', 'L1/R1']);
 const TRIGGER_LABELS = new Set(['L2', 'R2']);
 const SYSTEM_LABELS = new Set(['View', 'Menu']);
 
-function normalized(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
 function glyphKindFor(label, family) {
   if (family === INPUT_FAMILIES.KEYBOARD) return 'keycap';
   if (FACE_LABELS.has(label)) return 'face';
@@ -106,11 +102,8 @@ export function actionGlyphMarkup(descriptor) {
 export function actionCaptionMarkup(action, verb = '', options = {}) {
   const descriptor = actionDescriptor(action, options);
   const copy = String(verb || '').trim();
-  const duplicate = copy && (
-    normalized(copy) === normalized(descriptor.actionId)
-    || normalized(copy) === normalized(descriptor.fallbackLabel)
-  );
-  return `${actionGlyphMarkup(descriptor)}${copy && !duplicate ? ` <span class="ui-action-copy">${escapeMarkup(copy)}</span>` : ''}`;
+  if (!copy) return '';
+  return `${actionGlyphMarkup(descriptor)} <span class="ui-action-copy">${escapeMarkup(copy)}</span>`;
 }
 
 export function ctaLabel(action, label, options = {}) {

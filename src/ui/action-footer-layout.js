@@ -1,13 +1,14 @@
 import { UI_DECK_GEOMETRY } from './design-tokens.js';
 
-function promptWidth(entry, gap) {
+export function normalizeActionPrompt(entry) {
   const descriptor = entry?.descriptor || entry;
-  const verb = String(entry?.verb || '').trim().toLowerCase();
-  const duplicate = verb === String(descriptor?.actionId || '').toLowerCase()
-    || verb === String(descriptor?.fallbackLabel || '').trim().toLowerCase();
-  const copyWidth = verb && !duplicate
-    ? UI_DECK_GEOMETRY.actionGlyph.gap + verb.length * 8
-    : 0;
+  const verb = String(entry?.verb || '').trim();
+  if (!descriptor || !String(descriptor.fallbackLabel || '').trim() || !verb) return null;
+  return { descriptor, verb };
+}
+
+function promptWidth(entry, gap) {
+  const copyWidth = UI_DECK_GEOMETRY.actionGlyph.gap + entry.verb.length * 8;
   return Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth,
     UI_DECK_GEOMETRY.actionGlyph.minWidth + copyWidth) + gap;
 }
@@ -27,13 +28,15 @@ export function measureActionFooter(actions, {
   let top = 0;
   let rowCount = 0;
   for (const entry of Array.isArray(actions) ? actions : []) {
-    const width = promptWidth(entry, gap);
+    const prompt = normalizeActionPrompt(entry);
+    if (!prompt) continue;
+    const width = promptWidth(prompt, gap);
     if (cursor > 0 && cursor + width > maxWidth) {
       cursor = 0;
       top += lineHeight;
     }
     if (cursor === 0) rowCount += 1;
-    placed.push({ descriptor: entry?.descriptor || entry, verb: entry?.verb || '', x: cursor, y: top, w: width });
+    placed.push({ ...prompt, x: cursor, y: top, w: width });
     cursor += width;
   }
   const contentHeight = placed.length > 0 ? top + UI_DECK_GEOMETRY.actionGlyph.minHeight : 0;

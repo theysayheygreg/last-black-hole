@@ -47,7 +47,7 @@ import { initDevPanel } from './dev-panel.js';
 import { initBenchUi } from './bench/ui.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor,
-         getSlingshotInteractionState, isExfilPortal, clearHUDForTerminal } from './hud.js';
+         getSlingshotInteractionState, isExfilPortal, clearHUDForTerminal, syncHUDPhase } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -175,9 +175,10 @@ import {
 } from './ui/motion.js';
 import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
 import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
-import { deckPanelLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
+import { deckPanelLayout, interruptSurfaceLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
 import { formatHullStats, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
 import { measureActionFooter } from './ui/action-footer-layout.js';
+import { pauseAbandonIntent } from './ui/pause-presentation.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
 
@@ -1782,6 +1783,18 @@ function transitionToTitle() {
   triggerTransition(() => loadTitleScene());
 }
 
+function abandonPausedRunToTitle() {
+  if (pauseAbandonIntent({ remoteActive: remoteSession.active }) === 'return-title') {
+    transitionToTitle();
+    return;
+  }
+  triggerTransition(() => {
+    void leaveRemoteSessionToHome().catch((error) => {
+      console.error('[LBH] remote abandon failed:', error);
+    }).finally(() => loadTitleScene());
+  });
+}
+
 /**
  * Start a game on a specific map. Called from map select.
  */
@@ -2967,7 +2980,8 @@ let _prevConsumable2 = false;
 let _prevSlingshot = false;
 let _prevSeedReroll = false;
 let _prevPortalCount = -1;
-let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
+let pauseMenuSelection = 0;  // 0 = return to game, 1 = abandon run
+let pauseAbandonConfirm = false;
 
 function neutralizeRemoteAuthorityInput() {
   if (!remoteSession.active || !simClient?.enabled || remoteSession.pauseNeutralizationInFlight) return;
@@ -3138,8 +3152,10 @@ function togglePause() {
     gamePhase = 'paused';
     audioRouter?.setPhase('paused');
     pauseMenuSelection = 0;  // default to "return to game"
+    pauseAbandonConfirm = false;
     ship.setThrust(false);
   } else if (gamePhase === 'paused') {
+    pauseAbandonConfirm = false;
     resumeFromPause();
   }
 }
@@ -3147,14 +3163,6 @@ function togglePause() {
 // ---- Consumable effect dispatch ----
 
 // ---- Terminal UI helpers ----
-
-/** Draw subtle scanline overlay on menu/terminal screens */
-function drawScanlines(ctx, w, h, alpha = 0.04) {
-  ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-  for (let y = 0; y < h; y += 3) {
-    ctx.fillRect(0, y, w, 1);
-  }
-}
 
 function titleLoopTime(time) {
   return ((time % TITLE_ATTRACT_LOOP_SECONDS) + TITLE_ATTRACT_LOOP_SECONDS) % TITLE_ATTRACT_LOOP_SECONDS;
@@ -4767,7 +4775,10 @@ function gameLoop(now) {
   } else {
     // --- Paused input ---
     // Circle/back = resume game (not quit)
-    if (backNow && !_prevBack) togglePause();
+    if (backNow && !_prevBack) {
+      pauseAbandonConfirm = false;
+      togglePause();
+    }
     // Start/options = also resume
     if (pauseNow && !_prevPause) togglePause();
     // Navigate menu
@@ -4776,9 +4787,13 @@ function gameLoop(now) {
     // Confirm selection
     if (confirmNow && !_prevConfirm) {
       if (pauseMenuSelection === 0) {
+        pauseAbandonConfirm = false;
         togglePause();  // return to game
+      } else if (!pauseAbandonConfirm) {
+        pauseAbandonConfirm = true;
       } else if (!transitionActive) {
-        transitionToTitle();
+        pauseAbandonConfirm = false;
+        abandonPausedRunToTitle();
       }
     }
   }
@@ -5530,7 +5545,7 @@ function gameLoop(now) {
           : null,
       }),
     );
-    updateHUD(simState.runElapsedTime, portalSystem, cargoItems,
+    if (gamePhase === 'playing') updateHUD(simState.runElapsedTime, portalSystem, cargoItems,
       remoteSession.active ? (remoteSession.snapshot?.world?.growthTimer ?? 0) : simState.growthTimer, {
       terminal: gamePhase === 'dead' || gamePhase === 'escaped' || authoritativePlayer?.status === 'escaped'
         || authoritativePlayer?.status === 'dead' || ship.status === 'dead',
@@ -5567,9 +5582,9 @@ function gameLoop(now) {
     });
   }
 
-  // Show/hide HUD based on phase
-  if (inMenu) hideHUD();
-  else if (gamePhase === 'playing') showHUD();
+  // One idempotent owner covers every non-terminal phase, including pause and
+  // direct recovery paths. Results retain their accepted terminal fade.
+  syncHUDPhase(gamePhase);
 
   rulerOverlayStats = drawRulerOverlay(ctx, {
     presentation,
@@ -5759,7 +5774,7 @@ function gameLoop(now) {
     const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.fillStyle = 'rgba(0, 2, 12, 0.80)';
     ctx.fillRect(0, 0, w, h);
-    drawScanlines(ctx, w, h);
+    drawUiScanlines(ctx, w, h, currentUiMotionSettings().reducedMotion ? 0 : 0.025, 4);
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
@@ -6691,14 +6706,18 @@ function gameLoop(now) {
 
   // === PAUSE MENU ===
   if (!rendererFixtureActive && gamePhase === 'paused') {
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
-
     const w = overlayCanvas.width, h = overlayCanvas.height;
+    const pauseActions = [
+      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'select' },
+      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'confirm' },
+      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'resume' },
+    ];
+    const surface = interruptSurfaceLayout(w, h, 'pause', pauseActions);
+    const cx = surface.panel.x + surface.panel.w / 2;
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.64)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.82)';
     ctx.fillRect(0, 0, w, h);
-    drawScanlines(ctx, w, h, 0.03);
+    drawUiScanlines(ctx, w, h, currentUiMotionSettings().reducedMotion ? 0 : 0.025, 4);
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
@@ -6708,9 +6727,7 @@ function gameLoop(now) {
       duration: motion.windowDuration,
       reducedMotion: motion.reducedMotion,
     });
-    const focusPulse = uiFocusPulseAmount();
-    const pausePanelRect = { x: cx - 210, y: cy - 170, w: 420, h: 300 };
-    drawTerminalWindow(ctx, pausePanelRect, {
+    drawTerminalWindow(ctx, surface.panel, {
       state: windowState,
       origin: 'top-left',
       role: 'flow',
@@ -6720,95 +6737,93 @@ function gameLoop(now) {
     });
     ctx.globalAlpha *= windowState.content;
 
-    // Title
-    ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
+    ctx.fillStyle = roleColor(pauseAbandonConfirm ? 'danger' : 'flow', 0.95);
     ctx.font = canvasFont(28, { role: 'display', weight: '700' });
-    ctx.fillText('PAUSED', cx, cy - 130);
+    ctx.fillText(pauseAbandonConfirm ? 'ABANDON RUN?' : 'PAUSED', cx, surface.heading.y + 29);
 
     const awaySeconds = pauseResumeState.enteredAt == null
       ? 0
       : Math.max(0, (performance.now() - pauseResumeState.enteredAt) / 1000);
     const remotePause = remoteSession.active;
-    ctx.fillStyle = remotePause ? 'rgba(157, 252, 255, 0.96)' : 'rgba(255, 217, 102, 0.92)';
+    ctx.fillStyle = roleColor(pauseAbandonConfirm ? 'danger' : remotePause ? 'flow' : 'text', 0.96);
     ctx.font = canvasFont(14, { weight: '700' });
-    ctx.fillText(remotePause ? 'WORLD CONTINUES' : 'WORLD HOLDS', cx, cy - 91);
-    ctx.fillStyle = 'rgba(150, 175, 195, 0.72)';
+    ctx.fillText(
+      pauseAbandonConfirm ? 'LEAVE THIS CYCLE?' : remotePause ? 'THE WORLD CONTINUES' : 'SIMULATION HELD',
+      cx,
+      surface.status.y + 16,
+    );
+    ctx.fillStyle = roleColor('muted', 0.78);
     ctx.font = canvasFont(11);
-    const status = remotePause
-      ? `link ${remoteSession.health?.ok === false ? 'lost' : 'stable'} // cycle ${remoteSession.snapshot?.session?.status || 'unknown'}`
-      : 'solo cycle held while you are away';
-    ctx.fillText(fitUiText(ctx, status, pausePanelRect.w - 36), cx, cy - 72);
-    if (remotePause) {
-      ctx.fillText(`run ${simState.runElapsedTime.toFixed(1)}s // away ${awaySeconds.toFixed(1)}s`, cx, cy - 56);
-    }
+    const status = pauseAbandonConfirm
+      ? 'confirm abandon run or return to resume'
+      : remotePause
+        ? `connection ${remoteSession.health?.ok === false ? 'lost' : 'stable'} · away ${awaySeconds.toFixed(1)}s`
+        : '';
+    if (status) ctx.fillText(fitUiText(ctx, status, surface.status.w), cx, surface.status.y + 38);
 
-    // Menu buttons
-    const buttons = ['return to game', 'exit to title'];
+    const buttons = ['return to game', 'abandon run'];
     for (let i = 0; i < buttons.length; i++) {
-      const y = cy - 18 + i * 44;
+      const row = surface.rows[i];
       const selected = i === pauseMenuSelection;
-
-      if (selected) {
-        ctx.fillStyle = `rgba(60, 80, 140, ${(0.3 + 0.1 * focusPulse).toFixed(3)})`;
-        ctx.fillRect(cx - 150, y - 16, 300, 34);
-        ctx.strokeStyle = `rgba(100, 150, 255, ${(0.5 + 0.22 * focusPulse).toFixed(3)})`;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(cx - 150, y - 16, 300, 34);
-      }
-
-      ctx.fillStyle = selected ? 'rgba(240, 245, 255, 1)' : 'rgba(160, 170, 195, 0.65)';
+      drawSelectedRow(ctx, row, {
+        role: pauseAbandonConfirm && i === 1 ? 'danger' : 'flow',
+        active: selected,
+        alpha: selected ? 1 : 0.58,
+        fillAlpha: 0.14,
+        borderAlpha: 0.68,
+        railWidth: 2,
+      });
+      ctx.fillStyle = roleColor(selected ? 'text' : 'muted', selected ? 1 : 0.72);
       ctx.font = selected ? canvasFont(18, { weight: 'bold' }) : canvasFont(16);
-      ctx.fillText(buttons[i], cx, y + 6);
+      ctx.fillText(buttons[i], cx, row.y + row.h / 2 + 6);
     }
 
-    // Signature stays secondary to live authority status.
-    if (currentSignature && !remotePause) {
-      ctx.fillStyle = 'rgba(140, 170, 190, 0.7)';
-      ctx.font = canvasFont(12);
-      ctx.fillText(currentSignature.name, cx, cy + 55);
-      ctx.fillStyle = 'rgba(120, 150, 170, 0.5)';
-      ctx.font = canvasFont(10);
-      ctx.fillText(currentSignature.mechanical, cx, cy + 72);
-    }
-
-    drawActionFooter(ctx, cx - 130, cy + 104, [
-      { descriptor: actionDescriptor('select', currentPromptOptions()), verb: 'select' },
-      { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'confirm' },
-      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'resume' },
-    ], { alpha: 0.78, gap: 12 });
+    drawActionFooter(ctx, surface.footer.drawX, surface.footer.drawY, pauseActions, {
+      alpha: 0.78,
+      gap: UI_DECK_GEOMETRY.panel.gap,
+      maxWidth: surface.footer.contentWidth,
+    });
 
     ctx.restore();
   }
 
   if (!rendererFixtureActive && gamePhase === 'recovery') {
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
+    const recoveryActions = [
+      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'return to the deck' },
+    ];
+    const surface = interruptSurfaceLayout(overlayCanvas.width, overlayCanvas.height, 'recovery', recoveryActions);
+    const cx = surface.panel.x + surface.panel.w / 2;
     const motion = currentUiMotionSettings();
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.78)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.84)';
     ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    drawTerminalWindow(ctx, { x: cx - 210, y: cy - 116, w: 420, h: 232 }, {
+    drawUiScanlines(ctx, overlayCanvas.width, overlayCanvas.height, motion.reducedMotion ? 0 : 0.025, 4);
+    drawTerminalWindow(ctx, surface.panel, {
       state: sampleTerminalWindow(uiMotionTimer, {
         duration: motion.windowDuration,
         reducedMotion: motion.reducedMotion,
       }),
       origin: 'top-left',
-      role: 'salvage',
+      role: 'flow',
       fillAlpha: 0.92,
       borderAlpha: 0.42,
       cornerLength: 34,
     });
     ctx.textAlign = 'center';
-    ctx.fillStyle = roleColor('salvage', 0.96);
-    ctx.font = canvasFont(25, { role: 'display', weight: '700' });
-    ctx.fillText('AUTHORITY RECOVERY', cx, cy - 52);
+    ctx.fillStyle = roleColor('text', 0.96);
+    ctx.font = canvasFont(28, { role: 'display', weight: '700' });
+    ctx.fillText('SIGNAL LOST', cx, surface.heading.y + 29);
     ctx.fillStyle = roleColor('muted', 0.84);
-    ctx.font = canvasFont(13);
-    ctx.fillText('CURRENT RUN IS NO LONGER AVAILABLE', cx, cy - 20);
-    ctx.fillText('RETURN TO THE HOME SURFACE TO RECONNECT', cx, cy + 4);
-    drawActionFooter(ctx, cx - 105, cy + 70, [
-      { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back' },
-    ], { alpha: 0.82 });
+    ctx.font = canvasFont(15);
+    ctx.fillText('this cycle is beyond reach', cx, surface.status.y + 22);
+    ctx.font = canvasFont(12);
+    ctx.fillText('cycle record syncs on reconnect', cx, surface.status.y + 50);
+    drawActionFooter(ctx, surface.footer.drawX, surface.footer.drawY, recoveryActions, {
+      alpha: 0.82,
+      gap: UI_DECK_GEOMETRY.panel.gap,
+      maxWidth: surface.footer.contentWidth,
+      backingRole: 'flow',
+    });
     ctx.restore();
   }
 

@@ -7,7 +7,7 @@ import {
   UI_TYPOGRAPHY,
 } from './design-tokens.js';
 import { canvasFont } from './typography.js';
-import { measureActionFooter } from './action-footer-layout.js';
+import { measureActionFooter, normalizeActionPrompt } from './action-footer-layout.js';
 import { applyCanvasTextShadow, drawGeneratedFrame } from './asset-kit.js';
 
 const ROLE_COLORS = {
@@ -311,19 +311,16 @@ export function drawActionGlyph(ctx, descriptor, rect, { alpha = 1, color = null
   return { x, y, w: size, h: size };
 }
 
-export function drawActionPrompt(ctx, rect, descriptor, { verb = '', actionLabel = '', alpha = 1, color = null } = {}) {
+export function drawActionPrompt(ctx, rect, descriptor, { verb = '', alpha = 1, color = null } = {}) {
+  const prompt = normalizeActionPrompt({ descriptor, verb });
+  if (!prompt) return { glyph: null, copy: false };
   const source = normalizeRect(rect);
   const minGlyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight);
   const glyphSize = Math.max(minGlyphSize, Math.min(32, source.h));
   const glyphRect = { x: source.x, y: source.y, w: glyphSize, h: source.h };
-  const copy = String(verb || '').trim();
-  const sameAction = copy && (
-    copy.toLowerCase() === String(descriptor?.actionId || '').toLowerCase()
-    || copy.toLowerCase() === String(descriptor?.fallbackLabel || '').toLowerCase()
-    || copy.toLowerCase() === String(actionLabel || '').trim().toLowerCase()
-  );
-  drawActionGlyph(ctx, descriptor, glyphRect, { alpha, color });
-  if (copy && !sameAction) {
+  const copy = prompt.verb;
+  drawActionGlyph(ctx, prompt.descriptor, glyphRect, { alpha, color });
+  if (copy) {
     ctx.save();
     ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall, { weight: '700' });
     ctx.textAlign = 'left';
@@ -332,7 +329,7 @@ export function drawActionPrompt(ctx, rect, descriptor, { verb = '', actionLabel
     ctx.fillText(copy.toUpperCase(), source.x + glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap, source.y + source.h / 2);
     ctx.restore();
   }
-  return { glyph: { x: glyphRect.x, y: glyphRect.y, w: glyphSize, h: glyphSize }, copy: !sameAction && Boolean(copy) };
+  return { glyph: { x: glyphRect.x, y: glyphRect.y, w: glyphSize, h: glyphSize }, copy: true };
 }
 
 export function drawActionFooter(ctx, x, y, actions, {
@@ -403,15 +400,15 @@ export function drawCommandButton(ctx, rect, label, {
   ctx.fillStyle = textColor ? withAlpha(textColor, a) : roleColor(disabled ? 'muted' : 'text', a);
   ctx.fillText(fitUiText(ctx, labelText.toUpperCase(), r.w - UI_DECK_GEOMETRY.button.paddingX * 2), r.x + r.w / 2, r.y + r.h / 2);
 
-  // The action face owns the verb. The supporting affordance is a drawn glyph
-  // and only adds copy when it is not the same verb again.
+  // A command slab already owns its verb. Only render a supporting affordance
+  // when the caller supplies an explicit, captioned prompt.
   if (action) {
     drawActionPrompt(ctx, {
       x: r.x + UI_DECK_GEOMETRY.button.paddingX,
       y: r.y + r.h + UI_DECK_GEOMETRY.button.gap,
       w: r.w - UI_DECK_GEOMETRY.button.paddingX * 2,
       h: UI_DECK_GEOMETRY.actionGlyph.minHeight,
-    }, action, { verb: promptText, actionLabel: labelText, alpha: 0.78 * a, color: roleColor(buttonRole) });
+    }, action, { verb: promptText, alpha: 0.78 * a, color: roleColor(buttonRole) });
   }
   ctx.restore();
 }

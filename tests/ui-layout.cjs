@@ -6,6 +6,8 @@ const assert = require('assert');
   const footerLayout = await import('../src/ui/action-footer-layout.js');
   const layout = await import('../src/ui/layout-contract.js');
   const primitives = await import('../src/ui/canvas-primitives.js');
+  const hudModule = await import('../src/hud.js');
+  const pausePresentation = await import('../src/ui/pause-presentation.js');
   const loadout = await import('../src/ui/loadout-presentation.js');
   const runResults = await import('../src/run-results.js');
 
@@ -47,7 +49,8 @@ const assert = require('assert');
     assert(descriptor.bindingId && descriptor.fallbackLabel && descriptor.glyphKind, `${actionId} did not resolve`);
     assert.notStrictEqual(descriptor.glyphKind, 'keycap', `${actionId} emitted a keyboard glyph in Deck mode`);
   }
-  assert(!prompts.actionCaptionMarkup('confirm', 'confirm', { deck: true }).includes('ui-action-copy'), 'duplicate action/subprompt verb emitted');
+  assert(prompts.actionCaptionMarkup('confirm', 'confirm', { deck: true }).includes('ui-action-copy'), 'explicit action caption was suppressed');
+  assert.strictEqual(prompts.actionCaptionMarkup('confirm', '', { deck: true }), '', 'captionless DOM prompt emitted an orphan chip');
   assert(prompts.actionCaptionMarkup('confirm', 'launch', { deck: true }).includes('ui-action-copy'), 'distinct supporting verb was lost');
   assert(!prompts.actionCaptionMarkup('confirm', 'confirm', { deck: true }).includes('data-input-family="keyboard"'), 'Deck caption selected keyboard family');
   assert(prompts.affordanceCaption('slingshot', 'engage', { mode: 'controller' }).includes('ui-action-glyph'), 'Slingshot caption must generate a glyph element');
@@ -78,6 +81,12 @@ const assert = require('assert');
     { descriptor: prompts.actionDescriptor('delete', deckOptions), verb: 'delete' },
     { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'back out' },
   ];
+  assert.strictEqual(footerLayout.normalizeActionPrompt({ descriptor: deck, verb: '' }), null, 'captionless canvas prompt survived normalization');
+  assert.strictEqual(footerLayout.measureActionFooter([{ descriptor: deck, verb: '' }]).placed.length, 0, 'captionless footer reserved phantom space');
+  assert.strictEqual(footerLayout.measureActionFooter([
+    { descriptor: deck, verb: '' },
+    { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'back' },
+  ]).placed.length, 1, 'mixed footer did not filter only its invalid prompt');
   const deleteProfileActions = [
     { descriptor: prompts.actionDescriptor('navigate', deckOptions), verb: 'choose cancel / delete' },
     { descriptor: prompts.actionDescriptor('confirm', deckOptions), verb: 'cancel' },
@@ -121,6 +130,31 @@ const assert = require('assert');
   assert(results.buttonPrompt.y + results.buttonPrompt.h + geometry.panel.paddingY <= results.panel.y + results.panel.h, 'results CTA support glyph lost its bottom gutter');
   assert(results.contentBottom + geometry.panel.gap <= results.button.y, 'results content overlaps CTA rail');
   assert(results.cargoRowH >= 40, 'results cargo rows became too small for Deck readability');
+  const pauseActions = [
+    { descriptor: prompts.actionDescriptor('select', deckOptions), verb: 'select' },
+    { descriptor: prompts.actionDescriptor('confirm', deckOptions), verb: 'confirm' },
+    { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'resume' },
+  ];
+  for (const [width, height] of [[960, 720], [1280, 800]]) {
+    const pause = layout.interruptSurfaceLayout(width, height, 'pause', pauseActions);
+    assert(pause.panel.w <= 880 && pause.panel.h <= height * 0.75, `${width}x${height} pause escaped the single-window contract`);
+    assert(pause.rows.every((row) => row.h >= 58 && layout.rectContains(pause.panel, row, geometry.panel.paddingX)), `${width}x${height} pause row failed Deck geometry`);
+    assert(pause.rows.every((row) => !layout.rectsOverlap(row, pause.footer, geometry.separation)), `${width}x${height} pause rows overlap measured footer`);
+    assert(layout.rectContains(pause.panel, pause.footer, geometry.panel.paddingX), `${width}x${height} pause footer escaped its panel`);
+    const recovery = layout.interruptSurfaceLayout(width, height, 'recovery', [
+      { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'return to the deck' },
+    ]);
+    assert(layout.rectContains(recovery.panel, recovery.footer, geometry.panel.paddingX), `${width}x${height} recovery footer escaped its panel`);
+    assert(!layout.rectsOverlap(recovery.status, recovery.footer, geometry.separation), `${width}x${height} recovery status overlaps footer`);
+  }
+  assert.strictEqual(hudModule.projectHUDPhase('playing'), 'shown');
+  assert.strictEqual(hudModule.projectHUDPhase('paused'), 'hidden');
+  assert.strictEqual(hudModule.projectHUDPhase('recovery'), 'hidden');
+  assert.strictEqual(hudModule.projectHUDPhase('mapSelect'), 'hidden');
+  assert.strictEqual(hudModule.projectHUDPhase('dead'), 'terminal');
+  assert.strictEqual(hudModule.projectHUDPhase('escaped'), 'terminal');
+  assert.strictEqual(pausePresentation.pauseAbandonIntent({ remoteActive: false }), 'return-title');
+  assert.strictEqual(pausePresentation.pauseAbandonIntent({ remoteActive: true }), 'leave-remote');
   for (const [width, height] of [[1048, 576], [960, 720], [1280, 800]]) {
     const map = layout.mapSelectSurfaceLayout(width, height, width, 6, mapActions);
     const scaleBounds = primitives.statusPillBounds(map.briefStatus.scale, { minWidth: map.briefStatus.scale.w });
