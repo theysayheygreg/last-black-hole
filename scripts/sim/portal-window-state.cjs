@@ -7,4 +7,15 @@ function canOpenPortalWindow(window) {
   return Array.isArray(countRange) && Number(countRange[1]) > 0;
 }
 
-module.exports = { canOpenPortalWindow };
+function createPortalWindowOpenedEvent(window, payload) {
+  if (!canOpenPortalWindow(window)) return null;
+  return {
+    type: "portal.windowOpened",
+    payload,
+  };
+}
+
+module.exports = {
+  canOpenPortalWindow,
+  createPortalWindowOpenedEvent,
+};

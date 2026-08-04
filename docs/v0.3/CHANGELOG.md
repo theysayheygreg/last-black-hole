@@ -3,11 +3,11 @@
 - **Phase-banded exfil routes:** optional exits now scale with each map's
   actual run duration from the existing 600-second Expanse reference
   (`90/75/60/45/30s` becomes `15/12.5/10/7.5/5%`). Their opening fronts stay
-  inside their declared Inhibitor phase rather than cascading across later
-  pressure events. The late band now offers brief, scarce real routes instead
-  of zero-count phantom windows; zero-count diagnostic windows cannot publish
-  an authority opening or a HUD aperture countdown. Final exfil remains the
-  unchanged 60-second last chance.
+  wholly inside one guarded Inhibitor phase interval rather than crossing
+  pressure or collapse fronts. The late band now offers brief, scarce real
+  routes instead of zero-count phantom windows; zero-count diagnostic windows
+  cannot publish an authority opening or a HUD aperture countdown. Final exfil
+  remains the unchanged 60-second last chance.
 
 - **Suite manifest completeness:** every top-level executable v0.3 test is now
   either an intentional lane entry or a documented diagnostic/capture/release

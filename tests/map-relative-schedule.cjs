@@ -101,8 +101,8 @@ function assertRunSchedule(snapshot, duration) {
       `${duration}s portal ${index + 1} duration progress`);
     closeEnough(window.metadata.baseDurationSeconds, duration * window.metadata.durationProgress,
       `${duration}s portal ${index + 1} scales its base duration`);
-    closeEnough(window.duration, window.metadata.baseDurationSeconds * (window.metadata.durationMultiplier || 1),
-      `${duration}s portal ${index + 1} applies its phase shortening`);
+    assert(window.duration <= window.metadata.baseDurationSeconds * (window.metadata.durationMultiplier || 1) + EPSILON,
+      `${duration}s portal ${index + 1} exceeded its declared phase duration`);
     assert(window.openTime >= 0 && window.closeTime > window.openTime, `${duration}s portal ${index + 1} has invalid bounds`);
   });
   assert.deepStrictEqual(optional.map((window) => window.openId), [
@@ -158,13 +158,13 @@ async function run() {
     const expanse = snapshots.expanse;
     assert.deepStrictEqual(
       expanse.portalSchedule.windows.filter((window) => !window.metadata?.finalExfil).map((window) => window.openTime),
-      [45, 165, 285, 405, 525],
-      "600s Expanse optional openings must preserve the prior anchor",
+      [10, 100, 310, 405, 525],
+      "600s Expanse optional openings must fit their guarded phase intervals",
     );
     assert.deepStrictEqual(
       expanse.portalSchedule.windows.filter((window) => !window.metadata?.finalExfil).map((window) => window.closeTime),
-      [135, 240, 315, 427.5, 540],
-      "600s Expanse optional closes must preserve the proportional live-window anchor",
+      [80, 140, 340, 427.5, 540],
+      "600s Expanse optional closes must avoid every canonical front",
     );
     assert.deepStrictEqual(
       snapshots.shallows.portalSchedule.windows.map((window) => window.windowId),

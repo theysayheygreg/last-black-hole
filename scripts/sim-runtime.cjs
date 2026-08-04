@@ -133,7 +133,9 @@ const {
   wrapPosition: wrapWorldPosition,
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
-const { canOpenPortalWindow } = require("./sim/portal-window-state.cjs");
+const {
+  createPortalWindowOpenedEvent,
+} = require("./sim/portal-window-state.cjs");
 const { hullCalmSpaceReferenceSpeed } = require("./sim/hull-reference-speed.cjs");
 const { capFabricCurrent } = require("./sim/fabric-reference-frame.cjs");
 const {
@@ -447,10 +449,6 @@ function portalPhaseBand(progress, duration) {
   };
 }
 
-function isOutsidePortalFrontGuard(time, eventFrontTimes, guardSeconds) {
-  return eventFrontTimes.every((frontTime) => Math.abs(time - frontTime) >= guardSeconds);
-}
-
 function resolvePortalWindowPlacement({
   requestedOpenTime,
   durationSeconds,
@@ -460,46 +458,36 @@ function resolvePortalWindowPlacement({
   guardSeconds,
 }) {
   // A portal's declared phase is part of its player-facing pacing contract.
-  // Keep its open event inside that band; when a close grazes another front,
-  // prefer trimming the aperture over inventing a later-phase opening.
-  const lowerBound = Math.max(
+  // Carve that phase into intervals which exclude every canonical event front
+  // and its guard. The entire aperture must fit one interval: it may slide
+  // earlier or become shorter, but it never crosses a phase/collapse front.
+  const bandStart = Math.max(
     phaseBand.startTime + guardSeconds,
     previousCloseTime == null ? -Infinity : previousCloseTime + guardSeconds,
   );
-  const upperBound = phaseBand.endTime - guardSeconds;
-  if (lowerBound > upperBound) return null;
+  const bandEnd = phaseBand.endTime - guardSeconds;
+  if (bandStart >= bandEnd) return null;
 
-  const candidates = new Set([
-    lowerBound,
-    upperBound,
-    Math.max(lowerBound, Math.min(upperBound, requestedOpenTime)),
-  ]);
-  for (const frontTime of eventFrontTimes) {
-    candidates.add(frontTime - guardSeconds);
-    candidates.add(frontTime + guardSeconds);
-    // Preserve the intended aperture by moving it earlier inside its own
-    // phase before falling back to a shorter window at the requested time.
-    candidates.add(frontTime - guardSeconds - durationSeconds);
+  const internalFronts = eventFrontTimes.filter((frontTime) =>
+    frontTime > phaseBand.startTime && frontTime < phaseBand.endTime,
+  );
+  const safeIntervals = [];
+  let intervalStart = bandStart;
+  for (const frontTime of internalFronts) {
+    const intervalEnd = Math.min(bandEnd, frontTime - guardSeconds);
+    if (intervalEnd > intervalStart) safeIntervals.push([intervalStart, intervalEnd]);
+    intervalStart = Math.max(intervalStart, frontTime + guardSeconds);
   }
+  if (bandEnd > intervalStart) safeIntervals.push([intervalStart, bandEnd]);
 
   const placements = [];
-  for (const candidate of candidates) {
-    if (!Number.isFinite(candidate) || candidate < lowerBound || candidate > upperBound) continue;
-    if (!isOutsidePortalFrontGuard(candidate, eventFrontTimes, guardSeconds)) continue;
-
-    let resolvedDuration = durationSeconds;
-    const requestedCloseTime = candidate + resolvedDuration;
-    const closeConflict = eventFrontTimes.find((frontTime) =>
-      Math.abs(requestedCloseTime - frontTime) < guardSeconds,
-    );
-    if (closeConflict !== undefined) {
-      // Keep the close before the conflicting front when that gives the player
-      // a usable aperture; do not move this opening across the front instead.
-      resolvedDuration = Math.max(0, closeConflict - guardSeconds - candidate);
-    }
-    const closeTime = candidate + resolvedDuration;
-    if (resolvedDuration <= 0 || !isOutsidePortalFrontGuard(closeTime, eventFrontTimes, guardSeconds)) continue;
-    placements.push({ openTime: candidate, durationSeconds: resolvedDuration });
+  for (const [safeStart, safeEnd] of safeIntervals) {
+    const availableDuration = safeEnd - safeStart;
+    const resolvedDuration = Math.min(durationSeconds, availableDuration);
+    if (resolvedDuration <= 0) continue;
+    const latestOpenTime = safeEnd - resolvedDuration;
+    const openTime = Math.max(safeStart, Math.min(latestOpenTime, requestedOpenTime));
+    placements.push({ openTime, durationSeconds: resolvedDuration });
   }
 
   placements.sort((a, b) =>
@@ -2568,21 +2556,22 @@ function openPortalWindow(window) {
       runtime.portalClock.suppressedWindowIds.has(window.windowId)) return false;
   const finalExfil = Boolean(window.metadata?.finalExfil);
   const countRange = window.metadata?.effectiveCountRange || [0, 0];
-  if (!canOpenPortalWindow(window)) {
+  const openedEvent = createPortalWindowOpenedEvent(window, portalEventPayload(window, {
+    finalExfil,
+    portalTypes: window.metadata?.types || [],
+  }));
+  if (!openedEvent) {
     // A schedule can retain a zero-count diagnostic/deprecated window, but it
     // is not an opening. Never teach the event stream or HUD that one exists.
     runtime.portalClock.suppressedWindowIds.add(window.windowId);
     return false;
   }
-  runtime.portalClock.openedWindowIds.add(window.windowId);
   const count = finalExfil
     ? 1
     : runtime.session.rng.int(`portal.window.count.${window.windowId}`, countRange[0], countRange[1]);
-  publishEvent("portal.windowOpened", portalEventPayload(window, {
-    finalExfil,
-    portalCount: count,
-    portalTypes: window.metadata?.types || [],
-  }));
+  openedEvent.payload.portalCount = count;
+  runtime.portalClock.openedWindowIds.add(window.windowId);
+  publishEvent(openedEvent.type, openedEvent.payload);
 
   for (let index = 0; index < count; index += 1) {
     const type = finalExfil
