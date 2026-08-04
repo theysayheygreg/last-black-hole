@@ -79,31 +79,43 @@ async function run() {
     'Decorative density history must be clipped to meaningful current or wave material');
     assert(shader.includes('mix(0.13, 0.31, laneStrength)'), 'Stronger current must create long coherent downstream marks');
     assert(shader.includes('mix(0.12, 0.90, laneStrength)'), 'Stronger current must advance marks faster');
-    assert(shader.includes('vec3(0.10, 0.42, 0.70)') && shader.includes('vec3(0.18, 0.52, 0.78)'),
-      'Lane palette must use restrained cyan/blue-white values');
+    assert(shader.includes('vec3(0.065, 0.055, 0.30)') && shader.includes('vec3(0.20, 0.18, 0.82)')
+      && shader.includes('vec3 waveColor = vec3(1.00, 0.70, 0.34);'),
+    'Terrain lanes must stay blue-violet while event waves own the separate bone/amber read');
     assert(shader.includes('float baseMix = sceneExcitation * 0.004;')
       && shader.includes('clamp(baseMix, 0.0, 0.006)'),
       'Calm field must remain dark outside meaningful current material');
-    assert(shader.includes('channelEnvelope * 0.34 + channelBody * 0.38')
+    assert(shader.includes('channelEnvelope * 0.52 + channelBody * 0.58')
       && shader.includes('laneColor * channelBand * channelPresence'),
-      'The channel must retain a coherent body and soft shoulders through ASCII quantization');
-    assert(shader.includes('smoothstep(0.002, 0.03, laneSpeed)')
-      && shader.includes('mix(0.62, 1.0, laneStrength)'),
-    'Any materially active current must keep its channel visible; strength changes emphasis rather than existence');
-    assert(shader.includes('channelEnvelope * waveSwell * 0.20'),
+      'The channel must retain a visibly strong coherent body and soft shoulders through ASCII quantization');
+    assert(shader.includes('smoothstep(0.001, 0.018, laneSpeed)')
+      && shader.includes('mix(0.76, 1.0, laneStrength)'),
+      'Any materially active current must keep its channel visible; strength changes emphasis rather than existence');
+    assert(shader.includes('float glyphCell = floor(along / max(markLength * 0.62, 0.075))')
+      && shader.includes('float variedAsciiWeave = fineAsciiWeave * glyphBrightness;')
+      && shader.includes('float glyphCrossGrain = 1.0 - smoothstep('),
+    'Corridor-local material must recover a bounded family of glyph rhythm and luminance variants');
+    assert(shader.includes('waveColor * channelEnvelope * waveSwell * 0.28'),
       'The source wave must lift the broad fabric channel rather than add a detached ring');
     assert(shader.includes('(0.72 + gravityWeight * 0.48)')
       && shader.includes('gravityWeight * 0.28 - fullGravityWeight * 0.38')
       && shader.includes('nearestProfile.z * 1.35'),
     'Authored current/gravity/full-gravity reaches must produce broad bend, compression, and split');
-    assert(shader.includes('float visualCoreRadius = max(coreRadius * 1.55, u_cameraView * 0.040);'),
-      'Lethal bodies need a dominant presentation-only void at Deck resolution');
+    assert(shader.includes('float visualCoreRadius = max(coreRadius * 1.90, u_cameraView * 0.068);'),
+      'Lethal bodies need a large dominant presentation-only void at Deck resolution');
     assert(shader.includes('col *= mix(1.0, 0.16, coreQuiet);')
       && shader.includes('mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet))'),
     'Near-core fabric must quiet while authored gravity selectively reinforces curved lanes');
-    assert(shader.includes('min(ringInner, visualCoreRadius * 1.38)')
-      && shader.includes('min(ringOuter, visualCoreRadius * 1.78)'),
-    'Analytic accretion must remain a compact body-relative rim, not a broad halo');
+    assert(shader.includes('min(ringInner, visualCoreRadius * 1.36)')
+      && shader.includes('min(ringOuter, visualCoreRadius * 1.86)'),
+      'Analytic accretion must remain a compact body-relative rim, not a broad halo');
+    assert(shader.includes('vec2 cameraRelativeFluidUVToGlobalFluidUV(vec2 cameraRelativeUV)')
+      && shader.includes('cameraRelativeFluidUVToGlobalFluidUV(u_wellPositions[i])'),
+    'Every camera-relative well coordinate must use one shared global-fluid conversion seam');
+    assert(shader.includes('vec2 plumeAxis = normalize(vec2(0.86, 0.50 * orbitalDir));')
+      && shader.includes('float plumeReach = visualCoreRadius * (2.55 + min(ringEnergy, 1.0) * 0.20);')
+      && shader.includes('float plumeMask = plumeSpine * plumeStart * plumeEnd * plumeRagged;'),
+    'Wells must own one orbital-direction-keyed asymmetric hot accretion plume');
   });
 
   await runner.run('upload path shares the same fixed budget owner', async () => {

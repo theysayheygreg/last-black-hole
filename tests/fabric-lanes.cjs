@@ -30,7 +30,7 @@ async function run() {
     assert(shader.includes('const float channelHalfViewport = 0.125'));
     assert(shader.includes('float channelEnvelope = 1.0 - smoothstep('));
     assert(shader.includes('float channelBody = 1.0 - smoothstep('));
-    assert(shader.includes('channelEnvelope * 0.34 + channelBody * 0.38'));
+    assert(shader.includes('channelEnvelope * 0.52 + channelBody * 0.58'));
     assert(shader.includes('float mediumFilament = 1.0 - smoothstep('));
     assert(shader.includes('float fineAsciiWeave = fineThread * markAttack * markRelease * channelEnvelope;'));
     assert(shader.includes('float decorativeHistory = (sceneExcitation * 0.46 + ringSignal * 0.18)'));

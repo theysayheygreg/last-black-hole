@@ -284,6 +284,15 @@ vec2 sampleSpatiallyFilteredAuthoritativeFlow(vec2 coarseUV, vec2 radiusUV) {
   return center + (horizontal + vertical) * 0.15;
 }
 
+// Well positions arrive camera-relative because they also feed the local fluid
+// window. The fabric itself is world-anchored, so every well comparison must
+// restore that one global fluid coordinate through this shared seam. Keeping
+// it here prevents the lane and per-well passes from drifting by convention.
+vec2 cameraRelativeFluidUVToGlobalFluidUV(vec2 cameraRelativeUV) {
+  return fract(u_worldCamera
+    + (cameraRelativeUV - vec2(0.5)) * (u_gridWindow / u_worldScale));
+}
+
 void main() {
   // Sample the same square world slice represented by the fluid texture.
   // Aspect-correct widening belongs in a future rectangular-fluid-window pass.
@@ -356,8 +365,7 @@ void main() {
       if (i >= u_wellCount) break;
       // u_wellPositions is camera-relative fluid UV; restore its global
       // fluid location before comparing it with the world-anchored lane.
-      vec2 wellGlobalUV = fract(u_worldCamera
-        + (u_wellPositions[i] - vec2(0.5)) * (u_gridWindow / u_worldScale));
+      vec2 wellGlobalUV = cameraRelativeFluidUVToGlobalFluidUV(u_wellPositions[i]);
       vec2 wellWorld = wellGlobalUV * u_worldScale;
       vec2 delta = laneWorld - wellWorld;
       delta -= round(delta / u_worldScale) * u_worldScale;
@@ -468,8 +476,8 @@ void main() {
       channelHalfWidth * 0.80,
       laneDistance
     );
-    float channelPresence = smoothstep(0.002, 0.03, laneSpeed)
-      * mix(0.62, 1.0, laneStrength)
+    float channelPresence = smoothstep(0.001, 0.018, laneSpeed)
+      * mix(0.76, 1.0, laneStrength)
       * mix(0.28, 1.0, 1.0 - coreQuiet);
 
     // Strength reads as longer, faster downstream strokes—not extra lanes.
@@ -486,13 +494,29 @@ void main() {
     float markAttack = smoothstep(0.22, 0.28, markPhase);
     float markRelease = 1.0 - smoothstep(0.58, 0.66, markPhase);
     float fineAsciiWeave = fineThread * markAttack * markRelease * channelEnvelope;
+    // Restore the old field's tactile character without reviving its
+    // full-frame hash carpet: cadence chooses a small repeating family of
+    // bright long strokes, dim short strokes, and cross-grain marks only
+    // inside a corridor that already communicates accepted current.
+    float glyphCell = floor(along / max(markLength * 0.62, 0.075))
+      + floor(across / finePitch);
+    float glyphVariant = mod(glyphCell, 4.0);
+    float glyphBrightness = mix(0.62, 1.28, step(1.5, glyphVariant));
+    float glyphCrossGrain = 1.0 - smoothstep(
+      0.12,
+      0.30,
+      abs(fract(along * 5.4 + glyphVariant * 0.17) - 0.5)
+    );
+    float variedAsciiWeave = fineAsciiWeave * glyphBrightness;
     float laneSignal = fineAsciiWeave * smoothstep(0.01, 0.06, laneSpeed)
       * mix(0.34, 1.0, 1.0 - coreQuiet);
-    vec3 laneColor = mix(vec3(0.04, 0.16, 0.30), vec3(0.10, 0.42, 0.70), laneStrength);
-    laneColor = mix(laneColor, vec3(0.18, 0.52, 0.78), gravityWeight * 0.35 + fullGravityWeight * 0.65);
-    // Event-wave treatment remains its existing green overlay until the
-    // dedicated wave/noise pass; this slice only clarifies steady current.
-    laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
+    // Cyan belongs to route/exfil. Ordinary terrain sits in a blue-violet
+    // family; gravity may brighten it but never turn it into cyan. Event
+    // waves are the separate bone/amber BREAK read.
+    vec3 laneColor = mix(vec3(0.065, 0.055, 0.30), vec3(0.20, 0.18, 0.82), laneStrength);
+    laneColor = mix(laneColor, vec3(0.30, 0.26, 0.98), gravityWeight * 0.35 + fullGravityWeight * 0.65);
+    vec3 waveColor = vec3(1.00, 0.70, 0.34);
+    laneColor = mix(laneColor, waveColor, clamp(waveSwell * 0.82, 0.0, 0.82));
     // Decorative density is history, not a map-wide noise carpet. It appears
     // only where accepted current or a source-bound wave already makes the
     // material meaningful; calm space stays genuinely dark.
@@ -501,16 +525,18 @@ void main() {
     // The body and soft shoulders must survive ASCII quantization as one
     // coherent corridor. Medium filaments provide tactile depth; the fine
     // weave is downstream-only detail rather than the lane's silhouette.
-    float channelBand = channelEnvelope * 0.34 + channelBody * 0.38;
+    float channelBand = channelEnvelope * 0.52 + channelBody * 0.58;
     col += laneColor * channelBand * channelPresence;
-    col += laneColor * mediumFilament * 0.34 * channelPresence;
-    col += laneColor * laneSignal * 0.54 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
+    col += laneColor * mediumFilament * 0.48 * channelPresence;
+    col += laneColor * variedAsciiWeave * 0.62 * channelPresence;
+    col += laneColor * glyphCrossGrain * mediumFilament * 0.20 * channelPresence;
+    col += laneColor * laneSignal * 0.68 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
     col += mix(u_normalColor, laneColor, 0.72) * decorativeHistory * channelPresence;
     // The event front lifts the material corridor itself. It remains distinct
     // from the circular player Noise indicator because only fabric intersected
     // by the source wave brightens and swells.
-    col += vec3(0.24, 0.82, 0.70) * channelEnvelope * waveSwell * 0.20;
-    col += vec3(0.24, 0.82, 0.70) * waveCrest * 0.42;
+    col += waveColor * channelEnvelope * waveSwell * 0.28;
+    col += vec3(1.18, 0.82, 0.46) * waveCrest * 0.54;
   }
 
   // === PER-WELL: dark core + one readable accretion band ===
@@ -528,8 +554,7 @@ void main() {
     float ringInner = shape.y;
     float ringOuter = shape.z;
     float orbitalDir = shape.w;
-    vec2 wellGlobalUV = fract(u_worldCamera
-      + (u_wellPositions[i] - vec2(0.5)) * (u_gridWindow / u_worldScale));
+    vec2 wellGlobalUV = cameraRelativeFluidUVToGlobalFluidUV(u_wellPositions[i]);
     vec2 wellWorld = wellGlobalUV * u_worldScale;
     float telegraph = 0.0;
     for (int wi = 0; wi < 8; wi++) {
@@ -549,7 +574,7 @@ void main() {
     // lethal body has a compact readable silhouette at Deck resolution.
     // In ordinary play the void must survive at speed as an actual region,
     // not a tiny contact dot hidden inside its bright corona.
-    float visualCoreRadius = max(coreRadius * 1.55, u_cameraView * 0.040);
+    float visualCoreRadius = max(coreRadius * 1.90, u_cameraView * 0.068);
     float coreMask = smoothstep(visualCoreRadius * 1.18, visualCoreRadius * 0.82, displayDist);
     float horizonMask = smoothstep(visualCoreRadius * 1.24, visualCoreRadius * 1.02, displayDist)
                       * (1.0 - smoothstep(visualCoreRadius * 1.02, visualCoreRadius * 0.88, displayDist));
@@ -559,8 +584,8 @@ void main() {
     // Mechanical accretion radii remain inputs, but the visible band is capped
     // to a compact body-relative rim. The old max() expansion turned the
     // analytic treatment into a broad halo that masked deformation.
-    float visualRingInner = max(visualCoreRadius * 1.16, min(ringInner, visualCoreRadius * 1.38));
-    float visualRingOuter = max(visualRingInner * 1.18, min(ringOuter, visualCoreRadius * 1.78));
+    float visualRingInner = max(visualCoreRadius * 1.14, min(ringInner, visualCoreRadius * 1.36));
+    float visualRingOuter = max(visualRingInner * 1.20, min(ringOuter, visualCoreRadius * 1.86));
     float ringMask = smoothstep(visualRingOuter, visualRingInner, displayDist)
                    * smoothstep(visualCoreRadius * 1.03, visualRingInner, displayDist);
     float localLive = 1.0 - coreMask;
@@ -578,6 +603,33 @@ void main() {
 
     // Main accretion band. This is the bright read, not the whole well.
     col += ringColor * localRing * 1.16 * ringBias * localLive;
+
+    // Every gameplay well needs one asymmetric hot accretion plume so it
+    // reads as an angry place rather than a symmetric map marker. The existing
+    // orbital direction determines which side trails; it never changes gravity,
+    // current, or the compact lethal rim.
+    vec2 wellRelativeWorld = diff * u_gridWindow;
+    vec2 plumeAxis = normalize(vec2(0.86, 0.50 * orbitalDir));
+    vec2 plumeNormal = vec2(-plumeAxis.y, plumeAxis.x);
+    vec2 plumeLocal = vec2(
+      dot(wellRelativeWorld, plumeAxis),
+      dot(wellRelativeWorld, plumeNormal)
+    );
+    float plumeReach = visualCoreRadius * (2.55 + min(ringEnergy, 1.0) * 0.20);
+    float plumeProgress = clamp(plumeLocal.x / plumeReach, 0.0, 1.0);
+    float plumeCenter = sin(plumeProgress * 2.4) * visualCoreRadius * 0.20 * orbitalDir;
+    float plumeHalfWidth = mix(visualCoreRadius * 0.82, visualCoreRadius * 0.18, plumeProgress);
+    float plumeSpine = 1.0 - smoothstep(
+      plumeHalfWidth * 0.62,
+      plumeHalfWidth,
+      abs(plumeLocal.y - plumeCenter)
+    );
+    float plumeStart = smoothstep(visualCoreRadius * 0.62, visualCoreRadius * 1.16, plumeLocal.x);
+    float plumeEnd = 1.0 - smoothstep(plumeReach * 0.66, plumeReach, plumeLocal.x);
+    float plumeRagged = 0.66 + 0.34 * sin(plumeLocal.x * 54.0 + plumeLocal.y * 11.0);
+    float plumeMask = plumeSpine * plumeStart * plumeEnd * plumeRagged;
+    vec3 plumeColor = mix(ringColor, u_hotWellColor, 0.72);
+    col += plumeColor * plumeMask * (0.56 + ringEnergy * 0.52) * localLive;
 
     // Final dark core. This must win.
     col = mix(col, vec3(0.0), coreMask * 0.985);

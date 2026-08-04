@@ -1,5 +1,18 @@
 # v0.3 Changelog
 
+- **Fabric/well visual-presence recovery:** broad current corridors now carry a
+  deliberately brighter blue-violet body, bounded interior glyph rhythm, and
+  longer luminance variation while calm space remains dark. Cyan stays
+  exclusive to routes/exfil; source-bound event swells and crests now use a
+  separate bone/amber read. Gameplay wells grow into larger dark landmarks and
+  gain one restrained, orbital-direction-keyed hot accretion plume while their
+  immediate rim remains compact and the final dark core still wins. The shader
+  also routes every camera-relative well position through one shared
+  global-fluid conversion helper, so its lane deformation and per-well
+  presentation cannot diverge by local coordinate math. This is display-only:
+  no authority/sim forces, well radii, carry, waves, camera, or interaction
+  behavior changed.
+
 - **Body-aware interaction contacts:** authoritative pickups and exfil now use
   one compact gameplay volume: semantic range/aperture plus the physical ship
   body and a small `0.012` near-miss allowance.
