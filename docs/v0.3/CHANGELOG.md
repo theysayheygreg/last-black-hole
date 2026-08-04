@@ -1,5 +1,16 @@
 # v0.3 Changelog
 
+- **Well landmark and terrain-stability recovery:** gameplay restores a
+  restrained, presentation-only blackbody corona around each existing compact
+  analytic well body. The void and immediate rim remain the authoritative
+  danger read, while the larger corona makes a well visible as an angry
+  landmark several ship lengths before contact; title keeps its authored
+  composition. Ordinary fabric corridors now filter the accepted coarse field
+  at each world position rather than at the moving camera center, so camera
+  translation reveals stable terrain and only downstream material marks move.
+  No gameplay coordinates, authority field, gravity/current/hit radii, or
+  movement constants changed.
+
 - **Rich ordinary-current corridors (Area 1):** `5f9c0e4b` changes only
   `FRAG_DISPLAY` presentation. Existing accepted coarse authority flow is
   spatially filtered before it orients aspect-correct current corridors; a

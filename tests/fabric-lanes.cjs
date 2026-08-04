@@ -17,8 +17,8 @@ async function run() {
     assert(shader.includes('vec2 coarseUV = fract(u_worldCamera'));
     assert(shader.includes('sampleSpatiallyFilteredAuthoritativeFlow')
       && shader.includes('vec2 stableAuthorityFlow = sampleSpatiallyFilteredAuthoritativeFlow(')
-      && shader.includes('fract(u_worldCamera), fieldFilterUV'),
-    'The corridor must use a spatially filtered authority field, not one camera texel');
+      && shader.includes('coarseUV, fieldFilterUV'),
+    'The corridor must use a spatially filtered authority field at its world position, not one camera texel');
     assert(!shader.includes('cameraFlowUV'), 'The retired single camera-center vector must not return');
     assert(shader.includes('float visualBacktrace = min(u_cameraView * 0.11, 0.32);')
       && shader.includes('laneWorld -= (localLaneDir - baseLaneDir) * visualBacktrace;'),

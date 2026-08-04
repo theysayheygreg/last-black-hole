@@ -324,8 +324,11 @@ void main() {
     fieldFilterWorld / (u_worldScale * screenAspect),
     fieldFilterWorld / u_worldScale
   );
+  // Filter around this world position, rather than the moving camera center.
+  // That keeps the terrain nailed to the map during flight: only the small
+  // downstream material marks animate, never the whole current lattice.
   vec2 stableAuthorityFlow = sampleSpatiallyFilteredAuthoritativeFlow(
-    fract(u_worldCamera), fieldFilterUV
+    coarseUV, fieldFilterUV
   );
   vec2 localAuthorityFlow = texture(u_coarse, coarseUV).xy;
   vec2 fallbackFlow = length(localAuthorityFlow) > 0.0001 ? localAuthorityFlow : vel;

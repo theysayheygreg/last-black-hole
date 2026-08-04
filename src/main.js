@@ -245,7 +245,9 @@ const TITLE_RENDER_TUNING = {
 };
 const GAMEPLAY_RENDER_TUNING = {
   fluidGain: 1.0,
-  accretionStrength: 0.0,
+  // Gameplay retains a lower-strength corona than title. It is visual-only:
+  // the compact FluidDisplay void still owns the lethal-body read.
+  accretionStrength: 0.48,
   bloom: { threshold: 0.90, knee: 0.3, strength: 0.75, blurRadius: 3.0 },
   vignette: { strength: 0.6, radius: 0.45, softness: 0.65 },
   chromaticAberration: { strength: 0.002, falloff: 2.8 },
@@ -1557,13 +1559,13 @@ function loadScene(map, { seed = 1 } = {}) {
   // 8. Seed fresh fluid
   seedInitialFluid();
 
-  // 9. Compute per-well accretion radii used by AccretionPass on the
-  //    title screen. Radii key the visible temperature ramp to the
-  //    frame — not to gameplay hit radii. Gameplay runs with
-  //    strength=0 so these never paint, but we populate them anyway
-  //    so context is always valid.
+  // 9. AccretionPass owns a presentation-only corona. Title keeps its
+  //    authored composition; gameplay derives a smaller landmark corona from
+  //    the same compact body shapes as FluidDisplay. Neither changes hit,
+  //    gravity, current, or authority radii.
+  const gameplayCoronaRadii = wellSystem.getCoronaRadii(CAMERA_VIEW);
   sceneAccretionRadii = wellSystem.wells.map((_, index) => (
-    currentMap.titleAccretionRadii?.[index] || [0.07, 0.30, 0.52]
+    currentMap.titleAccretionRadii?.[index] || gameplayCoronaRadii[index] || [0.08, 0.16, 0.28]
   ));
 }
 

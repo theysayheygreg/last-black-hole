@@ -13,6 +13,22 @@ import { effectiveWellVisualMass } from './presentation/well-wave-presentation.j
 
 export { effectiveWellVisualMass } from './presentation/well-wave-presentation.js';
 
+/**
+ * Turn a compact gameplay well body into a larger presentation-only corona.
+ *
+ * The first three shape values remain the analytic core/rim contract used by
+ * FluidDisplay.  The corona is deliberately wider: a landmark needs to read
+ * before its lethal radius becomes an immediate movement problem.  It never
+ * feeds gravity, contact, current strength, or any authority payload.
+ */
+export function wellCoronaRadii(shape, cameraView = 3) {
+  const [coreRadius = 0, , ringOuter = 0] = shape || [];
+  const core = Math.max(coreRadius * 1.04, cameraView * 0.026);
+  const peak = Math.max(core * 1.72, ringOuter * 1.58);
+  const outer = Math.max(peak * 1.65, ringOuter * 3.40);
+  return [core, peak, outer];
+}
+
 // ---- Well name generation (foreboding) ----
 
 const WELL_ADJ = ['Hungering', 'Endless', 'Silent', 'Abyssal', 'Forsaken',
@@ -194,6 +210,15 @@ export class WellSystem {
 
       return [coreRef, ringInnerRef, ringOuterRef, w.orbitalDir];
     });
+  }
+
+  /**
+   * Presentation-only corona inputs for AccretionPass.  The compact analytic
+   * rim tells the player exactly where the void is; this wider blackbody
+   * material makes the same well legible as a threat and landmark at speed.
+   */
+  getCoronaRadii(cameraView = 3) {
+    return this.getRenderShapes().map((shape) => wellCoronaRadii(shape, cameraView));
   }
 
   /**

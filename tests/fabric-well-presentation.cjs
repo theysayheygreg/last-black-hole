@@ -42,6 +42,20 @@ async function run() {
     assert(!shader.includes('gravityContour'), 'gravity contour vocabulary must be retired');
   });
 
+  await runner.run('well body and wider corona have separate presentation roles', async () => {
+    const { wellCoronaRadii } = await import('../src/wells.js');
+    const compactBody = [0.075, 0.09, 0.133, 1];
+    const [core, peak, outer] = wellCoronaRadii(compactBody, 3);
+    assert(core >= compactBody[0], 'corona must preserve the compact void body');
+    assert(peak > core && outer > peak, 'corona must expand outward in ordered bands');
+    assert(outer >= compactBody[2] * 3.4, 'landmark corona must exceed the compact analytic rim');
+    const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
+    assert(main.includes('accretionStrength: 0.48'), 'gameplay must render a restrained well corona');
+    assert(main.includes('wellSystem.getCoronaRadii(CAMERA_VIEW)'), 'gameplay corona must derive from well presentation shapes');
+    assert(main.includes('Neither changes hit,') && main.includes('gravity, current, or authority radii'),
+      'well corona must remain explicitly presentation-only');
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }
