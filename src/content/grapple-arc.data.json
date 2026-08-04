@@ -7,7 +7,6 @@
   "releaseGhostSeconds": 1,
   "rehookCooldownSeconds": 1.25,
   "rehookCooldownTuningStepSeconds": 0.25,
-  "boostCooldownSeconds": 10,
   "brakeAbortThreshold": 0.1,
   "anchorFamilies": {
     "well": {

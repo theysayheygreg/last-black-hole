@@ -1499,7 +1499,6 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       aimAnchorRange: 0,
       aimDistance: 0,
       rehookReadyAt: 0,
-      boostReadyAt: 0,
       releaseGhostUntil: 0,
       releaseGhost: null,
       lastRelease: null,
@@ -3862,7 +3861,6 @@ function applyDebugPlayerState(player, body) {
     state.aimAnchorRange = 0;
     state.aimDistance = 0;
     state.rehookReadyAt = 0;
-    state.boostReadyAt = 0;
     state.releaseGhostUntil = 0;
     state.releaseGhost = null;
     state.lastRelease = null;
@@ -4772,7 +4770,6 @@ function ensurePlayerSlingshot(player) {
     aimAnchorRange: 0,
     aimDistance: 0,
     rehookReadyAt: 0,
-    boostReadyAt: 0,
     releaseGhostUntil: 0,
     releaseGhost: null,
     lastRelease: null,
@@ -4783,9 +4780,6 @@ function ensurePlayerSlingshot(player) {
   // branch at each call site.
   if (!Number.isFinite(Number(player.slingshot.rehookReadyAt))) {
     player.slingshot.rehookReadyAt = 0;
-  }
-  if (!Number.isFinite(Number(player.slingshot.boostReadyAt))) {
-    player.slingshot.boostReadyAt = 0;
   }
   return player.slingshot;
 }
@@ -5072,15 +5066,8 @@ function engagePlayerSlingshot(player, currentTime, dt = 0) {
   state.swingRadius = anchor.swingRadius;
   state.hookRadius = anchor.hookRadius;
   state.entrySpeed = speed;
-  const boostCooling = currentTime < state.boostReadyAt;
-  // The player can still take a new arc after the short re-hook pause, but
-  // every landmark shares one payout lock. That makes rapid tap loops a
-  // movement choice rather than a hidden speed-bank exploit.
-  state.boost = boostCooling ? 0 : anchor.boost;
-  state.arcSpeed = speed + state.boost;
-  if (!boostCooling) {
-    state.boostReadyAt = currentTime + SLINGSHOT_SERVER.boostCooldownSeconds;
-  }
+  state.boost = anchor.boost;
+  state.arcSpeed = speed + anchor.boost;
   state.orbitDir = orbitDir;
   state.phase = "arc";
   state.bendDegrees = Math.abs(signedAngle({ x: player.vx, y: player.vy }, tangent)) * 180 / Math.PI;

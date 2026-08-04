@@ -14,10 +14,11 @@
   `1.25s` re-hook cooldown (`0.25s` tuning step). Aim/lock projection and its
   controller/keyboard affordance stay suppressed until that timer clears, so
   a tap cannot pretend a fresh capture is available. Authority proof now
-  compares actual short and held exits, rejects repeated same-anchor taps
-  during cooldown, and confirms a later distinct landmark still grants its
-  ordinary flat boost on the already-higher entry velocity. This preserves
-  deliberate grapple chaining without a speed clamp or global payout lock.
+  compares actual short and held exits, compresses ten seconds of 15 Hz tap
+  attempts into the live cooldown window, and confirms a distinct landmark
+  still adds its normal flat bonus to the already-higher entry speed after the
+  cooldown clears. Grapple Arc v3 chaining remains intact; no payout lock or
+  speed clamp was added.
 
 - **Fabric spatial-material correction:** gameplay now has one analytic well
   owner. The display shader measures well bodies and plumes through the

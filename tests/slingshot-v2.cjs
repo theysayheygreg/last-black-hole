@@ -86,7 +86,15 @@ async function run() {
           delta(star.wy, well.wy, scale),
         ) > 0.7));
       assert(anchor, 'expected a clear star anchor');
+      const secondAnchor = initial.world.stars.find((star) => star.alive !== false
+        && star.id !== anchor.id);
+      assert(secondAnchor, 'expected a distinct second star anchor');
       const geometry = grappleGeometry({ type: 'star', starType: anchor.type, mass: anchor.mass });
+      const secondGeometry = grappleGeometry({
+        type: 'star',
+        starType: secondAnchor.type,
+        mass: secondAnchor.mass,
+      });
       const startRadius = geometry.hookRadius * 0.92;
       await post('/debug/player-state', {
         clientId: 'grapple-arc-v3-test',
@@ -266,15 +274,14 @@ async function run() {
       assert.strictEqual(shortRelease.player.slingshot.telegraph.aimCue, null,
         'cooldown must suppress a false aim telegraph');
 
-      // Keep sending the old alternating tap pattern through ten seconds of
-      // natural post-release motion. The player is never re-positioned here:
-      // a real exit must not bank another capture while spam keeps arriving.
+      // Compress ten seconds of 15 Hz button mashing into the live cooldown
+      // window. These 150 attempts happen while the player is still in the
+      // same first-anchor encounter and must not produce another engagement.
       const spamWatermark = Math.max(0, ...((await request('/events')).body.events || []).map((event) => event.seq || 0));
       let commandSeq = 6;
       let edgeId = 6;
-      let maxSpamSpeed = shortHoldExitSpeed;
-      const spamStartedAt = Date.now();
-      while (Date.now() - spamStartedAt < 10000) {
+      const tapAttempts = 15 * 10;
+      for (let attempt = 0; attempt < tapAttempts; attempt += 1) {
         await post('/input', {
           ...authority,
           commandSeq,
@@ -302,17 +309,73 @@ async function run() {
           timestamp: Date.now(),
         }, headers(authority));
         commandSeq += 1;
-        const spamState = await waitForPlayer('grapple-arc-v3-test', () => true, 250);
-        maxSpamSpeed = Math.max(maxSpamSpeed, Math.hypot(spamState.player.vx, spamState.player.vy));
-        await sleep(70);
       }
+      const afterSpam = await waitForPlayer('grapple-arc-v3-test', () => true, 250);
+      assert(afterSpam.player.slingshot.rehookCooldownSeconds > 0,
+        'equivalent ten-second tap load must complete inside the live cooldown window');
+      assert.strictEqual(afterSpam.player.slingshot.aim, null,
+        'tap spam must not restore aim during the re-hook cooldown');
+      assert.strictEqual(afterSpam.player.slingshot.telegraph.aimCue, null,
+        'tap spam must not restore the lock telegraph during cooldown');
       const spamEvents = (await request(`/events?since=${spamWatermark}`)).body.events || [];
       const repeatedEngages = spamEvents.filter((event) => event.type === 'player.slingshotEngaged'
         && event.payload?.clientId === 'grapple-arc-v3-test');
-      assert(repeatedEngages.every((event) => event.payload?.boost === 0),
-      `ten-second tap spam may re-hook only without a second payout: ${JSON.stringify(repeatedEngages.map((event) => event.payload))}`);
-      assert(maxSpamSpeed <= shortHoldExitSpeed + 0.35,
-        'tap spam must stay within the first capture speed plus ordinary motion tolerance');
+      assert.strictEqual(repeatedEngages.length, 0,
+        'same-anchor tap attempts inside the cooldown must not re-engage');
+
+      // The cooldown is an input affordance, not a payout lock. Once it has
+      // honestly expired, a different landmark contributes its normal flat
+      // bonus on top of the already-boosted entry speed.
+      await waitForPlayer('grapple-arc-v3-test', (player) =>
+        player.slingshot?.rehookCooldownSeconds <= 0, 3000);
+      const secondStartRadius = secondGeometry.hookRadius * 0.92;
+      await post('/debug/player-state', {
+        clientId: 'grapple-arc-v3-test',
+        wx: wrap(secondAnchor.wx + secondStartRadius, scale),
+        wy: secondAnchor.wy,
+        vx: -shortHoldExitSpeed,
+        vy: 0,
+        deltaV: 40,
+        status: 'alive',
+      });
+      await post('/input', {
+        ...authority,
+        commandSeq,
+        seq: commandSeq,
+        moveX: -1,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: true,
+        slingshotEdges: [edgeId],
+        timestamp: Date.now(),
+      }, headers(authority));
+      commandSeq += 1;
+      edgeId += 1;
+      const secondEngaged = await waitForPlayer('grapple-arc-v3-test', (player) =>
+        player.slingshot?.engaged && player.slingshot?.anchorId === secondAnchor.id);
+      assert(Math.abs(secondEngaged.player.slingshot.boost - secondGeometry.boost) < 1e-9,
+        'a distinct landmark must retain its normal flat boost');
+      assert(Math.abs(secondEngaged.player.slingshot.entrySpeed - shortHoldExitSpeed) < 0.05,
+        'the second landmark must enter with the already-boosted velocity');
+      assert(Math.abs(secondEngaged.player.slingshot.arcSpeed
+        - secondEngaged.player.slingshot.entrySpeed
+        - secondEngaged.player.slingshot.boost) < 1e-6,
+      'the second landmark must compound its flat boost from the higher entry speed');
+      await post('/input', {
+        ...authority,
+        commandSeq,
+        seq: commandSeq,
+        moveX: 0,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: false,
+        slingshotEdges: [],
+        timestamp: Date.now(),
+      }, headers(authority));
+      commandSeq += 1;
+      await waitForPlayer('grapple-arc-v3-test', (player) => !player.slingshot?.engaged);
 
       await post('/debug/player-state', {
         clientId: 'grapple-arc-v3-test',

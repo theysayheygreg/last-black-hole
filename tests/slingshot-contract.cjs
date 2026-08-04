@@ -21,8 +21,6 @@ function run() {
     're-hook cooldown must remain in the readable 1.0–1.5 second tuning band');
   assert.strictEqual(GRAPPLE_ARC.rehookCooldownTuningStepSeconds, 0.25,
     're-hook tuning must stay in explicit quarter-second steps');
-  assert.strictEqual(GRAPPLE_ARC.boostCooldownSeconds, 10,
-    'the global boost cooldown must cover the ten-second tap-spam window');
 
   const ordinaryWell = grappleGeometry({ type: 'well', killRadius: 0.04, mass: 1 });
   const grownWell = grappleGeometry({ type: 'well', killRadius: 0.09, mass: 3 });
@@ -84,7 +82,7 @@ function run() {
   assert(!('payoffCurve' in GRAPPLE_ARC), 'canonical contract must have no arc-duration payoff curve');
   assert(!('energyAccrualRate' in GRAPPLE_ARC), 'canonical contract must have no energy bank');
 
-  console.log('GrappleArcContract: 18/18 passed');
+  console.log('GrappleArcContract: 17/17 passed');
 }
 
 try {
