@@ -285,19 +285,28 @@ jobs:
               -f ref="refs/tags/${RELEASE_TAG}" -f sha="${GITHUB_SHA}" >/dev/null
           fi
 
+          # Publish as a draft so the public releases page shows only the
+          # advertised downloads (current stable + v0.3 beta). The rolling
+          # build stays available to maintainers and automation via this tag.
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release edit "${RELEASE_TAG}" \
-              --title "Latest Playtest" --notes-file release-notes.md --prerelease
+              --title "Weekly Auto-Build (internal channel)" \
+              --notes-file release-notes.md --prerelease --draft
           else
             gh release create "${RELEASE_TAG}" \
-              --target "${GITHUB_SHA}" --title "Latest Playtest" \
-              --notes-file release-notes.md --prerelease
+              --target "${GITHUB_SHA}" --title "Weekly Auto-Build (internal channel)" \
+              --notes-file release-notes.md --prerelease --draft
           fi
 
           gh release upload "${RELEASE_TAG}" release-assets/* --clobber
       - name: Verify published rolling release
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > published-release.json
+          # The by-tag REST endpoint cannot see draft releases; the list
+          # endpoint returns drafts (with repo auth) and keeps full asset
+          # objects, including the digest field the checks below assert on.
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=50" \
+            --jq "[.[] | select(.tag_name == \"${RELEASE_TAG}\")][0]" \
+            > published-release.json
           gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" > published-tag.json
           node - <<'NODE'
           const fs = require('fs');
