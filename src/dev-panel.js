@@ -243,10 +243,9 @@ function autoRange(val) {
   };
 }
 
-/**
- * Format a number to a sensible display precision.
- */
-function fmt(v) {
+/** Format one numeric control/metric without letting absent telemetry crash UI. */
+export function formatDevPanelValue(v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '—';
   if (Number.isInteger(v)) return String(v);
   if (Math.abs(v) < 0.001) return v.toExponential(2);
   if (Math.abs(v) < 1) return v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '.0');
@@ -712,18 +711,18 @@ function createSliderNested(obj, key, path) {
   display.style.textAlign = 'right';
   display.style.flexShrink = '0';
   display.style.color = '#8f8';
-  display.textContent = hint.unit ? `${fmt(val)} ${hint.unit}` : fmt(val);
+  display.textContent = hint.unit ? `${formatDevPanelValue(val)} ${hint.unit}` : formatDevPanelValue(val);
 
   slider.addEventListener('input', () => {
     const v = snapControlValue(path, parseFloat(slider.value));
     slider.value = v;
     obj[key] = v;
-    display.textContent = hint.unit ? `${fmt(v)} ${hint.unit}` : fmt(v);
+    display.textContent = hint.unit ? `${formatDevPanelValue(v)} ${hint.unit}` : formatDevPanelValue(v);
   });
 
   slider._update = () => {
     slider.value = obj[key];
-    display.textContent = hint.unit ? `${fmt(obj[key])} ${hint.unit}` : fmt(obj[key]);
+    display.textContent = hint.unit ? `${formatDevPanelValue(obj[key])} ${hint.unit}` : formatDevPanelValue(obj[key]);
   };
 
   row.appendChild(label);
@@ -791,17 +790,17 @@ function createArraySliderNested(obj, key, index, compLabel, path) {
   display.style.textAlign = 'right';
   display.style.flexShrink = '0';
   display.style.color = '#8f8';
-  display.textContent = fmt(val);
+  display.textContent = formatDevPanelValue(val);
 
   slider.addEventListener('input', () => {
     const v = parseFloat(slider.value);
     obj[key][index] = v;
-    display.textContent = fmt(v);
+    display.textContent = formatDevPanelValue(v);
   });
 
   slider._update = () => {
     slider.value = obj[key][index];
-    display.textContent = fmt(obj[key][index]);
+    display.textContent = formatDevPanelValue(obj[key][index]);
   };
 
   row.appendChild(label);

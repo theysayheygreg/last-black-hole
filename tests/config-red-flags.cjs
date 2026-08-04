@@ -70,6 +70,18 @@ async function run() {
       "dev panel must snap to the declared step");
   });
 
+  await runner.run("dev panel formats absent authority metrics without throwing", async () => {
+    const { formatDevPanelValue } = await import("../src/dev-panel.js");
+    for (const unavailable of [null, undefined, NaN, Infinity, -Infinity]) {
+      assert(formatDevPanelValue(unavailable) === "—",
+        `Expected unavailable placeholder for ${String(unavailable)}`);
+    }
+    assert(formatDevPanelValue(0) === "0", "Expected integer formatting to remain stable");
+    assert(formatDevPanelValue(0.0005) === "5.00e-4", "Expected small-value exponent formatting to remain stable");
+    assert(formatDevPanelValue(0.5) === "0.5", "Expected fractional formatting to remain stable");
+    assert(formatDevPanelValue(1.25) === "1.25", "Expected ordinary decimal formatting to remain stable");
+  });
+
   await runner.run("ESM CJS and dev panel consume canonical tuning metadata", async () => {
     const esm = await import("../src/content/tuning.js");
     const devPanel = await import("../src/dev-panel.js");

@@ -1,5 +1,11 @@
 # v0.3 Changelog
 
+- **Dev telemetry shutdown crash:** the live dev panel now renders an
+  unavailable placeholder when an authority metric is null or non-finite
+  during disconnect/shutdown. Valid integer, fractional, scientific, and
+  decimal formatting is unchanged; losing telemetry no longer throws through
+  the main UI loop.
+
 - **Local run lifecycle recovery:** local player launch now pins the authority
   process for the Electron/local-host session, matching packaged-app behavior.
   If a prior local session left an otherwise healthy but unpinned sim on the
