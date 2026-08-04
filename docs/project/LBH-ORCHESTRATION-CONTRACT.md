@@ -4,20 +4,12 @@ Primary control cycles use the installed `lbh-primary-sol` skill at
 `~/.codex/skills/lbh-primary-sol/SKILL.md`. This file remains the project-specific
 authority; the skill supplies the reusable producer workflow.
 
-Primary Sol also owns the installed LBH skill portfolio: Forge, harness,
-delegation, Three lifecycle, social screenshot, and public update passes. It
-may also invoke Maestro's production or quality-review specialist lane for
-coordinated visual, audio, copy, motion, and thematic judgment. It routes these
-lanes when useful, keeps them aligned with this contract, and avoids running
-overlapping passes as ceremony.
-
-Primary Sol owns cross-version merges and RC candidate selection. Workstream
-Sols produce commits; they do not promote or merge version lines independently.
-Primary Sol also owns the main-line governance surfaces: root `README.md`,
-`docs/project/ROADMAP.md`, `docs/journal/DECISION-LOG.md`,
-`docs/project/BRANCHING-AND-RELEASE-LINES.md`, and the `origin/main` push
-contract. Version workstreams may propose changes but do not edit or publish
-those surfaces independently.
+Primary is Greg's clean intake, routing, and status surface. It may inspect
+read-only repository and task state and synthesize receipts, but it does not
+execute project work. Every implementation, code review, test or CI run,
+integration, build, deployment, repository edit, Discord action, and
+specialist invocation occurs in an explicitly owned task. Workstream Sols own
+their version integration branches and Luna armies.
 
 > Status: active. Effective 2026-07-14.
 >
@@ -154,9 +146,9 @@ progress belongs in commits and task receipts, not status churn here.
 
 | Role | Codex task | Owned line | Current assignment |
 |---|---|---|---|
-| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | Greg intake, cross-workstream routing, read-only status synthesis, merge readiness, and RC selection | Route all executable work to owned tasks; keep v0.4 held while the v0.3 feature-set repair program proceeds |
+| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | Greg intake, owned-task routing, read-only status, and receipt synthesis | Route all executable work to owned tasks; keep v0.4 held while the v0.3 feature-set repair program proceeds |
 | v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Hold accepted P5E commit `40b5f26` on `codex/v0.4-p5e-controls`; no integration or P6 until Primary routes it |
-| v0.3 Workstream Sol | delegated task id not exposed | `codex/v0.3-ballpark-roadmap` in `/private/tmp/lbh-v03-ballpark-integration` | Own Luna review, focused CI, and same-line integration for the ordered v0.3 feature-set repair program; Item 7 remains last |
+| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3-ballpark-roadmap` in `/private/tmp/lbh-v03-ballpark-integration` | Review and integrate Item 5 fix-forward, release UI Wave C, then complete Wave C/D and Item 7 last |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
 | Maestro Specialist Intake | Primary Sol routes; Maestro executes | Pinned player-facing slices across version lines | Production and quality-review lanes are available from `#orb-assistant` message `1526773577079328930`; invoke only when a coherent slice warrants multi-craft judgment |
 
