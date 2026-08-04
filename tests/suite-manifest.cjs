@@ -455,6 +455,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "UIDesignTokens",
+    file: "ui-design-tokens.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
     name: "UIPrimitives",
     file: "ui-primitives.cjs",
     lanes: ["fast", "core", "static", "full"],
