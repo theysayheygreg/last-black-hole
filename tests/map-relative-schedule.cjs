@@ -44,6 +44,7 @@ function assertClassificationFixture() {
   assert(source["scripts/sim-runtime.cjs"].includes("phaseProgresses: Object.freeze([0, 0.15, 0.30, 0.45])"));
   assert(source["scripts/sim-runtime.cjs"].includes("graceProgress: 0.075"));
   assert(source["scripts/sim-runtime.cjs"].includes("cadenceProgress: 0.20"));
+  assert(source["scripts/sim-runtime.cjs"].includes("durationProgress: 0.15"));
   assert(source["scripts/sim-runtime.cjs"].includes('openProgress: 1'));
   assert(source["scripts/sim-runtime.cjs"].includes("finalExfilDuration: readNumber"));
   assert(source["scripts/sim-runtime.cjs"].includes("offsetGuardSeconds: 10"));
@@ -93,10 +94,15 @@ function assertRunSchedule(snapshot, duration) {
   ]);
   optional.forEach((window, index) => {
     closeEnough(window.metadata.requestedOpenProgress, 0.075 + 0.2 * index, `${duration}s portal ${index + 1} target`);
-    assert(window.metadata.openProgress + EPSILON >= window.metadata.requestedOpenProgress,
-      `${duration}s portal ${index + 1} moved before its normalized target`);
-    assert(window.duration === [90, 75, 60, 45, 30][index] * (window.metadata.durationMultiplier || 1),
-      `${duration}s portal ${index + 1} lost its absolute base duration`);
+    assert(window.metadata.openProgress + EPSILON >= window.metadata.phaseBand.startProgress &&
+      window.metadata.openProgress <= window.metadata.phaseBand.endProgress + EPSILON,
+    `${duration}s portal ${index + 1} crossed its declared phase band`);
+    closeEnough(window.metadata.durationProgress, [0.15, 0.125, 0.10, 0.075, 0.05][index],
+      `${duration}s portal ${index + 1} duration progress`);
+    closeEnough(window.metadata.baseDurationSeconds, duration * window.metadata.durationProgress,
+      `${duration}s portal ${index + 1} scales its base duration`);
+    closeEnough(window.duration, window.metadata.baseDurationSeconds * (window.metadata.durationMultiplier || 1),
+      `${duration}s portal ${index + 1} applies its phase shortening`);
     assert(window.openTime >= 0 && window.closeTime > window.openTime, `${duration}s portal ${index + 1} has invalid bounds`);
   });
   assert.deepStrictEqual(optional.map((window) => window.openId), [
@@ -157,8 +163,8 @@ async function run() {
     );
     assert.deepStrictEqual(
       expanse.portalSchedule.windows.filter((window) => !window.metadata?.finalExfil).map((window) => window.closeTime),
-      [135, 240, 321, 432, 543],
-      "600s Expanse optional closes must preserve the prior anchor",
+      [135, 240, 315, 427.5, 540],
+      "600s Expanse optional closes must preserve the proportional live-window anchor",
     );
     assert.deepStrictEqual(
       snapshots.shallows.portalSchedule.windows.map((window) => window.windowId),

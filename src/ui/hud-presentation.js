@@ -26,10 +26,17 @@ export function resolveHudTimerState({
   const interval = Math.max(0.001, Number(growthIntervalSeconds) || 45);
   const timer = Math.max(0, Number(growthTimer) || 0);
   const windows = Array.isArray(portalSchedule?.windows) && portalSchedule.windows.length > 0
-    ? portalSchedule.windows.map((window) => ({
-      time: Number(window.openTime) || 0,
-      final: window.metadata?.finalExfil === true,
-    }))
+    ? portalSchedule.windows
+      // A zero-count authority window is diagnostic schedule data, not a
+      // player route. Never turn it into a lying "next aperture" countdown.
+      .filter((window) => {
+        const countRange = window?.metadata?.effectiveCountRange;
+        return !Array.isArray(countRange) || Number(countRange[1]) > 0;
+      })
+      .map((window) => ({
+        time: Number(window.openTime) || 0,
+        final: window.metadata?.finalExfil === true,
+      }))
     : (Array.isArray(fallbackWaves) ? fallbackWaves.map((wave, index, waves) => ({
       time: Number(wave.time) || 0,
       final: index === waves.length - 1,

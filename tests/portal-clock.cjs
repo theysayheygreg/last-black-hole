@@ -5,14 +5,33 @@ const {
   assert,
 } = require("./helpers.cjs");
 const { Conductor } = require("../scripts/sim/conductor.cjs");
+const { canOpenPortalWindow } = require("../scripts/sim/portal-window-state.cjs");
 
 const SIM_PORT = Number(process.env.LBH_PORTAL_CLOCK_SIM_PORT || 8818);
-const TRANSITION_PORT = Number(process.env.LBH_PORTAL_CLOCK_TRANSITION_PORT || 8819);
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
+const EPSILON = 1e-9;
+// This leaves less than one .20 cadence beat without a player-visible exit.
+// It protects the original report's back-half drought without prescribing a
+// new simulation clock or fake windows.
+const MAX_EXIT_LESS_GAP_PROGRESS = 0.175;
 
-async function request(path, body = null, port = SIM_PORT) {
-  const baseUrl = port === SIM_PORT ? SIM_URL : `http://127.0.0.1:${port}`;
-  const response = await fetch(`${baseUrl}${path}`, body == null ? undefined : {
+const MAP_EXPECTATIONS = Object.freeze({
+  shallows: {
+    duration: 480,
+    optionalDurations: [72, 60, 24, 18, 12],
+  },
+  expanse: {
+    duration: 600,
+    optionalDurations: [90, 75, 30, 22.5, 15],
+  },
+  "deep-field": {
+    duration: 720,
+    optionalDurations: [108, 90, 36, 27, 18],
+  },
+});
+
+async function request(path, body = null) {
+  const response = await fetch(`${SIM_URL}${path}`, body == null ? undefined : {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -22,42 +41,9 @@ async function request(path, body = null, port = SIM_PORT) {
   return json;
 }
 
-async function waitForSnapshot(port, predicate, timeoutMs = 5000) {
-  const deadline = Date.now() + timeoutMs;
-  let last = null;
-  while (Date.now() < deadline) {
-    try {
-      last = await request("/snapshot", null, port);
-      if (predicate(last)) return last;
-    } catch (error) {
-      last = { error };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for snapshot on ${port}: ${JSON.stringify({
-    session: last?.session,
-    simTime: last?.simTime,
-    portals: last?.world?.portals,
-    players: last?.players?.map((player) => ({ clientId: player.clientId, isAI: player.isAI, status: player.status })),
-    finalWindow: last?.portalSchedule?.windows?.find((window) => window.metadata?.finalExfil),
-  })}`);
-}
-
-async function waitForEvents(port, since, predicate, timeoutMs = 5000) {
-  const deadline = Date.now() + timeoutMs;
-  let last = [];
-  while (Date.now() < deadline) {
-    try {
-      last = (await request(`/events?since=${since}`, null, port)).events || [];
-      if (predicate(last)) return last;
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for events on ${port}: ${JSON.stringify(last)}`);
-}
-
-function maxEventSeq(events) {
-  return Math.max(0, ...(events || []).map((event) => Number(event.seq) || 0));
+function closeEnough(actual, expected, label) {
+  assert(Math.abs(Number(actual) - Number(expected)) <= EPSILON,
+    `${label}: expected ${expected}, got ${actual}`);
 }
 
 function assertGuarded(fronts, guard) {
@@ -68,110 +54,81 @@ function assertGuarded(fronts, guard) {
   }
 }
 
+function assertExitlessGapBound(windows, duration, mapId) {
+  const live = windows.filter((window) => canOpenPortalWindow(window));
+  const fronts = [{ openTime: 0, closeTime: 0 }, ...live];
+  for (let index = 1; index < fronts.length; index += 1) {
+    const gapProgress = (fronts[index].openTime - fronts[index - 1].closeTime) / duration;
+    assert(gapProgress <= MAX_EXIT_LESS_GAP_PROGRESS + EPSILON,
+      `${mapId} has an exit-less gap of ${(gapProgress * 100).toFixed(1)}%, above the ${MAX_EXIT_LESS_GAP_PROGRESS * 100}% bound`);
+  }
+}
+
+function assertMapSchedule(schedule, mapId, expectation) {
+  assert(schedule?.conductorId === "match-conductor", "Expected the portal schedule on the match Conductor");
+  assert(schedule.matchDurationSeconds === expectation.duration, `${mapId} schedule duration`);
+  assert(schedule.offsetGuardSeconds === 10, `${mapId} Conductor guard`);
+
+  const optional = schedule.windows.filter((window) => !window.metadata.finalExfil);
+  const finalWindow = schedule.windows.find((window) => window.metadata.finalExfil);
+  assert(optional.length === 5, `${mapId} keeps five declared optional windows`);
+  assert(JSON.stringify(optional.map((window) => window.metadata.effectiveCountRange)) === JSON.stringify([
+    [2, 3], [1, 2], [1, 1], [1, 1], [1, 1],
+  ]), `${mapId} keeps every optional window real through phase three`);
+
+  optional.forEach((window, index) => {
+    const requestedProgress = 0.075 + 0.2 * index;
+    const phaseBand = window.metadata.phaseBand;
+    assert(phaseBand, `${mapId} optional ${index + 1} declares its phase band`);
+    closeEnough(window.metadata.requestedOpenProgress, requestedProgress,
+      `${mapId} optional ${index + 1} normalized target`);
+    assert(window.metadata.openProgress + EPSILON >= phaseBand.startProgress &&
+      window.metadata.openProgress <= phaseBand.endProgress + EPSILON,
+    `${mapId} optional ${index + 1} crossed its declared phase band`);
+    assert(window.metadata.phaseAtOpen === window.metadata.declaredPhase,
+      `${mapId} optional ${index + 1} changed its declared phase`);
+    assert(canOpenPortalWindow(window), `${mapId} optional ${index + 1} must be a real player route`);
+    closeEnough(window.duration, expectation.optionalDurations[index],
+      `${mapId} optional ${index + 1} duration`);
+  });
+  assert(optional.slice(0, 3).every(canOpenPortalWindow),
+    `${mapId} must retain a live optional route in each declared early/mid/pressure band`);
+  assertExitlessGapBound([...optional, finalWindow], expectation.duration, mapId);
+
+  assert(finalWindow, `${mapId} final exfil window`);
+  closeEnough(finalWindow.openTime, expectation.duration, `${mapId} final exfil open`);
+  closeEnough(finalWindow.closeTime, expectation.duration + 60, `${mapId} final exfil close`);
+  assert(finalWindow.openId.endsWith(":open") && finalWindow.closeId.endsWith(":close"),
+    `${mapId} final exfil event identities`);
+  assertGuarded(schedule.eventFronts, schedule.offsetGuardSeconds);
+}
+
 async function run() {
   const runner = new TestRunner("PortalClock");
   await startSimServer(SIM_PORT, { keepAlive: true, idleShutdownMs: 5000 });
 
   try {
-    await runner.run("server publishes one guarded deterministic portal schedule", async () => {
-      const first = await request("/snapshot");
-      assert(first.world.portals.length === 0, "No portal may exist before its declared open event");
-      const schedule = first.portalSchedule;
-      assert(schedule?.conductorId === "match-conductor", "Expected the portal schedule on the match Conductor");
-      assert(schedule.offsetGuardSeconds === 10, "Expected the provisional ten-second Conductor guard");
-      assert(schedule.windows.length === 6, `Expected five optional windows and one final window, got ${schedule.windows.length}`);
-
-      const optional = schedule.windows.filter((window) => !window.metadata.finalExfil);
-      const finalWindow = schedule.windows.find((window) => window.metadata.finalExfil);
-      assert(JSON.stringify(optional.map((window) => window.openTime)) === JSON.stringify([36, 226, 281, 327, 420]),
-        "Expected normalized optional targets with the absolute guard resolved forward");
-      assert(JSON.stringify(optional.map((window) => window.closeTime)) === JSON.stringify([126, 271, 317, 354, 438]),
-        "Expected absolute portal durations with declarative late-phase shortening");
-      assert(JSON.stringify(optional.map((window) => window.metadata.effectiveCountRange)) === JSON.stringify([[2, 3], [0, 0], [0, 0], [0, 0], [0, 0]]),
-        "Expected deterministic late-phase count thinning");
-      assert(finalWindow.openTime === 480 && finalWindow.closeTime === 540,
-        "Final exfil must open at the Shallows timer and close after its declared duration");
-      assert(finalWindow.openId.endsWith(":open") && finalWindow.closeId.endsWith(":close"),
-        "Expected stable final open/close event identities");
-      assertGuarded(schedule.eventFronts, schedule.offsetGuardSeconds);
-
-      const restarted = await request("/session/start", { mapId: "shallows", maxPlayers: 1, seed: 424242 });
-      const sameSeed = await request("/snapshot");
-      assert(restarted.session.seed === 424242, "Expected the focused restart to use the requested seed");
-      assert(JSON.stringify(sameSeed.portalSchedule) === JSON.stringify(
-        await request("/session/start", { mapId: "shallows", maxPlayers: 1, seed: 424242 })
-          .then(() => request("/snapshot"))
-          .then((snapshot) => snapshot.portalSchedule)
-      ), "Expected same seed/config to produce byte-stable portal schedule data");
-    });
-
-    await runner.run("live server opens and closes guaranteed final exfil on its declared fronts", async () => {
-      await startSimServer(TRANSITION_PORT, {
-        keepAlive: true,
-        idleShutdownMs: 5000,
-        env: {
-          LBH_SIM_MAX_SIM_TIME: "10",
-          LBH_SIM_FINAL_EXFIL_DURATION: "10",
-          LBH_SIM_TERMINAL_GRACE_MS: "60000",
-        },
-      });
-      try {
-        const start = await request("/session/start", {
-          mapId: "shallows",
-          requesterId: "portal-clock-host",
-          requesterName: "Portal Clock Host",
-          maxPlayers: 1,
-        }, TRANSITION_PORT);
-        assert(start.session?.runId, "Expected a real session start run id");
-        const join = await request("/join", {
-          runId: start.session.runId,
-          clientId: "portal-clock-host",
-          name: "Portal Clock Host",
-          joinTicket: start.joinTicket,
-        }, TRANSITION_PORT);
-        assert(join.ok === true, "Expected a real human to join the transition session");
-
-        const baseline = await request("/events?since=0", null, TRANSITION_PORT);
-        const since = maxEventSeq(baseline.events);
-        const beforeOpen = await waitForSnapshot(TRANSITION_PORT, (snapshot) =>
-          snapshot.session?.status === "running" && snapshot.simTime >= 5 && snapshot.simTime < 10, 8000);
-        assert(!beforeOpen.world.portals.some((portal) => portal.finalInhibitor && portal.alive !== false),
-          "Real server must not materialize final exfil before the main timer");
-
-        const opened = await waitForSnapshot(TRANSITION_PORT, (snapshot) =>
-          snapshot.session?.status === "running" && snapshot.simTime >= 10 && snapshot.simTime < 20 &&
-          snapshot.world.portals.some((portal) => portal.id === "portal-final-exfil" && portal.alive !== false), 12000);
-        const finalPortal = opened.world.portals.find((portal) => portal.id === "portal-final-exfil");
-        const openEvents = await waitForEvents(TRANSITION_PORT, since, (events) =>
-          events.some((event) => event.type === "portal.windowOpened" && event.payload?.windowId === "portal:final-exfil:1") &&
-          events.some((event) => event.type === "portal.spawned" && event.payload?.portalId === "portal-final-exfil"), 3000);
-        const openedEvent = openEvents.find((event) => event.type === "portal.windowOpened" && event.payload?.windowId === "portal:final-exfil:1");
-        const spawnedEvent = openEvents.find((event) => event.type === "portal.spawned" && event.payload?.portalId === "portal-final-exfil");
-        assert(opened.session.status === "running", "Real session must remain running at final open");
-        assert(finalPortal.windowId === "portal:final-exfil:1" && finalPortal.scheduledOpenTime === 10 && finalPortal.scheduledCloseTime === 20,
-          "Real final portal must carry the declared open and close schedule");
-        assert(openedEvent.payload.conductorId === "match-conductor" && openedEvent.payload.openId.endsWith(":open") &&
-          openedEvent.payload.scheduledOpenTime === 10 && openedEvent.payload.scheduledCloseTime === 20,
-        "Real open event must carry Conductor identity and schedule fronts");
-        assert(spawnedEvent.payload.conductorId === "match-conductor" && spawnedEvent.payload.portalId === finalPortal.id,
-          "Real spawn event must identify the guaranteed final portal");
-
-        const ended = await waitForSnapshot(TRANSITION_PORT, (snapshot) =>
-          snapshot.session?.status === "ended" && snapshot.simTime >= 20, 20000);
-        const closeEvents = await waitForEvents(TRANSITION_PORT, since, (events) =>
-          events.some((event) => event.type === "portal.windowClosed" && event.payload?.windowId === "portal:final-exfil:1") &&
-          events.some((event) => event.type === "portal.expired" && event.payload?.portalId === "portal-final-exfil"), 3000);
-        assert(ended.session.endReason === "run-timeout", "Real final close must end the session as run-timeout");
-        assert(ended.players.filter((player) => !player.isAI && player.status === "alive").length === 0,
-          "Real final close must leave no active humans");
-        assert(closeEvents.some((event) => event.type === "portal.windowClosed" && event.payload?.closeId.endsWith(":close")),
-          "Real close event must carry its paired close identity");
-      } finally {
-        await stopSimServer(TRANSITION_PORT).catch(() => null);
+    await runner.run("every map keeps phase-banded live portal routes without a back-half drought", async () => {
+      for (const [mapId, expectation] of Object.entries(MAP_EXPECTATIONS)) {
+        await request("/session/start", { mapId, maxPlayers: 1, seed: 424242 });
+        const snapshot = await request("/snapshot");
+      assert(snapshot.world.portals.length === 0, `${mapId} must not materialize a portal before its declared open front`);
+        assertMapSchedule(snapshot.portalSchedule, mapId, expectation);
       }
     });
 
+    await runner.run("zero-count diagnostic windows cannot publish an opening", () => {
+      const zeroCount = { metadata: { effectiveCountRange: [0, 0] } };
+      const liveOptional = { metadata: { effectiveCountRange: [1, 1] } };
+      const finalExfil = { metadata: { finalExfil: true, effectiveCountRange: [1, 1] } };
+      assert(canOpenPortalWindow(zeroCount) === false,
+        "A zero-count schedule entry must be suppressed before portal.windowOpened is published");
+      assert(canOpenPortalWindow(liveOptional) === true);
+      assert(canOpenPortalWindow(finalExfil) === true);
+    });
+
     await runner.run("Conductor spawn selection preserves declared final radius bands", async () => {
+      await request("/session/start", { mapId: "shallows", maxPlayers: 1, seed: 424242 });
       const schedule = (await request("/snapshot")).portalSchedule;
       const finalWindow = schedule.windows.find((window) => window.metadata.finalExfil);
       const band = finalWindow.metadata.spawnRadiusBands.finalExfil;

@@ -26,10 +26,15 @@ Shallows `480s`, Expanse `600s`, and Deep Field `720s`. Collapse, Inhibitor,
 optional portal targets, and final exfil open are normalized to the selected
 run; the final exfil closes 60 seconds after the 100% front. The prior Expanse
 600-second schedule remains the anchor, with epoch 3 intentionally corrected to
-75%. Portal durations, tells, cooldowns, action windows, effect lifetimes,
-offset guards, and reconnect/reservation timers remain absolute. The locked
-baseline is accepted for focused proof, while later multiplier balance remains
-playtest-tunable.
+75%. Optional portal apertures use that same normalized schedule: their authored
+90/75/60/45/30-second Expanse durations are `0.15/.125/.10/.075/.05` of the
+selected run, so Shallows and Deep Field do not inherit mismatched real-time
+windows. Every optional opening stays in its declared Inhibitor phase band;
+late pressure halves the count range and aperture duration rather than silently
+removing the back half of the route. The final 60-second exfil, tells,
+cooldowns, action windows, effect lifetimes, offset guards, and
+reconnect/reservation timers remain absolute. The locked baseline is accepted
+for focused proof, while later multiplier balance remains playtest-tunable.
 
 ### Teaching Route
 

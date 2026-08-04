@@ -110,6 +110,7 @@ function createRunState() {
     portalClock: {
       openedWindowIds: new Set(),
       closedWindowIds: new Set(),
+      suppressedWindowIds: new Set(),
       finalOpen: false,
       finalClosed: false,
     },

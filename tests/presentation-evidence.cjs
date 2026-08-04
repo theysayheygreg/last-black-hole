@@ -128,8 +128,11 @@ async function run() {
   const activePortal = { id: 'optional-1', type: 'standard', alive: true, wx: 0.5, wy: 0.5, spawnTime: 57, lifespan: 10 };
   const portalSchedule = {
     windows: [
-      { openTime: 60, metadata: { finalExfil: false } },
-      { openTime: 120, metadata: { finalExfil: true } },
+      // Diagnostic zero-count entries are authority history only. They must
+      // never turn into a lying HUD countdown before the next real aperture.
+      { openTime: 59, metadata: { finalExfil: false, effectiveCountRange: [0, 0] } },
+      { openTime: 60, metadata: { finalExfil: false, effectiveCountRange: [1, 1] } },
+      { openTime: 120, metadata: { finalExfil: true, effectiveCountRange: [1, 1] } },
     ],
   };
   const displayed = [];

@@ -133,6 +133,7 @@ const {
   wrapPosition: wrapWorldPosition,
 } = require("./sim/world-geometry.cjs");
 const { createConductor } = require("./sim/conductor.cjs");
+const { canOpenPortalWindow } = require("./sim/portal-window-state.cjs");
 const { hullCalmSpaceReferenceSpeed } = require("./sim/hull-reference-speed.cjs");
 const { capFabricCurrent } = require("./sim/fabric-reference-frame.cjs");
 const {
@@ -210,15 +211,20 @@ const PORTAL_CONFIG = Object.freeze({
     cadenceProgress: 0.20,
     offsetGuardSeconds: 10,
     optionalWindows: Object.freeze([
-      { count: [2, 3], types: ["standard"], durationSeconds: 90 },
-      { count: [1, 2], types: ["standard", "unstable"], durationSeconds: 75 },
-      { count: [1, 2], types: ["standard", "rift"], durationSeconds: 60 },
-      { count: [1, 1], types: ["unstable"], durationSeconds: 45 },
-      { count: [1, 1], types: ["standard"], durationSeconds: 30 },
+      // Fractions of the selected match duration. These preserve the old
+      // 90/75/60/45/30-second Expanse cadence while keeping every map tier's
+      // exit windows proportional to its actual run length.
+      { count: [2, 3], types: ["standard"], durationProgress: 0.15 },
+      { count: [1, 2], types: ["standard", "unstable"], durationProgress: 0.125 },
+      { count: [1, 2], types: ["standard", "rift"], durationProgress: 0.10 },
+      { count: [1, 1], types: ["unstable"], durationProgress: 0.075 },
+      { count: [1, 1], types: ["standard"], durationProgress: 0.05 },
     ]),
     latePhaseRules: Object.freeze([
       { minInhibitorPhase: 2, countMultiplier: 0.5, durationMultiplier: 0.8 },
-      { minInhibitorPhase: 3, countMultiplier: 0, durationMultiplier: 0.6 },
+      // The final pressure band makes optional exits brief and scarce, not
+      // fictional. A 0.5 count range still resolves to one real aperture.
+      { minInhibitorPhase: 3, countMultiplier: 0.5, durationMultiplier: 0.5 },
     ]),
     finalExfilDuration: readNumber(process.env.LBH_SIM_FINAL_EXFIL_DURATION, 60, 1),
     placementAttempts: 128,
@@ -426,6 +432,92 @@ function scalePortalCountRange(countRange, multiplier) {
   return [min, max];
 }
 
+function portalPhaseBand(progress, duration) {
+  const phase = inhibitorPhaseAtProgress(progress);
+  const startProgress = inhibitorPhaseProgress(phase);
+  const endProgress = phase < INHIBITOR_CONFIG.phaseProgresses.length - 1
+    ? inhibitorPhaseProgress(phase + 1)
+    : 1;
+  return {
+    phase,
+    startProgress,
+    endProgress,
+    startTime: duration * startProgress,
+    endTime: duration * endProgress,
+  };
+}
+
+function isOutsidePortalFrontGuard(time, eventFrontTimes, guardSeconds) {
+  return eventFrontTimes.every((frontTime) => Math.abs(time - frontTime) >= guardSeconds);
+}
+
+function resolvePortalWindowPlacement({
+  requestedOpenTime,
+  durationSeconds,
+  phaseBand,
+  previousCloseTime,
+  eventFrontTimes,
+  guardSeconds,
+}) {
+  // A portal's declared phase is part of its player-facing pacing contract.
+  // Keep its open event inside that band; when a close grazes another front,
+  // prefer trimming the aperture over inventing a later-phase opening.
+  const lowerBound = Math.max(
+    phaseBand.startTime + guardSeconds,
+    previousCloseTime == null ? -Infinity : previousCloseTime + guardSeconds,
+  );
+  const upperBound = phaseBand.endTime - guardSeconds;
+  if (lowerBound > upperBound) return null;
+
+  const candidates = new Set([
+    lowerBound,
+    upperBound,
+    Math.max(lowerBound, Math.min(upperBound, requestedOpenTime)),
+  ]);
+  for (const frontTime of eventFrontTimes) {
+    candidates.add(frontTime - guardSeconds);
+    candidates.add(frontTime + guardSeconds);
+    // Preserve the intended aperture by moving it earlier inside its own
+    // phase before falling back to a shorter window at the requested time.
+    candidates.add(frontTime - guardSeconds - durationSeconds);
+  }
+
+  const placements = [];
+  for (const candidate of candidates) {
+    if (!Number.isFinite(candidate) || candidate < lowerBound || candidate > upperBound) continue;
+    if (!isOutsidePortalFrontGuard(candidate, eventFrontTimes, guardSeconds)) continue;
+
+    let resolvedDuration = durationSeconds;
+    const requestedCloseTime = candidate + resolvedDuration;
+    const closeConflict = eventFrontTimes.find((frontTime) =>
+      Math.abs(requestedCloseTime - frontTime) < guardSeconds,
+    );
+    if (closeConflict !== undefined) {
+      // Keep the close before the conflicting front when that gives the player
+      // a usable aperture; do not move this opening across the front instead.
+      resolvedDuration = Math.max(0, closeConflict - guardSeconds - candidate);
+    }
+    const closeTime = candidate + resolvedDuration;
+    if (resolvedDuration <= 0 || !isOutsidePortalFrontGuard(closeTime, eventFrontTimes, guardSeconds)) continue;
+    placements.push({ openTime: candidate, durationSeconds: resolvedDuration });
+  }
+
+  placements.sort((a, b) =>
+    b.durationSeconds - a.durationSeconds
+    || Math.abs(a.openTime - requestedOpenTime) - Math.abs(b.openTime - requestedOpenTime)
+    || a.openTime - b.openTime,
+  );
+  return placements[0] || null;
+}
+
+function optionalPortalBaseDurationSeconds(declaration, runDurationSeconds) {
+  const progress = Number(declaration.durationProgress);
+  if (!Number.isFinite(progress) || progress <= 0) {
+    throw new RangeError("Optional portal durationProgress must be greater than zero");
+  }
+  return runDurationSeconds * progress;
+}
+
 function portalWindowMetadata(
   declaration,
   index,
@@ -433,8 +525,12 @@ function portalWindowMetadata(
   openProgress,
   requestedOpenProgress = openProgress,
   portalPlacement,
+  runDurationSeconds,
+  phaseBand = null,
+  durationSeconds = null,
 ) {
   const lateRule = latePortalRuleForPhase(phase);
+  const baseDurationSeconds = optionalPortalBaseDurationSeconds(declaration, runDurationSeconds);
   return {
     system: "portals",
     kind: "optional",
@@ -442,12 +538,20 @@ function portalWindowMetadata(
     openProgress,
     requestedOpenProgress,
     phaseAtOpen: phase,
+    declaredPhase: phase,
+    phaseBand: phaseBand && {
+      startProgress: phaseBand.startProgress,
+      endProgress: phaseBand.endProgress,
+    },
     countRange: declaration.count.slice(),
     effectiveCountRange: scalePortalCountRange(declaration.count, lateRule.countMultiplier),
     types: declaration.types.slice(),
-    baseDurationSeconds: declaration.durationSeconds,
+    durationProgress: declaration.durationProgress,
+    baseDurationSeconds,
     durationMultiplier: lateRule.durationMultiplier,
-    durationSeconds: declaration.durationSeconds * lateRule.durationMultiplier,
+    durationSeconds: durationSeconds == null
+      ? baseDurationSeconds * lateRule.durationMultiplier
+      : durationSeconds,
     latePhaseRule: lateRule,
     portalPlacementPolicyId: portalPlacement.policyId,
     spawnRadiusBands: portalPlacement.spawnRadiusBands,
@@ -513,63 +617,63 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
     wells,
   });
 
-  const guardSeconds = PORTAL_CONFIG.schedule.offsetGuardSeconds;
-  const inhibitorFrontTimes = INHIBITOR_CONFIG.phaseProgresses.map(
-    (progress) => duration * progress,
-  );
+  const guardSeconds = resolvedGuardSeconds;
+  // Portal placement must honour every currently declared Conductor front.
+  // Collapse epochs register after this initial schedule, so include their
+  // same canonical fronts here rather than discovering a conflict later.
+  const eventFrontTimes = Array.from(new Set([
+    ...INHIBITOR_CONFIG.phaseProgresses.map((progress) => duration * progress),
+    ...createCollapseEpochSchedule({ matchDurationSeconds: duration })
+      .map((epoch) => epoch.scheduledTime),
+  ])).sort((a, b) => a - b);
   let previousOptionalCloseTime = null;
   const optionalWindows = PORTAL_CONFIG.schedule.optionalWindows.flatMap((declaration, index) => {
     const requestedOpenProgress =
       PORTAL_CONFIG.schedule.graceProgress + PORTAL_CONFIG.schedule.cadenceProgress * index;
     const requestedOpenTime = duration * requestedOpenProgress;
-    if (requestedOpenTime + declaration.durationSeconds > duration) {
+    if (requestedOpenTime >= duration) {
       return [];
     }
 
-    // Portal targets stay normalized, but the pre-existing absolute guard
-    // may move a short-tier opening forward when it meets an epoch front.
-    let openTime = Math.max(
-      requestedOpenTime,
-      previousOptionalCloseTime === null ? 0 : previousOptionalCloseTime + guardSeconds,
+    const declaredBand = portalPhaseBand(requestedOpenProgress, duration);
+    const baseMetadata = portalWindowMetadata(
+      declaration,
+      index,
+      declaredBand.phase,
+      requestedOpenProgress,
+      requestedOpenProgress,
+      portalPlacement,
+      duration,
+      declaredBand,
     );
-    for (let attempt = 0; attempt < 16; attempt += 1) {
-      const phase = inhibitorPhaseAtProgress(openTime / duration);
-      const durationSeconds = portalWindowMetadata(
-        declaration,
-        index,
-        phase,
-        openTime / duration,
-        requestedOpenProgress,
-        portalPlacement,
-      ).durationSeconds;
-      let nextOpenTime = openTime;
-      for (const frontTime of inhibitorFrontTimes) {
-        if (Math.abs(nextOpenTime - frontTime) < guardSeconds) {
-          nextOpenTime = Math.max(nextOpenTime, frontTime + guardSeconds);
-        }
-        if (Math.abs(nextOpenTime + durationSeconds - frontTime) < guardSeconds) {
-          nextOpenTime = Math.max(nextOpenTime, frontTime + guardSeconds);
-        }
-      }
-      if (nextOpenTime === openTime) {
-        break;
-      }
-      openTime = nextOpenTime;
-    }
+    const placement = resolvePortalWindowPlacement({
+      requestedOpenTime,
+      durationSeconds: baseMetadata.durationSeconds,
+      phaseBand: declaredBand,
+      previousCloseTime: previousOptionalCloseTime,
+      eventFrontTimes,
+      guardSeconds,
+    });
+    // A too-short diagnostic run can make a band physically unfit. Product
+    // schedules never take this path; omitting the false opening is more
+    // honest than publishing an aperture on a different phase front.
+    if (!placement) return [];
 
-    const openProgress = openTime / duration;
-    const phase = inhibitorPhaseAtProgress(openProgress);
+    const openProgress = placement.openTime / duration;
     const metadata = portalWindowMetadata(
       declaration,
       index,
-      phase,
+      declaredBand.phase,
       openProgress,
       requestedOpenProgress,
       portalPlacement,
+      duration,
+      declaredBand,
+      placement.durationSeconds,
     );
-    previousOptionalCloseTime = openTime + metadata.durationSeconds;
+    previousOptionalCloseTime = placement.openTime + metadata.durationSeconds;
     return [{
-      openTime,
+      openTime: placement.openTime,
       durationSeconds: metadata.durationSeconds,
       metadata,
     }];
@@ -2460,10 +2564,17 @@ function spawnPortalForWindow(window, type, index, { finalExfil = false } = {}) 
 }
 
 function openPortalWindow(window) {
-  if (runtime.portalClock.openedWindowIds.has(window.windowId)) return;
-  runtime.portalClock.openedWindowIds.add(window.windowId);
+  if (runtime.portalClock.openedWindowIds.has(window.windowId) ||
+      runtime.portalClock.suppressedWindowIds.has(window.windowId)) return false;
   const finalExfil = Boolean(window.metadata?.finalExfil);
   const countRange = window.metadata?.effectiveCountRange || [0, 0];
+  if (!canOpenPortalWindow(window)) {
+    // A schedule can retain a zero-count diagnostic/deprecated window, but it
+    // is not an opening. Never teach the event stream or HUD that one exists.
+    runtime.portalClock.suppressedWindowIds.add(window.windowId);
+    return false;
+  }
+  runtime.portalClock.openedWindowIds.add(window.windowId);
   const count = finalExfil
     ? 1
     : runtime.session.rng.int(`portal.window.count.${window.windowId}`, countRange[0], countRange[1]);
@@ -2493,9 +2604,14 @@ function openPortalWindow(window) {
     runtime.mapState.nextPortalWindowIndex = window.metadata.windowIndex + 1;
     runtime.mapState.nextPortalWaveIndex = runtime.mapState.nextPortalWindowIndex;
   }
+  return true;
 }
 
 function closePortalWindow(window) {
+  if (runtime.portalClock.suppressedWindowIds.has(window.windowId)) {
+    runtime.portalClock.closedWindowIds.add(window.windowId);
+    return false;
+  }
   if (!runtime.portalClock.openedWindowIds.has(window.windowId) ||
       runtime.portalClock.closedWindowIds.has(window.windowId)) return;
   runtime.portalClock.closedWindowIds.add(window.windowId);
@@ -2521,15 +2637,17 @@ function closePortalWindow(window) {
   if (finalExfil) {
     runtime.portalClock.finalClosed = true;
   }
+  return true;
 }
 
 function tickPortals(dt) {
   let lifecycleChanged = false;
   const windows = runtime.portalSchedule?.windows || [];
   for (const window of windows) {
-    if (runtime.simTime >= window.openTime && !runtime.portalClock.openedWindowIds.has(window.windowId)) {
-      openPortalWindow(window);
-      lifecycleChanged = true;
+    if (runtime.simTime >= window.openTime &&
+        !runtime.portalClock.openedWindowIds.has(window.windowId) &&
+        !runtime.portalClock.suppressedWindowIds.has(window.windowId)) {
+      lifecycleChanged = openPortalWindow(window) || lifecycleChanged;
     }
     if (runtime.simTime >= window.closeTime && !runtime.portalClock.closedWindowIds.has(window.windowId)) {
       closePortalWindow(window);
