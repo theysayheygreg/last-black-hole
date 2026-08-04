@@ -123,16 +123,14 @@ async function run() {
       });
       assert(breacher.thrustScale > HULL_DEFINITIONS.breacher.thrustScale, `Expected breacher rig thrust boost, got ${breacher.thrustScale}`);
       assert(breacher.pickupRadius > HULL_DEFINITIONS.breacher.pickupRadius, `Expected breacher pickup boost, got ${breacher.pickupRadius}`);
-      assert(breacher.controlDebuffResist > HULL_DEFINITIONS.breacher.controlDebuffResist, `Expected breacher control resistance, got ${breacher.controlDebuffResist}`);
+      assert(breacher.wellResistScale > HULL_DEFINITIONS.breacher.wellResistScale, `Expected breacher well resistance, got ${breacher.wellResistScale}`);
 
-      const resonant = createPlayerBrain({
+      const internalRig = createPlayerBrain({
         hullType: "resonant",
-        rigLevels: [1, 1, 0],
+        rigLevels: [5, 5, 5],
       });
-      assert(Math.abs(resonant.pulseRadiusScale - (HULL_DEFINITIONS.resonant.pulseRadiusScale * 1.1)) < 1e-6,
-        `Expected resonant pulse radius rig boost, got ${resonant.pulseRadiusScale}`);
-      assert(resonant.pulseCooldownScale < HULL_DEFINITIONS.resonant.pulseCooldownScale,
-        `Expected resonant pulse cooldown reduction, got ${resonant.pulseCooldownScale}`);
+      assert(internalRig.pulseRadiusScale === HULL_DEFINITIONS.resonant.pulseRadiusScale,
+        'Internal hull rig ideas must remain unreachable until their v0.4 authority work exists');
     });
   } finally {
     await stopSimServer(SIM_PORT);

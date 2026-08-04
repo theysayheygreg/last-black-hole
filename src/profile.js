@@ -117,11 +117,11 @@ function normalizeHullType(hullType, legacyShipType) {
   return PUBLIC_HULL_IDS.includes(raw) ? raw : DEFAULT_HULL_TYPE;
 }
 
-function normalizeRigLevels(rigLevels = []) {
+function normalizeRigLevels(rigLevels = [], hullType = DEFAULT_HULL_TYPE) {
   return Array.from({ length: RIG_SLOT_COUNT }, (_, index) => {
     const value = Number(rigLevels?.[index]);
     if (!Number.isFinite(value)) return 0;
-    return Math.max(0, Math.min(MAX_RIG_LEVEL, Math.round(value)));
+    return Math.max(0, Math.min(shippedRigLevelCap(hullType, index), Math.round(value)));
   });
 }
 
@@ -147,7 +147,7 @@ function normalizeProfileShape(profile = {}) {
   next.upgrades = { ...defaults.upgrades, ...(profile.upgrades || {}) };
   next.hullType = normalizeHullType(profile.hullType, profile.shipType);
   next.shipType = next.hullType;
-  next.rigLevels = normalizeRigLevels(profile.rigLevels);
+  next.rigLevels = normalizeRigLevels(profile.rigLevels, next.hullType);
   next.vault = Array.isArray(profile.vault)
     ? sanitizeRetiredItems(profile.vault).filter(Boolean)
     : defaults.vault;
@@ -168,49 +168,26 @@ export const RIG_TRACKS = Object.fromEntries(
       key,
       label: track.name,
       focus: track.focus,
+      levels: track.levels || [],
     })),
   ])
 );
 
 const RIG_LEVEL_COSTS = BALANCE.progression.rigLevelCosts;
 
-export const RIG_LEVEL_EFFECTS = {
-  drifter: [
-    ['current coupling +0.1', 'flow lock aligns 0.5s faster', 'current coupling +0.1', 'flow lock aligns 0.5s faster', 'flow lock noise halved'],
-    ['well resistance +0.1', 'noise masking in accretion shadows', 'well resistance +0.1', 'show well kill radius', 'eddy brake cooldown -5s'],
-    ['salvage reach +0.1', 'wreck tier estimate in HUD', 'salvage reach +0.1', '+1 extraction item chance', null],
-  ],
-  breacher: [
-    ['thrust output +0.05', 'thrust output +0.1', '+5s burn fuel', 'burn recharge +50%', 'burn thrust x2.5'],
-    ['well resistance +0.1', 'control recovery +0.15', 'momentum shield threshold -10%', 'shield charge on first burn', 'shockwave stun +1s'],
-    ['salvage reach +0.05', 'salvage reach +0.1', null, 'death cargo scatters further', 'loot noise spikes -30%'],
-  ],
-  resonant: [
-    ['pulse radius +10%', 'eddy duration +2s', 'eddies pull wrecks', '+1 max eddy', 'team-visible eddies'],
-    ['pulse cooldown -5%', 'tap cooldown -5s', 'pulse cooldown -20% near anchor', 'anchor persists through death', 'frequency shift cooldown -15s'],
-    [],
-  ],
-  shroud: [
-    ['noise decay +5%', '+0.1 noiseDecayMult', 'wake cloak cooldown -10s', 'scavengers never detect ghost trail', 'wake cloak works at THRESHOLD'],
-    ['+0.1 sensorRange', 'see inhibitor tracking target', '+0.1 sensorRange', 'see wreck contents', 'see player equipped items'],
-    ['+1 decoy charge', 'decoy duration +4s', 'decoy cooldown -20s', 'decoys attract fauna', 'remote decoy placement'],
-  ],
-  hauler: [
-    ['+1 cargo slot', 'tagged wrecks glow further', '+1 cargo slot', 'block first swarm drain', 'salvage lock +1 charge'],
-    ['deep scanner names items', 'tagged wreck bonus +1 item', 'tractor range +0.05 wu', 'tagged wreck lockout 10s', 'tractor can pull portals'],
-    ['reinforced hull scatters 0 cargo', '+0.1 wellResistScale', 'tractor cooldown -10s', 'reinforced hull +1 charge', 'full-cargo speed +10%'],
-  ],
-};
+export const RIG_LEVEL_EFFECTS = Object.fromEntries(
+  Object.entries(HULL_RIG_TRACKS).map(([hullType, tracks]) => [
+    hullType,
+    Object.values(tracks).map((track) => (track.levels || []).map((level) => level.effect)),
+  ])
+);
 
-// v0.2 only exposes ranks backed by current authoritative gameplay code.
-// Higher-rank ideas stay in the design list above, but cannot take EM yet.
-export const RIG_SHIPPED_LEVEL_CAPS = {
-  drifter: [1, 3, 1],
-  breacher: [2, 2, 2],
-  resonant: [1, 1, 0],
-  shroud: [2, 1, 0],
-  hauler: [1, 0, 2],
-};
+export const RIG_SHIPPED_LEVEL_CAPS = Object.fromEntries(
+  Object.entries(HULL_RIG_TRACKS).map(([hullType, tracks]) => [
+    hullType,
+    Object.values(tracks).map((track) => (track.levels || []).length),
+  ])
+);
 
 function shippedRigLevelCap(hullType, trackIndex) {
   const caps = RIG_SHIPPED_LEVEL_CAPS[normalizeHullType(hullType)];
@@ -368,7 +345,7 @@ export class ProfileManager {
     const nextHull = normalizeHullType(hullType);
     p.hullType = nextHull;
     p.shipType = nextHull;
-    p.rigLevels = normalizeRigLevels(p.rigLevels);
+    p.rigLevels = normalizeRigLevels(p.rigLevels, nextHull);
     this.save();
     return true;
   }
@@ -385,7 +362,7 @@ export class ProfileManager {
     const p = this.active;
     if (!p) return null;
     const hullType = normalizeHullType(p.hullType, p.shipType);
-    const levels = normalizeRigLevels(p.rigLevels);
+    const levels = normalizeRigLevels(p.rigLevels, hullType);
     const tracks = RIG_TRACKS[hullType] || RIG_TRACKS[DEFAULT_HULL_TYPE];
     return {
       hullType,
@@ -408,7 +385,7 @@ export class ProfileManager {
     if (!p) return null;
     const index = Number(trackIndex);
     if (!Number.isInteger(index) || index < 0 || index >= RIG_SLOT_COUNT) return null;
-    const levels = normalizeRigLevels(p.rigLevels);
+    const levels = normalizeRigLevels(p.rigLevels, p.hullType || p.shipType);
     const currentLevel = levels[index] ?? 0;
     const maxLevel = shippedRigLevelCap(p.hullType || p.shipType, index);
     if (currentLevel >= maxLevel) return null;
@@ -432,7 +409,7 @@ export class ProfileManager {
     if (!p || !this.canAffordRigUpgrade(trackIndex)) return false;
     const cost = this.getRigUpgradeCost(trackIndex);
     p.exoticMatter -= cost.em;
-    p.rigLevels = normalizeRigLevels(p.rigLevels);
+    p.rigLevels = normalizeRigLevels(p.rigLevels, p.hullType || p.shipType);
     p.rigLevels[cost.trackIndex] = cost.nextLevel;
     this.save();
     return true;

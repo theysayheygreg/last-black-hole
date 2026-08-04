@@ -312,6 +312,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RigEffects",
+    file: "rig-effects.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "MovementGolden",
     file: "movement-golden.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],

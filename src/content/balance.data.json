@@ -20,8 +20,8 @@
       { "em": 2500 },
       { "em": 6000 }
     ],
-    "rigLevelCosts": [300, 750, 1500, 3000, 5000],
+    "rigLevelCosts": [300, 750, 1500],
     "maxProfileRank": 3,
-    "maxRigLevel": 5
+    "maxRigLevel": 3
   }
 }

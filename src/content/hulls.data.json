@@ -7,71 +7,51 @@
     "drifter": {
       "laminar": {
         "name": "Laminar",
-        "focus": "current mastery"
+        "focus": "current mastery",
+        "levels": [
+          { "effect": "current coupling +0.1", "modifiers": [{ "stat": "currentCoupling", "mode": "add", "value": 0.1 }] }
+        ]
       },
       "edgerunner": {
         "name": "Edgerunner",
-        "focus": "well navigation"
+        "focus": "well navigation",
+        "levels": [
+          { "effect": "well resistance +0.1", "modifiers": [{ "stat": "wellResistScale", "mode": "add", "value": 0.1 }] },
+          { "effect": "Noise dissipates 20% faster", "modifiers": [{ "stat": "noiseDecayMultiplier", "mode": "multiply", "value": 1.2 }] },
+          { "effect": "well resistance +0.1", "modifiers": [{ "stat": "wellResistScale", "mode": "add", "value": 0.1 }] }
+        ]
       },
       "gleanings": {
         "name": "Gleanings",
-        "focus": "extraction value"
+        "focus": "extraction value",
+        "levels": [
+          { "effect": "pickup reach +0.1", "modifiers": [{ "stat": "pickupRadius", "mode": "add", "value": 0.1 }] }
+        ]
       }
     },
     "breacher": {
       "afterburner": {
         "name": "Afterburner",
-        "focus": "raw speed"
+        "focus": "raw speed",
+        "levels": [
+          { "effect": "thrust response +0.05", "modifiers": [{ "stat": "thrustScale", "mode": "add", "value": 0.05 }] },
+          { "effect": "thrust response +0.1", "modifiers": [{ "stat": "thrustScale", "mode": "add", "value": 0.1 }] }
+        ]
       },
       "ironclad": {
         "name": "Ironclad",
-        "focus": "survivability"
+        "focus": "survivability",
+        "levels": [
+          { "effect": "well resistance +0.1", "modifiers": [{ "stat": "wellResistScale", "mode": "add", "value": 0.1 }] }
+        ]
       },
-      "smashgrab": {
-        "name": "Smash & Grab",
-        "focus": "speed-looting"
-      }
-    },
-    "resonant": {
-      "harmonics": {
-        "name": "Harmonics",
-        "focus": "eddy mastery"
-      },
-      "anchor": {
-        "name": "Anchor",
-        "focus": "territorial control"
-      },
-      "dampening": {
-        "name": "Dampening",
-        "focus": "anti-inhibitor"
-      }
-    },
-    "shroud": {
-      "phantom": {
-        "name": "Phantom",
-        "focus": "stealth depth"
-      },
-      "sensor": {
-        "name": "Sensor",
-        "focus": "information"
-      },
-      "decoy": {
-        "name": "Decoy",
-        "focus": "misdirection"
-      }
-    },
-    "hauler": {
-      "cargo": {
-        "name": "Cargo",
-        "focus": "carrying capacity"
-      },
-      "salvage": {
-        "name": "Salvage",
-        "focus": "loot quality"
-      },
-      "endurance": {
-        "name": "Endurance",
-        "focus": "survivability"
+      "salvageDrive": {
+        "name": "Salvage Drive",
+        "focus": "speed-looting",
+        "levels": [
+          { "effect": "pickup reach +0.05", "modifiers": [{ "stat": "pickupRadius", "mode": "add", "value": 0.05 }] },
+          { "effect": "pickup reach +0.1", "modifiers": [{ "stat": "pickupRadius", "mode": "add", "value": 0.1 }] }
+        ]
       }
     }
   },
