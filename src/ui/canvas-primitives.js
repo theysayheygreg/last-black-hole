@@ -1,5 +1,6 @@
 import {
   UI_COLORS,
+  UI_PALETTE,
   UI_DECK,
   UI_DECK_GEOMETRY,
   UI_SPACING,
@@ -28,7 +29,7 @@ const ROLE_COLORS = {
   panel: UI_COLORS.panelBackground,
   border: UI_COLORS.panelBorder,
   void: UI_COLORS.void,
-  bone: '#fff4da',
+  bone: UI_PALETTE.bone,
 };
 
 export function clamp01(value) {
@@ -122,7 +123,7 @@ export function drawUiPanel(ctx, rect, {
 } = {}) {
   const r = normalizeRect(rect);
   ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 8, 0.72)';
+  ctx.shadowColor = withAlpha(UI_PALETTE.void, 0.72);
   ctx.shadowBlur = 12;
   ctx.shadowOffsetX = 4;
   ctx.shadowOffsetY = 6;

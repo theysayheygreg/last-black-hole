@@ -45,6 +45,9 @@ const ROOT = path.resolve(__dirname, '..');
   assert(fs.readFileSync(path.join(ROOT, 'scripts/build-visual-assets.cjs'), 'utf8').includes('UI_PALETTE.textPrimaryBase, UI_PALETTE.ecology, UI_PALETTE.route, UI_PALETTE.value'),
     'Asset builder tier adapter drifted from canonical roles');
   assert(![...fs.readFileSync(cssPath, 'utf8'), JSON.stringify(tokens.UI_TIERS)].join('').toLowerCase().includes('255,215,0'), 'Banned gold returned');
+  const tokenAdapterSource = fs.readFileSync(path.join(ROOT, 'src/ui/design-tokens.js'), 'utf8');
+  assert(!tokenAdapterSource.match(/#[0-9a-f]{3,8}|rgba?\(\s*\d/i),
+    'Design-token adapters must derive colors from palette-tokens.js');
 
   console.log('UIDesignTokens: canonical JS, Three adapters, generated CSS, and asset tier consumers agree.');
 })().catch((error) => {

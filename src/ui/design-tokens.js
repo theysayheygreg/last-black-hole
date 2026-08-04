@@ -18,7 +18,7 @@ export const UI_COLORS = {
   panelBorder: UI_PALETTE.structure,
   panelText: UI_PALETTE.textPrimary,
   mutedText: UI_PALETTE.textMuted,
-  timerNormal: 'rgba(234, 247, 255, 0.9)',
+  timerNormal: colorWithAlpha(UI_PALETTE.textPrimaryBase, 0.9),
   timerWarning: colorWithAlpha(UI_PALETTE.value, 0.95),
   timerCritical: colorWithAlpha(UI_PALETTE.danger, UI_ROLE_ALPHA.danger),
   danger: colorWithAlpha(UI_PALETTE.danger, UI_ROLE_ALPHA.danger),
@@ -26,32 +26,32 @@ export const UI_COLORS = {
   portalDim: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.routeDim),
   salvage: colorWithAlpha(UI_PALETTE.value, UI_ROLE_ALPHA.value),
   signal: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.routeActive),
-  signalLabel: 'rgba(0, 226, 255, 0.62)',
-  warningText: 'rgba(234, 247, 255, 0.95)',
+  signalLabel: colorWithAlpha(UI_PALETTE.route, 0.62),
+  warningText: colorWithAlpha(UI_PALETTE.textPrimaryBase, 0.95),
   selectionBorder: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.selectionBorder),
   selectionBackground: colorWithAlpha(UI_PALETTE.route, UI_ROLE_ALPHA.selectionFill),
-  terminalRowBackground: 'rgba(0, 14, 30, 0.36)',
-  terminalRowBorder: 'rgba(0, 226, 255, 0.18)',
-  terminalRowMuted: 'rgba(154, 180, 206, 0.62)',
-  terminalPillBackground: 'rgba(0, 226, 255, 0.14)',
-  terminalPillBorder: 'rgba(0, 226, 255, 0.34)',
-  terminalPillText: 'rgba(234, 247, 255, 0.88)',
+  terminalRowBackground: colorWithAlpha(UI_PALETTE.field, 0.36),
+  terminalRowBorder: colorWithAlpha(UI_PALETTE.route, 0.18),
+  terminalRowMuted: colorWithAlpha(UI_PALETTE.textMutedBase, 0.62),
+  terminalPillBackground: colorWithAlpha(UI_PALETTE.route, 0.14),
+  terminalPillBorder: colorWithAlpha(UI_PALETTE.route, 0.34),
+  terminalPillText: colorWithAlpha(UI_PALETTE.textPrimaryBase, 0.88),
   inhibitor: colorWithAlpha(UI_PALETTE.inhibitor, UI_ROLE_ALPHA.inhibitor),
-  inhibitorVessel: 'rgba(255, 70, 150, 1)',
+  inhibitorVessel: colorWithAlpha(UI_PALETTE.inhibitor, 1),
   anomaly: colorWithAlpha(UI_PALETTE.anomaly, UI_ROLE_ALPHA.anomaly),
   ecology: colorWithAlpha(UI_PALETTE.ecology, UI_ROLE_ALPHA.ecology),
 };
 
 export const UI_SHADOWS = {
-  panelText: '2px 3px 5px rgba(0, 0, 8, 0.9)',
-  panel: '4px 6px 12px rgba(0, 0, 8, 0.72)',
-  canvasTextColor: 'rgba(0, 0, 8, 0.92)',
+  panelText: `2px 3px 5px ${colorWithAlpha(UI_PALETTE.void, 0.9)}`,
+  panel: `4px 6px 12px ${colorWithAlpha(UI_PALETTE.void, 0.72)}`,
+  canvasTextColor: colorWithAlpha(UI_PALETTE.void, 0.92),
   canvasTextBlur: 4,
   canvasTextOffsetX: 2,
   canvasTextOffsetY: 3,
-  portalGlow: '0 0 6px rgba(0, 226, 255, 0.5)',
-  warningGlow: '0 0 6px rgba(0, 0, 0, 0.8)',
-  inhibitorGlow: '0 0 8px rgba(255, 62, 181, 0.55)',
+  portalGlow: `0 0 6px ${colorWithAlpha(UI_PALETTE.route, 0.5)}`,
+  warningGlow: `0 0 6px ${colorWithAlpha(UI_PALETTE.void, 0.8)}`,
+  inhibitorGlow: `0 0 8px ${colorWithAlpha(UI_PALETTE.inhibitor, 0.55)}`,
 };
 
 export const UI_SPACING = {
@@ -155,9 +155,9 @@ export const UI_TIERS = {
 };
 
 export const UI_CATEGORIES = {
-  salvage: 'rgba(255, 185, 56, 0.92)',
-  component: 'rgba(0, 226, 255, 0.9)',
-  dataCore: 'rgba(184, 76, 255, 0.94)',
+  salvage: colorWithAlpha(UI_PALETTE.value, 0.92),
+  component: colorWithAlpha(UI_PALETTE.route, 0.9),
+  dataCore: colorWithAlpha(UI_PALETTE.anomaly, 0.94),
   artifact: colorWithAlpha(UI_PALETTE.bone, 0.95),
 };
 

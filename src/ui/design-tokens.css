@@ -7,8 +7,8 @@
   --lbh-void: #000021;
   --lbh-panel-bg: rgba(0, 2, 10, 0.78);
   --lbh-panel-backing: rgba(0, 0, 8, 0.56);
-  --lbh-panel-shadow: 4px 6px 12px rgba(0, 0, 8, 0.72);
-  --lbh-text-shadow: 2px 3px 5px rgba(0, 0, 8, 0.9);
+  --lbh-panel-shadow: 4px 6px 12px rgba(0, 0, 33, 0.72);
+  --lbh-text-shadow: 2px 3px 5px rgba(0, 0, 33, 0.9);
   --lbh-panel-border: rgba(0, 226, 255, 0.32);
   --lbh-text-primary: rgba(234, 247, 255, 0.94);
   --lbh-text-muted: rgba(154, 180, 206, 0.72);
