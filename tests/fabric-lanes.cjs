@@ -47,11 +47,16 @@ async function run() {
     const canvasHeight = 800;
     const halfViewport = 0.125;
     const shipDiameter = 44;
-    const widthPx = 2 * cameraView * halfViewport * canvasHeight / cameraView;
+    const aspect = 1280 / 800;
     for (const degrees of [0, 45, 90]) {
-      const aspectMetric = [Math.cos(degrees * Math.PI / 180) * 1.6, Math.sin(degrees * Math.PI / 180)];
-      const screenLength = Math.hypot(...aspectMetric);
-      const aspectCorrectWidth = widthPx * screenLength / screenLength;
+      const radians = degrees * Math.PI / 180;
+      const sideMetric = [-Math.sin(radians), Math.cos(radians)];
+      const sideWorld = [sideMetric[0] / aspect, sideMetric[1]];
+      const pixelsPerWorld = [canvasHeight * aspect / cameraView, canvasHeight / cameraView];
+      const aspectCorrectWidth = 2 * cameraView * halfViewport * Math.hypot(
+        sideWorld[0] * pixelsPerWorld[0],
+        sideWorld[1] * pixelsPerWorld[1],
+      );
       const shipWidths = aspectCorrectWidth / shipDiameter;
       assert(shipWidths >= 4 && shipWidths <= 5,
         `${degrees}deg corridor must remain 4-5 ship widths, got ${shipWidths.toFixed(2)}`);

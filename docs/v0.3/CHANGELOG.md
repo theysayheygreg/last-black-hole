@@ -1,5 +1,17 @@
 # v0.3 Changelog
 
+- **Rich ordinary-current corridors (Area 1):** `5f9c0e4b` changes only
+  `FRAG_DISPLAY` presentation. Existing accepted coarse authority flow is
+  spatially filtered before it orients aspect-correct current corridors; a
+  bounded visual backtrace supplies local curvature without contributing to
+  movement. At 1280x800, the 200px corridor body is 4.55 default-hull widths
+  (4.17 Breacher widths), with 50% broad-body coverage and deliberately dark
+  rest between lanes. Broad cyan material, medium filaments, and clipped fine
+  ASCII weave replace the earlier sparse mark-only read; density history is
+  limited to current or source-wave material. No simulation, authority,
+  movement values, camera, HUD, or entity behavior changed. The focused
+  capture and proof receipt is `reviews/completions/2026-08-03-rich-current-area1.md`.
+
 - **Navigable fabric channels:** each sparse authored current now owns a faint
   screen-stable channel envelope about 4–5 visible ship widths across at
   gameplay zoom. Broken cyan strokes remain the directional texture inside
