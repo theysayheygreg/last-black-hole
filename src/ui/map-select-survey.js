@@ -316,6 +316,129 @@ export function surveySchemaKeys() {
   return [...SURVEY_KEYS];
 }
 
+// Authored thumbnail signatures describe each survey class, not the seeded
+// entity layout. Keeping them here gives destination rows a stable identity
+// without leaking authority positions through the preview boundary.
+const TOPOLOGY_SIGNATURES = Object.freeze({
+  shallows: Object.freeze([
+    '00100',
+    '01110',
+    '11010',
+    '01110',
+    '00100',
+  ]),
+  expanse: Object.freeze([
+    '10001',
+    '01110',
+    '11011',
+    '01110',
+    '10101',
+  ]),
+  'deep-field': Object.freeze([
+    '11011',
+    '00100',
+    '10101',
+    '01010',
+    '11111',
+  ]),
+});
+
+const CONTACT_ICONOGRAPHY = Object.freeze({
+  gravity: Object.freeze({ icon: 'well-spiral', glyph: '◎' }),
+  derelict: Object.freeze({ icon: 'derelict-diamond', glyph: '◇' }),
+  stellar: Object.freeze({ icon: 'stellar-star', glyph: '✦' }),
+  scavenger: Object.freeze({ icon: 'scavenger-skull', glyph: '♙' }),
+  anomaly: Object.freeze({ icon: 'anomaly-burst', glyph: '※' }),
+  exit: Object.freeze({ icon: 'aperture-ring', glyph: '◉' }),
+});
+
+export function resolveTopologySignature(mapOrId) {
+  const id = typeof mapOrId === 'string' ? mapOrId : mapOrId?.id;
+  const definition = getMapScaleDefinition(id);
+  const rows = TOPOLOGY_SIGNATURES[id];
+  if (!definition || !rows) return null;
+  return {
+    id: `${id}-survey-signature`,
+    mapClass: definition.mapClass,
+    grid: rows.length,
+    rows: [...rows],
+  };
+}
+
+function seedSerial(seed, mapClass) {
+  const first = hashSeed(`${mapClass}:${String(seed ?? 1)}`);
+  const second = hashSeed(`${first}:survey-terminal`);
+  const body = `${first.toString(36)}${second.toString(36)}`.toUpperCase().padStart(12, '0').slice(-12);
+  return `${body.slice(0, 4)}-${body.slice(4, 8)}-${body.slice(8, 12)}`;
+}
+
+export function projectSurveyChrome({ seed, mapClass, confidence = 0 } = {}) {
+  const safeConfidence = clamp(Math.round(Number(confidence) || 0), 0, 100);
+  const normalizedSeed = Math.max(1, Math.floor(Number(seed) || 1));
+  return {
+    terminal: 'SURVEY TERMINAL v0.3',
+    seedSerial: seedSerial(seed, mapClass),
+    cycle: normalizedSeed % 100,
+    signal: safeConfidence >= 70 ? 'STRONG' : safeConfidence >= 40 ? 'PARTIAL' : 'WEAK',
+    link: safeConfidence > 0 ? 'STABLE' : 'NO CARRIER',
+    confidence: safeConfidence,
+  };
+}
+
+export function projectSurveyDensity(density = {}) {
+  const value = clamp(Number(density.value) || 0, 0, 1);
+  return {
+    band: String(density.band || 'UNCERTAIN'),
+    segments: 8,
+    filledSegments: Math.round(value * 8),
+    legend: [
+      { id: 'dense', label: 'DENSE MASS', mark: 'contour' },
+      { id: 'scattered', label: 'SCATTERED', mark: 'dots' },
+      { id: 'uncertain', label: 'UNCERTAIN', mark: 'broken' },
+      { id: 'anomaly', label: 'ANOMALY', mark: 'burst' },
+      { id: 'void', label: 'VOID', mark: 'empty' },
+    ],
+    gradient: { low: 'LOW', high: 'HIGH' },
+    unstableZones: { label: 'UNSTABLE ZONES', mark: 'hatch' },
+  };
+}
+
+export function projectSurveyContacts(families = []) {
+  const source = Array.isArray(families) ? families : [];
+  const largest = Math.max(1, ...source.map((family) => Number(family?.range?.max) || 0));
+  return source.map((family) => {
+    const min = Math.max(0, Math.floor(Number(family?.range?.min) || 0));
+    const max = Math.max(min, Math.floor(Number(family?.range?.max) || 0));
+    const icon = CONTACT_ICONOGRAPHY[family?.id] || { icon: 'unknown-contact', glyph: '?' };
+    return {
+      id: String(family?.id || 'unknown'),
+      label: String(family?.label || 'UNKNOWN CONTACT'),
+      role: String(family?.role || 'muted'),
+      icon: icon.icon,
+      glyph: icon.glyph,
+      magnitude: {
+        segments: 5,
+        filledSegments: max > 0 ? Math.max(1, Math.ceil((((min + max) / 2) / largest) * 5)) : 0,
+      },
+      range: { min, max, label: `${min}–${max}` },
+    };
+  });
+}
+
+export function projectSurveyTerminal(preview, { seed, mapClass } = {}) {
+  if (!preview) return null;
+  const resolvedMapClass = mapClass || preview.mapClass?.id;
+  return {
+    topologySignature: resolveTopologySignature(resolvedMapClass),
+    chrome: projectSurveyChrome({ seed, mapClass: resolvedMapClass, confidence: preview.confidence }),
+    density: projectSurveyDensity(preview.density),
+    contacts: projectSurveyContacts(preview.possibleContactFamilies),
+    // Confidence is deliberately the only summary statistic. Uncertainty
+    // still shapes reconstruction noise, but gets no second numeric readout.
+    confidence: preview.confidence,
+  };
+}
+
 function surveyNoise(seed) {
   const value = Math.sin(seed * 12.9898) * 43758.5453;
   return value - Math.floor(value);

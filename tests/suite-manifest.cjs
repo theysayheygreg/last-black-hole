@@ -740,6 +740,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MapSelectConceptProjections",
+    file: "map-select-concept-projections.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "SoloAuthorityLaunch",
     file: "solo-authority-launch.cjs",
     lanes: ["fast", "core", "static", "authority", "full"],
