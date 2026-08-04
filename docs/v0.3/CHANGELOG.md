@@ -11,6 +11,12 @@
   No gameplay coordinates, authority field, gravity/current/hit radii, or
   movement constants changed.
 
+- **Well material correction:** gameplay wells now keep that larger dark void
+  but use a lower-intensity red/orange danger corona instead of the title
+  screen's white-hot blackbody peak. The title retains its authored spectrum;
+  ordinary play concentrates energy at the rim and fades into dark violet so
+  the well reads as a hostile cause, not a bright field diagram.
+
 - **Rich ordinary-current corridors (Area 1):** `5f9c0e4b` changes only
   `FRAG_DISPLAY` presentation. Existing accepted coarse authority flow is
   spatially filtered before it orients aspect-correct current corridors; a

@@ -52,6 +52,7 @@ uniform float u_gridWindow;           // world-units spanned by the fluid grid t
 uniform float u_cameraView;           // world-units visible on each axis
 uniform float u_viewAspect;           // retained for pass ABI while the window stays square
 uniform float u_strength;             // master blend for the radial color
+uniform int u_gameplayPalette;        // title blackbody versus bounded in-match threat read
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -71,6 +72,22 @@ vec3 tempRamp(float t) {
   c = mix(c, vec3(0.15, 0.38, 1.00), smoothstep(0.28, 0.55, t));    // blue
   c = mix(c, vec3(0.22, 0.08, 0.58), smoothstep(0.55, 0.82, t));    // outer purple (blue-leaning)
   c = mix(c, vec3(0.0), smoothstep(0.88, 1.0, t));                   // far space (pushed out)
+  return c;
+}
+
+// Gameplay deliberately stops before the title's white-hot instrument read.
+// The void is defined by FluidDisplay; this is the angry red/orange material
+// immediately around it, fading back into a dark violet edge.
+vec3 gameplayTempRamp(float t) {
+  t = clamp(t, -1.0, 1.0);
+  vec3 c = vec3(0.0);
+  c = mix(c, vec3(0.15, 0.01, 0.08), smoothstep(-1.0, -0.78, t));
+  c = mix(c, vec3(0.48, 0.025, 0.07), smoothstep(-0.78, -0.48, t));
+  c = mix(c, vec3(0.92, 0.12, 0.035), smoothstep(-0.48, -0.18, t));
+  c = mix(c, vec3(1.08, 0.38, 0.045), smoothstep(-0.18, 0.06, t));
+  c = mix(c, vec3(0.46, 0.035, 0.20), smoothstep(0.06, 0.32, t));
+  c = mix(c, vec3(0.14, 0.015, 0.13), smoothstep(0.32, 0.62, t));
+  c = mix(c, vec3(0.0), smoothstep(0.80, 1.0, t));
   return c;
 }
 
@@ -104,7 +121,7 @@ void main() {
       t = (dist - peakR) / max(outerR - peakR, 1e-4);
     }
 
-    accretion += tempRamp(t);
+    accretion += u_gameplayPalette == 1 ? gameplayTempRamp(t) : tempRamp(t);
   }
 
   fragColor = vec4(base + accretion * u_strength, 1.0);
@@ -114,6 +131,7 @@ export class AccretionPass extends Pass {
   constructor({ strength = 1.0 } = {}) {
     super({ name: 'accretion', rendersToScreen: false });
     this.strength = strength;
+    this.gameplayPalette = false;
     this.prog = null;
   }
 
@@ -144,6 +162,7 @@ export class AccretionPass extends Pass {
     gl.uniform1f(this.prog.uniforms.u_cameraView, ctx.cameraView ?? 1);
     gl.uniform1f(this.prog.uniforms.u_viewAspect, ctx.viewAspect ?? 1);
     gl.uniform1f(this.prog.uniforms.u_strength, this.strength);
+    gl.uniform1i(this.prog.uniforms.u_gameplayPalette, this.gameplayPalette ? 1 : 0);
 
     composer.drawQuad();
   }

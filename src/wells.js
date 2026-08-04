@@ -23,9 +23,11 @@ export { effectiveWellVisualMass } from './presentation/well-wave-presentation.j
  */
 export function wellCoronaRadii(shape, cameraView = 3) {
   const [coreRadius = 0, , ringOuter = 0] = shape || [];
-  const core = Math.max(coreRadius * 1.04, cameraView * 0.026);
-  const peak = Math.max(core * 1.72, ringOuter * 1.58);
-  const outer = Math.max(peak * 1.65, ringOuter * 3.40);
+  // The void must be readable before its corona is; a landmark black hole is
+  // not a tiny hit dot with a large UI halo around it.
+  const core = Math.max(coreRadius * 1.55, cameraView * 0.040);
+  const peak = Math.max(core * 1.65, ringOuter * 1.42);
+  const outer = Math.max(peak * 1.48, ringOuter * 2.65);
   return [core, peak, outer];
 }
 

@@ -247,7 +247,7 @@ const GAMEPLAY_RENDER_TUNING = {
   fluidGain: 1.0,
   // Gameplay retains a lower-strength corona than title. It is visual-only:
   // the compact FluidDisplay void still owns the lethal-body read.
-  accretionStrength: 0.48,
+  accretionStrength: 0.40,
   bloom: { threshold: 0.90, knee: 0.3, strength: 0.75, blurRadius: 3.0 },
   vignette: { strength: 0.6, radius: 0.45, softness: 0.65 },
   chromaticAberration: { strength: 0.002, falloff: 2.8 },
@@ -1574,6 +1574,10 @@ function applyRenderTuningForPhase(isTitle) {
   const t = isTitle ? TITLE_RENDER_TUNING : GAMEPLAY_RENDER_TUNING;
   fluidGainPass.gain = t.fluidGain;
   accretionPass.strength = t.accretionStrength;
+  // The title owns the expansive blackbody spectrum. Ordinary play uses the
+  // same geometry with a lower, red/orange danger treatment so it reads as a
+  // hostile landmark instead of a bright scientific field plot.
+  accretionPass.gameplayPalette = !isTitle && !rendererFixtureActive;
   bloomPass.threshold = t.bloom.threshold;
   bloomPass.knee = t.bloom.knee;
   bloomPass.strength = t.bloom.strength;

@@ -545,7 +545,9 @@ void main() {
     float displayDist = dist * telegraphScale;
     // Preserve gameplay radii as truth while guaranteeing that the authored
     // lethal body has a compact readable silhouette at Deck resolution.
-    float visualCoreRadius = max(coreRadius, u_cameraView * 0.025);
+    // In ordinary play the void must survive at speed as an actual region,
+    // not a tiny contact dot hidden inside its bright corona.
+    float visualCoreRadius = max(coreRadius * 1.55, u_cameraView * 0.040);
     float coreMask = smoothstep(visualCoreRadius * 1.18, visualCoreRadius * 0.82, displayDist);
     float horizonMask = smoothstep(visualCoreRadius * 1.24, visualCoreRadius * 1.02, displayDist)
                       * (1.0 - smoothstep(visualCoreRadius * 1.02, visualCoreRadius * 0.88, displayDist));

@@ -48,10 +48,16 @@ async function run() {
     const [core, peak, outer] = wellCoronaRadii(compactBody, 3);
     assert(core >= compactBody[0], 'corona must preserve the compact void body');
     assert(peak > core && outer > peak, 'corona must expand outward in ordered bands');
-    assert(outer >= compactBody[2] * 3.4, 'landmark corona must exceed the compact analytic rim');
+    assert(outer >= compactBody[2] * 2.65, 'landmark corona must exceed the compact analytic rim');
     const main = fs.readFileSync(path.join(ROOT, 'src/main.js'), 'utf8');
-    assert(main.includes('accretionStrength: 0.48'), 'gameplay must render a restrained well corona');
+    const accretion = fs.readFileSync(path.join(ROOT, 'src/render/passes/accretion-pass.js'), 'utf8');
+    assert(main.includes('accretionStrength: 0.40'), 'gameplay must render a restrained well corona');
     assert(main.includes('wellSystem.getCoronaRadii(CAMERA_VIEW)'), 'gameplay corona must derive from well presentation shapes');
+    assert(main.includes('accretionPass.gameplayPalette = !isTitle && !rendererFixtureActive'),
+      'title must preserve its authored blackbody spectrum while gameplay uses its danger palette');
+    assert(accretion.includes('vec3 gameplayTempRamp(float t)')
+      && accretion.includes('u_gameplayPalette == 1 ? gameplayTempRamp(t) : tempRamp(t)'),
+      'gameplay corona must stay red/orange and avoid title-white energy');
     assert(main.includes('Neither changes hit,') && main.includes('gravity, current, or authority radii'),
       'well corona must remain explicitly presentation-only');
   });
