@@ -6,6 +6,7 @@ const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const {
   DEV_URL,
   LOCAL_SIM_URL,
+  fetchJson,
   getStackSnapshot,
   formatStackSummary,
   startService,
@@ -110,13 +111,38 @@ function assertMode(selectedMode) {
   throw new Error(`Unknown mode "${selectedMode}". Use one of: ${Object.keys(MODES).join(", ")}`);
 }
 
+// `startService` intentionally leaves a healthy managed process alone. That
+// is usually useful, but local-player mode has a stronger lifetime contract:
+// Home must still be able to begin the next run after a terminal result. If a
+// prior dev session left an unpinned sim on the fixed local port, replace just
+// that sim before opening the client. This is not a general supervisor policy.
+async function startLocalHostSim({
+  healthFetcher = () => fetchJson(`${LOCAL_SIM_URL}/health`),
+  stop = stopService,
+  start = startService,
+  args = MODES['local-host'].serviceArgs.sim,
+} = {}) {
+  const health = await healthFetcher();
+  const needsReplacement = Boolean(health && health.idleState?.keepAlive !== true);
+  const stopped = needsReplacement ? stop('sim') : '';
+  const started = start('sim', args);
+  return { needsReplacement, stopped, started };
+}
+
 async function start({ mode = "local-host", openBrowser = true, remoteSimUrl = "" } = {}) {
   const selected = assertMode(mode);
   telemetry.info("stack.start", { mode: selected.name, openBrowser: Boolean(openBrowser) });
   console.log(`Starting LBH in ${selected.name} mode...\n`);
 
   for (const service of selected.services) {
-    const output = startService(service, selected.serviceArgs?.[service] || []);
+    let output;
+    if (selected.name === 'local-host' && service === 'sim') {
+      const result = await startLocalHostSim({ args: selected.serviceArgs.sim });
+      if (result.stopped) console.log(result.stopped);
+      output = result.started;
+    } else {
+      output = startService(service, selected.serviceArgs?.[service] || []);
+    }
     if (output) console.log(output);
   }
 
@@ -167,6 +193,7 @@ module.exports = {
   MODES,
   DEV_URL,
   parseArgs,
+  startLocalHostSim,
   start,
   stop,
   printStackStatus,

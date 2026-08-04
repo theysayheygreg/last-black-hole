@@ -20,12 +20,14 @@ const {
   waitFor,
   withQuery,
 } = require('./helpers.cjs');
-const { MODES } = require('../scripts/stack.cjs');
+const { MODES, startLocalHostSim } = require('../scripts/stack.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const htmlFile = process.argv[2] || 'index-a.html?renderer=three';
 const PORT = Number(process.env.LBH_RUN_LIFECYCLE_SIM_PORT || (9650 + process.pid % 200));
 const SIM_URL = `http://127.0.0.1:${PORT}`;
+const UNPINNED_PORT = PORT + 1;
+const PINNED_PORT = PORT + 2;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -41,6 +43,53 @@ async function post(route, payload) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+async function requestAt(port, route, options = {}) {
+  const response = await fetch(`http://127.0.0.1:${port}${route}`, options);
+  return { status: response.status, body: await response.json().catch(() => ({})) };
+}
+
+async function postAt(port, route, payload) {
+  return requestAt(port, route, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function waitForHealthAt(port, predicate, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  let last = null;
+  while (Date.now() < deadline) {
+    try {
+      last = await requestAt(port, '/health');
+      if (predicate(last)) return last;
+    } catch (error) {
+      last = { error };
+    }
+    await sleep(60);
+  }
+  throw new Error(`Timed out waiting for sim health on ${port}: ${last?.error?.message || JSON.stringify(last?.body || null)}`);
+}
+
+async function startAndEndTerminalRun(port, clientId) {
+  const start = await postAt(port, '/session/start', {
+    mapId: 'shallows', requesterId: clientId, requesterName: clientId,
+  });
+  assert(start.status === 200, `Expected start on ${port}, got ${start.status}`);
+  const join = await postAt(port, '/join', {
+    clientId,
+    runId: start.body.session?.runId,
+    joinTicket: start.body.joinTicket,
+    name: clientId,
+  });
+  assert(join.status === 200, `Expected join on ${port}, got ${join.status}`);
+  const death = await postAt(port, '/debug/player-state', {
+    clientId, status: 'dead', cause: 'lifecycle-smoke',
+  });
+  assert(death.status === 200, `Expected terminal setup on ${port}, got ${death.status}`);
+  await waitForHealthAt(port, (result) => result.status === 200 && result.body.session?.status === 'ended');
 }
 
 async function waitForPhase(page, phase, timeout = 10000) {
@@ -112,16 +161,65 @@ async function bootstrap(page) {
 async function run() {
   const runner = new TestRunner('RunLifecycleRecovery');
 
-  await runner.run('Local player launch pins the same authority lifetime as the packaged app', () => {
+  await runner.run('Local player launch replaces a managed unpinned sim before starting', async () => {
     assert(
       JSON.stringify(MODES['local-host']?.serviceArgs?.sim) === JSON.stringify(['--keep-alive', 'true']),
       'Expected local-host authority to survive terminal result and Home',
+    );
+    const restartCalls = [];
+    await startLocalHostSim({
+      healthFetcher: async () => ({ idleState: { keepAlive: false } }),
+      stop: (name) => { restartCalls.push(`stop:${name}`); return 'stopped'; },
+      start: (name, args) => { restartCalls.push(`start:${name}:${args.join(' ')}`); return 'started'; },
+    });
+    assert(
+      restartCalls.join('|') === 'stop:sim|start:sim:--keep-alive true',
+      `Expected managed unpinned sim replacement, got ${restartCalls.join('|')}`,
+    );
+    const pinnedCalls = [];
+    await startLocalHostSim({
+      healthFetcher: async () => ({ idleState: { keepAlive: true } }),
+      stop: () => { pinnedCalls.push('stop'); return 'stopped'; },
+      start: (name, args) => { pinnedCalls.push(`start:${name}:${args.join(' ')}`); return 'started'; },
+    });
+    assert(
+      pinnedCalls.join('|') === 'start:sim:--keep-alive true',
+      `Expected pinned sim reuse, got ${pinnedCalls.join('|')}`,
     );
     const playSource = fs.readFileSync(path.join(ROOT, 'scripts', 'play.cjs'), 'utf8');
     assert(
       playSource.includes("startService('sim', LOCAL_PLAY_SIM_ARGS)"),
       'Expected the fresh npm play sim restart to retain the local lifetime args',
     );
+  });
+
+  await runner.run('Unpinned terminal sim retires while pinned player sim survives the same grace', async () => {
+    const terminalEnv = { LBH_SIM_TERMINAL_GRACE_MS: '300' };
+    await startSimServer(UNPINNED_PORT, { env: terminalEnv });
+    try {
+      await startAndEndTerminalRun(UNPINNED_PORT, 'unpinned-terminal');
+      await sleep(700);
+      let stopped = false;
+      try {
+        await requestAt(UNPINNED_PORT, '/health');
+      } catch {
+        stopped = true;
+      }
+      assert(stopped, 'Expected unpinned terminal sim to retire after its grace period');
+    } finally {
+      await stopSimServer(UNPINNED_PORT).catch(() => null);
+    }
+
+    await startSimServer(PINNED_PORT, { keepAlive: true, env: terminalEnv });
+    try {
+      await startAndEndTerminalRun(PINNED_PORT, 'pinned-terminal');
+      await sleep(700);
+      const health = await requestAt(PINNED_PORT, '/health');
+      assert(health.status === 200, 'Expected pinned terminal sim to remain available');
+      assert(health.body.idleState?.keepAlive === true, 'Expected keepAlive truth after terminal grace');
+    } finally {
+      await stopSimServer(PINNED_PORT).catch(() => null);
+    }
   });
 
   await startServer();

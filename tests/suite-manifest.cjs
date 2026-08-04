@@ -366,6 +366,13 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RunLifecycleRecovery",
+    file: "run-lifecycle-recovery.cjs",
+    lanes: ["authority", "playtest", "full"],
+    browser: true,
+    slow: true,
+  },
+  {
     name: "SimScale",
     file: "sim-scale.cjs",
     lanes: ["core", "authority", "full"],

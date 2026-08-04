@@ -2,6 +2,9 @@
 
 - **Local run lifecycle recovery:** local player launch now pins the authority
   process for the Electron/local-host session, matching packaged-app behavior.
+  If a prior local session left an otherwise healthy but unpinned sim on the
+  managed local port, local-host replaces only that sim before it opens the
+  client. A persistent sim is reused.
   A player can read a terminal result, return Home, and start a fresh map
   without the only local sim retiring underneath the client. The focused
   browser smoke drives death -> Home -> normal map-select second launch and
