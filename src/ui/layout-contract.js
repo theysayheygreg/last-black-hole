@@ -155,12 +155,47 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
     panels.left.w - pad * 2,
     rowH,
   ));
+  // The command glyph is deliberately a separate support cue, so reserve its
+  // full rail inside the terminal rather than making lower content compete
+  // with it. The same accounting is used by result screens.
   const command = rect(
     panels.right.x + pad,
-    panels.right.y + panels.right.h - UI_DECK_GEOMETRY.button.minHeight - UI_DECK_GEOMETRY.button.gap - UI_DECK_GEOMETRY.actionGlyph.minHeight - 4,
+    panels.right.y + panels.right.h - UI_DECK_GEOMETRY.panel.paddingX
+      - UI_DECK_GEOMETRY.button.minHeight - UI_DECK_GEOMETRY.button.gap - UI_DECK_GEOMETRY.actionGlyph.minHeight,
     panels.right.w - pad * 2,
     UI_DECK_GEOMETRY.button.minHeight,
   );
+  const compactBrief = panels.right.h < 620;
+  const statusHeight = UI_DECK_GEOMETRY.valueBlock.minHeight;
+  const statusTop = panels.right.y + (compactBrief ? 58 : 86);
+  const statusGap = UI_DECK_GEOMETRY.panel.gap;
+  const statusWidth = Math.max(1, (panels.right.w - pad * 2 - statusGap) / 2);
+  const authorityY = command.y - (compactBrief ? 94 : 96);
+  const descriptionLineY = panels.right.y + (compactBrief ? 145 : 188);
+  const descriptionLineHeight = compactBrief ? 12 : 13;
+  const descriptionLines = 2;
+  const contentsY = panels.right.y + (compactBrief ? 174 : 222);
+  const contactY = panels.right.y + (compactBrief ? 194 : 252);
+  const contactRowStep = compactBrief ? 20 : 39;
+  const briefing = {
+    compact: compactBrief,
+    titleY: panels.right.y + (compactBrief ? 40 : 58),
+    titleBounds: rect(panels.right.x + pad, panels.right.y + (compactBrief ? 18 : 30), panels.right.w - pad * 2, compactBrief ? 28 : 32),
+    statusTop,
+    statusHeight,
+    signatureY: panels.right.y + (compactBrief ? 125 : 163),
+    descriptionLineY,
+    descriptionLineHeight,
+    descriptionLines,
+    contentsY,
+    contactY,
+    contactRowStep,
+    contactDescription: !compactBrief,
+    authorityY,
+    confidenceLabelY: command.y - 56,
+    confidenceValueY: command.y - 22,
+    commandPrompt: rect(command.x, command.y + command.h + UI_DECK_GEOMETRY.button.gap, command.w, UI_DECK_GEOMETRY.actionGlyph.minHeight),
+  };
   return {
     ...panels,
     pad,
@@ -170,15 +205,14 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
     // single 32px rail.
     footer,
     command,
-    briefStatus: (() => {
-      const gap = UI_DECK_GEOMETRY.panel.gap;
-      const width = Math.max(1, (panels.right.w - pad * 2 - gap) / 2);
-      const y = panels.right.y + 86;
-      return {
-        scale: rect(panels.right.x + pad, y, width, UI_DECK_GEOMETRY.valueBlock.minHeight),
-        risk: rect(panels.right.x + pad + width + gap, y, width, UI_DECK_GEOMETRY.valueBlock.minHeight),
-      };
-    })(),
+    // drawStatusPill is center anchored. These are centers, not top-left
+    // rectangles; keeping that contract explicit prevents the pills from
+    // crossing into the title and signature rows.
+    briefStatus: {
+      scale: rect(panels.right.x + pad + statusWidth / 2, statusTop + statusHeight / 2, statusWidth, statusHeight),
+      risk: rect(panels.right.x + pad + statusWidth + statusGap + statusWidth / 2, statusTop + statusHeight / 2, statusWidth, statusHeight),
+    },
+    briefing,
   };
 }
 
@@ -256,6 +290,9 @@ export function resultsSurfaceLayout(width, height) {
   const leftX = panel.x + pad;
   const rightX = leftX + columnW + columnGap;
   const buttonW = Math.max(UI_DECK_GEOMETRY.button.minWidth, Math.min(320, panel.w - pad * 2));
+  const buttonY = panel.y + panel.h - pad
+    - UI_DECK_GEOMETRY.actionGlyph.minHeight - UI_DECK_GEOMETRY.button.gap - UI_DECK_GEOMETRY.button.minHeight;
+  const button = rect((w - buttonW) / 2, buttonY, buttonW, UI_DECK_GEOMETRY.button.minHeight);
   return {
     panel,
     pad,
@@ -263,11 +300,12 @@ export function resultsSurfaceLayout(width, height) {
     columnW,
     leftX,
     rightX,
-    button: rect((w - buttonW) / 2, panel.y + panel.h - UI_DECK_GEOMETRY.button.minHeight - pad, buttonW, UI_DECK_GEOMETRY.button.minHeight),
+    button,
+    buttonPrompt: rect(button.x, button.y + button.h + UI_DECK_GEOMETRY.button.gap, button.w, UI_DECK_GEOMETRY.actionGlyph.minHeight),
     cargoRowH: UI_DECK_GEOMETRY.listRow.minHeight - 14,
     cargoGap: UI_DECK_GEOMETRY.separation,
     // Terminal rows may occupy this area; the CTA owns the rest of the panel.
-    contentBottom: panel.y + panel.h - UI_DECK_GEOMETRY.button.minHeight - pad - UI_DECK_GEOMETRY.panel.gap,
+    contentBottom: button.y - UI_DECK_GEOMETRY.panel.gap,
   };
 }
 

@@ -202,6 +202,50 @@ export function fitUiText(ctx, text, maxWidth, {
   return best;
 }
 
+/**
+ * Break supporting copy on measured word boundaries. Canvas has no native
+ * wrapping, and route briefings need to remain legible instead of silently
+ * losing their second half to an ellipsis on short Deck-height surfaces.
+ */
+export function wrapUiText(ctx, text, maxWidth, {
+  maxLines = Infinity,
+} = {}) {
+  const source = String(text ?? '').trim();
+  const limit = Math.max(1, Math.floor(Number(maxLines) || 1));
+  if (!source || !Number.isFinite(maxWidth) || maxWidth <= 0) return [];
+
+  const words = source.split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const candidate = line ? `${line} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      line = candidate;
+      continue;
+    }
+    if (line) lines.push(line);
+    if (lines.length >= limit) {
+      const remaining = [word, ...words.slice(index + 1)].join(' ');
+      lines[limit - 1] = fitUiText(ctx, `${lines[limit - 1]} ${remaining}`.trim(), maxWidth);
+      return lines;
+    }
+    line = ctx.measureText(word).width <= maxWidth ? word : fitUiText(ctx, word, maxWidth);
+  }
+  if (line && lines.length < limit) lines.push(line);
+  return lines;
+}
+
+/** Return the drawn bounds for a center-anchored status pill. */
+export function statusPillBounds(rect, {
+  minWidth = UI_DECK_GEOMETRY.valueBlock.minWidth,
+} = {}) {
+  const r = normalizeRect(rect);
+  const width = Math.max(minWidth, r.w || 0);
+  const height = Math.max(r.h || 20, UI_DECK_GEOMETRY.valueBlock.minHeight);
+  return { x: r.x - width / 2, y: r.y - height / 2, w: width, h: height };
+}
+
 function drawGlyphFrame(ctx, x, y, w, h, radius = 0) {
   if (radius > 0 && typeof ctx.arcTo === 'function') {
     ctx.beginPath();
@@ -449,10 +493,8 @@ export function drawStatusPill(ctx, rect, label, {
   ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const width = Math.max(minWidth, r.w || ctx.measureText(source).width + 18);
-  const height = Math.max(r.h || 20, UI_DECK_GEOMETRY.valueBlock.minHeight);
-  const x = r.x - width / 2;
-  const y = r.y - height / 2;
+  const bounds = statusPillBounds({ ...r, w: Math.max(r.w, ctx.measureText(source).width + 18) }, { minWidth });
+  const { x, y, w: width, h: height } = bounds;
   ctx.fillStyle = roleColor(role, 0.14 * alpha);
   ctx.fillRect(x, y, width, height);
   ctx.strokeStyle = roleColor(role, 0.34 * alpha);

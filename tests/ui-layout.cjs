@@ -5,6 +5,7 @@ const assert = require('assert');
   const prompts = await import('../src/ui/input-prompts.js');
   const footerLayout = await import('../src/ui/action-footer-layout.js');
   const layout = await import('../src/ui/layout-contract.js');
+  const primitives = await import('../src/ui/canvas-primitives.js');
   const loadout = await import('../src/ui/loadout-presentation.js');
 
   const geometry = tokens.UI_DECK_GEOMETRY;
@@ -81,6 +82,11 @@ const assert = require('assert');
     { descriptor: prompts.actionDescriptor('confirm', deckOptions), verb: 'cancel' },
     { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'cancel' },
   ];
+  const mapActions = [
+    { descriptor: prompts.actionDescriptor('select', deckOptions), verb: 'move' },
+    { descriptor: prompts.actionDescriptor('reroll', deckOptions), verb: 'new seed' },
+    { descriptor: prompts.actionDescriptor('back', deckOptions), verb: 'back out' },
+  ];
   const home = layout.deckPanelLayout(960, 720, 'home', 960, { rightFooterActions: homeActions, footerGap: 10 });
   assertSurface('home panels', [home.left, home.center, home.right]);
   assert(layout.rectContains(home.right, home.rightFooter, geometry.panel.paddingX), 'home right footer escaped its panel');
@@ -110,9 +116,24 @@ const assert = require('assert');
   assert(layout.rectContains({ x: title.panelX, y: title.panelY, w: title.panelW, h: title.panelH }, title.footerRect), 'title prompt rail escaped panel');
   const results = layout.resultsSurfaceLayout(960, 720);
   assert(layout.rectContains(results.panel, results.button, geometry.panel.paddingX), 'results CTA escaped panel');
-  assert(results.button.y + results.button.h + geometry.panel.paddingY <= results.panel.y + results.panel.h, 'results CTA lost its bottom gutter');
+  assert(layout.rectContains(results.panel, results.buttonPrompt, geometry.panel.paddingX), 'results CTA prompt escaped panel');
+  assert(results.buttonPrompt.y + results.buttonPrompt.h + geometry.panel.paddingY <= results.panel.y + results.panel.h, 'results CTA support glyph lost its bottom gutter');
   assert(results.contentBottom + geometry.panel.gap <= results.button.y, 'results content overlaps CTA rail');
   assert(results.cargoRowH >= 40, 'results cargo rows became too small for Deck readability');
+  for (const [width, height] of [[1048, 576], [960, 720], [1280, 800]]) {
+    const map = layout.mapSelectSurfaceLayout(width, height, width, 6, mapActions);
+    const scaleBounds = primitives.statusPillBounds(map.briefStatus.scale, { minWidth: map.briefStatus.scale.w });
+    const riskBounds = primitives.statusPillBounds(map.briefStatus.risk, { minWidth: map.briefStatus.risk.w });
+    assert(layout.rectContains(map.right, scaleBounds, geometry.panel.paddingX), `${width}x${height} scale pill escaped briefing panel`);
+    assert(layout.rectContains(map.right, riskBounds, geometry.panel.paddingX), `${width}x${height} risk pill escaped briefing panel`);
+    assert(!layout.rectsOverlap(scaleBounds, riskBounds, 0), `${width}x${height} scale/risk pills overlap`);
+    assert(!layout.rectsOverlap(map.briefing.titleBounds, scaleBounds, geometry.separation), `${width}x${height} scale pill overlaps title`);
+    assert(!layout.rectsOverlap(map.briefing.titleBounds, riskBounds, geometry.separation), `${width}x${height} risk pill overlaps title`);
+    assert(map.briefing.signatureY > scaleBounds.y + scaleBounds.h, `${width}x${height} signature row must clear scale card`);
+    assert(map.briefing.contactY + map.briefing.contactRowStep * 3 < map.briefing.authorityY,
+      `${width}x${height} possible contents collide with authority band`);
+    assert(layout.rectContains(map.right, map.briefing.commandPrompt, geometry.panel.paddingX), `${width}x${height} map CTA prompt escaped briefing panel`);
+  }
   const itemEffects = loadout.formatItemEffects({ coefficients: { thrustScale: 1.08, cargoSlots: 1 } });
   assert(itemEffects.includes('thrust response +8%'), 'item effect should use a readable percentage tag');
   assert(itemEffects.includes('cargo slots +1'), 'item effect should retain additive slot identity');

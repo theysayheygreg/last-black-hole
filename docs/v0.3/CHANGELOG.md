@@ -27,6 +27,19 @@
 - Made terminal result overlays deliberately obscure the active HUD and reserve
   the CTA rail from summary/cargo/notable content.
 
+## Rendered UI containment repair — 2026-08-04
+
+- Ship hull controls reserve their measured prompt rail before rig and loadout
+  rows. Launch reserves its support glyph before operation facts and keeps the
+  route CTA inside its terminal rail.
+- Map briefing scale/risk pills use their center-anchored bounds, reserve
+  title/body/contact/authority bands, and wrap supporting copy by measured
+  word boundaries on short surfaces.
+- Results reserve the `RETURN HOME` support glyph inside the terminal frame.
+  Focused checks cover map briefing bounds at 1048x576, 960x720, and 1280x800;
+  `tests/ui-rendered-repair-capture.cjs` captures the affected live-canvas
+  surfaces.
+
 - **Well landmark and terrain-stability recovery:** gameplay restores a
   restrained, presentation-only blackbody corona around each existing compact
   analytic well body. The void and immediate rim remain the authoritative
