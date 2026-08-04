@@ -2,6 +2,7 @@
 
 const { simUnitsToMeters } = require("../content/units.cjs");
 const { NOISE_CONFIG, resolveThreatWarningBudget } = require("./noise-radius.cjs");
+const { playerBodyRadius } = require("./interaction-volumes.cjs");
 const INHIBITOR_ECOLOGY_DATA = require("../../src/content/inhibitor-ecology.data.json");
 
 const POPULATION_CONFIG = INHIBITOR_ECOLOGY_DATA.population;
@@ -274,23 +275,34 @@ function resolveGlitchInfluence(entities, players, {
       const playerId = String(player.clientId || "unknown");
       const previousCooldown = Math.max(0, finite(glitch.contactCooldowns[playerId]));
       glitch.contactCooldowns[playerId] = Math.max(0, previousCooldown - step);
-      if (distance > glitch.coreRadius || glitch.contactCooldowns[playerId] > 0) continue;
-
-      const before = clamp(player.hullDamage, 0, glitch.maxDamage ?? 1);
-      const after = clamp(before + glitch.coreDamage, 0, glitch.maxDamage ?? 1);
-      player.hullDamage = after;
-      glitch.contactCooldowns[playerId] = Math.max(0, finite(glitch.contactCooldownSeconds));
-      contacts.push({
-        entityId: glitch.id,
-        clientId: playerId,
-        damage: after - before,
-        totalDamage: after,
-        lethal: after >= (glitch.maxDamage ?? 1),
-        tick: Math.max(0, Math.trunc(finite(tick))),
-      });
+      if (distance > glitch.coreRadius + playerBodyRadius(player)) continue;
+      const contact = applyGlitchContact(glitch, player, { tick });
+      if (contact) contacts.push(contact);
     }
   }
   return { contacts, continuous };
+}
+
+// Endpoint and swept crossings share this compact damage/cooldown seam. The
+// caller owns geometry; this owner keeps the consequence identical.
+function applyGlitchContact(glitch, player, { tick = 0 } = {}) {
+  if (!glitch || glitch.kind !== "glitch" || glitch.lifecycle !== "alive") return null;
+  if (!player || player.status !== "alive") return null;
+  const playerId = String(player.clientId || "unknown");
+  if (Math.max(0, finite(glitch.contactCooldowns[playerId])) > 0) return null;
+  const maxDamage = glitch.maxDamage ?? 1;
+  const before = clamp(player.hullDamage, 0, maxDamage);
+  const after = clamp(before + glitch.coreDamage, 0, maxDamage);
+  player.hullDamage = after;
+  glitch.contactCooldowns[playerId] = Math.max(0, finite(glitch.contactCooldownSeconds));
+  return {
+    entityId: glitch.id,
+    clientId: playerId,
+    damage: after - before,
+    totalDamage: after,
+    lethal: after >= maxDamage,
+    tick: Math.max(0, Math.trunc(finite(tick))),
+  };
 }
 
 function projectGlitchEntity(entity) {
@@ -505,7 +517,7 @@ function applySwarmContacts(entities, players, { dt = 0, worldScale = 1, tick = 
       const playerId = String(player.clientId || "unknown");
       swarm.contactCooldowns[playerId] = Math.max(0,
         finite(swarm.contactCooldowns[playerId]) - step);
-      if (distance > swarm.contactRadius || swarm.contactCooldowns[playerId] > 0) continue;
+      if (distance > swarm.contactRadius + playerBodyRadius(player)) continue;
       const contact = applySwarmContact(swarm, player, { tick });
       if (contact) contacts.push(contact);
     }
@@ -748,25 +760,35 @@ function resolveVesselInfluence(entities, players, {
       const playerId = String(player.clientId || "unknown");
       vessel.contactCooldowns[playerId] = Math.max(0,
         finite(vessel.contactCooldowns[playerId]) - step);
-      if (distance > vessel.outerDamageRadius || vessel.contactCooldowns[playerId] > 0) continue;
-
-      const before = clamp(player.hullDamage, 0, 1);
-      const core = distance <= vessel.coreRadius;
-      const after = core ? 1 : clamp(before + vessel.outerDamage, 0, 1);
-      player.hullDamage = after;
-      vessel.contactCooldowns[playerId] = Math.max(0, finite(vessel.contactCooldownSeconds));
-      contacts.push({
-        entityId: vessel.id,
-        clientId: playerId,
-        damage: after - before,
-        totalDamage: after,
-        instantKill: core,
-        lethal: core || after >= 1,
-        tick: Math.max(0, Math.trunc(finite(tick))),
+      if (distance > vessel.outerDamageRadius + playerBodyRadius(player)) continue;
+      const contact = applyVesselContact(vessel, player, {
+        tick,
+        core: distance <= vessel.coreRadius + playerBodyRadius(player),
       });
+      if (contact) contacts.push(contact);
     }
   }
   return { contacts, continuous };
+}
+
+function applyVesselContact(vessel, player, { tick = 0, core = false } = {}) {
+  if (!vessel || vessel.kind !== "vessel" || vessel.lifecycle !== "alive") return null;
+  if (!player || player.status !== "alive") return null;
+  const playerId = String(player.clientId || "unknown");
+  if (Math.max(0, finite(vessel.contactCooldowns[playerId])) > 0) return null;
+  const before = clamp(player.hullDamage, 0, 1);
+  const after = core ? 1 : clamp(before + vessel.outerDamage, 0, 1);
+  player.hullDamage = after;
+  vessel.contactCooldowns[playerId] = Math.max(0, finite(vessel.contactCooldownSeconds));
+  return {
+    entityId: vessel.id,
+    clientId: playerId,
+    damage: after - before,
+    totalDamage: after,
+    instantKill: core,
+    lethal: core || after >= 1,
+    tick: Math.max(0, Math.trunc(finite(tick))),
+  };
 }
 
 function projectVesselEntity(entity) {
@@ -870,6 +892,7 @@ module.exports = {
   INHIBITOR_ECOLOGY_CONFIG,
   createGlitchEntity,
   advanceGlitchEntity,
+  applyGlitchContact,
   resolveGlitchInfluence,
   projectGlitchEntity,
   createSwarmEntity,
@@ -891,6 +914,7 @@ module.exports = {
   selectNearestAliveTarget,
   createVesselEntity,
   advanceVesselEntity,
+  applyVesselContact,
   resolveVesselInfluence,
   projectVesselEntity,
   deriveWellOverdriveMultiplier,

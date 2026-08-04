@@ -1,5 +1,15 @@
 # v0.3 Changelog
 
+- **Body-aware interaction contacts:** authoritative pickups and exfil now use
+  one compact gameplay volume: semantic range/aperture plus the physical ship
+  body and a small `0.012` near-miss allowance.
+  Endpoint and high-speed swept contacts share that truth across world seams.
+  Crossing an exfil opens a `0.35s` explicit-confirm prompt but never
+  auto-extracts; ordinary leave behavior is unchanged. Glitch and Vessel hull
+  contacts also sweep after movement, so they cannot tunnel through a fast
+  ship. Scavengers now derive their death-spiral start angle from wrapped
+  authority direction instead of raw coordinates.
+
 - **Well/fabric camera lock:** camera scrolling now moves the local fluid
   texture by the same camera-relative UV displacement used by the well, Three,
   and canvas projections. The prior source-sampling sign was inverted, so

@@ -108,6 +108,13 @@ const { isBenchValidationError } = require("./sim/bench-errors.cjs");
 const { resolveBenchGate } = require("./sim/bench-gate.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 const {
+  INTERACTION_VOLUME_CONFIG,
+  effectiveInteractionRadius,
+  interactionTargetRadius,
+  isWithinInteractionRadius,
+  playerBodyRadius,
+} = require("./sim/interaction-volumes.cjs");
+const {
   getHeatRatio,
   setHeatRatio,
   stepPlayerFreeMovement,
@@ -138,6 +145,7 @@ const {
   totalCapBlocksSpawn,
   createGlitchEntity,
   advanceGlitchEntity,
+  applyGlitchContact,
   resolveGlitchInfluence,
   createSwarmEntity,
   advanceSwarmEntity,
@@ -145,6 +153,7 @@ const {
   applySwarmContacts,
   createVesselEntity,
   advanceVesselEntity,
+  applyVesselContact,
   resolveVesselInfluence,
   shouldSpawnVessel,
   applyWellOverdrive,
@@ -192,6 +201,9 @@ const { calculateWellGrowth, createWellGrowthEvent } = require("./sim/well-growt
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = Object.freeze({
   captureRadius: 0.08,
+  // A high-speed crossing earns a brief explicit confirm window. It never
+  // extracts on contact and ordinary endpoint residence still aborts on exit.
+  sweptConfirmGraceSeconds: 0.35,
   schedule: Object.freeze({
     // Whole-run fronts are normalized against the selected map duration.
     graceProgress: 0.075,
@@ -1404,6 +1416,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     wy: 0,
     vx: 0,
     vy: 0,
+    radius: INTERACTION_VOLUME_CONFIG.playerBodyRadius,
     lastInput: {
       seq: 0,
       moveX: 0,
@@ -2960,16 +2973,25 @@ function movementSweep(startWX, startWY, player) {
   };
 }
 
-function sweptEntityContact(sweep, entity, radius) {
+function sweptEntityContact(sweep, player, entity, radius) {
   if (!sweep) return null;
   const result = sweptMovingCircleVsCircle({
     ...sweep,
-    movingRadius: 0,
+    movingRadius: playerBodyRadius(player),
     targetX: entity.wx,
     targetY: entity.wy,
     targetRadius: Math.max(0, radius),
   });
   return result.hit ? result : null;
+}
+
+function sweptInteractionContact(sweep, player, entity, options = {}) {
+  return sweptEntityContact(
+    sweep,
+    player,
+    entity,
+    interactionTargetRadius(options),
+  );
 }
 
 function sweptEntityClosestApproach(sweep, entity) {
@@ -2989,7 +3011,7 @@ function applySweptPlanetoidPushes(player, dt, sweep, planetoids = runtime.mapSt
   if (!sweep || player.slingshot?.engaged) return;
   for (const planetoid of planetoids) {
     if (planetoid.alive === false) continue;
-    const hit = sweptEntityContact(sweep, planetoid, PLANETOID_SERVER.shipPushRadius);
+    const hit = sweptEntityContact(sweep, player, planetoid, PLANETOID_SERVER.shipPushRadius);
     // Starting inside was already sampled by the normal continuous-force step.
     if (!hit || hit.startedOverlapping) continue;
     const closest = sweptEntityClosestApproach(sweep, planetoid);
@@ -3051,7 +3073,7 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sw
     if (scav.alive === false || scav.state === "dying") continue;
     const { dist, nx, ny } = worldDirection(scav.wx, scav.wy, player.wx, player.wy, runtime.session.worldScale);
     const swept = dist >= SCAVENGER_CONFIG.bumpRadius
-      ? sweptEntityContact(sweep, scav, SCAVENGER_CONFIG.bumpRadius)
+      ? sweptEntityContact(sweep, player, scav, SCAVENGER_CONFIG.bumpRadius)
       : null;
     if ((dist < SCAVENGER_CONFIG.bumpRadius || swept) && dist > 0.0001) {
       const impulse = SCAVENGER_CONFIG.bumpForce;
@@ -3261,7 +3283,7 @@ function applySweptWaveContacts(player, sweep) {
 function applySweptWellContacts(player, dt, sweep) {
   const contacts = [];
   for (const well of runtime.mapState.wells) {
-    const hit = sweptEntityContact(sweep, well, well.killRadius);
+    const hit = sweptEntityContact(sweep, player, well, well.killRadius);
     if (!hit || hit.startedOverlapping) continue;
     contacts.push({ well, hit });
   }
@@ -3277,14 +3299,24 @@ function pickupRadiusForPlayer(player) {
   return 0.08 * (player.brain ? player.brain.pickupRadius : 1.0);
 }
 
-function collectPickupWreckCandidates(player, wrecks, pickupDist, limit) {
+function pickupInteractionOptions(player) {
+  return {
+    semanticRadius: pickupRadiusForPlayer(player),
+  };
+}
+
+function pickupInteractionRadius(player) {
+  return effectiveInteractionRadius(player, pickupInteractionOptions(player));
+}
+
+function collectPickupWreckCandidates(player, wrecks, searchRadius, limit) {
   const mirror = runtime.ballparkMirror;
   if (!mirror) throw new Error("Ballpark is required for authoritative pickup queries");
 
   const materializedById = indexEntitiesById(wrecks);
   const { bodies } = collectNearestBodies(mirror, { wx: player.wx, wy: player.wy }, {
     category: "wreck",
-    radius: pickupDist,
+    radius: searchRadius,
     // Cooldown is a wreck-specific gameplay fact, so gather the full local
     // pickup bubble and filter materialized entities before applying budget.
     limit: Math.max(limit, wrecks.length || 1),
@@ -3342,9 +3374,9 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   const maxCargo = player.brain ? player.brain.cargoSlots : PLAYER_CARGO_SLOTS;
   if (getCargoCount(player) >= maxCargo) return;
 
-  const pickupDist = pickupRadiusForPlayer(player);
   const limit = wrecks.length || 1;
-  const { candidates: endpointCandidates } = collectPickupWreckCandidates(player, wrecks, pickupDist, limit);
+  const searchRadius = pickupInteractionRadius(player);
+  const { candidates: endpointCandidates } = collectPickupWreckCandidates(player, wrecks, searchRadius, limit);
   const nearbyById = new Map(endpointCandidates.map((candidate) => [String(candidate.entity.id), {
     ...candidate,
     contactT: 1,
@@ -3352,7 +3384,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   if (sweep) {
     for (const wreck of wrecks) {
       if (wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
-      const hit = sweptEntityContact(sweep, wreck, pickupDist);
+      const hit = sweptInteractionContact(sweep, player, wreck, pickupInteractionOptions(player));
       if (!hit) continue;
       const key = String(wreck.id);
       const existing = nearbyById.get(key);
@@ -3365,7 +3397,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
     .sort((a, b) => a.contactT - b.contactT || a.dist - b.dist)
     .slice(0, limit);
   for (const { entity: wreck, handle, dist, contactT } of nearbyWrecks) {
-    if (contactT >= 1 && dist >= pickupDist) continue;
+    if (contactT >= 1 && !isWithinInteractionRadius(dist, player, pickupInteractionOptions(player))) continue;
 
     // Wreck age scales EM sell value only, not artifact coefficients.
     // Coefficients are fixed by the catalog — aging makes loot worth more to sell,
@@ -3419,43 +3451,50 @@ function clearPortalInteraction(player, reason = "left-zone") {
   });
 }
 
-function tickExtraction(player, confirmRequested = false) {
-  if (player.status !== "alive") return;
-  const portals = runtime.mapState.portals;
-  const maxCaptureDist = portals.reduce((best, portal) => {
-    if (!isPortalAvailable(portal)) return best;
-    return Math.max(best, portalCaptureRadius(portal));
-  }, PORTAL_CONFIG.captureRadius);
-  const limit = portals.length || 1;
-  const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
-  const portalHit = endpointCandidates
-    .filter(({ entity: portal, dist }) => dist < portalCaptureRadius(portal))
-    .sort((a, b) => a.dist - b.dist)[0] || null;
+function portalInteractionOptions(portal) {
+  return { semanticRadius: portal ? portalCaptureRadius(portal) : PORTAL_CONFIG.captureRadius };
+}
 
-  if (!portalHit) {
-    clearPortalInteraction(player);
-    return;
-  }
+function portalInteractionRadius(player, portal) {
+  return effectiveInteractionRadius(player, portalInteractionOptions(portal));
+}
 
-  const portal = portalHit.entity;
-  const samePortal = player.portalInteraction?.portalId === portal.id;
+function enterPortalInteraction(player, portal, { swept = false } = {}) {
+  const previous = player.portalInteraction;
+  const samePortal = previous?.portalId === portal.id;
+  if (!samePortal) clearPortalInteraction(player, "changed-zone");
+  if (samePortal && !swept && previous.sweptConfirmExpiresAt == null) return previous;
+
+  player.portalInteraction = {
+    portalId: portal.id,
+    portalType: portal.type,
+    enteredTick: samePortal ? previous.enteredTick : runtime.tick,
+    ready: true,
+    ...(swept ? {
+      sweptConfirmExpiresAt: runtime.simTime + PORTAL_CONFIG.sweptConfirmGraceSeconds,
+    } : {}),
+  };
   if (!samePortal) {
-    clearPortalInteraction(player, "changed-zone");
-    player.portalInteraction = {
-      portalId: portal.id,
-      portalType: portal.type,
-      enteredTick: runtime.tick,
-      ready: true,
-    };
     publishEvent("player.portalProximity", {
       clientId: player.clientId,
       portalId: portal.id,
       portalType: portal.type,
       entered: true,
+      ...(swept ? { reason: "swept-crossing" } : {}),
     });
   }
+  return player.portalInteraction;
+}
 
-  if (!confirmRequested) return;
+function activeSweptPortalGrace(player, portals) {
+  const interaction = player.portalInteraction;
+  if (!interaction || !Number.isFinite(interaction.sweptConfirmExpiresAt)) return null;
+  if (runtime.simTime > interaction.sweptConfirmExpiresAt) return null;
+  const portal = portals.find((entry) => entry.id === interaction.portalId);
+  return portal && isPortalAvailable(portal) ? portal : null;
+}
+
+function confirmPortalExtraction(player, portal) {
   publishEvent("player.portalConfirmed", {
     clientId: player.clientId,
     portalId: portal.id,
@@ -3472,6 +3511,53 @@ function tickExtraction(player, confirmRequested = false) {
     portalType: portal.type,
     cargoCount: getCargoCount(player),
   });
+}
+
+function tickExtraction(player, confirmRequested = false, sweep = null) {
+  if (player.status !== "alive") return;
+  const portals = runtime.mapState.portals;
+  const maxCaptureDist = portals.reduce((best, portal) => {
+    if (!isPortalAvailable(portal)) return best;
+    return Math.max(best, portalInteractionRadius(player, portal));
+  }, portalInteractionRadius(player, null));
+  const limit = portals.length || 1;
+  const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
+  const portalHit = endpointCandidates
+    .filter(({ entity: portal, dist }) => isWithinInteractionRadius(dist, player, portalInteractionOptions(portal)))
+    .sort((a, b) => a.dist - b.dist)[0] || null;
+
+  if (portalHit) {
+    const portal = portalHit.entity;
+    enterPortalInteraction(player, portal);
+    if (confirmRequested) confirmPortalExtraction(player, portal);
+    return;
+  }
+
+  const crossedPortal = sweep
+    ? portals
+      .filter(isPortalAvailable)
+      .map((portal) => ({
+        portal,
+        hit: sweptInteractionContact(sweep, player, portal, portalInteractionOptions(portal)),
+      }))
+      .filter(({ hit }) => hit && !hit.startedOverlapping)
+      .sort((a, b) => a.hit.t - b.hit.t || String(a.portal.id).localeCompare(String(b.portal.id)))[0] || null
+    : null;
+  if (crossedPortal) {
+    // Crossing earns the short prompt window only. A confirmation carried in
+    // the same movement tick cannot turn a fly-through into auto-extraction.
+    enterPortalInteraction(player, crossedPortal.portal, { swept: true });
+    return;
+  }
+
+  const gracePortal = activeSweptPortalGrace(player, portals);
+  if (gracePortal) {
+    if (confirmRequested) confirmPortalExtraction(player, gracePortal);
+    return;
+  }
+  clearPortalInteraction(player, player.portalInteraction?.sweptConfirmExpiresAt != null
+    ? "swept-confirm-expired"
+    : "left-zone");
 }
 
 function refreshPlayerEffects(player) {
@@ -4097,7 +4183,9 @@ function applyWellGravityToEntity(entity, dt) {
         entity.deathWellWY = well.wy;
         entity.deathStartWX = entity.wx;
         entity.deathStartWY = entity.wy;
-        entity.deathAngle = Math.atan2(entity.wy - well.wy, entity.wx - well.wx);
+        // `direction` is already seam-correct. Preserve the outward radial
+        // angle when a scavenger dies across a wrapped world edge.
+        entity.deathAngle = Math.atan2(-direction.dy, -direction.dx);
         entity.vx = 0;
         entity.vy = 0;
       }
@@ -5818,7 +5906,7 @@ function applySweptSentryContacts(player, sweep) {
   if (!sweep) return;
   for (const sentry of runtime.mapState.sentries) {
     if (!sentry.alive || sentry.state !== "lunge") continue;
-    const hit = sweptEntityContact(sweep, sentry, 0.04);
+    const hit = sweptEntityContact(sweep, player, sentry, 0.04);
     // Endpoint overlap was already handled before player movement.
     if (!hit || hit.startedOverlapping) continue;
     const well = runtime.mapState.wells.find((entry) => entry.id === sentry.wellId);
@@ -5929,7 +6017,7 @@ function applySweptFaunaContacts(player, sweep) {
   const contacts = [];
   for (const fauna of runtime.mapState.fauna) {
     if (!fauna.alive) continue;
-    const hit = sweptEntityContact(sweep, fauna, faunaContactRadius(fauna));
+    const hit = sweptEntityContact(sweep, player, fauna, faunaContactRadius(fauna));
     if (!hit || hit.startedOverlapping) continue;
     contacts.push({ fauna, hit });
   }
@@ -6260,7 +6348,7 @@ function applySweptSwarmContacts(player, sweep) {
   const contacts = [];
   for (const swarm of runtime.inhibitorEntities) {
     if (swarm.kind !== "swarm" || swarm.lifecycle !== "alive") continue;
-    const hit = sweptEntityContact(sweep, swarm, swarm.contactRadius);
+    const hit = sweptEntityContact(sweep, player, swarm, swarm.contactRadius);
     // Starting overlap was handled by the ecology contact pass before player
     // movement; only a newly crossed aperture belongs here.
     if (!hit || hit.startedOverlapping) continue;
@@ -6269,6 +6357,38 @@ function applySweptSwarmContacts(player, sweep) {
   }
   contacts.sort((a, b) => a.hit.t - b.hit.t || String(a.contact.entityId).localeCompare(String(b.contact.entityId)));
   applyInhibitorContacts(contacts.map(({ contact }) => contact), "inhibitor_swarm");
+}
+
+function applySweptGlitchContacts(player, sweep) {
+  if (!sweep) return;
+  const contacts = [];
+  for (const glitch of runtime.inhibitorEntities) {
+    if (glitch.kind !== "glitch" || glitch.lifecycle !== "alive") continue;
+    const hit = sweptEntityContact(sweep, player, glitch, glitch.coreRadius);
+    if (!hit || hit.startedOverlapping) continue;
+    const contact = applyGlitchContact(glitch, player, { tick: runtime.tick });
+    if (contact) contacts.push({ contact, hit });
+  }
+  contacts.sort((a, b) => a.hit.t - b.hit.t || String(a.contact.entityId).localeCompare(String(b.contact.entityId)));
+  applyInhibitorContacts(contacts.map(({ contact }) => contact), "inhibitor_glitch");
+}
+
+function applySweptVesselContacts(player, sweep) {
+  if (!sweep) return;
+  const contacts = [];
+  for (const vessel of runtime.inhibitorEntities) {
+    if (vessel.kind !== "vessel" || vessel.lifecycle !== "alive") continue;
+    const outerHit = sweptEntityContact(sweep, player, vessel, vessel.outerDamageRadius);
+    if (!outerHit || outerHit.startedOverlapping) continue;
+    const coreHit = sweptEntityContact(sweep, player, vessel, vessel.coreRadius);
+    const contact = applyVesselContact(vessel, player, {
+      tick: runtime.tick,
+      core: Boolean(coreHit && !coreHit.startedOverlapping),
+    });
+    if (contact) contacts.push({ contact, hit: outerHit });
+  }
+  contacts.sort((a, b) => a.hit.t - b.hit.t || String(a.contact.entityId).localeCompare(String(b.contact.entityId)));
+  applyInhibitorContacts(contacts.map(({ contact }) => contact), "inhibitor_vessel");
 }
 
 function appendContinuousInfluence(target, contributions) {
@@ -6508,10 +6628,14 @@ function resolvePostMovementContacts(player, playerDt, sweep, relevance, forceLe
     applySweptSentryContacts(player, sweep);
     applySweptFaunaContacts(player, sweep);
   });
+  applySweptGlitchContacts(player, sweep);
+  if (player.status !== "alive") return false;
   applySweptSwarmContacts(player, sweep);
   if (player.status !== "alive") return false;
+  applySweptVesselContacts(player, sweep);
+  if (player.status !== "alive") return false;
   tickPlayerPickups(player, relevance.wrecks, sweep);
-  tickExtraction(player, extractConfirm);
+  tickExtraction(player, extractConfirm, sweep);
   return player.status === "alive";
 }
 
