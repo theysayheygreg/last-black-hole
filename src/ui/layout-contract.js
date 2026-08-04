@@ -110,17 +110,34 @@ export function deckPanelLayout(width, height, kind = 'home', viewportWidth = wi
   const left = rect(marginX, top, leftW, panelH);
   const center = rect(left.x + left.w + gap, top, centerW, panelH);
   const right = rect(center.x + center.w + gap, top, rightW, panelH);
-  return { compact, width: w, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH, left, center, right };
+  // Controller/keyboard affordances routinely need two rows at Deck scale.
+  // Reserve the second row up front instead of letting a wrapped footer leak
+  // through the panel frame.
+  const footerHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight * 2
+    + UI_DECK_GEOMETRY.panel.gap + 12;
+  const footerY = bottom - UI_DECK_GEOMETRY.panel.paddingX - footerHeight;
+  return {
+    compact, width: w, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH,
+    left, center, right,
+    footerHeight,
+    leftFooter: rect(left.x + UI_DECK_GEOMETRY.panel.paddingX, footerY, left.w - UI_DECK_GEOMETRY.panel.paddingX * 2, footerHeight),
+    rightFooter: rect(right.x + UI_DECK_GEOMETRY.panel.paddingX, footerY, right.w - UI_DECK_GEOMETRY.panel.paddingX * 2, footerHeight),
+  };
 }
 
 export function mapSelectSurfaceLayout(width, height, viewportWidth = width, entryCount = 6) {
   const panels = deckPanelLayout(width, height, 'map', viewportWidth);
   const pad = UI_DECK_GEOMETRY.panel.paddingX;
   const count = Math.max(1, Math.floor(Number(entryCount) || 1));
-  const rowH = Math.max(UI_DECK_GEOMETRY.listRow.minHeight, Math.min(72, (panels.left.h - 170) / count));
+  const footer = panels.leftFooter;
+  const rowStartY = panels.left.y + 52;
+  // Rows yield space to a two-line footer before they are allowed to grow.
+  // Six locked/available destinations still retain their Deck minimum height.
+  const rowBudget = (footer.y - rowStartY - UI_DECK_GEOMETRY.separation * count) / count;
+  const rowH = Math.max(UI_DECK_GEOMETRY.listRow.minHeight, Math.min(72, rowBudget));
   const rows = Array.from({ length: count }, (_, index) => rect(
     panels.left.x + pad,
-    panels.left.y + 52 + index * (rowH + UI_DECK_GEOMETRY.separation),
+    rowStartY + index * (rowH + UI_DECK_GEOMETRY.separation),
     panels.left.w - pad * 2,
     rowH,
   ));
@@ -134,8 +151,20 @@ export function mapSelectSurfaceLayout(width, height, viewportWidth = width, ent
     ...panels,
     pad,
     rows,
-    footer: rect(panels.left.x + pad, panels.left.y + panels.left.h - 54, panels.left.w - pad * 2, UI_DECK_GEOMETRY.actionGlyph.minHeight),
+    // Three map actions wrap at Deck width. Keep their backing, glyphs, and
+    // second line within the terminal rather than treating the footer as a
+    // single 32px rail.
+    footer,
     command,
+    briefStatus: (() => {
+      const gap = UI_DECK_GEOMETRY.panel.gap;
+      const width = Math.max(1, (panels.right.w - pad * 2 - gap) / 2);
+      const y = panels.right.y + 86;
+      return {
+        scale: rect(panels.right.x + pad, y, width, UI_DECK_GEOMETRY.valueBlock.minHeight),
+        risk: rect(panels.right.x + pad + width + gap, y, width, UI_DECK_GEOMETRY.valueBlock.minHeight),
+      };
+    })(),
   };
 }
 
@@ -155,7 +184,14 @@ export function profileSurfaceLayout(width, height) {
     rowW,
     rowH,
   ));
-  return { panel, rows, heading: rect(innerX, panel.y + 48, rowW, UI_DECK_GEOMETRY.heading.minHeight), promptY: panel.y + panel.h - 20 };
+  const footerHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight * 2
+    + UI_DECK_GEOMETRY.panel.gap + 12;
+  return {
+    panel,
+    rows,
+    heading: rect(innerX, panel.y + 48, rowW, UI_DECK_GEOMETRY.heading.minHeight),
+    footer: rect(innerX, panel.y + panel.h - UI_DECK_GEOMETRY.panel.paddingX - footerHeight, rowW, footerHeight),
+  };
 }
 
 export function titleSurfaceLayout(width, height, layout = 'left') {
@@ -210,6 +246,8 @@ export function resultsSurfaceLayout(width, height) {
     button: rect((w - buttonW) / 2, panel.y + panel.h - UI_DECK_GEOMETRY.button.minHeight - pad, buttonW, UI_DECK_GEOMETRY.button.minHeight),
     cargoRowH: UI_DECK_GEOMETRY.listRow.minHeight - 14,
     cargoGap: UI_DECK_GEOMETRY.separation,
+    // Terminal rows may occupy this area; the CTA owns the rest of the panel.
+    contentBottom: panel.y + panel.h - UI_DECK_GEOMETRY.button.minHeight - pad - UI_DECK_GEOMETRY.panel.gap,
   };
 }
 

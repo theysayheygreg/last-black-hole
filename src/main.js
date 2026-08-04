@@ -5852,7 +5852,12 @@ function gameLoop(now) {
         { descriptor: actionDescriptor('delete', currentPromptOptions()), verb: 'delete' },
         { descriptor: actionDescriptor('back', currentPromptOptions()), verb: 'back out' },
       ];
-    drawActionFooter(ctx, profileLayout.panel.x + UI_DECK_GEOMETRY.panel.paddingX, profileLayout.promptY - 12, profileFooterActions, { alpha: 0.76, maxWidth: profileLayout.panel.w - UI_DECK_GEOMETRY.panel.paddingX * 2, backing: true, backingRole: 'flow' });
+    drawActionFooter(ctx, profileLayout.footer.x, profileLayout.footer.y, profileFooterActions, {
+      alpha: 0.76,
+      maxWidth: profileLayout.footer.w,
+      backing: true,
+      backingRole: 'flow',
+    });
 
     ctx.restore();
   }
@@ -6354,12 +6359,12 @@ function gameLoop(now) {
       ctx.fillStyle = roleColor('muted', 0.74);
       ctx.fillText(fitUiText(ctx, 'map briefing opens on confirm', sidebarW), sidebarX, sideY);
     }
-    drawActionFooter(ctx, sidebarX, rightPanel.y + rightPanel.h - 72, [
+    drawActionFooter(ctx, panelLayout.rightFooter.x, panelLayout.rightFooter.y, [
       { descriptor: actionDescriptor('tabs', homePromptOptions), verb: 'switch tabs' },
       { descriptor: actionDescriptor('select', homePromptOptions), verb: 'move' },
       { descriptor: actionDescriptor('confirm', homePromptOptions), verb: 'use' },
       { descriptor: actionDescriptor('back', homePromptOptions), verb: 'back out' },
-    ], { alpha: 0.72, gap: 10, maxWidth: sidebarW, backing: true, backingRole: 'flow' });
+    ], { alpha: 0.72, gap: 10, maxWidth: panelLayout.rightFooter.w, backing: true, backingRole: 'flow' });
 
     ctx.restore();
   }
@@ -6457,11 +6462,11 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    drawActionFooter(ctx, listPanel.x + pad, listPanel.y + listPanel.h - 54, [
+    drawActionFooter(ctx, panelLayout.footer.x, panelLayout.footer.y, [
       { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
       { descriptor: actionDescriptor('reroll', promptOptions), verb: 'new seed' },
       { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
-    ], { alpha: 0.82, gap: 10, maxWidth: listPanel.w - pad * 2, backing: true, backingRole: surveyRole });
+    ], { alpha: 0.82, gap: 10, maxWidth: panelLayout.footer.w, backing: true, backingRole: surveyRole });
 
     const centerX = previewPanel.x + pad;
     ctx.font = canvasFont(21, { role: 'display', weight: '800' });
@@ -6512,8 +6517,12 @@ function gameLoop(now) {
       ctx.font = canvasFont(20, { role: 'display', weight: '800' });
       ctx.fillStyle = roleColor('text', 0.96);
       ctx.fillText(fitUiText(ctx, preview.mapClass.label, briefW), briefX, briefPanel.y + 58);
-      drawStatusPill(ctx, { x: briefX + briefW * 0.27, y: briefPanel.y + 86, w: briefW * 0.48, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, preview.scale.label, { role: 'flow', alpha: 0.88, minWidth: briefW * 0.48 });
-      drawStatusPill(ctx, { x: briefX + briefW * 0.78, y: briefPanel.y + 86, w: briefW * 0.40, h: UI_DECK_GEOMETRY.valueBlock.minHeight }, preview.riskBand, { role: surveyRole, alpha: 0.88, minWidth: briefW * 0.40 });
+      drawStatusPill(ctx, panelLayout.briefStatus.scale, preview.scale.label, {
+        role: 'flow', alpha: 0.88, minWidth: panelLayout.briefStatus.scale.w,
+      });
+      drawStatusPill(ctx, panelLayout.briefStatus.risk, preview.riskBand, {
+        role: surveyRole, alpha: 0.88, minWidth: panelLayout.briefStatus.risk.w,
+      });
       drawKeyValueRow(ctx, 'signature', preview.signature.name, briefX, briefPanel.y + 128, { labelWidth: 88, valueRole: 'anomaly' });
       ctx.font = canvasFont(10);
       ctx.fillStyle = roleColor('muted', 0.74);

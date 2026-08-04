@@ -165,7 +165,12 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const accent = roleColor(role, 0.95);
   const lingerFrac = clamp01(rawTime / lingerDuration);
   const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
-  const overlayAlpha = lingerFrac < 1 ? dimEase * 0.55 : 0.55 + Math.min(0.2, (rawTime - lingerDuration) * 0.6);
+  // Terminal truth must replace the active HUD, not become another layer of
+  // tiny text underneath it. Preserve a short dissolve, then give the result
+  // surface an almost-opaque field so the player's next decision is legible.
+  const overlayAlpha = lingerFrac < 1
+    ? dimEase * 0.76
+    : 0.90 + Math.min(0.06, (rawTime - lingerDuration) * 0.12);
   const reveal = Math.max(0, rawTime - lingerDuration);
 
   ctx.save();
@@ -186,7 +191,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
 
   drawScanlines(ctx, w, h, 0.026);
   const surface = resultsSurfaceLayout(w, h);
-  const { panel: panelRect, columnW, leftX, rightX, button, cargoRowH, cargoGap } = surface;
+  const { panel: panelRect, columnW, leftX, rightX, button, cargoRowH, cargoGap, contentBottom } = surface;
   const { x: panelX, y: panelY, w: panelW, h: panelH } = panelRect;
   const panelReveal = motionProgress(reveal, {
     delay: 0.02,
@@ -313,7 +318,8 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ry += 24;
   ctx.font = canvasFont(13);
   ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
-  const lines = notableLines.length > 0 ? notableLines.slice(0, 3) : ['no unusual telemetry'];
+  const requestedLines = notableLines.length > 0 ? notableLines.slice(0, 3) : ['no unusual telemetry'];
+  const lines = requestedLines.slice(0, Math.max(0, Math.floor((contentBottom - ry) / 16)));
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {

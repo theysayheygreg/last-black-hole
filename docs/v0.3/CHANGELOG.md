@@ -1,5 +1,15 @@
 # v0.3 Changelog
 
+## UI recovery — 2026-08-04
+
+- Anchored the map destination footer, Home crew footer, and profile footer to
+  measured Deck-safe rails so wrapped controller/keyboard affordances remain
+  inside their panels at 1280x800 and 960x720.
+- Made map scale/risk pills share the briefing width instead of allowing the
+  risk pill to extend beyond the right panel.
+- Made terminal result overlays deliberately obscure the active HUD and reserve
+  the CTA rail from summary/cargo/notable content.
+
 - **Well landmark and terrain-stability recovery:** gameplay restores a
   restrained, presentation-only blackbody corona around each existing compact
   analytic well body. The void and immediate rim remain the authoritative

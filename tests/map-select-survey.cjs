@@ -87,6 +87,9 @@ async function run() {
   assert(surface.rows.every((row, index) => !surface.rows.some((other, otherIndex) => index !== otherIndex && layout.rectsOverlap(row, other, 0))), 'destination rows overlap');
   assert(surface.rows.every((row) => !layout.rectsOverlap(row, surface.footer, 0)), 'destination rows overlap footer');
   assert(layout.rectContains(surface.right, surface.command, surface.pad), 'command escaped right panel');
+  assert(layout.rectContains(surface.right, surface.briefStatus.scale, surface.pad), 'scale status escaped briefing panel');
+  assert(layout.rectContains(surface.right, surface.briefStatus.risk, surface.pad), 'risk status escaped briefing panel');
+  assert(!layout.rectsOverlap(surface.briefStatus.scale, surface.briefStatus.risk, 0), 'briefing status pills overlap');
   const glyph = {
     x: surface.command.x + tokens.UI_DECK_GEOMETRY.button.paddingX,
     y: surface.command.y + surface.command.h + tokens.UI_DECK_GEOMETRY.button.gap,
