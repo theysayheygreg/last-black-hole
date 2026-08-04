@@ -113,7 +113,7 @@ const grappleBranch = playerTick.slice(
   playerTick.indexOf('if (grappleOwnsMovement)'),
   playerTick.indexOf('// FREE movement advances'),
 );
-assert.strictEqual((playerTick.match(/estimateFlowSample\(/g) || []).length, 1,
+assert.strictEqual((playerTick.match(/estimatePlayerFabricFlow\(/g) || []).length, 1,
   'player tick must cache exactly one authority field sample');
 assert(!hullTick.includes('estimateFlow(player.wx, player.wy)'),
   'Flow Lock must consume the cached player sample');

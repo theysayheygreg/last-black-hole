@@ -122,7 +122,7 @@ const runtimeSource = fs.readFileSync(path.join(ROOT, 'scripts/sim-runtime.cjs')
 const freeStart = runtimeSource.indexOf('function tickAuthorityPlayers');
 const freeEnd = runtimeSource.indexOf('\nfunction tickSim', freeStart);
 const freeSource = runtimeSource.slice(freeStart, freeEnd);
-assert.strictEqual((freeSource.match(/estimateFlowSample\(/g) || []).length, 1,
+assert.strictEqual((freeSource.match(/estimatePlayerFabricFlow\(/g) || []).length, 1,
   'FREE authority movement must sample the fabric exactly once per player tick');
 assert.strictEqual((freeSource.match(/stepPlayerFreeMovement\(/g) || []).length, 1,
   'FREE authority movement must have one ordered step owner');

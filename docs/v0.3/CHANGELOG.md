@@ -1,5 +1,14 @@
 # v0.3 Changelog
 
+- **Suite manifest completeness:** every top-level executable v0.3 test is now
+  either an intentional lane entry or a documented diagnostic/capture/release
+  exclusion. A fast/core/static/full guard fails as soon as a new test file is
+  left unclassified. The movement, coordinate-presentation, interaction,
+  inhibitor ecology/cap, fabric, noise, and retired-time contracts are now in
+  their relevant checkpoint lanes; the fabric retirement scan now covers the
+  entire `src/` tree instead of a hand-maintained file list. Runner concurrency
+  and product behavior are unchanged.
+
 - **Fabric spatial-material correction:** gameplay now has one analytic well
   owner. The display shader measures well bodies and plumes through the
   globally anchored world torus; it no longer wraps a second time inside the

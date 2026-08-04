@@ -5,6 +5,25 @@ const { TestRunner, assert } = require('./helpers.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
+function readSourceTree(relativeDirectory) {
+  const directory = path.join(ROOT, relativeDirectory);
+  const files = [];
+  const visit = (currentDirectory) => {
+    for (const entry of fs.readdirSync(currentDirectory, { withFileTypes: true })) {
+      const fullPath = path.join(currentDirectory, entry.name);
+      if (entry.isDirectory()) visit(fullPath);
+      else if (entry.isFile() && /\.(?:js|cjs|mjs|glsl)$/.test(entry.name)) {
+        files.push({
+          file: path.relative(ROOT, fullPath),
+          source: fs.readFileSync(fullPath, 'utf8'),
+        });
+      }
+    }
+  };
+  visit(directory);
+  return files;
+}
+
 async function run() {
   const runner = new TestRunner('FabricReadabilityCleanup');
   const anomalies = require('../src/content/anomalies.data.json');
@@ -15,9 +34,7 @@ async function run() {
   const physics = read('src/physics.js');
   const shader = read('src/render/shaders/fluid.glsl.js');
   const presentation = read('src/presentation/presentation-frame.js');
-  const materialRegistry = read('src/render-three/material-registry.js');
-  const renderHints = read('src/render-three/renderable-hints.js');
-  const renderPlan = read('src/render-three/render-plan.js');
+  const sourceFiles = readSourceTree('src');
 
   await runner.run('active fabric surface keeps only canonical controls and channels', () => {
     assert(catalog.assertValidAnomalyCatalog(), 'anomaly catalog must remain valid after knob cleanup');
@@ -36,9 +53,9 @@ async function run() {
   });
 
   await runner.run('presentation names the live wave material without retired field cues', () => {
-    for (const source of [shader, presentation, materialRegistry, renderHints, renderPlan]) {
+    for (const { file, source } of sourceFiles) {
       for (const retired of ['gravityContour', 'haloMask', 'surfBand', 'surfHint']) {
-        assert(!source.includes(retired), `renderer source retained retired ${retired} vocabulary`);
+        assert(!source.includes(retired), `${file} retained retired ${retired} vocabulary`);
       }
     }
     assert(!shader.includes('fabric noise'), 'display shader retained the retired noise-layer comment');

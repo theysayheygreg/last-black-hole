@@ -203,6 +203,11 @@ async function run() {
   assert.strictEqual(vfx.getStats().disposeCount, 1, "VFX manager must count disposal once");
 
   const renderer = new WorldScenePresentation({ renderQuality: "minimal" });
+  // The renderer contract below is about scene ownership/count/reset, not
+  // browser image decoding. Give its pooled sprite cards one headless Three
+  // material so this authority fixture does not require `document`.
+  const headlessSpriteMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1 });
+  renderer.entityAssets.getMaterial = () => headlessSpriteMaterial;
   const renderEntityCount = (counts, runId, totalTime) => {
     const inhibitors = [];
     for (const [kind, count] of Object.entries(counts)) {
@@ -220,6 +225,8 @@ async function run() {
     }
     const scene = createPresentationSceneSource({
       phase: "playing",
+      // Player family update is disabled below: this fixture measures only
+      // Inhibitor ownership while retaining the normal scene-source shape.
       localPlayer: { ship: { wx: 0, wy: 0, vx: 0, vy: 0 } },
       world: { inhibitors },
     });
@@ -244,6 +251,7 @@ async function run() {
   renderer.reset({ phase: "playing", runId: "new-run" });
   rendererEntityCounts.after = renderEntityCount({}, "new-run", 0);
   renderer.dispose();
+  headlessSpriteMaterial.dispose();
 
   await startSimServer(PORT, {
     keepAlive: true,
