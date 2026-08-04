@@ -288,7 +288,12 @@ displayed rig string maps to an implemented rule.
 - Decide-and-document what Vessel overdrive multiplies now (recommend:
   overdrive stays a strength multiplier — it is the one sanctioned
   "angrier, not bigger" effect, and it already has its own visual).
-- `killRadius` formula untouched.
+- `killRadius` formula untouched — ratified as an **independent curve**
+  from reach (two knobs by design: Greg wants GARGANTUA-class authored
+  wells possible later — huge reach, separately-authored core). On
+  Shallows, keep both curves at their simplest setting during the
+  movement/fabric proving phase; expressiveness is for later maps and
+  anomaly classes, not the testbed.
 - Update `OPEN-DECISIONS.md` growth entry to "implemented"; fix the
   `UNIVERSE-CLOCK.md` stale numbers or banner it historical.
 
@@ -322,6 +327,15 @@ displayed rig string maps to an implemented rule.
   re-check happens exactly once.
 
 ## Out of scope
+
+Deferred by design (Greg 2026-08-04): **per-cause wave impulses.** The
+constant 25%-of-hull-speed crossing impulse is a knowing orphan of the
+movement simplification — kept deliberately conservative during map-one
+readability proving. Eventual design: consumption events (star/wreck/
+planetoid) carry different impulse magnitudes than conductor-authored
+waves (well growth). Do not "fix" the constant now; do not scale impulse
+with amplitude.
+
 
 Special-effect grammar/parser for artifacts (queued as its own follow-up
 after this program), internal-hull promotion (v0.4), Bench F2 adapters,

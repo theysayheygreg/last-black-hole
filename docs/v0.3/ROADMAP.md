@@ -296,6 +296,28 @@ The remaining release gates are intentionally separate:
   Greg's listening verdict. Machine checks own routing, lifecycle, packaging,
   and performance; they do not grade taste.
 
+## Parked Design Queue — Needs Revisiting (Greg, 2026-08-04)
+
+Held deliberately, not stale; each returns to the table after the current
+review-driven program and the Shallows movement/readability proving
+milestone:
+
+- **Bench goal-prompt dispatch** — the Bench F1/F2 expansion prompt,
+  undispatched.
+- **Areas 3–5 ratification** — night-ideation output awaiting Greg
+  review.
+- **The Undertow: Drain-Basin revision** — area design revision pending.
+- **Death-economy call** — Orrery's standing recommendation on record:
+  tax carried cargo only, never banked EM (matches shipped behavior);
+  formal ratification pending.
+- **S9a** — parked by name.
+
+Also parked by design (same date): per-cause wave impulses (see the
+feature-set repair program's out-of-scope note) and the
+Shallows-vs-coarse-field gravity unification — Shallows stays the exact-
+math testbed until the movement/fabric simplification is proven, then
+the proven configuration propagates outward.
+
 ## Deferred Beyond v0.3
 
 - v0.3.2 begins with the gated
