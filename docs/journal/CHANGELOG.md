@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-08-04: Bundled an E3 Orrery visual-clarity milestone review with the
+  three approved fabric concept sheets, stable current implementation evidence,
+  recent well/fabric/spatial/UI fixes, and a bounded next-wave decision rubric.
+
 - 2026-08-02: Added the v0.3 fabric-readability implementation contract and a
   bundled E3 Orrery review packet covering the accepted-current renderer seam,
   well deformation, one-shot wave authority, and feature-first proof budget.
