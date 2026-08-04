@@ -53,7 +53,7 @@ function run() {
 
   const readme = fs.readFileSync(readmePath, "utf8");
   includes(readme, "## Playable Targets", "README must expose playable targets");
-  includes(readme, "releases/download/nightly-latest/install.sh | sh", "README must document the release-owned Deck installer command");
+  includes(readme, "releases/download/v0.2.2-final/install.sh | sh -s -- --version v0.2.2-final", "README must document the release-owned Deck installer command pinned to the stable public release");
   includes(readme, "docs/public/OLD-VERSIONS.md", "README must link the preserved-version installer list");
   includes(readme, "docs/reference/STEAM-DECK-RUNBOOK.md", "README must link the Steam Deck runbook");
 
