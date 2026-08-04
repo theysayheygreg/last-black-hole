@@ -47,32 +47,44 @@ async function run() {
     assert(JSON.stringify(underBudget) === JSON.stringify([7, 2]), 'Under-budget maps must preserve authored order exactly');
   });
 
-  await runner.run('lane shader keeps sparse rest and strength-through-motion art', async () => {
+  await runner.run('lane shader keeps aspect-correct rich corridors and strength-through-motion art', async () => {
     const shader = shaders.FRAG_DISPLAY;
-    assert(shader.includes('const float laneSpacing = 2.40;'), 'Expected one or two broad corridors with substantial calm space');
-    assert(shader.includes('vec2 cameraFlowUV = fract(u_worldCamera);')
-      && shader.includes('texture(u_coarse, cameraFlowUV).xy'),
-    'Presentation must use one stable camera-local current rather than dissolve the corridor into per-glyph directions');
-    assert(shader.includes('const float channelHalfViewport = 0.075;')
+    assert(shader.includes('const float laneSpacing = 1.50;'), 'Rich ordinary play should begin at the deliberate half-frame material spacing');
+    assert(shader.includes('sampleSpatiallyFilteredAuthoritativeFlow')
+      && shader.includes('vec2 stableAuthorityFlow = sampleSpatiallyFilteredAuthoritativeFlow(')
+      && !shader.includes('cameraFlowUV'),
+    'Presentation must spatially filter the accepted authority field instead of using one camera texel');
+    assert(shader.includes('const float channelHalfViewport = 0.125;')
       && shader.includes('float channelHalfWidth = u_cameraView * channelHalfViewport;')
-      && shader.includes('channelHalfWidth * 0.72'),
-    'Each sparse lane needs a screen-stable navigable channel envelope, not only a pencil mark');
-    const channelPixelsAt1280 = 1280 * 0.075 * 2;
+      && shader.includes('channelHalfWidth * 0.80'),
+    'Each corridor needs a screen-stable navigable channel envelope, not only a pencil mark');
+    const channelPixelsAt800 = 800 * 0.125 * 2;
     for (const hull of [{ label: 'default', entity: {} }, { label: 'breacher', entity: { hull: { type: 'breacher' } } }]) {
       const shipVisibleDiameter = entityScale.resolveEntityPresentationSpec('player', hull.entity).basePx * 2;
-      const channelToShipRatio = channelPixelsAt1280 / shipVisibleDiameter;
+      const channelToShipRatio = channelPixelsAt800 / shipVisibleDiameter;
       assert(channelToShipRatio >= 4 && channelToShipRatio <= 5,
-        `Expected a 4-5x ${hull.label} ship channel at 1280px, got ${channelToShipRatio.toFixed(2)}x`);
+        `Expected a 4-5x ${hull.label} ship corridor at 1280x800, got ${channelToShipRatio.toFixed(2)}x`);
     }
-    assert(shader.includes('mix(0.012, 0.016, laneStrength)'), 'Lane strength must not substantially increase coverage');
-    assert(shader.includes('mix(0.45, 1.25, laneStrength)'), 'Stronger current must create long coherent downstream marks');
+    assert(shader.includes('vec2 laneMetric = laneWorld * vec2(screenAspect, 1.0);')
+      && shader.includes('vec2 laneDirMetric = normalize(laneFlow * vec2(screenAspect, 1.0));'),
+    'Display-space metric must preserve corridor width at horizontal, diagonal, and vertical orientations');
+    assert(shader.includes('float visualBacktrace = min(u_cameraView * 0.11, 0.32);')
+      && shader.includes('laneWorld -= (localLaneDir - baseLaneDir) * visualBacktrace;'),
+    'Curvature must use a bounded visual-only backtrace');
+    assert(shader.includes('float mediumFilament = 1.0 - smoothstep(')
+      && shader.includes('float fineAsciiWeave = fineThread * markAttack * markRelease * channelEnvelope;'),
+    'Corridors must layer medium filaments and fine downstream ASCII weave over the broad material body');
+    assert(shader.includes('float decorativeHistory = (sceneExcitation * 0.46 + ringSignal * 0.18)')
+      && shader.includes('(channelEnvelope + waveSwell * 0.35)'),
+    'Decorative density history must be clipped to meaningful current or wave material');
+    assert(shader.includes('mix(0.13, 0.31, laneStrength)'), 'Stronger current must create long coherent downstream marks');
     assert(shader.includes('mix(0.12, 0.90, laneStrength)'), 'Stronger current must advance marks faster');
     assert(shader.includes('vec3(0.10, 0.42, 0.70)') && shader.includes('vec3(0.18, 0.52, 0.78)'),
       'Lane palette must use restrained cyan/blue-white values');
-    assert(shader.includes('float baseMix = sceneExcitation * 0.012;')
-      && shader.includes('clamp(baseMix, 0.0, 0.018)'),
-      'Base field must preserve large dark regions outside the lanes');
-    assert(shader.includes('channelEnvelope * 0.30 + channelBody * 0.28')
+    assert(shader.includes('float baseMix = sceneExcitation * 0.004;')
+      && shader.includes('clamp(baseMix, 0.0, 0.006)'),
+      'Calm field must remain dark outside meaningful current material');
+    assert(shader.includes('channelEnvelope * 0.34 + channelBody * 0.38')
       && shader.includes('laneColor * channelBand * channelPresence'),
       'The channel must retain a coherent body and soft shoulders through ASCII quantization');
     assert(shader.includes('smoothstep(0.002, 0.03, laneSpeed)')
@@ -87,7 +99,7 @@ async function run() {
     assert(shader.includes('float visualCoreRadius = max(coreRadius, u_cameraView * 0.025);'),
       'Lethal bodies need a bounded presentation-only minimum at Deck resolution');
     assert(shader.includes('col *= mix(1.0, 0.16, coreQuiet);')
-      && shader.includes('mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet))'),
+      && shader.includes('mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet))'),
     'Near-core fabric must quiet while authored gravity selectively reinforces curved lanes');
     assert(shader.includes('min(ringInner, visualCoreRadius * 1.38)')
       && shader.includes('min(ringOuter, visualCoreRadius * 1.78)'),

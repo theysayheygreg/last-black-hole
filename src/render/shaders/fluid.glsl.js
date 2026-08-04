@@ -251,7 +251,7 @@ uniform float u_gravityScale;
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
 uniform float u_gridWindow;    // world-units spanned by the camera-anchored fluid texture
 uniform float u_cameraView;    // world-units visible on each axis; matches the square fluid window
-uniform float u_viewAspect;    // retained for pass ABI; ignored while the fluid window is square
+uniform float u_viewAspect;    // display aspect used only for aspect-correct corridor geometry
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_worldScale;    // authoritative world span used to keep lanes world anchored
 uniform vec2 u_worldCamera;    // camera center in global fluid UV for the coarse field
@@ -271,6 +271,18 @@ uniform float u_waveTelegraph[8];
 
 in vec2 v_uv;
 out vec4 fragColor;
+
+// The coarse texture is the accepted authority field. A small plus-shaped
+// filter gives the corridor one stable directional basis across the viewport
+// without turning every fragment into its own noisy vector glyph.
+vec2 sampleSpatiallyFilteredAuthoritativeFlow(vec2 coarseUV, vec2 radiusUV) {
+  vec2 center = texture(u_coarse, coarseUV).xy * 0.40;
+  vec2 horizontal = texture(u_coarse, coarseUV + vec2(radiusUV.x, 0.0)).xy
+    + texture(u_coarse, coarseUV - vec2(radiusUV.x, 0.0)).xy;
+  vec2 vertical = texture(u_coarse, coarseUV + vec2(0.0, radiusUV.y)).xy
+    + texture(u_coarse, coarseUV - vec2(0.0, radiusUV.y)).xy;
+  return center + (horizontal + vertical) * 0.15;
+}
 
 void main() {
   // Sample the same square world slice represented by the fluid texture.
@@ -296,25 +308,40 @@ void main() {
 
   // Base fabric stays quiet; the lane layer below is the only route-scale
   // current cue. This keeps local texture from impersonating gameplay flow.
-  float baseMix = sceneExcitation * 0.012;
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.018));
+  float baseMix = sceneExcitation * 0.004;
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.006));
 
-  // Sparse world-anchored lanes. The coarse texture is the accepted remote
-  // current; local velocity is only a fallback for title/legacy sandbox views.
+  // Rich but bounded world-anchored corridors. The coarse texture is the
+  // accepted remote current; local velocity is only a fallback for title or
+  // legacy sandbox views where no authority texture exists.
   vec2 coarseUV = fract(u_worldCamera + (v_uv - vec2(0.5))
     * (u_cameraView / u_worldScale) * vec2(1.0, -1.0));
-  // One camera-local current establishes the corridor's stable direction.
-  // Sampling a different direction at every glyph made the mathematically
-  // broad lane dissolve into an illegible vector field. Nearby authored wells
-  // still bend/split the corridor below, while movement keeps using the full
-  // authority field rather than this presentation sample.
-  vec2 cameraFlowUV = fract(u_worldCamera);
-  vec2 coarseFlow = texture(u_coarse, cameraFlowUV).xy;
-  vec2 laneFlow = length(coarseFlow) > 0.0001 ? coarseFlow : vel;
+  float screenAspect = max(0.5, u_viewAspect);
+  // Filter at a bounded camera-relative footprint. This remains one broad
+  // planning direction, but it is no longer a single camera-center sample.
+  float fieldFilterWorld = min(u_cameraView * 0.11, 0.30);
+  vec2 fieldFilterUV = vec2(
+    fieldFilterWorld / (u_worldScale * screenAspect),
+    fieldFilterWorld / u_worldScale
+  );
+  vec2 stableAuthorityFlow = sampleSpatiallyFilteredAuthoritativeFlow(
+    fract(u_worldCamera), fieldFilterUV
+  );
+  vec2 localAuthorityFlow = texture(u_coarse, coarseUV).xy;
+  vec2 fallbackFlow = length(localAuthorityFlow) > 0.0001 ? localAuthorityFlow : vel;
+  vec2 laneFlow = length(stableAuthorityFlow) > 0.0001 ? stableAuthorityFlow : fallbackFlow;
   float laneSpeed = length(laneFlow) * u_worldScale / u_refScale;
   float laneStrength = clamp(laneSpeed / 0.22, 0.0, 1.0);
   if (laneSpeed > 0.0001) {
     vec2 laneWorld = coarseUV * u_worldScale;
+    vec2 baseLaneDir = normalize(laneFlow);
+    // A short, capped visual backtrace bends material through nearby accepted
+    // field change without giving presentation a second movement vector.
+    vec2 localLaneDir = length(localAuthorityFlow) > 0.0001
+      ? normalize(localAuthorityFlow)
+      : baseLaneDir;
+    float visualBacktrace = min(u_cameraView * 0.11, 0.32);
+    laneWorld -= (localLaneDir - baseLaneDir) * visualBacktrace;
     float nearestWellDistance = 999.0;
     vec2 nearestWellWorld = laneWorld;
     vec2 nearestDelta = vec2(0.0);
@@ -367,8 +394,6 @@ void main() {
       laneFlow = normalize(mix(laneFlow, tangent, currentWeight * 0.68));
     }
 
-    vec2 laneDir = normalize(laneFlow);
-
     // B+C event-wave read: a broad material swell travels with the existing
     // lanes and fades quickly behind the authoritative front. The broken
     // crest is a sparse material accent, never a second ring primitive.
@@ -397,13 +422,17 @@ void main() {
     }
     laneWorld += waveDeformation;
     laneFlow = normalize(laneFlow + waveDeformation * 0.75);
-    laneDir = normalize(laneFlow);
-    vec2 laneSide = vec2(-laneDir.y, laneDir.x);
-    float across = dot(laneWorld, laneSide);
-    float along = dot(laneWorld, laneDir);
-    // At the default three-world-unit view this yields roughly one or two
-    // materially active corridors, leaving most of the field genuinely calm.
-    const float laneSpacing = 2.40;
+    // The fluid window remains square so other passes stay aligned. Convert
+    // only the corridor metric into display space: this keeps horizontal,
+    // diagonal, and vertical channels the same physical width on 1280x800.
+    vec2 laneMetric = laneWorld * vec2(screenAspect, 1.0);
+    vec2 laneDirMetric = normalize(laneFlow * vec2(screenAspect, 1.0));
+    vec2 laneSideMetric = vec2(-laneDirMetric.y, laneDirMetric.x);
+    float across = dot(laneMetric, laneSideMetric);
+    float along = dot(laneMetric, laneDirMetric);
+    // 0.75 screen-world-unit corridors on 1.5-unit spacing occupy about half
+    // the ordinary frame, deliberately rich for Greg to dial back in play.
+    const float laneSpacing = 1.50;
     float laneCenter = floor(across / laneSpacing + 0.5) * laneSpacing;
     float laneDistance = abs(across - laneCenter);
     float splitWeight = nearestProfile.z > 0.0
@@ -419,20 +448,19 @@ void main() {
     // inherited excitation texture so the well body, rim, and curved approach
     // lanes read as one cause instead of a bright anonymous patch.
     col *= mix(1.0, 0.16, coreQuiet);
-    // The lane is a navigable channel, not a pencil line. Keep its envelope a
-    // stable fraction of the viewport so a player can place the ship inside it
-    // at speed on Deck or desktop; the broken marks are texture within that
-    // channel, not the only indication of its usable width.
-    const float channelHalfViewport = 0.075;
+    // The lane is a navigable channel, not a pencil line. At 1280x800 and the
+    // default three-world-unit view this is 200px wide: 4–5 player-ship
+    // diameters in every orientation after the display-metric conversion.
+    const float channelHalfViewport = 0.125;
     float channelHalfWidth = u_cameraView * channelHalfViewport;
     float channelEnvelope = 1.0 - smoothstep(
-      channelHalfWidth * 0.72,
+      channelHalfWidth * 0.80,
       channelHalfWidth,
       laneDistance
     );
     float channelBody = 1.0 - smoothstep(
-      channelHalfWidth * 0.42,
-      channelHalfWidth * 0.70,
+      channelHalfWidth * 0.50,
+      channelHalfWidth * 0.80,
       laneDistance
     );
     float channelPresence = smoothstep(0.002, 0.03, laneSpeed)
@@ -440,28 +468,39 @@ void main() {
       * mix(0.28, 1.0, 1.0 - coreQuiet);
 
     // Strength reads as longer, faster downstream strokes—not extra lanes.
-    // The generous spacing preserves dark rest between channel envelopes.
-    float laneWidth = mix(0.012, 0.016, laneStrength);
-    float localLaneWidth = laneWidth * mix(1.0, 1.38, gravityWeight * (1.0 - coreQuiet));
-    float laneBody = 1.0 - smoothstep(localLaneWidth, localLaneWidth * 2.1, laneDistance);
-    float markLength = mix(0.45, 1.25, laneStrength);
+    // Material is layered broad -> medium -> fine so the corridor still reads
+    // as a place before the ASCII weave is visible.
+    float mediumPitch = max(0.075, channelHalfWidth * 0.54);
+    float mediumCoord = across / mediumPitch + sin(along * 3.8 - u_time * 0.22) * 0.12;
+    float mediumFilament = 1.0 - smoothstep(0.10, 0.25, abs(fract(mediumCoord) - 0.5));
+    mediumFilament *= channelEnvelope * mix(0.64, 1.0, laneStrength);
+    float finePitch = max(0.028, channelHalfWidth * 0.16);
+    float fineThread = 1.0 - smoothstep(0.08, 0.20, abs(fract(across / finePitch) - 0.5));
+    float markLength = mix(0.13, 0.31, laneStrength);
     float markPhase = fract(along / markLength - u_time * mix(0.12, 0.90, laneStrength));
     float markAttack = smoothstep(0.22, 0.28, markPhase);
     float markRelease = 1.0 - smoothstep(0.58, 0.66, markPhase);
-    float brokenMark = markAttack * markRelease;
-    float laneSignal = laneBody * brokenMark * smoothstep(0.01, 0.06, laneSpeed)
+    float fineAsciiWeave = fineThread * markAttack * markRelease * channelEnvelope;
+    float laneSignal = fineAsciiWeave * smoothstep(0.01, 0.06, laneSpeed)
       * mix(0.34, 1.0, 1.0 - coreQuiet);
     vec3 laneColor = mix(vec3(0.04, 0.16, 0.30), vec3(0.10, 0.42, 0.70), laneStrength);
     laneColor = mix(laneColor, vec3(0.18, 0.52, 0.78), gravityWeight * 0.35 + fullGravityWeight * 0.65);
     // Event-wave treatment remains its existing green overlay until the
     // dedicated wave/noise pass; this slice only clarifies steady current.
     laneColor = mix(laneColor, vec3(0.12, 0.52, 0.46), clamp(waveSwell * 0.75, 0.0, 0.8));
+    // Decorative density is history, not a map-wide noise carpet. It appears
+    // only where accepted current or a source-bound wave already makes the
+    // material meaningful; calm space stays genuinely dark.
+    float decorativeHistory = (sceneExcitation * 0.46 + ringSignal * 0.18)
+      * (channelEnvelope + waveSwell * 0.35);
     // The body and soft shoulders must survive ASCII quantization as one
-    // coherent corridor. Without this material fill, the same mathematically
-    // wide envelope collapses into scattered one-character ticks.
-    float channelBand = channelEnvelope * 0.30 + channelBody * 0.28;
+    // coherent corridor. Medium filaments provide tactile depth; the fine
+    // weave is downstream-only detail rather than the lane's silhouette.
+    float channelBand = channelEnvelope * 0.34 + channelBody * 0.38;
     col += laneColor * channelBand * channelPresence;
-    col += laneColor * laneSignal * 0.72 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
+    col += laneColor * mediumFilament * 0.34 * channelPresence;
+    col += laneColor * laneSignal * 0.54 * mix(1.0, 1.42, gravityWeight * (1.0 - coreQuiet));
+    col += mix(u_normalColor, laneColor, 0.72) * decorativeHistory * channelPresence;
     // The event front lifts the material corridor itself. It remains distinct
     // from the circular player Noise indicator because only fabric intersected
     // by the source wave brightens and swells.
