@@ -113,7 +113,6 @@ const {
   interactionTargetRadius,
   isWithinInteractionRadius,
   playerBodyRadius,
-  wreckBodyRadius,
 } = require("./sim/interaction-volumes.cjs");
 const {
   getHeatRatio,
@@ -3300,15 +3299,14 @@ function pickupRadiusForPlayer(player) {
   return 0.08 * (player.brain ? player.brain.pickupRadius : 1.0);
 }
 
-function pickupInteractionOptions(player, wreck) {
+function pickupInteractionOptions(player) {
   return {
     semanticRadius: pickupRadiusForPlayer(player),
-    targetBodyRadius: wreckBodyRadius(wreck),
   };
 }
 
-function pickupInteractionRadius(player, wreck) {
-  return effectiveInteractionRadius(player, pickupInteractionOptions(player, wreck));
+function pickupInteractionRadius(player) {
+  return effectiveInteractionRadius(player, pickupInteractionOptions(player));
 }
 
 function collectPickupWreckCandidates(player, wrecks, searchRadius, limit) {
@@ -3377,10 +3375,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   if (getCargoCount(player) >= maxCargo) return;
 
   const limit = wrecks.length || 1;
-  const searchRadius = wrecks.reduce((largest, wreck) => Math.max(
-    largest,
-    pickupInteractionRadius(player, wreck),
-  ), pickupInteractionRadius(player, null));
+  const searchRadius = pickupInteractionRadius(player);
   const { candidates: endpointCandidates } = collectPickupWreckCandidates(player, wrecks, searchRadius, limit);
   const nearbyById = new Map(endpointCandidates.map((candidate) => [String(candidate.entity.id), {
     ...candidate,
@@ -3389,7 +3384,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   if (sweep) {
     for (const wreck of wrecks) {
       if (wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
-      const hit = sweptInteractionContact(sweep, player, wreck, pickupInteractionOptions(player, wreck));
+      const hit = sweptInteractionContact(sweep, player, wreck, pickupInteractionOptions(player));
       if (!hit) continue;
       const key = String(wreck.id);
       const existing = nearbyById.get(key);
@@ -3402,7 +3397,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
     .sort((a, b) => a.contactT - b.contactT || a.dist - b.dist)
     .slice(0, limit);
   for (const { entity: wreck, handle, dist, contactT } of nearbyWrecks) {
-    if (contactT >= 1 && !isWithinInteractionRadius(dist, player, pickupInteractionOptions(player, wreck))) continue;
+    if (contactT >= 1 && !isWithinInteractionRadius(dist, player, pickupInteractionOptions(player))) continue;
 
     // Wreck age scales EM sell value only, not artifact coefficients.
     // Coefficients are fixed by the catalog — aging makes loot worth more to sell,

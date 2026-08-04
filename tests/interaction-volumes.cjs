@@ -9,7 +9,6 @@ const {
   interactionTargetRadius,
   isWithinInteractionRadius,
   playerBodyRadius,
-  wreckBodyRadius,
 } = require("../scripts/sim/interaction-volumes.cjs");
 const { sweptMovingCircleVsCircle, wrappedDelta } = require("../scripts/sim/world-geometry.cjs");
 
@@ -20,23 +19,19 @@ function near(actual, expected, label, epsilon = 1e-9) {
 async function run() {
   const runner = new TestRunner("InteractionVolumes");
 
-  await runner.run("pickup and aperture volumes include physical bodies plus one bounded grace", () => {
+  await runner.run("pickup and aperture volumes include the ship body plus one bounded grace", () => {
     const player = { radius: INTERACTION_VOLUME_CONFIG.playerBodyRadius };
-    const wreck = { radius: INTERACTION_VOLUME_CONFIG.wreckBodyRadius };
     const pickupRadius = effectiveInteractionRadius(player, {
       semanticRadius: 0.08,
-      targetBodyRadius: wreckBodyRadius(wreck),
     });
     const apertureRadius = effectiveInteractionRadius(player, { semanticRadius: 0.08 });
-    near(pickupRadius, 0.172, "pickup radius");
+    near(pickupRadius, 0.127, "pickup radius");
     near(apertureRadius, 0.127, "aperture radius");
     assert(isWithinInteractionRadius(pickupRadius, player, {
       semanticRadius: 0.08,
-      targetBodyRadius: wreckBodyRadius(wreck),
     }), "The edge of a pickup volume must still count");
     assert(!isWithinInteractionRadius(pickupRadius + 0.0001, player, {
       semanticRadius: 0.08,
-      targetBodyRadius: wreckBodyRadius(wreck),
     }), "The grace must remain bounded");
     assert(interactionTargetRadius({ semanticRadius: 0.08 }) > 0.08,
       "Interaction targets must carry the explicit near-miss allowance");

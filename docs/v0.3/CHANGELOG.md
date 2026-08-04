@@ -2,7 +2,7 @@
 
 - **Body-aware interaction contacts:** authoritative pickups and exfil now use
   one compact gameplay volume: semantic range/aperture plus the physical ship
-  body, target body where applicable, and a small `0.012` near-miss allowance.
+  body and a small `0.012` near-miss allowance.
   Endpoint and high-speed swept contacts share that truth across world seams.
   Crossing an exfil opens a `0.35s` explicit-confirm prompt but never
   auto-extracts; ordinary leave behavior is unchanged. Glitch and Vessel hull

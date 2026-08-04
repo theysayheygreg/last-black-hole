@@ -699,7 +699,7 @@ class BallparkMirror {
         wy: wreck.wy,
         vx: finiteNumber(wreck.vx, 0),
         vy: finiteNumber(wreck.vy, 0),
-        radius: radiusFor(wreck, ["lootRadius", "radius"], INTERACTION_VOLUME_CONFIG.wreckBodyRadius),
+        radius: radiusFor(wreck, ["lootRadius", "radius"], 0.045),
         collisionMask: BODY_MASKS.WRECK,
         interactionMask: [BODY_MASKS.PICKUP, BODY_MASKS.SIGNAL],
         replicationLane: "near",

@@ -5,7 +5,6 @@
 // "close enough" means without making presentation pixels into collision.
 const INTERACTION_VOLUME_CONFIG = Object.freeze({
   playerBodyRadius: 0.035,
-  wreckBodyRadius: 0.045,
   nearMissGraceRadius: 0.012,
 });
 
@@ -21,20 +20,11 @@ function playerBodyRadius(player) {
   );
 }
 
-function wreckBodyRadius(wreck) {
-  return nonNegativeRadius(
-    wreck?.lootRadius ?? wreck?.radius,
-    INTERACTION_VOLUME_CONFIG.wreckBodyRadius,
-  );
-}
-
 function interactionTargetRadius({
   semanticRadius = 0,
-  targetBodyRadius = 0,
   graceRadius = INTERACTION_VOLUME_CONFIG.nearMissGraceRadius,
 } = {}) {
   return nonNegativeRadius(semanticRadius)
-    + nonNegativeRadius(targetBodyRadius)
     + nonNegativeRadius(graceRadius);
 }
 
@@ -52,5 +42,4 @@ module.exports = {
   interactionTargetRadius,
   isWithinInteractionRadius,
   playerBodyRadius,
-  wreckBodyRadius,
 };
