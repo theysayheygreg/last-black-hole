@@ -193,8 +193,12 @@ the single front departs, and leaves calm sparse lanes behind the crest.
 ### Extraction
 
 Use cyan zone-plus-confirm. Entering the aperture exposes an interaction;
-Enter/A confirms immediately; leaving aborts immediately. A high-speed sweep
-through the aperture is not extraction.
+Enter/A confirms immediately; ordinary residence still aborts immediately on
+leaving. The authority measures the semantic aperture plus the physical ship
+body and one small `0.012` near-miss allowance, rather than treating the ship
+as a point. A high-speed sweep never extracts by itself: it opens the same
+prompt for a brief `0.35s` explicit-confirm grace, then expires without a
+delayed extraction.
 
 ### Public Hulls
 

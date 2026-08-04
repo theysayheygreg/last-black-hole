@@ -3,6 +3,9 @@ const { BODY_MASKS, maskNames } = require("./body-masks.cjs");
 const { BODY_SCHEMA_VERSION, lifecycleStateIsActive } = require("./body-schema.cjs");
 const { BodyRegistry } = require("./body-registry.cjs");
 const { SpatialIndex } = require("./spatial-index.cjs");
+const {
+  INTERACTION_VOLUME_CONFIG,
+} = require("./interaction-volumes.cjs");
 
 const DEFAULT_WORLD_SCALE = 1;
 const DEFAULT_CELL_SIZE = 0.25;
@@ -629,7 +632,7 @@ class BallparkMirror {
         wy: player?.wy,
         vx: finiteNumber(player?.vx, 0),
         vy: finiteNumber(player?.vy, 0),
-        radius: radiusFor(player, ["radius", "collisionRadius"], 0.035),
+        radius: radiusFor(player, ["radius", "collisionRadius"], INTERACTION_VOLUME_CONFIG.playerBodyRadius),
         collisionMask: player?.isAI ? [BODY_MASKS.AI, BODY_MASKS.PLAYER] : BODY_MASKS.PLAYER,
         interactionMask: [BODY_MASKS.PICKUP, BODY_MASKS.PORTAL, BODY_MASKS.SIGNAL],
         ownerId: clientId,
@@ -696,7 +699,7 @@ class BallparkMirror {
         wy: wreck.wy,
         vx: finiteNumber(wreck.vx, 0),
         vy: finiteNumber(wreck.vy, 0),
-        radius: radiusFor(wreck, ["lootRadius", "radius"], 0.045),
+        radius: radiusFor(wreck, ["lootRadius", "radius"], INTERACTION_VOLUME_CONFIG.wreckBodyRadius),
         collisionMask: BODY_MASKS.WRECK,
         interactionMask: [BODY_MASKS.PICKUP, BODY_MASKS.SIGNAL],
         replicationLane: "near",
