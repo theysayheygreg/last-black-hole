@@ -35,18 +35,49 @@ export function resolveHudTimerState({
       })
       .map((window) => ({
         time: Number(window.openTime) || 0,
+        closeTime: Number(window.closeTime) || 0,
         final: window.metadata?.finalExfil === true,
       }))
     : (Array.isArray(fallbackWaves) ? fallbackWaves.map((wave, index, waves) => ({
       time: Number(wave.time) || 0,
+      closeTime: (Number(wave.time) || 0) + Math.max(0, Number(wave.lifespan) || 0),
       final: index === waves.length - 1,
     })) : []);
   const nextWindow = windows.find((window) => window.time > elapsed) || null;
+  const activeFinalWindow = windows.find((window) => (
+    window.final && window.time <= elapsed && window.closeTime > elapsed
+  )) || null;
   return {
     matchRemainingSeconds: Math.max(0, duration - elapsed),
     nextApertureSeconds: nextWindow ? Math.max(0, nextWindow.time - elapsed) : null,
     nextApertureIsFinal: Boolean(nextWindow?.final),
+    finalApertureOpenSeconds: activeFinalWindow
+      ? Math.max(0, activeFinalWindow.closeTime - elapsed)
+      : null,
     nextGrowthSeconds: Math.max(0, interval - (timer % interval)),
+  };
+}
+
+export function getCollapseTimerPresentation(timerState = {}) {
+  const remaining = Math.max(0, Number(timerState.matchRemainingSeconds) || 0);
+  const openSeconds = timerState.finalApertureOpenSeconds != null
+    && Number.isFinite(Number(timerState.finalApertureOpenSeconds))
+    ? Math.max(0, Number(timerState.finalApertureOpenSeconds))
+    : null;
+  if (openSeconds !== null) {
+    return { label: 'aperture open', value: fmtTime(openSeconds), tone: 'active' };
+  }
+  if (remaining <= 60) {
+    const finalCountdown = timerState.nextApertureIsFinal
+      && Number.isFinite(Number(timerState.nextApertureSeconds))
+      ? Math.max(0, Number(timerState.nextApertureSeconds))
+      : remaining;
+    return { label: 'final aperture', value: fmtTime(finalCountdown), tone: 'critical' };
+  }
+  return {
+    label: 'universal collapse',
+    value: fmtTime(remaining),
+    tone: remaining <= 120 ? 'warning' : 'normal',
   };
 }
 
@@ -134,18 +165,20 @@ export function getAbilityPresentationState(abilityState = {}) {
       meter: cooldown > 0 ? cooldownMeter(cooldown, 20) : 1,
     }));
   } else if (hull === 'breacher') {
-    const fuelMax = 30;
-    const fuel = Math.max(0, state.burnFuel || 0);
+    const heatCapacity = 30;
+    const reserve = Math.max(0, state.burnFuel || 0);
+    const heatRatio = clamp01(1 - reserve / heatCapacity);
+    const heatPercent = Math.round(heatRatio * 100);
     const active = Boolean(state.burnActive);
     slots.push(createAbilitySlot('Q', 'burn', {
-      status: active ? `burning ${fmtSeconds(fuel)}` : fuel > 1 ? `fuel ${Math.ceil(fuel)}/${fuelMax}` : 'fuel dry',
+      status: heatRatio < 0.97 ? `heat headroom ${100 - heatPercent}%` : 'heat locked',
       active,
-      ready: !active && fuel > 1,
+      ready: !active && heatRatio < 0.97,
       cooldown: 0,
-      detail: active ? 'thrust spike, loud noise' : 'hold fuel for a line break',
-      resourceLabel: 'fuel',
-      resource: fuel,
-      meter: clamp01(fuel / fuelMax),
+      detail: active ? 'thrust spike, heat rising' : 'hold before heat lock',
+      resourceLabel: 'heat',
+      resource: heatPercent,
+      meter: heatRatio,
     }));
   } else if (hull === 'resonant') {
     const tapCooldown = Math.max(0, state.tapCooldown || 0);

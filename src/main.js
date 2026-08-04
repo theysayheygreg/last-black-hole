@@ -908,10 +908,8 @@ function getConfiguredSimServerUrl() {
 }
 
 function authorityLaunchWarning(error) {
-  const detail = String(error?.message || 'local authority unavailable')
-    .split(/\r?\n/, 1)[0]
-    .slice(0, 120);
-  return `authority unavailable: ${detail}; retry or return home`;
+  console.error('[LBH] cycle launch detail:', error);
+  return 'the cycle would not open — retry or return home';
 }
 
 // ---- Init ----
@@ -1455,7 +1453,7 @@ function init() {
       const droppedWreck = wreckSystem.wrecks[wreckSystem.wrecks.length - 1];
       droppedWreck.loot = [item];
       droppedWreck.name = `dropped: ${item.name}`;
-      showWarning(`dropped ${item.name}`, 'rgba(255, 150, 80, 0.8)', 1500);
+      showWarning(`dropped ${item.name}`, 'rgba(255, 150, 80, 0.8)', 1500, { severity: 'loot' });
     }
   });
 
@@ -2652,13 +2650,13 @@ function applyRemoteEvents(events) {
       case 'player.inventoryAction':
         if (!isLocal || !payload.itemName) break;
         if (payload.action === 'dropCargo') {
-          showWarning(`dropped ${payload.itemName}`, 'rgba(255, 150, 80, 0.8)', 1500);
+          showWarning(`dropped ${payload.itemName}`, 'rgba(255, 150, 80, 0.8)', 1500, { severity: 'loot' });
         } else if (payload.action === 'equipCargo') {
-          showWarning(`equipped ${payload.itemName}`, 'rgba(255, 220, 120, 0.9)', 1400);
+          showWarning(`equipped ${payload.itemName}`, 'rgba(255, 220, 120, 0.9)', 1400, { severity: 'loot' });
         } else if (payload.action === 'loadConsumable') {
-          showWarning(`loaded ${payload.itemName}`, 'rgba(160, 220, 255, 0.9)', 1400);
+          showWarning(`loaded ${payload.itemName}`, 'rgba(160, 220, 255, 0.9)', 1400, { severity: 'loot' });
         } else if (payload.action === 'unequip' || payload.action === 'unloadConsumable') {
-          showWarning(`${payload.itemName} to cargo`, 'rgba(180, 180, 200, 0.9)', 1400);
+          showWarning(`${payload.itemName} to cargo`, 'rgba(180, 180, 200, 0.9)', 1400, { severity: 'loot' });
         }
         break;
       case 'star.consumed':
@@ -2674,9 +2672,12 @@ function applyRemoteEvents(events) {
       case 'well.grew':
         break;
       case 'wave.announced': {
-        const cause = String(payload.cause || 'well-growth').replaceAll('-', ' ').toUpperCase();
-        const source = payload.sourceWellId ? ` · ${payload.sourceWellId}` : '';
-        showWarning(`${cause} WAVE${source}`, 'rgba(160, 236, 224, 0.94)', 1600);
+        const waveCopy = {
+          'well-growth': 'gravity wave inbound',
+          collapse: 'collapse wave inbound',
+          inhibitor: 'inhibitor wake inbound',
+        }[String(payload.cause || '')];
+        if (waveCopy) showWarning(waveCopy, 'rgba(160, 236, 224, 0.94)', 1600);
         break;
       }
       case 'scavenger.extracted':
@@ -2814,7 +2815,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
     }
     if (forceReset && runningSession) {
       const selectedMapName = mapEntry.map?.name || mapEntry.name || mapEntry.id;
-      showWarning(`host reset to ${selectedMapName.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
+      showWarning(`new cycle opened on ${selectedMapName.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
     }
   } else if (runningSession.mapId !== mapEntry.id) {
     showWarning(`joining live cycle on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);
@@ -3062,7 +3063,7 @@ function applyPauseResumeDecision(decision) {
   }
   if (decision.phase === 'recovery' || decision.rematched) {
     gamePhase = 'recovery';
-    loadingMapName = 'authority recovery';
+    loadingMapName = 'cycle settling';
     audioRouter?.setPhase('loading');
     hideHUD();
     return;
@@ -3748,21 +3749,21 @@ function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
   const { ratio, overheatRemaining } = display;
   const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
   const slot = getShipLocalLabelSlots({ shipX: sx, shipY: sy, canvasW, canvasH }).heat;
-  const width = Math.min(68, slot.barW);
+  const width = Math.min(92, slot.barW);
   const left = slot.barX + (slot.barW - width) / 2;
   const top = slot.textY;
   const color = overheatRemaining > 0
-    ? 'rgba(255, 80, 70, 0.95)'
-    : ratio >= 0.75 ? 'rgba(255, 170, 70, 0.95)' : 'rgba(255, 220, 100, 0.9)';
+    ? roleColor('danger', 0.95)
+    : ratio >= 0.75 ? roleColor('salvage', 0.95) : roleColor('text', 0.94);
   ctx.save();
-  ctx.font = canvasFont(9, { weight: '700' });
+  ctx.font = canvasFont(18, { weight: '700' });
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
   ctx.fillText(overheatRemaining > 0 ? `HEAT LOCK ${overheatRemaining.toFixed(1)}s` : `HEAT ${Math.round(ratio * 100)}%`, sx, top);
-  ctx.fillStyle = 'rgba(5, 12, 24, 0.76)';
-  ctx.fillRect(left, slot.barY, width, 4);
+  ctx.fillStyle = roleColor('void', 0.76);
+  ctx.fillRect(left, slot.barY, width, 6);
   ctx.fillStyle = color;
-  ctx.fillRect(left, slot.barY, width * ratio, 4);
+  ctx.fillRect(left, slot.barY, width * ratio, 6);
   ctx.restore();
 }
 
@@ -4029,7 +4030,7 @@ function applyConsumableEffect(effectId, item = null) {
       break;
     }
     default:
-      showWarning(`used: ${effectId}`, 'rgba(200, 160, 255, 0.9)', 2000);
+      console.warn('[LBH] unknown consumable effect:', effectId);
   }
 }
 
@@ -4359,7 +4360,7 @@ function gameLoop(now) {
         }
         transitionToRemoteGame(selectedEntry, { forceReset: true });
       } else if (remoteControl.hasLiveSession) {
-        showWarning('only the host can reset the live cycle', 'rgba(255, 150, 120, 0.95)', 2400);
+        showWarning('this live cycle is already underway', 'rgba(255, 150, 120, 0.95)', 2400);
       }
     }
     if (!transitionActive && backNow && !_prevBack) {
@@ -4389,7 +4390,7 @@ function gameLoop(now) {
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave failed:', err);
-              showWarning(`remote exit failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
+              showWarning('the cycle would not release — try again', 'rgba(255, 100, 80, 0.95)', 4000);
             }).finally(() => {
               loadTitleScene();
               gamePhase = 'home';
@@ -4674,11 +4675,11 @@ function gameLoop(now) {
             audioEngine.playEvent('loot', ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
             for (const item of newItems.slice(0, added)) {
               const color = TIER_COLORS[item.tier] || 'rgba(212, 168, 67, 0.9)';
-              showWarning(`${item.name}`, color, 2000);
+              showWarning(`${item.name}`, color, 2000, { severity: 'loot' });
             }
           }
           if (overflow.length > 0) {
-            showWarning(`cargo full — ${overflow.length} item(s) left behind`, 'rgba(255, 100, 80, 0.9)', 2500);
+            showWarning(`cargo full — ${overflow.length} item(s) left behind`, 'rgba(255, 100, 80, 0.9)', 4000, { severity: 'threat' });
           }
         }
       } else {
@@ -4687,7 +4688,8 @@ function gameLoop(now) {
           w.alive && !w.looted && worldDistance(ship.wx, ship.wy, w.wx, w.wy) < CONFIG.wrecks.pickupRadius * 1.5
         );
         if (nearWreck && !inventorySystem._fullWarningShown) {
-          showWarning('cargo full —', 'rgba(255, 100, 80, 0.9)', 3000, {
+          showWarning('cargo full —', 'rgba(255, 100, 80, 0.9)', 4000, {
+            severity: 'threat',
             action: actionDescriptor('inventory', currentPromptOptions()),
             actionVerb: 'inventory to drop',
           });
@@ -5214,15 +5216,15 @@ function gameLoop(now) {
         const isExfil = contact.sourceKind === 'exfil' || contact.identity === 'EXFIL' || contact.category === 'EXFIL TONE';
         const isInhibitor = contact.sourceKind === 'inhibitor'
           || ['GLITCH', 'SWARM', 'VESSEL', 'VESSEL THRUST'].includes(contact.identity);
-        const accent = isExfil ? [100, 220, 220] : isInhibitor ? [255, 70, 150] : [220, 230, 245];
         const edgeAlpha = Math.max(0.15, alpha * pulse * 0.8);
-        const edge = drawEdgeArrow(sx, sy, `rgba(${accent.join(', ')}, ${edgeAlpha.toFixed(2)})`, 7);
+        const accentRole = isExfil ? 'flow' : isInhibitor ? 'inhibitor' : 'text';
+        const edge = drawEdgeArrow(sx, sy, roleColor(accentRole, edgeAlpha), 7);
         if (edge) {
           const label = contact.identity || contact.category;
-          ctx.font = canvasFont(9, { weight: '700' });
+          ctx.font = canvasFont(12, { weight: '700' });
           ctx.textAlign = 'center';
-          ctx.fillStyle = `rgba(${accent.join(', ')}, ${Math.max(0.2, alpha * pulse).toFixed(2)})`;
-          ctx.fillText(`${label} · ${Math.round(contact.rangeMeters || 0)}m`, edge.x, edge.y - 10);
+          ctx.fillStyle = roleColor(accentRole, Math.max(0.2, alpha * pulse));
+          ctx.fillText(`${label} · ${Math.round(contact.rangeMeters || 0)}m`, edge.x, edge.y - 12);
         }
       }
 
@@ -6578,15 +6580,15 @@ function gameLoop(now) {
       const authorityY = briefing.authorityY;
       const authorityActions = remoteControl?.canHostReset ? [{
         descriptor: actionDescriptor('delete', promptOptions),
-        verb: 'host reset',
+        verb: 'open new cycle',
       }] : [];
-      const authorityLine = remoteControl?.hasLiveSession
+      const linkLine = remoteControl?.hasLiveSession
         ? `live cycle // ${remoteControl.sessionPlayerCount} players`
-        : remoteControl?.loading ? 'checking live authority...' : 'local authority ready';
-      drawSectionLabel(ctx, 'authority', briefX, authorityY, { role: simClient?.enabled ? 'flow' : 'muted', alpha: 0.82 });
-      ctx.font = canvasFont(9);
+        : remoteControl?.loading ? 'link: searching...' : 'link: stable';
+      drawSectionLabel(ctx, 'link', briefX, authorityY, { role: simClient?.enabled ? 'flow' : 'muted', alpha: 0.82 });
+      ctx.font = canvasFont(10);
       ctx.fillStyle = roleColor('muted', 0.72);
-      ctx.fillText(fitUiText(ctx, authorityLine, briefW), briefX, authorityY + 20);
+      ctx.fillText(fitUiText(ctx, linkLine, briefW), briefX, authorityY + 20);
       if (authorityActions.length > 0) {
         drawActionFooter(ctx, briefX, authorityY + 28, authorityActions, {
           alpha: 0.82, gap: 10, maxWidth: briefW,
@@ -6663,12 +6665,12 @@ function gameLoop(now) {
     const remotePause = remoteSession.active;
     ctx.fillStyle = remotePause ? 'rgba(157, 252, 255, 0.96)' : 'rgba(255, 217, 102, 0.92)';
     ctx.font = canvasFont(14, { weight: '700' });
-    ctx.fillText(remotePause ? 'WORLD CONTINUES' : 'LOCAL SANDBOX // SIM FROZEN', cx, cy - 91);
+    ctx.fillText(remotePause ? 'WORLD CONTINUES' : 'WORLD HOLDS', cx, cy - 91);
     ctx.fillStyle = 'rgba(150, 175, 195, 0.72)';
     ctx.font = canvasFont(11);
     const status = remotePause
-      ? `authority ${remoteSession.health?.ok === false ? 'disconnected' : 'connected'} // ${remoteSession.snapshot?.session?.status || 'unknown'}`
-      : 'client debug freeze // no product authority claim';
+      ? `link ${remoteSession.health?.ok === false ? 'lost' : 'stable'} // cycle ${remoteSession.snapshot?.session?.status || 'unknown'}`
+      : 'solo cycle held while you are away';
     ctx.fillText(fitUiText(ctx, status, pausePanelRect.w - 36), cx, cy - 72);
     if (remotePause) {
       ctx.fillText(`run ${simState.runElapsedTime.toFixed(1)}s // away ${awaySeconds.toFixed(1)}s`, cx, cy - 56);

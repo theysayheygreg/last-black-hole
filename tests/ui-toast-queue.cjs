@@ -29,6 +29,16 @@ const { pathToFileURL } = require('url');
   assert.strictEqual(loot.at(-1).message, '+3 items', 'overflowing loot collapses into one summary');
   assert.strictEqual(queue.readToastQueue(state, 7000).length, 0, 'expired entries are not displayed');
 
+  let aggregateState = queue.createToastQueueState();
+  for (const message of ['A', 'B', 'C', 'D']) {
+    aggregateState = queue.enqueueToast(aggregateState, { severity: 'loot', message }, 3000 + aggregateState.nextId);
+  }
+  const firstAggregate = queue.readToastQueue(aggregateState, 3010).find((item) => item.aggregate);
+  aggregateState = queue.enqueueToast(aggregateState, { severity: 'loot', message: 'E' }, 3011);
+  const nextAggregate = queue.readToastQueue(aggregateState, 3011).find((item) => item.aggregate);
+  assert.strictEqual(nextAggregate.id, firstAggregate.id, 'loot aggregate should retain its DOM identity');
+  assert.notStrictEqual(nextAggregate.message, firstAggregate.message, 'retained loot aggregate must expose changed copy');
+
   console.log('UIToastQueue: severity ordering, caps, dedupe, aggregation, and lifetimes agree.');
 })().catch((error) => {
   console.error(error.stack || error.message);

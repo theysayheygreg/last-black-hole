@@ -197,14 +197,14 @@ async function run() {
       const elements = await page.evaluate(() => ({
         salvageCount: !!document.getElementById('hud-salvage-count'),
         salvageValue: !!document.getElementById('hud-salvage-value'),
-        scavCount: !!document.getElementById('hud-scavengers-count'),
+        deadScavengerNode: !!document.getElementById('hud-scavengers-count'),
         pulse: !!document.getElementById('hud-pulse'),
         signature: !!document.getElementById('hud-signature'),
         panel: !!document.getElementById('hud-inventory-panel'),
       }));
       assert(elements.salvageCount, 'Missing hud-salvage-count');
       assert(elements.salvageValue, 'Missing hud-salvage-value');
-      assert(elements.scavCount, 'Missing hud-scavengers-count');
+      assert(!elements.deadScavengerNode, 'Dead scavenger HUD node must stay retired');
       assert(elements.pulse, 'Missing hud-pulse');
       assert(elements.signature, 'Missing hud-signature');
       assert(elements.panel, 'Missing hud-inventory-panel');

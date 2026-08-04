@@ -15,6 +15,13 @@ import { setWarningColor } from './ui/hud-primitives.js';
 import { actionCaptionMarkup, affordanceCaption, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
 import { preloadUiAssets } from './ui/asset-kit.js';
+import { hudSurfaceLayout } from './ui/layout-contract.js';
+import {
+  createToastQueueState,
+  enqueueToast,
+  expireToastQueue,
+  readToastQueue,
+} from './ui/toast-queue.js';
 import {
   getInventoryActionAtCursor,
   initHudInventory,
@@ -34,6 +41,7 @@ import {
   getInteractionPresentationState,
   getHUDPresentationState,
   getRouteObjectiveState,
+  getCollapseTimerPresentation,
   resolveHudTimerState,
   getTerminalPresentationState,
   isExfilPortal,
@@ -61,32 +69,33 @@ export {
 };
 
 let _hudEl;
-let _collapseTimerEl, _collapseEventEl;
+let _collapseLabelEl, _collapseTimerEl, _collapseEventEl;
 let _portalsStatusEl, _portalsNextEl;
 let _salvageCountEl, _salvageValueEl;
-let _scavengersCountEl, _scavengersSub;
 let _pulseEl;
 let _signatureEl;
 let _warningsEl;
 let _noiseReadoutEl, _noiseDetailEl;
 let _hullFillEl, _hullReadoutEl;
 let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCaptionEl;
-let _abilitiesEl;
+let _actionsEl, _abilitiesEl;
 let _ability1El, _ability2El;
 let _inhibitorEl, _inhibitorSummaryEl;
 let _lastCollapseStr = '';
 let _promptOptions = {};
+let _toastQueue = createToastQueueState();
+let _toastExpiryTimer = null;
+let _lastLayoutKey = '';
 
 export function initHUD() {
   _hudEl = document.getElementById('hud');
+  _collapseLabelEl = document.querySelector('#hud-collapse .hud-label');
   _collapseTimerEl = document.getElementById('hud-collapse-timer');
   _collapseEventEl = document.getElementById('hud-collapse-event');
   _portalsStatusEl = document.getElementById('hud-portals-status');
   _portalsNextEl = document.getElementById('hud-portals-next');
   _salvageCountEl = document.getElementById('hud-salvage-count');
   _salvageValueEl = document.getElementById('hud-salvage-value');
-  _scavengersCountEl = document.getElementById('hud-scavengers-count');
-  _scavengersSub = document.getElementById('hud-scavengers-sub');
   _pulseEl = document.getElementById('hud-pulse');
   _signatureEl = document.getElementById('hud-signature');
   initHudInventory(document.getElementById('hud-inventory-panel'));
@@ -99,11 +108,14 @@ export function initHUD() {
   _interactionActionEl = document.getElementById('hud-interaction-action');
   _interactionDetailEl = document.getElementById('hud-interaction-detail');
   _interactionCaptionEl = document.getElementById('hud-interaction-caption');
+  _actionsEl = document.getElementById('hud-actions');
   _abilitiesEl = document.getElementById('hud-abilities');
   _ability1El = document.getElementById('hud-ability1');
   _ability2El = document.getElementById('hud-ability2');
   _inhibitorEl = document.getElementById('hud-ecology');
   _inhibitorSummaryEl = document.getElementById('hud-ecology-summary');
+  _toastQueue = createToastQueueState();
+  _lastLayoutKey = '';
   renderAbilitySlot(_ability1El, createAbilitySlot('Q', '---', { status: '', ready: false }));
   renderAbilitySlot(_ability2El, createAbilitySlot('R', '---', { status: '', ready: false }));
   void preloadUiAssets().catch(() => {});
@@ -182,7 +194,44 @@ export function hideHUD() {
     _hudEl.style.opacity = '';
     _hudEl.style.transition = '';
   }
-  if (_warningsEl) _warningsEl.innerHTML = '';
+  if (_toastExpiryTimer) clearTimeout(_toastExpiryTimer);
+  _toastExpiryTimer = null;
+  _toastQueue = createToastQueueState();
+  if (_warningsEl) _warningsEl.replaceChildren();
+}
+
+function applyRect(el, bounds) {
+  if (!el || !bounds) return;
+  el.style.left = `${Math.round(bounds.x)}px`;
+  el.style.top = `${Math.round(bounds.y)}px`;
+  el.style.right = 'auto';
+  el.style.bottom = 'auto';
+  el.style.width = `${Math.round(bounds.w)}px`;
+  el.style.height = `${Math.round(bounds.h)}px`;
+  el.style.maxHeight = `${Math.round(bounds.h)}px`;
+  el.style.transform = 'none';
+  el.style.boxSizing = 'border-box';
+}
+
+function applyHudContractLayout(opts = {}) {
+  const viewport = _hudEl?.getBoundingClientRect?.();
+  const width = viewport?.width || globalThis.innerWidth || opts.canvasW || 1280;
+  const height = viewport?.height || globalThis.innerHeight || opts.canvasH || 720;
+  const key = `${Math.round(width)}x${Math.round(height)}`;
+  if (key === _lastLayoutKey) return;
+  _lastLayoutKey = key;
+  const layout = hudSurfaceLayout(width, height);
+  const byId = (id) => document.getElementById(id);
+  applyRect(byId('hud-collapse'), layout.collapse);
+  applyRect(byId('hud-vitals'), layout.vitals);
+  applyRect(byId('hud-ecology'), layout.ecology);
+  applyRect(byId('hud-salvage'), layout.salvage);
+  applyRect(byId('hud-warnings'), layout.warnings);
+  applyRect(byId('hud-portals'), layout.portals);
+  applyRect(byId('hud-actions'), layout.actions);
+  applyRect(byId('hud-interaction'), layout.interaction);
+  applyRect(byId('hud-inventory-panel'), layout.inventory);
+  applyRect(byId('hud-signature'), layout.signature);
 }
 
 export function clearHUDForTerminal(outcome = 'dead') {
@@ -294,6 +343,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   const motion = resolveMotionSettings(CONFIG.ui?.motion || {});
   const reducedMotion = opts.reducedMotion ?? motion.reducedMotion;
   _hudEl.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
+  applyHudContractLayout(opts);
 
   const timerState = resolveHudTimerState({
     runElapsedTime,
@@ -303,53 +353,29 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     portalSchedule: opts.portalSchedule,
     fallbackWaves: CONFIG.portals.waves,
   });
-  const remaining = timerState.matchRemainingSeconds;
+  const timerPresentation = getCollapseTimerPresentation(timerState);
 
   // === COLLAPSE TIMER ===
-  const collapseStr = fmtTime(remaining);
+  const collapseStr = timerPresentation.value;
   if (collapseStr !== _lastCollapseStr) {
     _collapseTimerEl.textContent = collapseStr;
     _lastCollapseStr = collapseStr;
   }
-
-  const collapsePanel = _collapseTimerEl.parentElement;
-  if (remaining <= 60) {
-    _collapseTimerEl.style.color = 'rgba(232, 25, 0, 0.95)';
-    _collapseTimerEl.style.textShadow = '0 0 12px rgba(232, 25, 0, 0.6)';
-    collapsePanel.querySelector('.hud-label').style.color = 'rgba(232, 25, 0, 0.6)';
-  } else if (remaining <= 120) {
-    _collapseTimerEl.style.color = 'rgba(240, 144, 58, 0.9)';
-    _collapseTimerEl.style.textShadow = '0 0 10px rgba(240, 144, 58, 0.5)';
-    collapsePanel.querySelector('.hud-label').style.color = 'rgba(200, 120, 50, 0.5)';
-  } else {
-    _collapseTimerEl.style.color = '';
-    _collapseTimerEl.style.textShadow = '';
-    collapsePanel.querySelector('.hud-label').style.color = '';
-  }
+  _collapseLabelEl.textContent = timerPresentation.label;
+  _collapseTimerEl.parentElement.dataset.tone = timerPresentation.tone;
 
   // Next event
-  const nextGrowth = timerState.nextGrowthSeconds;
   const nextWaveTime = timerState.nextApertureSeconds;
   const isFinalWave = timerState.nextApertureIsFinal;
   const nextWaveLabel = isFinalWave ? 'final aperture' : 'aperture';
 
   let eventText = '';
-  if (nextWaveTime !== null && nextWaveTime < nextGrowth) {
+  if (timerPresentation.label === 'aperture open') {
+    eventText = 'enter the cyan aperture';
+  } else if (timerPresentation.label === 'final aperture') {
+    eventText = 'guaranteed exit inbound';
+  } else if (nextWaveTime !== null) {
     eventText = `next: ${nextWaveLabel} ${fmtTime(nextWaveTime)}`;
-    if (isFinalWave) {
-      _collapseEventEl.style.color = 'rgba(255, 80, 80, 0.8)';
-    } else if (nextWaveTime < 10) {
-      _collapseEventEl.style.color = 'rgba(200, 180, 100, 0.8)';
-    } else {
-      _collapseEventEl.style.color = '';
-    }
-  } else {
-    eventText = `next: well growth ${fmtTime(nextGrowth)}`;
-    if (nextGrowth < 5) {
-      _collapseEventEl.style.color = 'rgba(200, 180, 100, 0.7)';
-    } else {
-      _collapseEventEl.style.color = '';
-    }
   }
   _collapseEventEl.textContent = eventText;
 
@@ -386,19 +412,6 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
       _salvageCountEl.style.color = 'rgba(240, 180, 60, 0.9)';
     } else {
       _salvageCountEl.style.color = '';
-    }
-  }
-
-  // === SCAVENGERS ===
-  if (opts.scavengerSystem && _scavengersCountEl) {
-    const scavs = opts.scavengerSystem.scavengers;
-    const alive = scavs.filter(s => s.alive && s.state !== 'dying').length;
-    if (alive > 0) {
-      _scavengersCountEl.textContent = `scavengers: ${alive}`;
-      _scavengersSub.textContent = '';
-    } else {
-      _scavengersCountEl.textContent = 'no scavengers';
-      _scavengersSub.textContent = '';
     }
   }
 
@@ -495,65 +508,93 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     open: opts.inventoryOpen,
     promptOptions: _promptOptions,
   });
+  if (_actionsEl) _actionsEl.style.display = opts.inventoryOpen ? 'none' : '';
+  if (opts.inventoryOpen) {
+    if (_interactionEl) _interactionEl.style.display = 'none';
+    if (_inhibitorEl) _inhibitorEl.style.display = 'none';
+  }
 
 }
 
 /**
- * Add an event to the events log panel (left side, fades by age).
- * Replaces the old center-screen warning system.
- * Max 8 visible entries — oldest removed when full.
+ * Render the bounded severity queue into the existing accessible DOM log.
+ * Queue policy owns ordering, eviction, dedupe, and lifetime.
  */
-export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs = 4000, options = {}) {
+function renderToastQueue(now = Date.now()) {
   if (!_warningsEl) return;
-
-  // Cap visible entries
-  while (_warningsEl.children.length >= 8) {
-    _warningsEl.removeChild(_warningsEl.firstChild);
+  _toastQueue = expireToastQueue(_toastQueue, now);
+  const entries = readToastQueue(_toastQueue, now);
+  const liveIds = new Set(entries.map((entry) => String(entry.id)));
+  for (const child of [..._warningsEl.children]) {
+    if (!liveIds.has(child.dataset.toastId)) child.remove();
   }
-
-  const el = document.createElement('div');
-  el.className = 'hud-warning';
-  if (options.corrupt) {
-    const warningBoost = Number(textCorruptionConfig().warningBoost ?? 1.15) || 1;
-    const corruption = inhibitorTextAmount({
-      intensity: clamp01(options.intensity ?? 1),
-      count: 1,
-    }, warningBoost * Number(options.boost ?? 1));
-    setMaybeCorruptedText(
-      el,
-      text,
-      corruption,
-      options.seed ?? `warning-${Date.now()}-${_warningsEl.children.length}`,
-      { maxChars: options.maxChars ?? 96 }
-    );
-  } else if (options.action) {
-    el.textContent = stripCombiningMarks(text);
-    el.insertAdjacentHTML('beforeend', ` ${actionCaptionMarkup(options.action.actionId, options.actionVerb, {
-      ...options.action,
-      mode: options.action.inputFamily,
-    })}`);
-  } else {
-    el.textContent = stripCombiningMarks(text);
+  for (const entry of entries) {
+    const retained = _warningsEl.querySelector(`[data-toast-id="${entry.id}"]`);
+    if (retained?.dataset.toastMessage === entry.message) continue;
+    const options = entry.payload?.options || {};
+    const el = retained || document.createElement('div');
+    el.replaceChildren();
+    el.className = 'hud-warning';
+    el.dataset.toastId = String(entry.id);
+    el.dataset.toastMessage = entry.message;
+    el.dataset.severity = entry.severity;
+    el.dataset.tone = options.tone || (entry.severity === 'threat' ? 'danger' : entry.severity);
+    if (options.corrupt) {
+      const warningBoost = Number(textCorruptionConfig().warningBoost ?? 1.15) || 1;
+      const corruption = inhibitorTextAmount({
+        intensity: clamp01(options.intensity ?? 1),
+        count: 1,
+      }, warningBoost * Number(options.boost ?? 1));
+      setMaybeCorruptedText(
+        el,
+        entry.message,
+        corruption,
+        options.seed ?? `warning-${entry.id}`,
+        { maxChars: options.maxChars ?? 96 }
+      );
+    } else if (options.action) {
+      el.textContent = stripCombiningMarks(entry.message);
+      el.insertAdjacentHTML('beforeend', ` ${actionCaptionMarkup(options.action.actionId, options.actionVerb, {
+        ...options.action,
+        mode: options.action.inputFamily,
+      })}`);
+    } else {
+      el.textContent = stripCombiningMarks(entry.message);
+    }
+    setWarningColor(el, entry.payload?.color || UI_COLORS.warningText);
+    if (!retained) _warningsEl.appendChild(el);
   }
-  setWarningColor(el, color);
-  _warningsEl.appendChild(el);
+  if (_toastExpiryTimer) clearTimeout(_toastExpiryTimer);
+  _toastExpiryTimer = null;
+  const nextExpiry = entries.reduce((soonest, entry) => Math.min(soonest, entry.expiresAt), Infinity);
+  if (Number.isFinite(nextExpiry)) {
+    _toastExpiryTimer = setTimeout(() => renderToastQueue(Date.now()), Math.max(0, nextExpiry - now));
+  }
+}
 
-  setTimeout(() => {
-    el.classList.add('fading');
-    setTimeout(() => el.remove(), 1000);
-  }, durationMs);
+export function showWarning(text, color = UI_COLORS.warningText, _durationMs = null, options = {}) {
+  if (!_warningsEl) return;
+  const now = Date.now();
+  _toastQueue = enqueueToast(_toastQueue, {
+    severity: options.severity || (options.corrupt ? 'threat' : 'system'),
+    message: stripCombiningMarks(text),
+    payload: { color, options },
+  }, now);
+  renderToastQueue(now);
 }
 
 export function showInhibitorWarning(
   text,
   _kind = 'threat',
   intensity = 1,
-  durationMs = 3200,
+  _durationMs = 4000,
   color = 'rgba(204, 26, 128, 0.95)',
   options = {}
 ) {
-  showWarning(text, color, durationMs, {
+  showWarning(text, color, null, {
     corrupt: true,
+    severity: 'threat',
+    tone: 'inhibitor',
     intensity,
     ...options,
   });

@@ -205,13 +205,12 @@ async function run() {
       assert(styles.minWidth >= 200, `Inventory panel too narrow: ${styles.minWidth}px`);
     });
 
-    await runner.run('All HUD DOM elements present', async () => {
+    await runner.run('Required HUD DOM elements present', async () => {
       const elements = await page.evaluate(() => ({
         hud: !!document.getElementById('hud'),
         collapse: !!document.getElementById('hud-collapse'),
         portals: !!document.getElementById('hud-portals'),
         salvage: !!document.getElementById('hud-salvage'),
-        scavengers: !!document.getElementById('hud-scavengers'),
         pulse: !!document.getElementById('hud-pulse'),
         signature: !!document.getElementById('hud-signature'),
         warnings: !!document.getElementById('hud-warnings'),
@@ -220,6 +219,8 @@ async function run() {
       for (const [name, exists] of Object.entries(elements)) {
         assert(exists, `Missing HUD element: ${name}`);
       }
+      assert(await page.evaluate(() => !document.getElementById('hud-scavengers')),
+        'Dead scavenger HUD node must stay retired');
     });
 
     await runner.run('Dev panel exposes filter and Inhibitor corruption tuning', async () => {
@@ -282,8 +283,9 @@ async function run() {
       assert(drifter.active === true && drifter.status.includes('surf'), `Expected active flow lock status, got ${drifter.status}`);
 
       const breacher = presentations.breacher.slots[0];
-      assert(breacher.resourceLabel === 'fuel', 'Expected Breacher fuel resource label');
-      assert(breacher.meter > 0.35 && breacher.meter < 0.45, `Expected Breacher fuel meter near 0.4, got ${breacher.meter}`);
+      assert(breacher.resourceLabel === 'heat', 'Expected Breacher Heat resource label');
+      assert(breacher.status === 'heat headroom 40%', `Expected honest Heat headroom, got ${breacher.status}`);
+      assert(breacher.meter > 0.59 && breacher.meter < 0.61, `Expected Breacher Heat meter near 0.6, got ${breacher.meter}`);
 
       const resonant = presentations.resonant.slots;
       assert(resonant[0].active === true && resonant[0].status.includes('anchor'), `Expected Resonant anchor status, got ${resonant[0].status}`);

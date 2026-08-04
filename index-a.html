@@ -147,7 +147,6 @@
       text-shadow: var(--lbh-text-shadow);
     }
     #hud-collapse {
-      top: 12px; left: var(--lbh-edge-margin);
       color: var(--lbh-timer-normal);
       text-shadow: 0 0 6px var(--lbh-timer-glow);
       line-height: 1.25;
@@ -167,10 +166,12 @@
       font-size: var(--lbh-couch-micro);
       color: rgba(140, 160, 190, 0.65);
     }
+    #hud-collapse[data-tone="warning"] .hud-value { color: var(--lbh-salvage); }
+    #hud-collapse[data-tone="critical"] .hud-label,
+    #hud-collapse[data-tone="critical"] .hud-value { color: var(--lbh-danger); }
+    #hud-collapse[data-tone="active"] .hud-label,
+    #hud-collapse[data-tone="active"] .hud-value { color: var(--lbh-portal); }
     #hud-vitals {
-      top: 120px;
-      left: var(--lbh-edge-margin);
-      width: 270px;
       display: grid;
       gap: var(--lbh-deck-panel-gap);
       padding: var(--lbh-deck-panel-pad-y) var(--lbh-deck-panel-pad-x);
@@ -241,13 +242,10 @@
     #hud-hull-readout[data-tone="shielded"] { color: var(--lbh-portal); }
     #hud-hull-readout[data-tone="critical"] { color: var(--lbh-danger); }
     #hud-ecology {
-      top: 356px; left: var(--lbh-edge-margin);
-      width: 254px;
       color: var(--lbh-inhibitor);
       text-shadow: 0 0 8px var(--lbh-inhibitor-glow);
       line-height: 1.4;
       border-color: rgba(255, 62, 181, 0.24);
-      animation: inhibitorPulse 2.4s ease-in-out infinite;
     }
     #hud-ecology .hud-label {
       font-size: var(--lbh-couch-micro);
@@ -260,13 +258,7 @@
       font-weight: 600;
       line-height: 1.05;
     }
-    @keyframes inhibitorPulse {
-      0%, 100% { opacity: 0.8; }
-      50% { opacity: 1.0; }
-    }
     #hud-portals {
-      top: 12px; right: var(--lbh-edge-margin);
-      width: 292px;
       text-align: right;
       color: var(--lbh-portal);
       text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
@@ -290,8 +282,6 @@
     #hud-portals [data-tone="critical"] { color: var(--lbh-danger); }
     #hud-portals [data-tone="active"] { color: var(--lbh-portal); }
     #hud-salvage {
-      bottom: var(--lbh-edge-margin); left: var(--lbh-edge-margin);
-      width: 254px;
       color: var(--lbh-salvage);
       text-shadow: 0 0 6px rgba(255, 185, 56, 0.32);
       line-height: 1.5;
@@ -303,12 +293,7 @@
       display: grid;
       gap: 3px;
     }
-    #hud-scavengers {
-      display: none;  /* hidden — scavenger count is better as organic discovery */
-    }
     #hud-signature {
-      top: 18px; left: 50%;
-      transform: translateX(-50%);
       text-align: center;
       font-size: var(--lbh-couch-micro);
       color: rgba(140, 170, 190, 0.5);
@@ -318,9 +303,6 @@
       padding: 0;
     }
     #hud-actions {
-      right: var(--lbh-edge-margin);
-      bottom: var(--lbh-edge-margin);
-      width: 348px;
       display: grid;
       gap: var(--lbh-deck-panel-gap);
       padding: 14px 18px;
@@ -474,11 +456,7 @@
     .ui-action-glyph-keycap { border-radius: 2px; }
     .ui-action-copy { vertical-align: middle; }
     #hud-interaction {
-      left: 50%;
-      bottom: 24px;
-      width: min(380px, calc(100vw - 520px));
       min-width: 320px;
-      transform: translateX(-50%);
       text-align: center;
       border-color: rgba(0, 226, 255, 0.5);
       background: rgba(0, 4, 18, 0.9);
@@ -494,24 +472,25 @@
     /* Events log — left side, stacks entries, fades by age (like MMO chat) */
     #hud-warnings {
       position: absolute;
-      bottom: 102px;
-      left: var(--lbh-edge-margin);
-      width: 320px;
       text-align: left;
       display: flex;
       flex-direction: column;
       gap: 3px;
       pointer-events: none;
+      overflow: hidden;
     }
     .hud-warning {
-      font-size: var(--lbh-couch-micro);
+      font-size: 13px;
       font-weight: normal;
       letter-spacing: 0;
       text-shadow: 0 0 6px var(--lbh-warning-shadow);
-      opacity: 0;
-      padding: 2px 0;
-      animation: hud-warning-in 0.2s ease-out forwards;
+      padding: 6px 10px;
+      background: var(--lbh-panel-backing);
     }
+    .hud-warning[data-severity="threat"] { order: 0; border-left: 3px solid var(--lbh-danger); }
+    .hud-warning[data-severity="threat"][data-tone="inhibitor"] { border-left-color: var(--lbh-inhibitor); }
+    .hud-warning[data-severity="system"] { order: 1; border-left: 3px solid var(--lbh-text-muted); }
+    .hud-warning[data-severity="loot"] { order: 2; border-left: 0; font-size: 12px; color: var(--lbh-salvage) !important; }
     .hud-zalgo {
       display: inline-block;
       line-height: 1.05;
@@ -523,28 +502,13 @@
       letter-spacing: 0;
       padding: 4px 0;
     }
-    .hud-warning.fading {
-      animation: hud-warning-out 1.0s ease-in forwards;
-    }
-    @keyframes hud-warning-in {
-      from { opacity: 0; transform: translateX(-8px); }
-      to { opacity: 1; transform: translateX(0); }
-    }
-    @keyframes hud-warning-out {
-      from { opacity: 1; }
-      to { opacity: 0; }
-    }
     /* Inventory panel (Tab toggle) — terminal card */
     #hud-inventory-panel {
       position: absolute;
-      left: var(--lbh-edge-margin);
-      top: 50%;
-      transform: translateY(-50%);
       background: rgba(0, 2, 10, 0.94);
       border: 1px solid rgba(0, 226, 255, 0.26);
       border-radius: 2px;
       padding: 14px 18px;
-      width: min(420px, calc(100vw - 48px));
       min-width: min(360px, calc(100vw - 48px));
       max-width: 420px;
       font-size: var(--lbh-couch-small);
@@ -672,8 +636,8 @@
   </div>
   <div id="hud" style="display:none;">
     <div id="hud-collapse" class="hud-panel">
-      <div class="hud-label">universal collapse</div>
-      <div class="hud-value" id="hud-collapse-timer">10:00</div>
+      <div class="hud-label"></div>
+      <div class="hud-value" id="hud-collapse-timer"></div>
       <div class="hud-sub" id="hud-collapse-event"></div>
     </div>
     <div id="hud-vitals" class="hud-panel" role="group" aria-label="ship status">
@@ -682,8 +646,8 @@
         <div id="hud-hull-bar" role="progressbar" aria-label="hull condition" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="hud-hull-fill"></div></div>
       </div>
       <div id="hud-noise" class="hud-vital">
-        <div class="hud-vital-head"><div class="hud-label">audible radius</div><div id="hud-noise-readout" class="hud-vital-readout">NOISE 0m · STEADY</div></div>
-        <div id="hud-noise-detail">SOURCE IDLE · HEARD BY 0 · TRACKED BY 0</div>
+        <div class="hud-vital-head"><div class="hud-label">audible radius</div><div id="hud-noise-readout" class="hud-vital-readout"></div></div>
+        <div id="hud-noise-detail"></div>
       </div>
     </div>
     <div id="hud-ecology" class="hud-panel" style="display: none;">
@@ -698,10 +662,6 @@
     <div id="hud-salvage" class="hud-panel">
       <div id="hud-salvage-count"></div>
       <div class="hud-sub" id="hud-salvage-value"></div>
-    </div>
-    <div id="hud-scavengers" class="hud-panel">
-      <div id="hud-scavengers-count"></div>
-      <div class="hud-sub" id="hud-scavengers-sub"></div>
     </div>
     <div id="hud-actions" class="hud-panel" role="group" aria-label="ship actions">
       <div id="hud-pulse" class="hud-command"></div>

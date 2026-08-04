@@ -57,6 +57,7 @@ export function enqueueToast(state, toast, now) {
     message,
     createdAt: now,
     expiresAt: now + (toast.lifetimeMs ?? TOAST_LIFETIME_MS[severity]),
+    payload: toast.payload ?? null,
   };
   let entries = current.entries.slice();
   let lootOverflow = current.lootOverflow;

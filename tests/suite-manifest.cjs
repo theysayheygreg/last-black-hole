@@ -461,6 +461,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "HUDWaveBPresentation",
+    file: "hud-wave-b-presentation.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
     name: "UIPrimitives",
     file: "ui-primitives.cjs",
     lanes: ["fast", "core", "static", "full"],

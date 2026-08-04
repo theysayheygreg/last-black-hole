@@ -312,10 +312,28 @@ export function resultsSurfaceLayout(width, height) {
 export function hudSurfaceLayout(width, height) {
   const w = Math.max(1, Number(width) || 1);
   const h = Math.max(1, Number(height) || 1);
-  const edge = 18;
-  const vitals = rect(edge, 120, 286, 188);
-  const portals = rect(w - edge - 320, edge, 320, 74);
-  const actions = rect(w - edge - 360, h - edge - 260, 360, 260);
-  const interaction = rect(actions.x - UI_DECK_GEOMETRY.panel.gap - 380, h - edge - 84, 380, 70);
-  return { edge, vitals, portals, actions, interaction };
+  const edge = 24;
+  const gap = UI_DECK_GEOMETRY.viewport.gap;
+  const compact = h < 650;
+  const collapse = rect(edge, edge, 280, compact ? 64 : 76);
+  const vitals = rect(edge, collapse.y + collapse.h + gap, 286, compact ? 140 : 188);
+  const ecology = rect(edge, vitals.y + vitals.h + gap, 286, compact ? 60 : 70);
+  const salvage = rect(edge, h - edge - (compact ? 64 : 70), 286, compact ? 64 : 70);
+  const warnings = rect(edge, ecology.y + ecology.h + gap, 320,
+    Math.max(0, salvage.y - gap - (ecology.y + ecology.h + gap)));
+  const portals = rect(w - edge - 320, edge, 320, 90);
+  const actions = rect(w - edge - 360, h - edge - (compact ? 220 : 260), 360, compact ? 220 : 260);
+  const interaction = rect(
+    Math.max(warnings.x + warnings.w + gap, Math.min((w - 380) / 2, actions.x - gap - 380)),
+    actions.y - gap - 70,
+    380,
+    70,
+  );
+  const inventory = rect(warnings.x + warnings.w + gap, portals.y + portals.h + gap, 420,
+    Math.max(320, h - (portals.y + portals.h + gap) - edge));
+  const signature = rect(Math.max(edge, (w - 320) / 2), edge, 320, 24);
+  return {
+    edge, gap, collapse, vitals, ecology, salvage, warnings,
+    portals, actions, interaction, inventory, signature,
+  };
 }
