@@ -251,6 +251,11 @@ export function initTestAPI(getState) {
       return setMapSelectIndexForTest ? setMapSelectIndexForTest(index) : null;
     },
 
+    setPreviewSeed(seed) {
+      const { setPreviewSeedForTest } = getState();
+      return setPreviewSeedForTest ? setPreviewSeedForTest(seed) : null;
+    },
+
     restart() {
       const { restart } = getState();
       return restart ? restart() : false;
@@ -259,6 +264,11 @@ export function initTestAPI(getState) {
     getMapSelectSurvey() {
       const { getMapSelectSurveyForTest } = getState();
       return clone(getMapSelectSurveyForTest?.() || null);
+    },
+
+    getRunScene() {
+      const { getRunSceneForTest } = getState();
+      return clone(getRunSceneForTest?.() || null);
     },
 
     getRunResultsView() {
@@ -525,6 +535,11 @@ export function initTestAPI(getState) {
         clientId: simClient?.clientId || null,
         remoteAuthorityActive: Boolean(remoteAuthorityActive),
         remoteMapId: remoteMapId || null,
+        remoteRunId: remoteSnapshot?.session?.runId || null,
+        remoteSeed: remoteSnapshot?.session?.seed ?? null,
+        remoteSignature: remoteSnapshot?.session?.cosmicSignature
+          ? clone(remoteSnapshot.session.cosmicSignature)
+          : null,
         remoteTick: remoteSnapshot?.tick ?? null,
         remoteSimTime: remoteSnapshot?.simTime ?? null,
         sessionStatus: remoteControlState?.sessionStatus ?? null,

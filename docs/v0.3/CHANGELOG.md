@@ -2,9 +2,9 @@
 
 - **Selected route restart:** remote restarts now carry the Map Select route
   and preview seed through the normal authority launch handoff instead of
-  reusing the previous session's map id. The focused lifecycle browser journey
-  proves return-home selection and direct restart agree with authority map
-  truth.
+  reusing the previous session's map id, seed, or signature. The focused
+  lifecycle browser journey proves return-home selection and direct restart
+  agree with authority map, run identity, seed, signature, and audio truth.
 
 - **Dev telemetry shutdown crash:** the live dev panel now renders an
   unavailable placeholder when an authority metric is null or non-finite

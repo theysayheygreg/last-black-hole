@@ -266,20 +266,42 @@ async function run() {
         `Expected selected expanse route, got ${secondHealth.body.session?.mapId || 'unknown'}`);
       assert(secondHealth.body.idleState?.humanPlayerCount === 1, 'Expected exactly one human in the new run');
 
-      const restartSelection = await page.evaluate(async () => {
+      const restartSeed = 731337;
+      const restartSelection = await page.evaluate(async (seed) => {
         window.__TEST_API.setMapSelectIndex(2);
+        window.__TEST_API.setPreviewSeed(seed);
         const expected = window.__TEST_API.getMapSelectSurvey();
         await window.__TEST_API.restart();
-        return expected;
-      });
+        return { expected, seed: window.__TEST_API.getMapSelectState().seed };
+      }, restartSeed);
       const restartedHealth = await request('/health');
-      const restartedNetwork = await page.evaluate(() => window.__TEST_API.getNetworkState());
-      assert(restartSelection?.entry?.id === 'deep-field',
-        `Expected Deep Field briefing before restart, got ${restartSelection?.entry?.id || 'unknown'}`);
-      assert(restartedHealth.body.session?.mapId === restartSelection.entry.id,
-        `Expected authority map ${restartSelection.entry.id}, got ${restartedHealth.body.session?.mapId || 'unknown'}`);
-      assert(restartedNetwork.remoteMapId === restartSelection.entry.id,
-        `Expected client map ${restartSelection.entry.id}, got ${restartedNetwork.remoteMapId || 'unknown'}`);
+      const restartedClient = await page.evaluate(() => ({
+        network: window.__TEST_API.getNetworkState(),
+        scene: window.__TEST_API.getRunScene(),
+      }));
+      assert(restartSelection?.expected?.entry?.id === 'deep-field',
+        `Expected Deep Field briefing before restart, got ${restartSelection?.expected?.entry?.id || 'unknown'}`);
+      assert(restartSelection.seed === restartSeed,
+        `Expected selected preview seed ${restartSeed}, got ${restartSelection.seed}`);
+      assert(restartedHealth.body.session?.runId && restartedHealth.body.session.runId !== secondRunId,
+        'Expected selected restart to create a fresh authority run');
+      assert(restartedHealth.body.session?.mapId === restartSelection.expected.entry.id,
+        `Expected authority map ${restartSelection.expected.entry.id}, got ${restartedHealth.body.session?.mapId || 'unknown'}`);
+      assert(restartedHealth.body.session?.seed === restartSeed,
+        `Expected authority seed ${restartSeed}, got ${restartedHealth.body.session?.seed}`);
+      assert(restartedClient.network.remoteMapId === restartSelection.expected.entry.id,
+        `Expected client map ${restartSelection.expected.entry.id}, got ${restartedClient.network.remoteMapId || 'unknown'}`);
+      assert(restartedClient.network.remoteRunId === restartedHealth.body.session.runId,
+        'Expected client and authority to agree on fresh run identity');
+      assert(restartedClient.network.remoteSeed === restartSeed,
+        `Expected client authority seed ${restartSeed}, got ${restartedClient.network.remoteSeed}`);
+      assert(restartedClient.scene?.mapId === restartSelection.expected.entry.id
+        && restartedClient.scene.seed === restartSeed,
+      `Expected client scene ${restartSelection.expected.entry.id}/${restartSeed}, got ${JSON.stringify(restartedClient.scene)}`);
+      assert(JSON.stringify(restartedClient.scene.launchSignature) === JSON.stringify(restartedHealth.body.session.cosmicSignature),
+        'Expected client launch signature to use the selected preview seed');
+      assert(JSON.stringify(restartedClient.scene.signature) === JSON.stringify(restartedHealth.body.session.cosmicSignature),
+        'Expected client scene and authority to agree on selected-seed signature');
       assert(errors.length === 0, `Unexpected browser errors: ${errors.join(' | ')}`);
     });
   } finally {

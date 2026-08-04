@@ -1241,6 +1241,12 @@ function init() {
         scaleLabel: entry.available === false ? null : surveyScaleForMap(entry.id)?.scale.label || null,
       })),
       getMapSelectSurveyForTest: () => currentMapSelectSurvey(),
+      getRunSceneForTest: () => ({
+        mapId: currentMap?.id || null,
+        seed: remoteSession.active ? remoteSession.launchSeed : previewSeed,
+        signature: currentSignature ? { ...currentSignature } : null,
+        launchSignature: remoteSession.launchSignature ? { ...remoteSession.launchSignature } : null,
+      }),
       startGame,
       setMap: (map) => { startGame(map); },
       setOverlayVisible: (visible) => {
@@ -2759,17 +2765,21 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   const targetMapEntry = runningSession
     ? (forceReset ? mapEntry : (getPlayableMapEntryById(runningSession.mapId) || mapEntry))
     : mapEntry;
+  const startsFreshSelection = !runningSession || forceReset;
 
   rendererFixtureActive = false;
   pauseResumeState = createPauseResumeState();
   beginRemoteSession(remoteSession, targetMapEntry.id);
   fixtureShipCandidates = [];
 
-  const briefingSeed = runningSession?.seed ?? previewSeed;
-  loadScene(targetMapEntry.map, { seed: briefingSeed });
-  currentSignature = runningSession?.cosmicSignature
+  const briefingSeed = startsFreshSelection ? previewSeed : (runningSession?.seed ?? previewSeed);
+  const briefingSignature = !startsFreshSelection && runningSession?.cosmicSignature
     ? { ...runningSession.cosmicSignature }
     : computeSeedPreview(targetMapEntry.map, briefingSeed).signature;
+  remoteSession.launchSeed = briefingSeed;
+  remoteSession.launchSignature = briefingSignature ? { ...briefingSignature } : null;
+  loadScene(targetMapEntry.map, { seed: briefingSeed });
+  currentSignature = briefingSignature;
   audioRouter?.reset(`remote:${targetMapEntry.id}:${briefingSeed}`);
   // Enter loading phase — transition to 'playing' when first snapshot arrives
   loadingMapName = targetMapEntry.name || targetMapEntry.id || '';

@@ -21,7 +21,7 @@ function resetPendingInputSequence(state) {
 
 export function createRemoteSessionState() {
   return {
-    active: false, mapId: null, snapshot: null,
+    active: false, mapId: null, launchSeed: null, launchSignature: null, snapshot: null,
     authoritativeField: null, players: [],
     lastEventSeq: 0,
     inputRequestInFlight: false, snapshotRequestInFlight: false,
@@ -39,7 +39,7 @@ export function createRemoteSessionState() {
 // instead of folding them into an options-driven reset that hides lifecycle.
 export function resetRemoteAfterLaunchFailure(state) {
   Object.assign(state, {
-    active: false, mapId: null, snapshot: null,
+    active: false, mapId: null, launchSeed: null, launchSignature: null, snapshot: null,
     authoritativeField: null, players: [], health: null,
     pendingExtractConfirm: false,
     pendingSlingshotEdges: [], nextSlingshotEdgeId: 1,
@@ -50,7 +50,7 @@ export function resetRemoteAfterLaunchFailure(state) {
 export function resetRemoteForLocalGame(state) {
   Object.assign(state, {
     pauseNeutralizationInFlight: false, active: false,
-    mapId: null, snapshot: null, authoritativeField: null,
+    mapId: null, launchSeed: null, launchSignature: null, snapshot: null, authoritativeField: null,
     lastEventSeq: 0,
     presentation: null,
   });
@@ -61,7 +61,7 @@ export function resetRemoteForLocalGame(state) {
 export function beginRemoteSession(state, mapId) {
   Object.assign(state, {
     active: true, pauseNeutralizationInFlight: false,
-    authoritativeField: null, mapId, snapshot: null, players: [],
+    authoritativeField: null, mapId, launchSeed: null, launchSignature: null, snapshot: null, players: [],
     lastEventSeq: 0,
     presentation: null,
   });
@@ -72,7 +72,7 @@ export function beginRemoteSession(state, mapId) {
 export function resetRemoteAfterLeave(state) {
   Object.assign(state, {
     active: false, pauseNeutralizationInFlight: false,
-    mapId: null, snapshot: null, players: [], health: null,
+    mapId: null, launchSeed: null, launchSignature: null, snapshot: null, players: [], health: null,
     lastEventSeq: 0,
     presentation: null,
   });
