@@ -981,6 +981,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "UIToastQueue",
+    file: "ui-toast-queue.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "WellVisualPersistence",
     file: "well-visual-persistence.cjs",
     lanes: ["fast", "core", "static", "three", "full"],
