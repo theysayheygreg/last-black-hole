@@ -83,6 +83,7 @@ function projectNoise(player) {
 function projectPlayer(player, facts) {
   const heatRatio = getHeatRatio(player);
   const overheatRemaining = Math.max(0, Number(player.overheatRemaining) || 0);
+  const slingshotTelegraph = player.slingshot ? facts.buildSlingshotTelegraph(player) : null;
   const slingshot = player.slingshot ? {
     phase: player.slingshot.phase || "idle",
     engaged: Boolean(player.slingshot.engaged),
@@ -100,6 +101,7 @@ function projectPlayer(player, facts) {
     orbitDir: player.slingshot.orbitDir || 0,
     bendDegrees: player.slingshot.bendDegrees || 0,
     arcRadians: player.slingshot.arcRadians || 0,
+    rehookCooldownSeconds: Math.max(0, Number(slingshotTelegraph?.rehookCooldownSeconds) || 0),
     aim: player.slingshot.aimAnchorKey ? {
       anchorId: player.slingshot.aimAnchorId,
       anchorType: player.slingshot.aimAnchorType,
@@ -112,7 +114,7 @@ function projectPlayer(player, facts) {
     } : null,
     // Keep this after the outer aim fields: telegraph projection refreshes
     // eligibility before the ruler facts below consume it.
-    telegraph: facts.buildSlingshotTelegraph(player),
+    telegraph: slingshotTelegraph,
   } : null;
 
   return {

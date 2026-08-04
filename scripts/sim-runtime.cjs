@@ -1498,6 +1498,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       aimAnchorWY: null,
       aimAnchorRange: 0,
       aimDistance: 0,
+      rehookReadyAt: 0,
+      boostReadyAt: 0,
       releaseGhostUntil: 0,
       releaseGhost: null,
       lastRelease: null,
@@ -3859,6 +3861,8 @@ function applyDebugPlayerState(player, body) {
     state.aimAnchorWY = null;
     state.aimAnchorRange = 0;
     state.aimDistance = 0;
+    state.rehookReadyAt = 0;
+    state.boostReadyAt = 0;
     state.releaseGhostUntil = 0;
     state.releaseGhost = null;
     state.lastRelease = null;
@@ -4737,8 +4741,7 @@ function estimateFlow(wx, wy) {
 }
 
 function ensurePlayerSlingshot(player) {
-  if (player.slingshot) return player.slingshot;
-  player.slingshot = {
+  if (!player.slingshot) player.slingshot = {
     phase: "idle",
     engaged: false,
     anchorId: null,
@@ -4768,11 +4771,22 @@ function ensurePlayerSlingshot(player) {
     aimAnchorWY: null,
     aimAnchorRange: 0,
     aimDistance: 0,
+    rehookReadyAt: 0,
+    boostReadyAt: 0,
     releaseGhostUntil: 0,
     releaseGhost: null,
     lastRelease: null,
     consumedEdgeIds: [],
   };
+  // Old saved/test state can predate the cooldown. Normalizing it here keeps
+  // every authority path on the same re-hook truth without a compatibility
+  // branch at each call site.
+  if (!Number.isFinite(Number(player.slingshot.rehookReadyAt))) {
+    player.slingshot.rehookReadyAt = 0;
+  }
+  if (!Number.isFinite(Number(player.slingshot.boostReadyAt))) {
+    player.slingshot.boostReadyAt = 0;
+  }
   return player.slingshot;
 }
 
@@ -4830,16 +4844,44 @@ function findSlingshotAnchorByState(state) {
   return collectSlingshotAnchors().find((anchor) => slingshotAnchorKey(anchor) === key) || null;
 }
 
-function slingshotAimEligibility(player, state, anchor = findSlingshotAnchorByState(state)) {
+function findSlingshotAimAnchorByState(state) {
+  const key = state?.aimAnchorKey;
+  if (!key) return null;
+  return collectSlingshotAnchors().find((anchor) => slingshotAnchorKey(anchor) === key) || null;
+}
+
+function remainingSlingshotRehookSeconds(state, currentTime = runtime.simTime) {
+  return Math.max(0, Number(state?.rehookReadyAt || 0) - currentTime);
+}
+
+function clearSlingshotAim(state) {
+  state.aimAnchorKey = null;
+  state.aimAnchorId = null;
+  state.aimAnchorType = null;
+  state.aimAnchorWX = null;
+  state.aimAnchorWY = null;
+  state.aimAnchorRange = 0;
+  state.aimDistance = 0;
+  state.aimSpeed = 0;
+  state.engageEligible = false;
+}
+
+function slingshotAimEligibility(player, state, anchor = findSlingshotAnchorByState(state), currentTime = runtime.simTime) {
   const speed = Math.hypot(player.vx, player.vy);
+  const rehookCooldownSeconds = remainingSlingshotRehookSeconds(state, currentTime);
   return {
     speed,
-    engageEligible: Boolean(anchor && speed >= SLINGSHOT_SERVER.minimumEntrySpeed),
+    rehookCooldownSeconds,
+    engageEligible: Boolean(
+      anchor
+      && rehookCooldownSeconds <= 0
+      && speed >= SLINGSHOT_SERVER.minimumEntrySpeed,
+    ),
   };
 }
 
-function setSlingshotAimEligibility(player, state, anchor) {
-  const eligibility = slingshotAimEligibility(player, state, anchor);
+function setSlingshotAimEligibility(player, state, anchor, currentTime = runtime.simTime) {
+  const eligibility = slingshotAimEligibility(player, state, anchor, currentTime);
   state.aimSpeed = eligibility.speed;
   state.engageEligible = eligibility.engageEligible;
   return eligibility;
@@ -4871,6 +4913,14 @@ function findNearestSlingshotAffordance(player, dt = 0) {
 function updateSlingshotAim(player, currentTime, dt = 0) {
   const state = ensurePlayerSlingshot(player);
   if (state.engaged) return null;
+  if (remainingSlingshotRehookSeconds(state, currentTime) > 0) {
+    clearSlingshotAim(state);
+    // The release ghost is a retrospective trace, never a new aim/lock cue.
+    // Once it fades, the player gets one plain cooldown state until re-hook is
+    // allowed again.
+    if (currentTime >= state.releaseGhostUntil) state.phase = "cooldown";
+    return null;
+  }
   const current = findNearestSlingshotAffordance(player, dt);
   if (current) {
     const key = slingshotAnchorKey(current.anchor);
@@ -4883,20 +4933,12 @@ function updateSlingshotAim(player, currentTime, dt = 0) {
     state.aimAnchorRange = current.anchor.range;
     state.aimDistance = current.distance;
     state.lastAimSeenTime = currentTime;
-    setSlingshotAimEligibility(player, state, current.anchor);
+    setSlingshotAimEligibility(player, state, current.anchor, currentTime);
     return current;
   }
 
   state.phase = "idle";
-  state.aimAnchorKey = null;
-  state.aimAnchorId = null;
-  state.aimAnchorType = null;
-  state.aimAnchorWX = null;
-  state.aimAnchorWY = null;
-  state.aimAnchorRange = 0;
-  state.aimDistance = 0;
-  state.aimSpeed = 0;
-  state.engageEligible = false;
+  clearSlingshotAim(state);
   return null;
 }
 
@@ -4919,9 +4961,10 @@ function slingshotAnchorTelemetry(state, prefix = "anchor") {
 
 function buildSlingshotTelegraph(player) {
   const state = ensurePlayerSlingshot(player);
-  const aimAnchor = slingshotAnchorTelemetry(state, "aim");
+  const rehookCooldownSeconds = remainingSlingshotRehookSeconds(state);
+  const aimAnchor = rehookCooldownSeconds <= 0 ? slingshotAnchorTelemetry(state, "aim") : null;
   const aimEligibility = aimAnchor
-    ? setSlingshotAimEligibility(player, state, findSlingshotAnchorByState(state))
+    ? setSlingshotAimEligibility(player, state, findSlingshotAimAnchorByState(state))
     : { speed: 0, engageEligible: false };
   const activeAnchor = slingshotAnchorTelemetry(state, "");
   const releaseGhost = state.releaseGhost ? {
@@ -4930,6 +4973,7 @@ function buildSlingshotTelegraph(player) {
   } : null;
   return {
     phase: state.phase || "idle",
+    rehookCooldownSeconds,
     aimCue: aimAnchor ? {
       anchor: aimAnchor,
       distance: state.aimDistance || 0,
@@ -5003,6 +5047,7 @@ function buildPlayerRulerFacts(player) {
 function engagePlayerSlingshot(player, currentTime, dt = 0) {
   const state = ensurePlayerSlingshot(player);
   if (state.engaged) return false;
+  if (remainingSlingshotRehookSeconds(state, currentTime) > 0) return false;
   const affordance = findSlingshotAffordance(player, currentTime, dt);
   const anchor = affordance?.anchor;
   if (!anchor) return false;
@@ -5027,8 +5072,15 @@ function engagePlayerSlingshot(player, currentTime, dt = 0) {
   state.swingRadius = anchor.swingRadius;
   state.hookRadius = anchor.hookRadius;
   state.entrySpeed = speed;
-  state.boost = anchor.boost;
-  state.arcSpeed = speed + anchor.boost;
+  const boostCooling = currentTime < state.boostReadyAt;
+  // The player can still take a new arc after the short re-hook pause, but
+  // every landmark shares one payout lock. That makes rapid tap loops a
+  // movement choice rather than a hidden speed-bank exploit.
+  state.boost = boostCooling ? 0 : anchor.boost;
+  state.arcSpeed = speed + state.boost;
+  if (!boostCooling) {
+    state.boostReadyAt = currentTime + SLINGSHOT_SERVER.boostCooldownSeconds;
+  }
   state.orbitDir = orbitDir;
   state.phase = "arc";
   state.bendDegrees = Math.abs(signedAngle({ x: player.vx, y: player.vy }, tangent)) * 180 / Math.PI;
@@ -5115,7 +5167,9 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   state.hookRadius = 0;
   state.orbitDir = 0;
   state.arcRadians = 0;
+  clearSlingshotAim(state);
   state.phase = "release-ghost";
+  state.rehookReadyAt = currentTime + SLINGSHOT_SERVER.rehookCooldownSeconds;
   state.releaseGhostUntil = currentTime + SLINGSHOT_SERVER.releaseGhostSeconds;
   state.releaseGhost = {
     anchor: releaseAnchor,
@@ -5213,7 +5267,7 @@ function integratePlayerGrappleArc(player, dt, input) {
 function tickPlayerSlingshot(player, dt, input) {
   const state = ensurePlayerSlingshot(player);
   if (!state.engaged && state.phase === "release-ghost" && runtime.simTime >= state.releaseGhostUntil) {
-    state.phase = "idle";
+    state.phase = remainingSlingshotRehookSeconds(state) > 0 ? "cooldown" : "idle";
     state.releaseGhost = null;
   }
   if (!state.engaged) updateSlingshotAim(player, runtime.simTime, dt);

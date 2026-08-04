@@ -98,7 +98,6 @@ async function run() {
         resetSlingshot: true,
         status: 'alive',
       });
-
       await post('/input', {
         ...authority,
         commandSeq: 1,
@@ -203,8 +202,9 @@ async function run() {
         !player.slingshot?.engaged && player.slingshot?.phase === 'release-ghost');
       const ghost = released.player.slingshot.telegraph.releaseGhost;
       assert(ghost, 'release ghost must survive as presentation');
-      assert(Math.abs(Math.hypot(ghost.exit.x, ghost.exit.y) - afterContact.player.slingshot.arcSpeed) < 1e-6,
-        'release must use the same flat boosted speed regardless of hold time');
+      const longHoldExitSpeed = Math.hypot(ghost.exit.x, ghost.exit.y);
+      assert(Math.abs(longHoldExitSpeed - afterContact.player.slingshot.arcSpeed) < 1e-6,
+        'release must carry the held arc speed without duration payout');
       assert(!('chainCount' in released.player.slingshot) && !('energy' in released.player.slingshot),
         'retired v2 chain and energy fields must be absent');
       assert(Math.abs(ghost.anchor.wx - afterContact.player.slingshot.anchorWX) < 1e-9
@@ -214,6 +214,10 @@ async function run() {
       assert(ghost.direction.x * outward.x + ghost.direction.y * outward.y >= -1e-6,
         'inward release request must not create an inward exit');
 
+      // A fresh controlled setup makes this an actual authority comparison:
+      // release immediately after capture, then compare it to the held arc
+      // above. The debug reset is fixture setup only; the cooldown is tested
+      // below without resetting its state.
       await post('/debug/player-state', {
         clientId: 'grapple-arc-v3-test',
         wx: wrap(anchor.wx + startRadius, scale),
@@ -235,11 +239,108 @@ async function run() {
         slingshotEdges: [4],
         timestamp: Date.now(),
       }, headers(authority));
-      const brakeEngaged = await waitForPlayer('grapple-arc-v3-test', (player) => player.slingshot?.engaged);
+      const shortEngaged = await waitForPlayer('grapple-arc-v3-test', (player) => player.slingshot?.engaged);
       await post('/input', {
         ...authority,
         commandSeq: 5,
         seq: 5,
+        moveX: 0,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: false,
+        slingshotEdges: [],
+        timestamp: Date.now(),
+      }, headers(authority));
+      const shortRelease = await waitForPlayer('grapple-arc-v3-test', (player) =>
+        !player.slingshot?.engaged && player.slingshot?.phase === 'release-ghost');
+      const shortGhost = shortRelease.player.slingshot.telegraph.releaseGhost;
+      const shortHoldExitSpeed = Math.hypot(shortGhost.exit.x, shortGhost.exit.y);
+      assert(Math.abs(shortHoldExitSpeed - longHoldExitSpeed) < 1e-6,
+        'short and long held arcs must release at the same flat boosted speed');
+      assert(shortRelease.player.slingshot.rehookCooldownSeconds > 1
+        && shortRelease.player.slingshot.rehookCooldownSeconds <= 1.25,
+      'release must start the configured global re-hook cooldown');
+      assert.strictEqual(shortRelease.player.slingshot.aim, null,
+        'cooldown must suppress a stale aim target');
+      assert.strictEqual(shortRelease.player.slingshot.telegraph.aimCue, null,
+        'cooldown must suppress a false aim telegraph');
+
+      // Keep sending the old alternating tap pattern through ten seconds of
+      // natural post-release motion. The player is never re-positioned here:
+      // a real exit must not bank another capture while spam keeps arriving.
+      const spamWatermark = Math.max(0, ...((await request('/events')).body.events || []).map((event) => event.seq || 0));
+      let commandSeq = 6;
+      let edgeId = 6;
+      let maxSpamSpeed = shortHoldExitSpeed;
+      const spamStartedAt = Date.now();
+      while (Date.now() - spamStartedAt < 10000) {
+        await post('/input', {
+          ...authority,
+          commandSeq,
+          seq: commandSeq,
+          moveX: 0,
+          moveY: 0,
+          thrust: 0,
+          brake: 0,
+          slingshot: true,
+          slingshotEdges: [edgeId],
+          timestamp: Date.now(),
+        }, headers(authority));
+        commandSeq += 1;
+        edgeId += 1;
+        await post('/input', {
+          ...authority,
+          commandSeq,
+          seq: commandSeq,
+          moveX: 0,
+          moveY: 0,
+          thrust: 0,
+          brake: 0,
+          slingshot: false,
+          slingshotEdges: [],
+          timestamp: Date.now(),
+        }, headers(authority));
+        commandSeq += 1;
+        const spamState = await waitForPlayer('grapple-arc-v3-test', () => true, 250);
+        maxSpamSpeed = Math.max(maxSpamSpeed, Math.hypot(spamState.player.vx, spamState.player.vy));
+        await sleep(70);
+      }
+      const spamEvents = (await request(`/events?since=${spamWatermark}`)).body.events || [];
+      const repeatedEngages = spamEvents.filter((event) => event.type === 'player.slingshotEngaged'
+        && event.payload?.clientId === 'grapple-arc-v3-test');
+      assert(repeatedEngages.every((event) => event.payload?.boost === 0),
+      `ten-second tap spam may re-hook only without a second payout: ${JSON.stringify(repeatedEngages.map((event) => event.payload))}`);
+      assert(maxSpamSpeed <= shortHoldExitSpeed + 0.35,
+        'tap spam must stay within the first capture speed plus ordinary motion tolerance');
+
+      await post('/debug/player-state', {
+        clientId: 'grapple-arc-v3-test',
+        wx: wrap(anchor.wx + startRadius, scale),
+        wy: anchor.wy,
+        vx: -1.2,
+        vy: 0,
+        resetSlingshot: true,
+        status: 'alive',
+      });
+      await post('/input', {
+        ...authority,
+        commandSeq,
+        seq: commandSeq,
+        moveX: -1,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: true,
+        slingshotEdges: [edgeId],
+        timestamp: Date.now(),
+      }, headers(authority));
+      commandSeq += 1;
+      const brakeEngaged = await waitForPlayer('grapple-arc-v3-test', (player) => player.slingshot?.engaged);
+      await post('/input', {
+        ...authority,
+        commandSeq,
+        seq: commandSeq,
         moveX: 0,
         moveY: 0,
         thrust: 0,
@@ -253,6 +354,8 @@ async function run() {
       const brakeGhost = brakeAbort.player.slingshot.telegraph.releaseGhost;
       assert(Math.abs(Math.hypot(brakeGhost.exit.x, brakeGhost.exit.y) - brakeEngaged.player.slingshot.entrySpeed) < 1e-6,
         'brake abort must discard the flat grapple bonus');
+      assert(brakeAbort.player.slingshot.rehookCooldownSeconds > 1,
+        'brake abort must use the same global re-hook cooldown as button-up');
     } finally {
       await stopSimServer(SIM_PORT).catch(() => null);
     }

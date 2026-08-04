@@ -4509,7 +4509,10 @@ function gameLoop(now) {
         }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
           const authoritySlingshot = remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)?.slingshot;
-          if (!authoritySlingshot?.engaged && !authoritySlingshot?.aim) {
+          const rehookCooldownSeconds = Math.max(0, Number(authoritySlingshot?.rehookCooldownSeconds) || 0);
+          if (!authoritySlingshot?.engaged && rehookCooldownSeconds > 0) {
+            showWarning(`grapple cooling // re-hook in ${rehookCooldownSeconds.toFixed(1)}s`, 'rgba(120, 190, 255, 0.92)', 1200);
+          } else if (!authoritySlingshot?.engaged && !authoritySlingshot?.aim) {
             showWarning('no anchor in range // move toward a ring', 'rgba(120, 190, 255, 0.92)', 1600);
           } else if (!authoritySlingshot?.engaged && authoritySlingshot?.aim?.engageEligible === false) {
             showWarning('anchor in range // start moving to grapple', 'rgba(120, 190, 255, 0.92)', 1600);

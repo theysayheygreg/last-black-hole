@@ -17,6 +17,12 @@ function near(actual, expected, epsilon = 1e-9) {
 function run() {
   assert.strictEqual(GRAPPLE_ARC.reelSeconds, 0.15);
   assert.strictEqual(GRAPPLE_ARC.releaseAssistDegrees, 10);
+  assert(GRAPPLE_ARC.rehookCooldownSeconds >= 1 && GRAPPLE_ARC.rehookCooldownSeconds <= 1.5,
+    're-hook cooldown must remain in the readable 1.0–1.5 second tuning band');
+  assert.strictEqual(GRAPPLE_ARC.rehookCooldownTuningStepSeconds, 0.25,
+    're-hook tuning must stay in explicit quarter-second steps');
+  assert.strictEqual(GRAPPLE_ARC.boostCooldownSeconds, 10,
+    'the global boost cooldown must cover the ten-second tap-spam window');
 
   const ordinaryWell = grappleGeometry({ type: 'well', killRadius: 0.04, mass: 1 });
   const grownWell = grappleGeometry({ type: 'well', killRadius: 0.09, mass: 3 });
@@ -72,15 +78,13 @@ function run() {
     'inward input must not rewrite the tangent',
   );
 
-  const sameAnchor = grappleGeometry({ type: 'star', starType: 'redGiant', mass: 2 });
-  const shortHoldExit = 2 + sameAnchor.boost;
-  const longHoldExit = 2 + sameAnchor.boost;
-  near(shortHoldExit, longHoldExit);
+  // Hold-duration invariance is a real authority lifecycle assertion in
+  // slingshot-v2.cjs. This pure contract owns only the authored no-bank shape.
   assert(!('chainWindow' in GRAPPLE_ARC), 'canonical contract must have no chain window');
   assert(!('payoffCurve' in GRAPPLE_ARC), 'canonical contract must have no arc-duration payoff curve');
   assert(!('energyAccrualRate' in GRAPPLE_ARC), 'canonical contract must have no energy bank');
 
-  console.log('GrappleArcContract: 15/15 passed');
+  console.log('GrappleArcContract: 18/18 passed');
 }
 
 try {

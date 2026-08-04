@@ -365,6 +365,17 @@ export function getSlingshotInteractionState(slingshot) {
       verb: 'release',
     };
   }
+  const rehookCooldownSeconds = Math.max(0, Number(
+    slingshot.rehookCooldownSeconds ?? slingshot.telegraph?.rehookCooldownSeconds,
+  ) || 0);
+  if (rehookCooldownSeconds > 0) {
+    const shownSeconds = Math.ceil(rehookCooldownSeconds * 10) / 10;
+    return {
+      actionable: false,
+      label: 'grapple cooling',
+      detail: `re-hook in ${shownSeconds.toFixed(1)}s`,
+    };
+  }
   const anchor = slingshot.aim || slingshot.affordance;
   if (!anchor) return null;
   const anchorType = anchor.type || anchor.anchorType || 'anchor';

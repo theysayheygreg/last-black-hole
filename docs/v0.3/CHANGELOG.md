@@ -9,6 +9,16 @@
   entire `src/` tree instead of a hand-maintained file list. Runner concurrency
   and product behavior are unchanged.
 
+- **Grapple re-hook and boost banking guard:** releasing a grapple by
+  button-up, brake, or anchor loss now starts one global, authority-owned
+  `1.25s` re-hook cooldown (`0.25s` tuning step). Aim/lock projection and its
+  controller/keyboard affordance stay suppressed until that timer clears, so
+  a tap cannot pretend a fresh capture is available. Authority proof now
+  compares actual short and held exits, rejects repeated same-anchor taps
+  during cooldown, and confirms a later distinct landmark still grants its
+  ordinary flat boost on the already-higher entry velocity. This preserves
+  deliberate grapple chaining without a speed clamp or global payout lock.
+
 - **Fabric spatial-material correction:** gameplay now has one analytic well
   owner. The display shader measures well bodies and plumes through the
   globally anchored world torus; it no longer wraps a second time inside the

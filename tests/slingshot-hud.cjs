@@ -29,7 +29,18 @@ async function run() {
   assert.strictEqual(eligible.action, 'slingshot');
   assert(eligiblePrompt.caption.includes('Y'), 'Eligible aim must expose the Deck Y engage glyph');
 
-  console.log('SlingshotHud: 2/2 passed');
+  const cooling = hud.getSlingshotInteractionState({
+    aim: { type: 'well', speed: 0.4, engageEligible: true },
+    engaged: false,
+    rehookCooldownSeconds: 1.25,
+  });
+  const coolingPrompt = hud.getInteractionPresentationState(cooling, { deck: true });
+  assert.strictEqual(cooling.actionable, false);
+  assert.strictEqual(cooling.label, 'grapple cooling');
+  assert.strictEqual(cooling.detail, 're-hook in 1.3s');
+  assert.strictEqual(coolingPrompt.action, null, 'Cooldown must suppress the grapple glyph');
+
+  console.log('SlingshotHud: 3/3 passed');
 }
 
 run().catch((error) => {
