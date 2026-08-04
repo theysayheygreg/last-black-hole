@@ -134,9 +134,15 @@ from stale assumptions crossing system boundaries. Any task that touches
 movement, spawning, hazards, death, map scale, flow sampling, sim snapshots,
 camera, or renderer projection gets one extra checklist before Greg playtests:
 
-1. **Coordinate source of truth** — conversions go through `src/coords.js`.
-   Feature code must not inline `1.0 - y`, hand-roll toroidal wrapping, or
-   invent new screen/world/UV scale math.
+1. **Coordinate source of truth — hard gate.** Feature code must not author
+   one-off coordinate, position, projection, wrapping, distance, direction,
+   radius, collision/contact, interpolation, camera-relative, or spatial-query
+   math. Browser conversions go through `src/coords.js`; authoritative
+   toroidal geometry goes through `scripts/sim/world-geometry.cjs`; other
+   spatial contracts use their existing named shared owner. If a handler is
+   missing, extend the canonical owner first and make every call site consume
+   it. Separate ESM/CJS adapters must derive from one declared contract and
+   carry parity proof. Duplicated or "temporary" local math blocks review.
 2. **Authority parity** — gameplay truth lives in the sim. If a feature exists
    client-side for presentation or sandbox prediction, the server-side sim path
    must still own the authoritative version before it is considered shipped.
@@ -150,6 +156,10 @@ camera, or renderer projection gets one extra checklist before Greg playtests:
 5. **Representative proof** — run the smallest affected check now. Queue
    authority, playtest, visual, and fresh-process lenses for the next checkpoint
    when the exposure area requires them.
+
+This rule is about ownership, not file names. Moving the same formula into a
+nearby helper used by one call site does not centralize it. The owner must be
+the single reusable boundary for that kind of spatial truth.
 
 If the player dies to an invisible well, spawns off-route, gets pulled by a
 thing they cannot see, or bounces between positions, treat that as a contract

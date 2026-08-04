@@ -173,8 +173,13 @@ Movement bugs are often math bugs, not tuning bugs. When a change touches
 movement, spawning, hazards, map scale, camera, renderer projection, flow
 sampling, or sim snapshots, review these contracts before blaming constants:
 
-- `src/coords.js` is the only place for coordinate conversions. No inline
-  `1.0 - y`, ad hoc world wrapping, or pixel/world scale math in feature code.
+- `src/coords.js` is the browser coordinate owner and
+  `scripts/sim/world-geometry.cjs` is the authoritative toroidal geometry
+  owner. No feature call site may add one-off conversion, position,
+  projection, wrapping, distance, direction, radius, collision/contact,
+  interpolation, camera-relative, or spatial-query math. Extend the canonical
+  owner first; ESM/CJS adapters require parity proof. A single-use local helper
+  is still duplicated math and is a blocking contract failure.
 - Server sim truth is world-space, Y-down, toroidal, and authoritative. Client
   code may present, predict, or debug that truth, but cannot become the only
   implementation of gameplay physics.

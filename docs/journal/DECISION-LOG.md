@@ -1,5 +1,30 @@
 # Decision Log
 
+## 2026-08-04 — Spatial math has one canonical owner
+
+**Decision:** LBH feature code may not invent coordinate, position,
+projection, wrapping, distance, direction, radius, collision/contact,
+interpolation, camera-relative, or spatial-query math at a call site. Existing
+canonical handlers own those contracts. When a handler is missing, extend the
+canonical owner first and route every consumer through it. Browser and
+authority adapters may differ by module format, but must derive from one
+declared contract and carry parity proof. A one-use helper beside the feature
+is not centralization.
+
+**Why:** Repeated local formulas caused visible well/fabric displacement,
+toroidal grapple and death-spiral errors, and interaction volumes that did not
+match player perception. These failures are difficult to tune because every
+copy can be individually plausible while the game disagrees with itself.
+
+**Where it landed:** `AGENTS.md`, `docs/project/JAM-CONTRACT.md`,
+`docs/design/TEST-HARNESS.md`, and this decision log. Current browser
+coordinate ownership begins in `src/coords.js`; authoritative toroidal
+geometry begins in `scripts/sim/world-geometry.cjs`.
+
+**Door status:** Closed for inline or feature-local spatial math. Open for
+small extensions to canonical owners and explicit shared contracts when the
+game genuinely needs new math.
+
 ## 2026-07-14 — Main is the cross-version governance line
 
 **Decision:** Primary Sol owns the root README, project roadmap, durable
