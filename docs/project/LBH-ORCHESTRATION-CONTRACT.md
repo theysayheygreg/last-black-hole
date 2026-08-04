@@ -32,8 +32,17 @@ orchestrator translates those calls into bounded branch work and is the only
 Codex task that coordinates across LBH workstreams.
 
 The primary orchestrator is task
-`019f6315-910b-7e03-99c3-a50a3ed8efa6`. It remains the control plane until Greg
-replaces it or explicitly hands orchestration to another task.
+`019f6315-910b-7e03-99c3-a50a3ed8efa6`. It is Greg's clean intake, routing,
+and synthesized-status control surface until Greg replaces it or explicitly
+hands orchestration to another task. Primary may inspect read-only state and
+committed receipts, but it does not execute project work itself.
+
+Every implementation, code review, test or CI run, integration, build,
+deployment, repository edit, Discord action, or specialist invocation runs in
+an explicitly owned Codex task. Version Workstream Sols own their integration
+branches, descendant feature and CI Lunas, pinned review intake, and same-line
+integration receipts. Primary routes goals to those owners and reports their
+artifacts; it does not bypass them by spawning feature workers directly.
 
 For orchestration conflicts, precedence is:
 
@@ -145,9 +154,9 @@ progress belongs in commits and task receipts, not status churn here.
 
 | Role | Codex task | Owned line | Current assignment |
 |---|---|---|---|
-| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | `main` governance, cross-workstream routing, merge readiness, and RC selection | Route the v0.3.1 design-review sequence; hold the completed v0.4 P5 milestone before broad P6 evidence |
+| Primary Sol | `019f6315-910b-7e03-99c3-a50a3ed8efa6` | Greg intake, cross-workstream routing, read-only status synthesis, merge readiness, and RC selection | Route all executable work to owned tasks; keep v0.4 held while the v0.3 feature-set repair program proceeds |
 | v0.4 Workstream Sol | `019f4fd7-87b8-7be0-ab08-bc20811b701f` | v0.4 integration owner | Hold accepted P5E commit `40b5f26` on `codex/v0.4-p5e-controls`; no integration or P6 until Primary routes it |
-| v0.3 Workstream Sol | `019defe1-385a-7913-bbca-8cb09bdfd1b0` | `codex/v0.3-w1f2-inhibitor-clock` in `/private/tmp/lbh-v03-w1f2-inhibitor-clock` | Build the bounded W1-F2 Inhibitor Conductor clock from accepted W1-F1 commit `80ebbef` |
+| v0.3 Workstream Sol | delegated task id not exposed | `codex/v0.3-ballpark-roadmap` in `/private/tmp/lbh-v03-ballpark-integration` | Own Luna review, focused CI, and same-line integration for the ordered v0.3 feature-set repair program; Item 7 remains last |
 | Orrery Review Intake | `019f6363-2751-7d93-9db0-a6d29e769883` (Primary-owned child) | Read-only repo/Discord review ingress | `#last-black-hole` handshake confirmed by Orrery message `1526766996308496485`; heartbeat stays paused until a bundled E2/E3 milestone is sent |
 | Maestro Specialist Intake | Primary Sol routes; Maestro executes | Pinned player-facing slices across version lines | Production and quality-review lanes are available from `#orb-assistant` message `1526773577079328930`; invoke only when a coherent slice warrants multi-craft judgment |
 
@@ -168,14 +177,17 @@ Primary Sol:
 
 - converts Greg's direction into bounded `/goal` packets;
 - owns branch and workstream boundaries;
-- inspects task receipts and committed artifacts;
-- schedules CI and review at checkpoints;
+- inspects read-only task state, receipts, and committed artifacts;
+- routes CI and review checkpoints to the owning Workstream Sol;
 - routes cross-version findings to one owner;
 - reports one synthesized project view to Greg.
 
-Primary Sol does not implement branch features, run suites, poll successful
-processes, interpret successful logs line by line, or repair unrelated CI
-failures inside this task.
+Primary Sol does not implement branch features, review code, run tests or CI,
+integrate commits, build or deploy, edit the repository, perform Discord
+actions, invoke specialists, poll successful processes, interpret successful
+logs line by line, or repair unrelated CI failures inside this task. Each such
+action is routed to an owned Workstream Sol, Luna, review/CI task, or specialist
+intake task. Primary never spawns feature workers directly.
 
 ### Primary Control Loop
 
@@ -220,6 +232,9 @@ human decision, and do not ping repeatedly for the same question.
 A workstream Sol owns one version line. It may decompose a routed goal into
 non-overlapping Luna scopes, integrate their committed work, select the smallest
 direct proof, commit a coherent feature slice, and return a checkpoint receipt.
+It owns that line's feature and CI Lunas, pinned code review, specialist routing,
+and same-version integration; Primary receives the resulting receipts rather
+than performing those actions.
 Focused checks belong to the feature Luna or a narrow CI Luna whenever
 practical; the workstream Sol is not the default test runner.
 
