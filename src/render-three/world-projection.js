@@ -10,6 +10,20 @@ export function wrappedAxisDelta(next, previous, worldScale) {
   }
   return delta;
 }
+
+/**
+ * Shortest world-space vector from one presentation point to another.
+ *
+ * Three receives a map scale with each frame, so this intentionally lives
+ * beside the projection rather than using the mutable client-global scale in
+ * coords.js. Decorative relations use it before adding local offsets.
+ */
+export function wrappedWorldVector(from = {}, to = {}, worldScale) {
+  return {
+    x: wrappedAxisDelta(Number(to?.x), Number(from?.x), worldScale),
+    y: wrappedAxisDelta(Number(to?.y), Number(from?.y), worldScale),
+  };
+}
 export function normalizedWorldPhase(value, worldScale) {
   if (!Number.isFinite(value) || !Number.isFinite(worldScale) || worldScale <= 0) return 0;
   const unit = ((value / worldScale) % 1 + 1) % 1;

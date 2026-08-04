@@ -1,5 +1,6 @@
 import { VisualFamilyLifecycle } from './visual-family.js';
 import { selectPlayerAsset } from '../entity-assets.js';
+import { wrappedWorldVector } from '../world-projection.js';
 
 function heading(entity) {
   const facing = entity?.movement?.facing;
@@ -8,9 +9,10 @@ function heading(entity) {
   return Math.atan2(-(velocity.y || 0), velocity.x || 0);
 }
 
-function unitVector(from, to) {
-  const x = (to?.x || 0) - (from?.x || 0);
-  const y = (to?.y || 0) - (from?.y || 0);
+function unitVector(from, to, worldScale) {
+  if (!Number.isFinite(from?.x) || !Number.isFinite(from?.y)
+      || !Number.isFinite(to?.x) || !Number.isFinite(to?.y)) return { x: 1, y: 0 };
+  const { x, y } = wrappedWorldVector(from, to, worldScale);
   const length = Math.hypot(x, y) || 1;
   return { x: x / length, y: y / length };
 }
@@ -109,7 +111,9 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
       // A clipped orbital chord and anchor ticks replace the diagnostic range
       // ellipse. The route remains authored even when labels are hidden.
       const radius = Math.max(0.045, slingAnchor.range || aimAnchor?.range || 0.1);
-      const towardPlayer = player ? unitVector(slingAnchor.world, player.world) : { x: 1, y: 0 };
+      const towardPlayer = player
+        ? unitVector(slingAnchor.world, player.world, frame.camera?.worldScale)
+        : { x: 1, y: 0 };
       const tangent = { x: -towardPlayer.y, y: towardPlayer.x };
       const near = { x: slingAnchor.world.x + tangent.x * radius * 0.76, y: slingAnchor.world.y + tangent.y * radius * 0.76 };
       const far = { x: slingAnchor.world.x - tangent.x * radius * 0.76, y: slingAnchor.world.y - tangent.y * radius * 0.76 };

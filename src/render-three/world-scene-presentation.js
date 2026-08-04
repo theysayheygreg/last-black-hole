@@ -11,7 +11,7 @@ import { WreckVisualFamily } from './entities/wreck-visual-family.js';
 import { WorldSpriteVisualFamily } from './entities/world-sprite-visual-family.js';
 import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
-import { createWorldProjection, normalizedWorldPhase, wrappedAxisDelta } from './world-projection.js';
+import { createWorldProjection, normalizedWorldPhase, wrappedAxisDelta, wrappedWorldVector } from './world-projection.js';
 import { resolveEntityPresentationScale, SPRITE_CARD_SCALE } from './entity-presentation-scale.js';
 
 function clamp(n, min, max) {
@@ -46,6 +46,24 @@ function renderQualityOpacityScale(renderQuality) {
   if (renderQuality === 'minimal') return 0;
   if (renderQuality === 'default') return 0.7;
   return 1;
+}
+
+/**
+ * Return the nearest visible endpoint for the Vessel's public target tell.
+ * Presentation-frame normalizes world points to { x, y }; never fabricate a
+ * tell when either endpoint is incomplete.
+ */
+export function resolveVesselTargetTell(inhibitor, worldScale) {
+  if (inhibitor?.kind !== 'vessel') return null;
+  const source = inhibitor.world;
+  const target = inhibitor.target;
+  if (!Number.isFinite(source?.x) || !Number.isFinite(source?.y)
+      || !Number.isFinite(target?.x) || !Number.isFinite(target?.y)) return null;
+  const delta = wrappedWorldVector(source, target, worldScale);
+  return {
+    x: source.x + delta.x,
+    y: source.y + delta.y,
+  };
 }
 
 export class WorldScenePresentation {
@@ -657,13 +675,13 @@ export class WorldScenePresentation {
     // named target tell remains a line; generic magenta rings are retired.
     for (const inhibitor of sceneState.inhibitors || []) {
       const radius = Math.max(0.012, inhibitor.radius || 0.1);
-      if (inhibitor.kind === 'vessel' && inhibitor.target && Number.isFinite(inhibitor.target.wx)
-          && Number.isFinite(inhibitor.target.wy)) {
+      const vesselTargetTell = resolveVesselTargetTell(inhibitor, renderState.worldScale);
+      if (vesselTargetTell) {
         draw.line(
           inhibitor.world.x,
           inhibitor.world.y,
-          inhibitor.target.wx,
-          inhibitor.target.wy,
+          vesselTargetTell.x,
+          vesselTargetTell.y,
           this.entityMaterials.inhibitorRing,
         );
       }
