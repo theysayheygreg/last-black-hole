@@ -54,7 +54,7 @@ import { CombatSystem } from './combat.js';
 import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
 import { AudioRouter } from './audio/audio-router.js';
-import { buildRunBriefing } from './signatures.js';
+import { buildRunBriefing } from './run-briefing.js';
 import { InventorySystem } from './inventory.js';
 import { ProfileManager, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';

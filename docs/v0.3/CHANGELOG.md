@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+- **Cosmic signature authority:** each seeded run now freezes its authored
+  modifiers once in authority state. Current coupling, coast drag, well pull,
+  scheduled well growth, portal-window lifespan, Noise radius/decay, and the
+  snapshot-projected sensor scale consume that one value at their existing
+  seams. Briefing claims now name those actual effects, legacy Signal aliases
+  are gone from signature data, and the unused template/config signature path
+  has been replaced by a deterministic briefing-only predictor.
+
 - **Phase-banded exfil routes:** optional exits now scale with each map's
   actual run duration from the existing 600-second Expanse reference
   (`90/75/60/45/30s` becomes `15/12.5/10/7.5/5%`). Their opening fronts stay

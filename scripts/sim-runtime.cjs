@@ -78,6 +78,7 @@ const {
   syncPlayerNoiseModifiers,
   createAbilityState,
 } = require("./player-brain.cjs");
+const { resolveSignatureMods } = require("./sim/signature-mods.cjs");
 const { createControlPlaneClient } = require("./control-plane-client.cjs");
 const {
   createOverloadController,
@@ -350,6 +351,10 @@ function applyRunSeed(rngStreams, mapState, session) {
 
   session.lootQualityBias = rngStreams.range('qualityBias', 0.8, 1.2);
   session.cosmicSignature = SEEDED_GEN.pickCosmicSignature(rngStreams.rawStream('signature'));
+  session.signatureMods = resolveSignatureMods(session.cosmicSignature);
+  // The renderer receives the authoritative scale through the normal session
+  // snapshot; it may present sensor reach but cannot decide the modifier.
+  session.sensorRangeMultiplier = session.signatureMods.sensorRangeMult;
   session.aiSeed = Math.floor(rngStreams.float('aiSeed') * 1e9);
   session.hasNamedWreck = rngStreams.chance('namedWreck', 0.10);
   if (session.hasNamedWreck) {
@@ -516,9 +521,15 @@ function portalWindowMetadata(
   runDurationSeconds,
   phaseBand = null,
   durationSeconds = null,
+  portalLifespanMultiplier = 1,
+  minimumWindowDurationSeconds = 0,
 ) {
   const lateRule = latePortalRuleForPhase(phase);
-  const baseDurationSeconds = optionalPortalBaseDurationSeconds(declaration, runDurationSeconds);
+  const baseDurationSeconds = optionalPortalBaseDurationSeconds(declaration, runDurationSeconds)
+    * portalLifespanMultiplier;
+  const resolvedDurationSeconds = durationSeconds == null
+    ? Math.max(minimumWindowDurationSeconds, baseDurationSeconds * lateRule.durationMultiplier)
+    : durationSeconds;
   return {
     system: "portals",
     kind: "optional",
@@ -536,10 +547,9 @@ function portalWindowMetadata(
     types: declaration.types.slice(),
     durationProgress: declaration.durationProgress,
     baseDurationSeconds,
+    signatureDurationMultiplier: portalLifespanMultiplier,
     durationMultiplier: lateRule.durationMultiplier,
-    durationSeconds: durationSeconds == null
-      ? baseDurationSeconds * lateRule.durationMultiplier
-      : durationSeconds,
+    durationSeconds: resolvedDurationSeconds,
     latePhaseRule: lateRule,
     portalPlacementPolicyId: portalPlacement.policyId,
     spawnRadiusBands: portalPlacement.spawnRadiusBands,
@@ -548,12 +558,13 @@ function portalWindowMetadata(
   };
 }
 
-function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
+function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = [], signatureMods = null) {
   const duration = Number(runDurationSeconds);
   if (!Number.isFinite(duration) || duration <= 0) {
     throw new RangeError("runDurationSeconds must be greater than zero");
   }
   const portalPlacement = getPortalPlacementPolicy(mapId);
+  const portalLifespanMultiplier = resolveSignatureMods(signatureMods).portalLifespanMult;
   const conductor = createConductor({
     seed,
     conductorId: "match-conductor",
@@ -633,6 +644,9 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
       portalPlacement,
       duration,
       declaredBand,
+      null,
+      portalLifespanMultiplier,
+      resolvedGuardSeconds,
     );
     const placement = resolvePortalWindowPlacement({
       requestedOpenTime,
@@ -658,6 +672,8 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
       duration,
       declaredBand,
       placement.durationSeconds,
+      portalLifespanMultiplier,
+      resolvedGuardSeconds,
     );
     previousOptionalCloseTime = placement.openTime + metadata.durationSeconds;
     return [{
@@ -680,7 +696,7 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
     startTime: duration,
     cadence: 1,
     count: 1,
-    durations: PORTAL_CONFIG.schedule.finalExfilDuration,
+    durations: PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
     metadata: {
       system: "portals",
       kind: "final-exfil",
@@ -690,9 +706,10 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = []) {
       countRange: [1, 1],
       effectiveCountRange: [1, 1],
       types: ["standard"],
-      baseDurationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
+      baseDurationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
+      signatureDurationMultiplier: portalLifespanMultiplier,
       durationMultiplier: 1,
-      durationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration,
+      durationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
       latePhaseRule: { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 },
       portalPlacementPolicyId: portalPlacement.policyId,
       spawnRadiusBands: portalPlacement.spawnRadiusBands,
@@ -1463,6 +1480,7 @@ function refreshPlayerBrain(player, durableProfile = null) {
     rigLevels,
     profileUpgrades,
     equipped: player.equipped,
+    signatureMods: runtime.session.signatureMods,
   });
   syncPlayerNoiseModifiers(player);
   syncPlayerCargoCapacity(player);
@@ -1493,6 +1511,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     rigLevels,
     profileUpgrades,
     equipped: options.equipped,
+    signatureMods: runtime.session.signatureMods,
   });
   const player = {
     clientId,
@@ -1713,6 +1732,7 @@ function startSession(config = {}) {
     runtime.session.runDurationSeconds,
     runtime.session.mapId,
     runtime.mapState.wells,
+    runtime.session.signatureMods,
   );
   runtime.inhibitorSchedule = runtime.conductor.getSchedule();
   runtime.portalClock = runState.portalClock;
@@ -2768,12 +2788,13 @@ function tickGrowth(dt) {
     const well = runtime.mapState.wells[idx];
     if (!well) break;
     const scheduledTime = runtime.simTime - runtime.growthTimer;
+    const massDelta = well.growthRate * runtime.session.signatureMods.wellGrowthMult;
     applyWellGrowth(well, {
-      massDelta: well.growthRate,
+      massDelta,
       source: "schedule",
       reason: "normal-schedule",
       scheduledTime,
-      waveAmplitude: WAVE_SERVER.growthWaveAmplitude * (well.mass + well.growthRate),
+      waveAmplitude: WAVE_SERVER.growthWaveAmplitude * (well.mass + massDelta),
     });
   }
 }
@@ -3302,6 +3323,7 @@ function refreshPlayerWellContact(player, dt) {
 function resolveWellGravity(player, flowSample) {
   let pullX = 0;
   let pullY = 0;
+  const signatureGravityMultiplier = runtime.session.signatureMods.wellGravityMult;
   if (runtime.session.useCoarseField && runtime.coarseField) {
     pullX = flowSample.gravity.x;
     pullY = flowSample.gravity.y;
@@ -3315,8 +3337,8 @@ function resolveWellGravity(player, flowSample) {
     for (const { entity: well } of wells) {
       const direction = worldDirection(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
       const gravity = wellGravityVector("player", direction, effectiveWellMass(well));
-      pullX += gravity.x;
-      pullY += gravity.y;
+      pullX += gravity.x * signatureGravityMultiplier;
+      pullY += gravity.y * signatureGravityMultiplier;
     }
   }
   let pullScale = 1;
@@ -5397,7 +5419,7 @@ function rebuildAuthoritativeField() {
     cellSize: runtime.session.flowFieldCellSize,
     wells: runtime.mapState.wells,
     seededSea: runtime.session.seededSea,
-    wellGravityScale: SERVER_WELLS.shipPullStrength,
+    wellGravityScale: SERVER_WELLS.shipPullStrength * runtime.session.signatureMods.wellGravityMult,
     wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
     wellGravityMaxRange: SERVER_WELLS.maxRange,
     wellGravityFullRadius: SERVER_WELLS.fullGravityRadius,

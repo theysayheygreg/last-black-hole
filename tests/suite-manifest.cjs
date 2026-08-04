@@ -36,6 +36,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SignatureMods",
+    file: "signature-mods.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "AnomalyCatalog",
     file: "anomaly-catalog.cjs",
     lanes: ["fast", "core", "static", "full"],

@@ -6,6 +6,7 @@ const {
 const { MOVEMENT } = require('./content/movement.cjs');
 const { profileDragScaleFromUpgradeRank } = require('../src/content/tuning.js');
 const { resolvePlayerNoiseModifiers } = require('./sim/noise-radius.cjs');
+const { applySignatureModsToBrain } = require('./sim/signature-mods.cjs');
 
 // Default rig state: 3 tracks at level 0 for a given hull
 function defaultRigLevels(hullType) {
@@ -219,7 +220,7 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
   }
 }
 
-function createPlayerBrain({ hullType = "drifter", rigLevels = null, profileUpgrades = null, equipped = [] } = {}) {
+function createPlayerBrain({ hullType = "drifter", rigLevels = null, profileUpgrades = null, equipped = [], signatureMods = null } = {}) {
   const normalizedHullType = normalizeHullType(hullType);
   const hull = HULL_DEFINITIONS[normalizedHullType] || HULL_DEFINITIONS.drifter;
   const brain = {};
@@ -240,6 +241,10 @@ function createPlayerBrain({ hullType = "drifter", rigLevels = null, profileUpgr
   for (const item of equipped || []) {
     applyItemBrainEffects(brain, item);
   }
+
+  // Layer 5: the run-wide signature is authoritative session state, not a
+  // client-side configuration override.
+  applySignatureModsToBrain(brain, signatureMods);
 
   // Hard caps
   for (const [key, [min, max]] of Object.entries(BRAIN_CAPS)) {

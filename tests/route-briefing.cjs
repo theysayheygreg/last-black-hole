@@ -42,7 +42,7 @@ function assertRouteAnchors(map) {
 
 async function run() {
   const runner = new TestRunner("RouteBriefing");
-  const signatureModule = await import(pathToFileURL(path.join(ROOT, "src", "signatures.js")).href);
+  const signatureModule = await import(pathToFileURL(path.join(ROOT, "src", "run-briefing.js")).href);
   const browserMaps = {};
   for (const mapId of PLAYABLE_MAP_IDS) {
     const definition = getMapScaleDefinition(mapId);
