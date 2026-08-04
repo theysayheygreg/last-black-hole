@@ -65,32 +65,23 @@ Downloaded packages include `START-HERE.md` with direct launch instructions.
 Steam Deck details and troubleshooting live in the
 [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
 
-### Install the v0.3 beta — BETA
+### v0.3 beta — not published yet
 
-The in-development v0.3 "Ballpark" line as a release candidate. **Beta means
-beta:** systems are being rebalanced and reworked build to build, visuals and
-audio are mid-pass, and things will be rough. It installs completely alongside
-the current game — separate folder, saves, launcher, and Steam shortcut — so
-it never touches your v0.2 install.
+A v0.3 build becomes the public beta only when it passes the
+[release gate](docs/v0.3/RC-GATE.md) and ships a Steam Deck build. The
+current candidates haven't cleared the gate, so there is no beta download
+today. When one clears, it will appear here and on the releases page as
+**Last Singularity BETA**, installing alongside the stable game with
+separate saves.
 
-Linux, macOS, or SteamOS/Steam Deck:
+Want v0.3 sooner? Use the dev channel below.
 
-```sh
-curl -fsSL https://github.com/theysayheygreg/last-black-hole/releases/download/v0.3.1-rc.4838e6ed/install.sh | sh -s -- \
-  --version v0.3.1-rc.4838e6ed \
-  --name "Last Singularity BETA" \
-  --slug last-singularity-beta
-```
+### Dev channel — build from source, at your own risk
 
-Windows PowerShell:
-
-```powershell
-$installer = [scriptblock]::Create((irm https://github.com/theysayheygreg/last-black-hole/releases/download/v0.3.1-rc.4838e6ed/install.ps1))
-& $installer -Version v0.3.1-rc.4838e6ed -Name "Last Singularity BETA" -Slug last-singularity-beta
-```
-
-Direct beta zips live on the
-[v0.3.1 RC release](https://github.com/theysayheygreg/last-black-hole/releases/tag/v0.3.1-rc.4838e6ed).
+The bleeding edge is the repo itself. Anything not in a published release
+is unsupported: systems are rebalanced and reworked commit to commit,
+saves may break, and no acceptance has been done. If that sounds fine,
+the build-from-source path below runs whatever the branch has today.
 
 ### Older versions
 
