@@ -1,5 +1,13 @@
 # v0.3 Changelog
 
+- **Local run lifecycle recovery:** local player launch now pins the authority
+  process for the Electron/local-host session, matching packaged-app behavior.
+  A player can read a terminal result, return Home, and start a fresh map
+  without the only local sim retiring underneath the client. The focused
+  browser smoke drives death -> Home -> normal map-select second launch and
+  verifies one fresh running authority session; disposable test/sandbox sims
+  keep their existing idle shutdown behavior.
+
 ## UI recovery — 2026-08-04
 
 - Anchored the map destination footer, Home crew footer, and profile footer to

@@ -53,6 +53,10 @@ const MODES = {
     name: "local-host",
     description: "Dev server + local control plane + local sim + browser client bound to local authority.",
     services: ["control", "sim", "dev"],
+    // A player can remain in a terminal result or Home longer than the sim's
+    // disposable empty-session timeout. Local play owns this authority for the
+    // life of the launch, just like the packaged Electron app does.
+    serviceArgs: { sim: ["--keep-alive", "true"] },
     query: { simServer: LOCAL_SIM_URL },
   },
   "bench": {

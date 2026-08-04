@@ -17,6 +17,10 @@ const { start, DEV_URL } = require('./stack.cjs');
 const { startService, stopService } = require('./runtime-status.cjs');
 
 const HTML_FILE = 'index-a.html';
+// Keep the fresh authority that this launcher explicitly restarts alive for
+// the Electron session. Without this, a player who lingers after death can
+// return Home to a client whose local sim has already retired.
+const LOCAL_PLAY_SIM_ARGS = ['--keep-alive', 'true'];
 
 async function run() {
   // Bring up dev + control-plane + sim, but don't open a browser tab —
@@ -30,7 +34,7 @@ async function run() {
   console.log('\nResetting local sim for a fresh play session...');
   const stopped = stopService('sim');
   if (stopped) console.log(stopped);
-  const started = startService('sim');
+  const started = startService('sim', LOCAL_PLAY_SIM_ARGS);
   if (started) console.log(started);
 
   // Match stack.js local-host URL shape — sim server runs on 8787.
