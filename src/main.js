@@ -95,7 +95,6 @@ import {
   resetRemoteAfterLeave,
   resetRemoteAfterLaunchFailure,
   resetRemoteForLocalGame,
-  resetRemoteForRestart,
   settleRemoteInputAcknowledgement,
 } from './sim/remote-session-state.js';
 import {
@@ -1232,7 +1231,7 @@ function init() {
       setTimeScale: (s) => { timeScale = s; },
       loadTitleScene,
       loadRendererFixture,
-      restart: () => { restart(); },
+      restart: () => restart(),
       currentMap,
       mapList: MAP_LIST,
       mapSelectEntries: MAP_SELECT_ENTRIES.map((entry) => ({
@@ -2801,7 +2800,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
       throw new Error(`Remote session map mismatch: requested ${mapEntry.id}, got ${startedSession?.mapId || 'unknown'}`);
     }
     if (forceReset && runningSession) {
-      showWarning(`host reset to ${mapEntry.name.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
+      const selectedMapName = mapEntry.map?.name || mapEntry.name || mapEntry.id;
+      showWarning(`host reset to ${selectedMapName.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
     }
   } else if (runningSession.mapId !== mapEntry.id) {
     showWarning(`joining live cycle on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);
@@ -2858,33 +2858,26 @@ async function leaveRemoteSessionToHome() {
   resetRemoteAfterLeave(remoteSession);
 }
 
-async function restartRemoteSession() {
-  if (!simClient?.enabled || !remoteSession.mapId) return;
-  const mapEntry = getPlayableMapEntryById(remoteSession.mapId);
-  const profileSnapshot = profileManager.exportActiveProfile?.() || null;
-  await simClient.resetSession();
-  await simClient.join({
-    name: profileManager.active?.name || 'Pilot',
-    profileId: profileManager.active?.id || null,
-    profileSnapshot,
-    equipped: inventorySystem.equipped,
-    consumables: inventorySystem.consumables,
-  });
-  const snapshot = await simClient.pollSnapshot(true);
-  resetRemoteForRestart(remoteSession);
-  applyRemoteSnapshot(snapshot);
-  gamePhase = 'playing';
-  deathTimer = 0;
-  escapeTimer = 0;
-  showHUD();
-  currentMap = mapEntry.map;
+async function restartRemoteSession(mapEntry = currentMapSelectEntry()) {
+  const selectedEntry = mapEntry?.available
+    ? mapEntry
+    : getPlayableMapEntryById(remoteSession.mapId);
+  if (!simClient?.enabled || !selectedEntry) return;
+  // A restart is a fresh selected-route launch, not a reset of the prior
+  // session configuration. startRemoteGame carries the selected map + preview
+  // seed through the same authority handoff used by Map Select.
+  await startRemoteGame(selectedEntry, { forceReset: true });
 }
 
 /**
- * Restart the current map (same map, fresh state).
+ * Restart the map currently selected in the launch briefing as a fresh run.
  */
 function restart() {
-  startGame(currentMap);
+  const selectedEntry = currentMapSelectEntry();
+  if (remoteSession.active && simClient?.enabled) {
+    return restartRemoteSession(selectedEntry);
+  }
+  startGame(selectedEntry?.map || currentMap, previewSeed);
 }
 
 function applySceneCamera(dt) {

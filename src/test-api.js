@@ -246,6 +246,21 @@ export function initTestAPI(getState) {
       };
     },
 
+    setMapSelectIndex(index) {
+      const { setMapSelectIndexForTest } = getState();
+      return setMapSelectIndexForTest ? setMapSelectIndexForTest(index) : null;
+    },
+
+    restart() {
+      const { restart } = getState();
+      return restart ? restart() : false;
+    },
+
+    getMapSelectSurvey() {
+      const { getMapSelectSurveyForTest } = getState();
+      return clone(getMapSelectSurveyForTest?.() || null);
+    },
+
     getRunResultsView() {
       const { getRunResultsViewModel } = getState();
       return getRunResultsViewModel ? getRunResultsViewModel() : null;

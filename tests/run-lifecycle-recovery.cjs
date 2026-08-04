@@ -132,7 +132,7 @@ async function launchThroughMenu(page) {
   await waitForPhase(page, 'playing', 15000);
 }
 
-async function launchSecondRunThroughMenu(page) {
+async function launchSecondRunThroughMenu(page, mapIndex = 0) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const tab = await page.evaluate(() => window.__TEST_API?.getHomeState?.().tabName);
     if (tab === 'LAUNCH') break;
@@ -143,6 +143,9 @@ async function launchSecondRunThroughMenu(page) {
   await tap(page);
   await waitForPhase(page, 'mapSelect');
   await sleep(250);
+  for (let index = 0; index < mapIndex; index += 1) {
+    await tap(page, 'ArrowDown', 'ArrowDown');
+  }
   await tap(page);
   await waitForPhase(page, 'playing', 15000);
 }
@@ -254,12 +257,29 @@ async function run() {
       assert(homeHealth.status === 200, 'Authority exited before Home could launch a new run');
       assert(homeHealth.body.idleState?.keepAlive === true, 'Expected persistent local player authority');
 
-      await launchSecondRunThroughMenu(page);
+      await launchSecondRunThroughMenu(page, 1);
       const secondHealth = await request('/health');
       const secondRunId = secondHealth.body.session?.runId;
       assert(secondHealth.status === 200 && secondHealth.body.session?.status === 'running', 'Expected second run to be running');
       assert(secondRunId && secondRunId !== firstRunId, 'Expected Home launch to create a fresh run identity');
+      assert(secondHealth.body.session?.mapId === 'expanse',
+        `Expected selected expanse route, got ${secondHealth.body.session?.mapId || 'unknown'}`);
       assert(secondHealth.body.idleState?.humanPlayerCount === 1, 'Expected exactly one human in the new run');
+
+      const restartSelection = await page.evaluate(async () => {
+        window.__TEST_API.setMapSelectIndex(2);
+        const expected = window.__TEST_API.getMapSelectSurvey();
+        await window.__TEST_API.restart();
+        return expected;
+      });
+      const restartedHealth = await request('/health');
+      const restartedNetwork = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      assert(restartSelection?.entry?.id === 'deep-field',
+        `Expected Deep Field briefing before restart, got ${restartSelection?.entry?.id || 'unknown'}`);
+      assert(restartedHealth.body.session?.mapId === restartSelection.entry.id,
+        `Expected authority map ${restartSelection.entry.id}, got ${restartedHealth.body.session?.mapId || 'unknown'}`);
+      assert(restartedNetwork.remoteMapId === restartSelection.entry.id,
+        `Expected client map ${restartSelection.entry.id}, got ${restartedNetwork.remoteMapId || 'unknown'}`);
       assert(errors.length === 0, `Unexpected browser errors: ${errors.join(' | ')}`);
     });
   } finally {
