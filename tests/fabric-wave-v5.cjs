@@ -107,7 +107,8 @@ async function run() {
     assert(!conducted.includes('publishEvent("wave.announced"'),
       'conducted waves must use the shared announcement path exactly once');
     assert(runtime.includes('cause = "well-growth"'), 'missing independent wave cause well-growth');
-    assert(runtime.includes('cause: "consumption"'), 'missing independent wave cause consumption');
+    assert(runtime.includes('endsWith("-consumption") ? "consumption" : "well-growth"'),
+      'consumption sources must retain their distinct source-bound wave cause');
     assert(runtime.includes('cause: "vessel-overdrive"'), 'missing independent wave cause vessel-overdrive');
   });
 
