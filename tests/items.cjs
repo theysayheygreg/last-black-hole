@@ -25,6 +25,13 @@ async function loadItemsModule() {
   return import(`file://${path.join(tmp, "items.mjs")}`);
 }
 
+async function loadProfileModule() {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-profile-migration-"));
+  fs.cpSync(path.join(ROOT, "src"), path.join(tmp, "src"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ type: "module" }));
+  return import(`file://${path.join(tmp, "src", "profile.js")}`);
+}
+
 async function run() {
   const runner = new TestRunner("Items");
   const items = await loadItemsModule();
@@ -79,6 +86,71 @@ async function run() {
     for (const item of Object.values(items.ITEM_CATALOG_BY_TIER).flat()) {
       assert(Object.keys(item.coefficients || {}).length > 0 || item.special,
         `${item.id} must retain a real coefficient or implemented special`);
+    }
+  });
+
+  await runner.run("Legacy vault migration removes retired artifacts without losing live profile data", async () => {
+    const retired = { id: "legacy-retired", catalogId: "burn-canister", value: 77 };
+    const liveVaultItem = { id: "legacy-live", catalogId: "event-horizon-keel", value: 143 };
+    const liveEquippedItem = {
+      id: "legacy-equipped",
+      catalogId: "negative-space-spool",
+      subcategory: "equippable",
+      value: 211,
+    };
+    const storedProfile = {
+      id: "legacy-pilot-id",
+      name: "Archive Pilot",
+      created: "2026-07-01T00:00:00.000Z",
+      exoticMatter: 4096,
+      vault: [retired, liveVaultItem],
+      loadout: {
+        equipped: [retired, liveEquippedItem],
+        consumables: [null, null],
+      },
+      upgrades: { thrust: 2, hull: 1 },
+      hullType: "drifter",
+      rigLevels: [1, 0, 0],
+      totalExtractions: 9,
+      totalDeaths: 4,
+      recentEchoes: [{ fragment: "Still here.", pilotName: "Archive Pilot", hullType: "drifter" }],
+    };
+    const storage = new Map([
+      ["lbh_profiles_index", JSON.stringify({
+        slots: [{ name: storedProfile.name, created: storedProfile.created }, null, null],
+        lastActive: 0,
+      })],
+      ["lbh_profile_0", JSON.stringify(storedProfile)],
+    ]);
+    global.localStorage = {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, String(value)),
+      removeItem: (key) => storage.delete(key),
+    };
+
+    try {
+      const { ProfileManager } = await loadProfileModule();
+      const profile = new ProfileManager().loadProfile(0);
+      assert(profile.id === storedProfile.id, "migration must preserve profile identity");
+      assert(profile.name === storedProfile.name, "migration must preserve pilot name");
+      assert(profile.exoticMatter === storedProfile.exoticMatter, "migration must preserve EM");
+      assert(profile.totalExtractions === 9 && profile.totalDeaths === 4,
+        "migration must preserve lifetime run stats");
+      assert(profile.upgrades.thrust === 2 && profile.upgrades.hull === 1,
+        "migration must preserve inert legacy upgrade records");
+      assert(profile.vault.length === 1 && profile.vault[0].id === liveVaultItem.id,
+        "migration must remove only the retired vault artifact");
+      assert(profile.loadout.equipped[0] === null
+        && profile.loadout.equipped[1].id === liveEquippedItem.id,
+      "migration must clear retired equipment without shifting or losing the live slot");
+      assert(profile.recentEchoes[0].fragment === "Still here.",
+        "migration must preserve unrelated Chronicle data");
+
+      const persisted = JSON.parse(storage.get("lbh_profile_0"));
+      assert(persisted.vault.length === 1 && persisted.vault[0].id === liveVaultItem.id,
+        "sanitized vault must persist on load");
+    } finally {
+      delete global.localStorage;
     }
   });
 
