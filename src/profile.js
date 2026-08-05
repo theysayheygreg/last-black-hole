@@ -16,6 +16,7 @@
 import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
 import { PUBLIC_HULL_IDS, RIG_TRACKS as HULL_RIG_TRACKS } from './content/hulls.js';
 import { sanitizeRetiredItems } from './content/items.js';
+import { normalizeProfileDragUpgradeRank } from './content/tuning.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -145,6 +146,7 @@ function normalizeProfileShape(profile = {}) {
   // Old saves retain this inert record so profile migrations never discard it.
   // The shipped progression surface is now the authority-backed rig only.
   next.upgrades = { ...defaults.upgrades, ...(profile.upgrades || {}) };
+  next.upgrades.drag = normalizeProfileDragUpgradeRank(next.upgrades.drag);
   next.hullType = normalizeHullType(profile.hullType, profile.shipType);
   next.shipType = next.hullType;
   next.rigLevels = normalizeRigLevels(profile.rigLevels, next.hullType);
