@@ -40,9 +40,11 @@ async function run() {
     assert(shader.includes('smoothstep(0.01, 0.06, laneSpeed)'));
     assert(!shader.includes('43758.5453'), 'hash-noise cue must be retired');
     assert(!shader.includes('flowLight'), 'global speed-brightening cue must be retired');
-    assert(shader.includes('float calmMottleHash = fract(sin(dot(calmMottleCell, vec2(19.19, 47.73))) * 17831.29);')
-      && shader.includes('(1.0 - corridorPresence)'),
-    'Calm-space material must be sparse, global, and excluded from current corridors');
+    assert(!shader.includes('calmMottleCell')
+      && !shader.includes('calmMottleHash')
+      && !shader.includes('calmMottle')
+      && !shader.includes('floor(coarseUV * u_worldScale * 4.0)'),
+    'Calm space must not quantize into a coarse screen-visible tile layer');
   });
 
   await runner.run('diagnostic corridor math holds 4-5 ship widths at 0, 45, and 90 degrees', async () => {

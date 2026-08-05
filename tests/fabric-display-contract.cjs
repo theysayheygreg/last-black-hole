@@ -122,9 +122,11 @@ async function run() {
       && shader.includes('float plumeReach = visualCoreRadius * (2.55 + min(ringEnergy, 1.0) * 0.20);')
       && shader.includes('float plumeMask = plumeSpine * plumeStart * plumeEnd * plumeRagged;'),
     'Wells must own one orbital-direction-keyed asymmetric hot accretion plume');
-    assert(shader.includes('vec2 calmMottleCell = floor(coarseUV * u_worldScale * 4.0);')
-      && shader.includes('float calmMottle = smoothstep(0.91, 0.99, calmMottleHash) * (1.0 - corridorPresence);'),
-    'Calm space needs a sparse world-anchored indigo material layer without becoming another lane');
+    assert(!shader.includes('calmMottleCell')
+      && !shader.includes('calmMottleHash')
+      && !shader.includes('calmMottle')
+      && !shader.includes('floor(coarseUV * u_worldScale * 4.0)'),
+    'Calm fabric must not add threshold-crossing coarse tiles over the current read');
     assert(ascii.FRAG_ASCII.includes("import") === false
       && ascii.FRAG_ASCII.includes('lbhCameraRelativeFluidUVToGlobalFluidUV(')
       && ascii.FRAG_ASCII.includes('vec2 worldCell = floor(globalFluidUV * u_worldScale * (cellsPerScreen / u_cameraView));'),

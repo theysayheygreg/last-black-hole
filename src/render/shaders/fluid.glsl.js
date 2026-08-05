@@ -563,14 +563,6 @@ void main() {
     col += vec3(1.18, 0.82, 0.46) * waveCrest * 0.54;
   }
 
-  // Calm space still needs a faint sense of enormous depth, but it must never
-  // impersonate a navigable lane. This low-frequency indigo material is tied
-  // to global world cells, never screen UV, time, density history, or motion.
-  vec2 calmMottleCell = floor(coarseUV * u_worldScale * 4.0);
-  float calmMottleHash = fract(sin(dot(calmMottleCell, vec2(19.19, 47.73))) * 17831.29);
-  float calmMottle = smoothstep(0.91, 0.99, calmMottleHash) * (1.0 - corridorPresence);
-  col += vec3(0.004, 0.008, 0.019) * calmMottle;
-
   // === PER-WELL: dark core + one readable accretion band ===
   for (int i = 0; i < ${FABRIC_WELL_UNIFORM_BUDGET}; i++) {
     if (i >= u_wellCount) break;
