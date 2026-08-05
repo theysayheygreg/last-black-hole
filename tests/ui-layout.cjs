@@ -200,6 +200,44 @@ const assert = require('assert');
   const ledgerRows = runResults.buildRunLedgerRows({ tone: 'death', emEarned: 16 });
   assert(resultRows.every((row) => row.label && row.value), 'result summary cannot render an empty labeled row');
   assert(ledgerRows.every((row) => row.label && row.value), 'result ledger cannot render an empty labeled row');
+  const emptyNotableProjection = runResults.projectRunResultsPresentation({
+    cargoLabels: ['[T1] relay core 15em', '[T1] flare lattice 12em', '[T2] wake chart 30em'],
+    notableLines: [],
+    aiLines: [],
+  }, layout.resultsSurfaceLayout(960, 720));
+  assert.strictEqual(emptyNotableProjection.showNotable, false, 'empty facts must omit NOTABLE instead of rendering synthetic telemetry');
+  assert.deepStrictEqual(emptyNotableProjection.notableLines, [], 'empty facts must not become a NOTABLE line');
+  const realNotableView = runResults.buildRunResultsViewModel({
+    phase: 'escaped',
+    runResult: {
+      outcome: 'extracted',
+      cargoExtracted: [
+        { tier: 1, name: 'relay core', value: 15 },
+        { tier: 1, name: 'flare lattice', value: 12 },
+        { tier: 2, name: 'wake chart', value: 30 },
+      ],
+      notables: [{ description: 'first aperture crossing recorded' }],
+    },
+    settlement: { depositedCount: 2, overflowCount: 1, overflowValue: 30, vaultCount: 8, vaultCapacity: 8 },
+  });
+  const aiOnlyView = runResults.buildRunResultsViewModel({
+    phase: 'escaped',
+    runResult: {
+      outcome: 'extracted',
+      aiOutcomes: [{ personality: 'ghost', hullType: 'drifter', outcome: 'extracted', cargoCount: 1 }],
+    },
+  });
+  for (const [width, height] of [[960, 720], [1280, 800]]) {
+    const resultSurface = layout.resultsSurfaceLayout(width, height);
+    const factualProjection = runResults.projectRunResultsPresentation(realNotableView, resultSurface);
+    assert.strictEqual(factualProjection.cargoLines.length, 3, `${width}x${height} overflow settlement must retain its three cargo detail rows`);
+    assert(factualProjection.showNotable, `${width}x${height} real notable fact lost its section`);
+    assert.strictEqual(factualProjection.notableLines[0], 'first aperture crossing recorded', `${width}x${height} notable line changed or disappeared`);
+    assert(factualProjection.cargoEndY + 40 <= resultSurface.contentBottom, `${width}x${height} factual NOTABLE line crosses the CTA rail`);
+    const aiProjection = runResults.projectRunResultsPresentation(aiOnlyView, resultSurface);
+    assert(aiProjection.showNotable && aiProjection.notableLines[0].includes('ghost (drifter) extracted / 1 cargo'),
+      `${width}x${height} AI-only fact must remain truthful and visible`);
+  }
   const hud = layout.hudSurfaceLayout(960, 720);
   assertSurface('HUD surfaces', [hud.vitals, hud.portals, hud.actions, hud.interaction]);
   for (const [width, height] of [[960, 720], [1280, 800]]) {

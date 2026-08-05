@@ -176,6 +176,67 @@ export function buildRunLedgerRows(view = {}) {
   return value ? [{ label, value, valueRole: 'salvage' }] : [];
 }
 
+function meaningfulLines(lines) {
+  return (Array.isArray(lines) ? lines : [])
+    .map((line) => String(line ?? '').trim())
+    .filter(Boolean);
+}
+
+function cargoLinesForBudget(cargoLabels, rowBudget) {
+  const labels = meaningfulLines(cargoLabels);
+  const rows = Math.max(0, Math.floor(Number(rowBudget) || 0));
+  if (labels.length === 0) return rows > 0 ? ['[ empty ]'] : [];
+  if (rows === 0) return [];
+  if (labels.length <= rows) return labels;
+  const itemRows = Math.max(0, rows - 1);
+  return [...labels.slice(0, itemRows), `+${labels.length - itemRows} more items`];
+}
+
+// The cargo count and total already occupy the terminal's permanent summary
+// lanes. Individual cargo rows are supporting detail, so a real run fact wins
+// the last available line instead of being silently dropped behind that detail.
+export function projectRunResultsPresentation(view = {}, surface = {}) {
+  const panelY = Number(surface?.panel?.y) || 0;
+  const contentBottom = Number(surface?.contentBottom) || 0;
+  const cargoRowH = Math.max(0, Number(surface?.cargoRowH) || 0);
+  const cargoGap = Math.max(0, Number(surface?.cargoGap) || 0);
+  const sectionLabelH = 24;
+  const factLineH = 16;
+  const permanentRowH = 22;
+  const realNotableLines = meaningfulLines([
+    ...meaningfulLines(view.notableLines),
+    ...meaningfulLines(view.aiLines),
+  ]);
+  const cargoLabels = meaningfulLines(view.cargoLabels);
+  const defaultCargoRows = cargoLabels.length === 0 ? 1 : Math.min(3, cargoLabels.length);
+  const rightContentStartY = panelY + 160;
+  const settlementRows = view.settlement
+    ? 1 + (Number(view.settlement.overflowCount) > 0 ? 1 : 0)
+    : 0;
+  const cargoStartY = rightContentStartY + permanentRowH * (1 + settlementRows);
+  let cargoRowBudget = defaultCargoRows;
+  let cargoLines = cargoLinesForBudget(cargoLabels, cargoRowBudget);
+  const cargoEndY = () => cargoStartY + cargoLines.length * (cargoRowH + cargoGap) + cargoGap;
+  const notableBudget = () => Math.max(0, Math.floor((contentBottom - (cargoEndY() + sectionLabelH)) / factLineH));
+
+  // A fact section is only drawn with a fact inside it. If detail would crowd
+  // out every fact, collapse detail rows until the first truthful line fits.
+  while (realNotableLines.length > 0 && notableBudget() < 1 && cargoRowBudget > 0) {
+    cargoRowBudget -= 1;
+    cargoLines = cargoLinesForBudget(cargoLabels, cargoRowBudget);
+  }
+
+  const visibleNotableLines = realNotableLines.slice(0, Math.min(3, notableBudget()));
+  return {
+    cargoLines,
+    cargoStartY,
+    cargoEndY: cargoEndY(),
+    notableLines: visibleNotableLines,
+    showNotable: visibleNotableLines.length > 0,
+    notableBudget: notableBudget(),
+  };
+}
+
 export function drawRunResultsOverlay(ctx, canvas, {
   view,
   rawTime = 0,
@@ -223,7 +284,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
 
   drawScanlines(ctx, w, h, 0.026);
   const surface = resultsSurfaceLayout(w, h);
-  const { panel: panelRect, columnW, leftX, rightX, button, cargoRowH, cargoGap, contentBottom } = surface;
+  const { panel: panelRect, columnW, leftX, rightX, button, cargoRowH, cargoGap } = surface;
   const { x: panelX, y: panelY, w: panelW, h: panelH } = panelRect;
   const panelReveal = motionProgress(reveal, {
     delay: 0.02,
@@ -321,13 +382,10 @@ export function drawRunResultsOverlay(ctx, canvas, {
       ry += 22;
     }
   }
+  const presentation = projectRunResultsPresentation(view, surface);
   ctx.textAlign = 'left';
   ctx.font = canvasFont(13);
-  const cargoLines = view.cargoLabels.length > 0
-    ? view.cargoLabels.length > 3
-      ? [...view.cargoLabels.slice(0, 2), `+${view.cargoLabels.length - 2} more items`]
-      : view.cargoLabels.slice(0, 3)
-    : ['[ empty ]'];
+  const cargoLines = presentation.cargoLines;
   for (let i = 0; i < cargoLines.length; i++) {
     const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
       delay: 0.82,
@@ -355,21 +413,15 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   ry += cargoGap;
-  const notableLines = [...view.notableLines];
-  if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
-  // A section header with no room for a single line is worse than no
-  // section — budget the lines before drawing the label so NOTABLE never
-  // renders as an empty heading.
-  const notableBudget = Math.max(0, Math.floor((contentBottom - (ry + 24)) / 16));
-  if (notableBudget >= 1) {
+  // This projection owns the right-column contention policy: permanent cargo
+  // truth remains visible, optional cargo detail yields to a real run fact.
+  if (presentation.showNotable) {
     drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
     ry += 24;
     ctx.font = canvasFont(13);
     ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
-    const requestedLines = notableLines.length > 0 ? notableLines.slice(0, 3) : ['no unusual telemetry'];
-    const lines = requestedLines.slice(0, notableBudget);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (let i = 0; i < presentation.notableLines.length; i++) {
+      const line = presentation.notableLines[i];
       const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
         delay: 1.02,
         stagger: motion.rowStagger,
