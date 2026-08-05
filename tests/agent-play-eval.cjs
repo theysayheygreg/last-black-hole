@@ -36,6 +36,7 @@ const {
   planRouteApproach,
   resolveAgentPlayControlPriority,
   resolveHazardClearance,
+  resolveLiveWreckTarget,
 } = require("./agent-play-route.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html?renderer=three";
@@ -462,6 +463,14 @@ class RouteFailure extends Error {
   }
 }
 
+class RouteTargetUnavailable extends Error {
+  constructor(targetId) {
+    super(`Route target ${targetId} is no longer available`);
+    this.name = "RouteTargetUnavailable";
+    this.targetId = targetId;
+  }
+}
+
 async function routeFailureReceipt(clientId, snapshot, player, last) {
   const events = await getEvents(0).catch(() => []);
   const deathEvent = [...events].reverse().find((event) =>
@@ -506,7 +515,15 @@ async function steerTo(page, clientId, target, options = {}) {
       if (!start) start = { wx: player.wx, wy: player.wy };
       const ws = snapshot.session?.worldScale || 3;
       let route = null;
-      let steeringTarget = target;
+      let liveTarget = target;
+      if (options.wreckId) {
+        if (player.cargoCount > (options.cargoBefore ?? 0)) {
+          return { start, end: last, closest, target: { ...target }, player, snapshot, looted: true };
+        }
+        liveTarget = resolveLiveWreckTarget(options.wreckId, snapshot.world?.wrecks || []);
+        if (!liveTarget) throw new RouteTargetUnavailable(options.wreckId);
+      }
+      let steeringTarget = liveTarget;
       if (options.portalId) {
         const portal = (snapshot.world?.portals || []).find((entry) => entry.id === options.portalId);
         assert(portal, `Authoritative portal ${options.portalId} disappeared while routing`);
@@ -524,7 +541,7 @@ async function steerTo(page, clientId, target, options = {}) {
       } else if (options.hazardAware) {
         route = planRouteApproach({
           player,
-          target,
+          target: liveTarget,
           wells: snapshot.world?.wells || [],
           worldScale: ws,
           velocity: player,
@@ -534,8 +551,8 @@ async function steerTo(page, clientId, target, options = {}) {
       const dx = wrappedDelta(player.wx, steeringTarget.wx, ws);
       const dy = wrappedDelta(player.wy, steeringTarget.wy, ws);
       const dist = Math.hypot(dx, dy);
-      const targetDx = wrappedDelta(player.wx, target.wx, ws);
-      const targetDy = wrappedDelta(player.wy, target.wy, ws);
+      const targetDx = wrappedDelta(player.wx, liveTarget.wx, ws);
+      const targetDy = wrappedDelta(player.wy, liveTarget.wy, ws);
       const targetDistance = Math.hypot(targetDx, targetDy);
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
       const fuelRatio = player.deltaVRatio || 0;
@@ -625,7 +642,7 @@ async function steerTo(page, clientId, target, options = {}) {
         && !route?.waypoint
         && targetDistance <= radius
         && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
-        return { start, end: last, closest, target: { ...target } };
+        return { start, end: last, closest, target: { ...liveTarget } };
       }
 
       const nx = dist > 1e-6 ? dx / dist : 1;
@@ -862,40 +879,51 @@ async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screensh
   const before = localPlayer(snapshot, clientId);
   assert(before, "Expected the authoritative player before salvage routing");
   const worldScale = snapshot.session.worldScale;
-  const candidates = (snapshot.world?.wrecks || [])
-    .filter((entry) => entry.alive !== false && !entry.looted && entry.loot?.length)
-    .sort((left, right) =>
-      wrappedDistance(before, left, worldScale) - wrappedDistance(before, right, worldScale)
-    );
+  const cargoBefore = before.cargoCount || 0;
   let movement = null;
-  let wreck = (before.cargoCount || 0) > 0 ? { id: "natural-route-contact" } : null;
+  let wreck = cargoBefore > 0 ? { id: "natural-route-contact" } : null;
   let looted = { player: before, snapshot };
-  if ((before.cargoCount || 0) === 0) {
-    for (const candidate of candidates.slice(0, 3)) {
+  if (cargoBefore === 0) {
+    const attempted = new Set();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      snapshot = await getSnapshot();
+      const currentPlayer = localPlayer(snapshot, clientId);
+      assert(currentPlayer?.status === "alive", "Salvage target selection requires a live authoritative pilot");
+      const candidate = (snapshot.world?.wrecks || [])
+        .filter((entry) => entry.alive !== false && !entry.looted && entry.loot?.length && !attempted.has(entry.id))
+        .sort((left, right) =>
+          wrappedDistance(currentPlayer, left, worldScale) - wrappedDistance(currentPlayer, right, worldScale)
+        )[0];
+      assert(candidate, "Expected a live snapshot-selected wreck for the natural salvage route");
+      attempted.add(candidate.id);
       try {
         movement = await steerTo(page, clientId, candidate, {
+          wreckId: candidate.id,
+          cargoBefore,
           radius: 0.075,
           maxCruiseSpeed: 0.24,
           arrivalSpeed: 0.22,
           timeout: 45000,
           hazardAware: true,
         });
-        looted = await waitForPlayer(clientId, (player) => player.cargoCount > 0, { timeout: 5000 });
+        looted = await waitForPlayer(clientId, (player) => player.cargoCount > cargoBefore, { timeout: 5000 });
         wreck = candidate;
         break;
-      } catch {
-        // Scavengers may claim a target while the agent is in transit. Retry
-        // the next nearest live wreck instead of mutating world state.
+      } catch (error) {
+        // Scavengers may claim a target while the agent is in transit. Only
+        // that explicit public-state transition permits selecting another;
+        // death, navigation, and pickup failures remain visible defects.
+        if (!(error instanceof RouteTargetUnavailable)) throw error;
       }
     }
   }
-  assert(looted.player.cargoCount > 0, "Expected a natural wreck contact to add cargo");
+  assert(looted.player.cargoCount > cargoBefore, "Expected a natural wreck contact to add cargo");
   wreck ||= { id: "natural-route-contact" };
   screenshots.push(await capturePage(page, outputDir, "06-route-wreck-looted"));
   const salvage = {
     wreckId: wreck.id,
     movement,
-    cargoBefore: before.cargoCount || 0,
+    cargoBefore,
     cargoAfter: looted.player.cargoCount,
   };
   recordJourneyStage(report, { loot: salvage });

@@ -5,6 +5,7 @@ const {
   planRouteApproach,
   resolveAgentPlayControlPriority,
   resolveHazardClearance,
+  resolveLiveWreckTarget,
   routeHazards,
 } = require("./agent-play-route.cjs");
 
@@ -91,6 +92,18 @@ async function run() {
       inwardSpeed: 0.1,
     });
     assert(clearance.active, "Expected a close salvage pass to brake out through the published Mictlan margin");
+  });
+
+  await runner.run("tracks the current public wreck position and rejects spent targets", () => {
+    const wrecks = [
+      { id: "wreck-route", wx: 1.32, wy: 2.18, alive: true, looted: false, loot: [{ id: "cargo-a" }] },
+      { id: "wreck-spent", wx: 2, wy: 2, alive: true, looted: true, loot: [] },
+    ];
+    const current = resolveLiveWreckTarget("wreck-route", wrecks);
+    assert(current?.wx === 1.32 && current?.wy === 2.18,
+      "Expected the salvage route to follow the moving wreck's current snapshot position");
+    assert(resolveLiveWreckTarget("wreck-spent", wrecks) === null,
+      "A scavenger-looted wreck must be released for fresh target selection");
   });
 
   await runner.run("tick-1388 hazard brake overrides recharge coast", () => {

@@ -296,6 +296,14 @@ function planRouteApproach({
   };
 }
 
+function resolveLiveWreckTarget(wreckId, wrecks = []) {
+  const id = String(wreckId || "");
+  if (!id) return null;
+  const wreck = wrecks.find((entry) => String(entry?.id || "") === id) || null;
+  if (!wreck || wreck.alive === false || wreck.looted || !wreck.loot?.length) return null;
+  return wreck;
+}
+
 module.exports = {
   DEFAULT_WELL_MARGIN,
   DRIFT_LOOKAHEAD_SECONDS,
@@ -305,5 +313,6 @@ module.exports = {
   portalCaptureRadius,
   planPortalApproach,
   planRouteApproach,
+  resolveLiveWreckTarget,
   routeHazards,
 };
