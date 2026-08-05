@@ -11,7 +11,7 @@ import { WreckVisualFamily } from './entities/wreck-visual-family.js';
 import { WorldSpriteVisualFamily } from './entities/world-sprite-visual-family.js';
 import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
-import { createWorldProjection, wrappedAxisDelta, wrappedWorldVector } from './world-projection.js';
+import { createWorldProjection, wrappedWorldVector } from './world-projection.js';
 import { resolveEntityPresentationScale, SPRITE_CARD_SCALE } from './entity-presentation-scale.js';
 
 function clamp(n, min, max) {
@@ -35,12 +35,6 @@ function collectTemporalSpriteExpectations(frame = {}) {
     for (const entity of frame.world?.[family] || []) add(family, entity);
   }
   return expected;
-}
-
-function renderQualityOpacityScale(renderQuality) {
-  if (renderQuality === 'minimal') return 0;
-  if (renderQuality === 'default') return 0.7;
-  return 1;
 }
 
 /**
@@ -75,18 +69,15 @@ export class WorldScenePresentation {
     this._setWorldCameraAspect(1, 1);
     this.worldScene = new THREE.Scene();
     this.worldScene.name = 'lbh-top-down-3d-scene';
+    // The present pass retains this zero vector for its inert display-shell
+    // uniforms. World motion must never drive a screen-space fabric overlay.
     this.motion = new THREE.Vector2(0, 0);
-    this.targetMotion = new THREE.Vector2(0, 0);
-    this.prevCamera = null;
     this.lastSceneState = {
       cameraX: 0,
       cameraY: 0,
       worldScale: 3,
       gridWindow: 3,
       cameraView: CAMERA_VIEW,
-      motionX: 0,
-      motionY: 0,
-      parallaxStrength: this.settings.parallaxStrength,
     };
 
     this.layerRoot = new THREE.Group();
@@ -199,19 +190,9 @@ export class WorldScenePresentation {
   }
 
   _buildForegroundLayers() {
-    const ringGeom = new THREE.RingGeometry(0.62, 0.64, 96);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x54708a,
-      transparent: true,
-      opacity: 0.045,
-      depthTest: false,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    this.lensRing = new THREE.Mesh(ringGeom, ringMat);
-    this.lensRing.name = 'motion-lens-depth-cue';
-    this.lensRing.renderOrder = 20;
-    this.foregroundGroup.add(this.lensRing);
+    // Reserved for event-owned near-camera effects. A passive camera-reactive
+    // lens ring sat over the Composer fabric here and made terrain appear to
+    // re-phase while only the view moved, so it is intentionally retired.
   }
 
   _buildWorldEntityResources() {
@@ -474,25 +455,6 @@ export class WorldScenePresentation {
     const worldScale = Number.isFinite(camera.worldScale) ? camera.worldScale : this.lastSceneState.worldScale;
     const gridWindow = Number.isFinite(camera.gridWindow) ? camera.gridWindow : this.lastSceneState.gridWindow;
     const cameraView = Number.isFinite(camera.view) ? camera.view : (this.lastSceneState.cameraView ?? CAMERA_VIEW);
-    const totalTime = Number.isFinite(frame.timing?.totalTime) ? frame.timing.totalTime : 0;
-    const prev = this.prevCamera || { x: camX, y: camY };
-    const dCamX = wrappedAxisDelta(camX, prev.x, worldScale);
-    const dCamY = wrappedAxisDelta(camY, prev.y, worldScale);
-    this.prevCamera = { x: camX, y: camY };
-
-    const shipVelocity = frame.localPlayer?.movement?.velocity || {};
-    const shipVX = Number.isFinite(shipVelocity.x) ? shipVelocity.x : 0;
-    const shipVY = Number.isFinite(shipVelocity.y) ? shipVelocity.y : 0;
-    const parallaxStrength = this.settings.parallaxStrength;
-    const targetX = clamp((dCamX / Math.max(gridWindow, 0.001)) * 0.75 + (shipVX / Math.max(gridWindow, 0.001)) * 0.006, -0.045, 0.045);
-    const targetY = clamp((-dCamY / Math.max(gridWindow, 0.001)) * 0.75 + (-shipVY / Math.max(gridWindow, 0.001)) * 0.006, -0.045, 0.045);
-    this.targetMotion.set(targetX, targetY).multiplyScalar(parallaxStrength);
-    this.motion.lerp(this.targetMotion, 0.22);
-
-    this.lensRing.rotation.z = totalTime * 0.015 + (this.motion.x - this.motion.y) * 1.4;
-    const motionLen = this.motion.length();
-    this.lensRing.material.opacity = (0.035 + clamp(motionLen * 1.1, 0, 0.055)) * (renderQualityOpacityScale(this.renderQuality));
-
     const renderState = { camX, camY, cameraX: camX, cameraY: camY, worldScale, gridWindow, cameraView };
     this.currentProjection = createWorldProjection({ x: camX, y: camY, worldScale, view: cameraView }, this.worldCameraAspect);
     const phaseChanged = frame.phase !== this.lastPresentationPhase;
@@ -501,17 +463,12 @@ export class WorldScenePresentation {
     this.lastPresentationPhase = frame.phase;
     this.lastPresentationRunId = frame.runId || this.lastPresentationRunId;
     this._syncWorldScene(frame, renderState, diagnosticView);
-    const motionX = Math.abs(this.motion.x) < 1e-7 ? 0 : this.motion.x;
-    const motionY = Math.abs(this.motion.y) < 1e-7 ? 0 : this.motion.y;
     this.lastSceneState = {
       cameraX: camX,
       cameraY: camY,
       worldScale,
       gridWindow,
       cameraView,
-      motionX,
-      motionY,
-      parallaxStrength,
       sceneEntityCount: this.lastEntityCount,
       semanticCount: this.lastSemanticCount,
     };

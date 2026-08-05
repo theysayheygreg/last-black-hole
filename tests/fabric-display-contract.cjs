@@ -173,6 +173,26 @@ async function run() {
     'Three presentation must not warp or split the scene while the camera moves');
   });
 
+  await runner.run('camera translation keeps fabric landmarks on the canonical world projection', async () => {
+    const scene = fs.readFileSync(path.join(ROOT, 'src/render-three/world-scene-presentation.js'), 'utf8');
+    const projection = await import(path.join(ROOT, 'src/render-three/world-projection.js'));
+    const aspect = 1280 / 800;
+    const landmark = { x: 2.1, y: 1.7 };
+    const before = projection.createWorldProjection({ x: 1.5, y: 1.5, worldScale: 5, view: 3 }, aspect)
+      .project(landmark.x, landmark.y);
+    const after = projection.createWorldProjection({ x: 1.8, y: 1.5, worldScale: 5, view: 3 }, aspect)
+      .project(landmark.x, landmark.y);
+    const expectedXDelta = -(0.3 / 3) * 2 * aspect;
+
+    assert(Math.abs((after.x - before.x) - expectedXDelta) < 1e-9 && Math.abs(after.y - before.y) < 1e-9,
+      'A fixed world landmark must change only by the canonical camera framing delta');
+    assert(!scene.includes('motion-lens-depth-cue') && !scene.includes('lensRing')
+      && !scene.includes('targetMotion') && !scene.includes('motion.lerp('),
+    'No camera-reactive screen-space layer may re-phase the Composer fabric');
+    assert(scene.includes('createWorldProjection({ x: camX, y: camY, worldScale, view: cameraView }'),
+      'Three world projection must remain the shared camera/world owner');
+  });
+
   process.exit(runner.summary() ? 0 : 1);
 }
 
