@@ -8,6 +8,7 @@ const {
   resolveLiveWreckTarget,
   routeHazards,
 } = require("./agent-play-route.cjs");
+const { resolveHazardControl } = require("./agent-play-eval.cjs");
 
 function assertClearDetour(label, input) {
   const route = planPortalApproach({ ...input, velocity: input.player });
@@ -123,6 +124,27 @@ async function run() {
     assert(retained.active, "Retained tick-1388 state must remain inside dynamic stopping clearance");
     assert(command.mode === "hazard-clearance" && command.brake === true && command.coast === false,
       "Hazard clearance/braking must win over recharge coast until the dynamic margin is clear");
+  });
+
+  await runner.run("tick-1089 dynamic-clearance escape never reverse-thrusts into Acheron", () => {
+    const retained = resolveHazardClearance({
+      distance: 0.0987,
+      clearance: 0.12,
+      stoppingDistance: 0.0328,
+      driftMargin: 0.035,
+      inwardSpeed: 0.08,
+    });
+    const command = resolveHazardControl({
+      hazardActive: retained.active,
+      insideDynamicClearance: 0.0987 <= retained.dynamicClearance,
+      recharging: false,
+      overheated: false,
+      shouldBrake: true,
+    });
+    assert(retained.active && retained.dynamicClearance === 0.1528,
+      "Recorded Acheron sample must remain inside the dynamic clearance envelope");
+    assert(command.mode === "hazard-escape" && command.coast === false && command.brake === false,
+      "Inside dynamic clearance, the controller must preserve outward escape thrust without reverse brake");
   });
 
   const allPassed = runner.summary();

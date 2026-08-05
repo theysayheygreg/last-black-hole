@@ -53,6 +53,24 @@ const SHALLOWS_ROUTE = Object.freeze({
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
+// The route planner's published stopping envelope is deliberately broader
+// than its kill-radius margin. Once a sample is already inside that envelope,
+// reverse thrust would oppose the one command that can still increase
+// clearance. Keep this controller-only decision pure so the planner proof can
+// cover the recorded live state without changing simulation authority.
+function resolveHazardControl({ hazardActive, insideDynamicClearance, recharging, overheated, shouldBrake }) {
+  const priority = resolveAgentPlayControlPriority({
+    hazardActive,
+    recharging,
+    overheated,
+    shouldBrake,
+  });
+  if (hazardActive && insideDynamicClearance) {
+    return { mode: "hazard-escape", coast: false, brake: false };
+  }
+  return priority;
+}
+
 function safeName(value) {
   return String(value || "capture")
     .replace(/[^a-z0-9_-]+/gi, "-")
@@ -674,11 +692,14 @@ async function steerTo(page, clientId, target, options = {}) {
         })
         : { active: false, dynamicClearance: 0, brakeDistance: 0 };
       const avoidHazard = hazardClearance.active;
+      const insideDynamicClearance = Boolean(hazard
+        && hazard.distance <= hazardClearance.dynamicClearance);
       const shouldBrake = !options.allowFlyby
         && forwardSpeed > 0.01
         && dist <= stoppingDistance + proximityBuffer;
-      const priority = resolveAgentPlayControlPriority({
+      const priority = resolveHazardControl({
         hazardActive: avoidHazard,
+        insideDynamicClearance,
         recharging,
         overheated,
         shouldBrake,
@@ -716,6 +737,7 @@ async function steerTo(page, clientId, target, options = {}) {
           inwardSpeed,
           dynamicClearance: hazardClearance.dynamicClearance,
           brakeDistance: hazardClearance.brakeDistance,
+          insideDynamicClearance,
         },
       };
       await sleep(110);
@@ -1457,8 +1479,12 @@ async function run() {
   process.exit(passed ? 0 : 1);
 }
 
-run().catch((error) => {
-  console.error(error);
-  stopServer();
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch((error) => {
+    console.error(error);
+    stopServer();
+    process.exit(1);
+  });
+}
+
+module.exports = { resolveHazardControl };
