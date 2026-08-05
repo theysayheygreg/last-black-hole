@@ -871,110 +871,80 @@ async function run() {
       assert(Math.abs(resetPlayer.vy + 1.2) < 0.2,
         `Expected slingshot fixture tangential velocity, got ${resetPlayer.vy}`);
 
-      const engageSeq = Date.now() + 100;
       const captureEventWatermark = Math.max(0, ...(await getEvents(0)).map((event) => event.seq || 0));
-      await sendBrowserInput(page, {
-        seq: engageSeq,
-        moveX: 1,
-        moveY: 0,
-        thrust: 0,
-        brake: 0,
-        // Grapple Arc is held while orbiting. A false held level is a valid
-        // quick-tap capture, but it releases in the same authority tick and
-        // cannot be asserted through a later snapshot poll.
-        slingshot: true,
-        slingshotEdges: [1],
-        timestamp: Date.now(),
-      });
-      const captureEvents = await waitForEvents((events) => events.some((event) =>
-        event.seq > captureEventWatermark
-          && event.type === "player.slingshotEngaged"
-          && event.payload?.clientId === net.clientId
-      ));
-      const captureEvent = captureEvents.find((event) =>
-        event.seq > captureEventWatermark
-          && event.type === "player.slingshotEngaged"
-          && event.payload?.clientId === net.clientId
-      );
-      assert(captureEvent, "Expected the browser edge to produce an authoritative capture event");
-      assert(captureEvent.payload?.phase === "arc",
-        `Expected capture event phase=arc, got ${captureEvent.payload?.phase}`);
-      const engaged = await waitForSnapshotPlayerLabel(
-        "slingshot engage",
-        net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true
-          && remotePlayer.slingshot.phase === "arc"
-          && remotePlayer.slingshot.arcSpeed > 0,
-        { timeout: 10000 }
-      );
-      assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
-        `Expected authoritative slingshot anchor, got ${engaged.player.slingshot.anchorType}`);
+      // Drive the real browser input loop. A one-off sendRemoteInput call is
+      // immediately superseded by that loop's actual false held level, which
+      // correctly releases the grapple before a snapshot poll can observe it.
+      let slingshotKeyHeld = false;
+      await page.keyboard.down("KeyF");
+      slingshotKeyHeld = true;
+      try {
+        await waitFor(page, () => window.__TEST_API.getInputState()?.slingshot === true, { timeout: 3000 });
+        const captureEvents = await waitForEvents((events) => events.some((event) =>
+          event.seq > captureEventWatermark
+            && event.type === "player.slingshotEngaged"
+            && event.payload?.clientId === net.clientId
+        ));
+        const captureEvent = captureEvents.find((event) =>
+          event.seq > captureEventWatermark
+            && event.type === "player.slingshotEngaged"
+            && event.payload?.clientId === net.clientId
+        );
+        assert(captureEvent, "Expected the browser edge to produce an authoritative capture event");
+        assert(captureEvent.payload?.phase === "arc",
+          `Expected capture event phase=arc, got ${captureEvent.payload?.phase}`);
+        const engaged = await waitForSnapshotPlayerLabel(
+          "slingshot engage",
+          net.clientId,
+          (remotePlayer) => remotePlayer.slingshot?.engaged === true
+            && remotePlayer.slingshot.phase === "arc"
+            && remotePlayer.slingshot.arcSpeed > 0,
+          { timeout: 10000 }
+        );
+        assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
+          `Expected authoritative slingshot anchor, got ${engaged.player.slingshot.anchorType}`);
 
-      const readyToRelease = await waitForSnapshotPlayerLabel(
-        "grapple flat boost",
-        net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true
-          && remotePlayer.slingshot.arcSpeed > remotePlayer.slingshot.entrySpeed,
-        { timeout: 10000 }
-      );
-      const playerBeforeRelease = readyToRelease.player;
-      const releaseReadyTick = readyToRelease.snapshot.tick;
-      assert(Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy) > 0.01,
-        "Expected grappled player to have arc speed before release");
+        const readyToRelease = await waitForSnapshotPlayerLabel(
+          "grapple flat boost",
+          net.clientId,
+          (remotePlayer) => remotePlayer.slingshot?.engaged === true
+            && remotePlayer.slingshot.arcSpeed > remotePlayer.slingshot.entrySpeed,
+          { timeout: 10000 }
+        );
+        const playerBeforeRelease = readyToRelease.player;
+        assert(Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy) > 0.01,
+          "Expected grappled player to have arc speed before release");
 
-      await sendBrowserInput(page, {
-        seq: engageSeq + 1,
-        moveX: 1,
-        moveY: 0,
-        thrust: 0,
-        brake: 0,
-        slingshot: false,
-        slingshotEdges: [],
-        timestamp: Date.now(),
-      });
-      await waitForSnapshotPlayerLabel(
-        "slingshot release edge reset",
-        net.clientId,
-        (remotePlayer, remoteSnapshot) =>
-          remoteSnapshot.tick > releaseReadyTick &&
-          remotePlayer.slingshot?.engaged === true,
-        { timeout: 5000 }
-      );
-      const eventsBeforeRelease = await getEvents(0);
-      const lastSeqBeforeRelease = eventsBeforeRelease.reduce((max, event) => Math.max(max, event.seq || 0), 0);
-      await sendBrowserInput(page, {
-        seq: engageSeq + 2,
-        moveX: 1,
-        moveY: 0,
-        thrust: 0,
-        brake: 0,
-        slingshot: false,
-        slingshotEdges: [2],
-        timestamp: Date.now(),
-      });
-      const releaseEvents = await waitForEvents(
-        (events) => events.some((event) =>
+        const eventsBeforeRelease = await getEvents(0);
+        const lastSeqBeforeRelease = eventsBeforeRelease.reduce((max, event) => Math.max(max, event.seq || 0), 0);
+        await page.keyboard.up("KeyF");
+        slingshotKeyHeld = false;
+        const releaseEvents = await waitForEvents(
+          (events) => events.some((event) =>
+            event.seq > lastSeqBeforeRelease &&
+            event.type === "player.slingshotReleased" &&
+            event.payload?.clientId === net.clientId &&
+            event.payload.boostAwarded > 0
+          ),
+          { timeout: 10000 }
+        );
+        const releaseEvent = releaseEvents.find((event) =>
           event.seq > lastSeqBeforeRelease &&
-          event.type === "player.slingshotReleased" &&
-          event.payload?.clientId === net.clientId &&
-          event.payload.boostAwarded > 0
-        ),
-        { timeout: 10000 }
-      );
-      const releaseEvent = releaseEvents.find((event) =>
-        event.seq > lastSeqBeforeRelease &&
-        event.type === "player.slingshotReleased" &&
-        event.payload?.clientId === net.clientId
-      );
-      const released = await waitForSnapshotPlayerLabel(
-        "slingshot release snapshot",
-        net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === false,
-        { timeout: 10000 }
-      );
-      assert(released.player.slingshot.engaged === false, "Expected authoritative slingshot release");
-      assert(releaseEvent?.payload?.boostAwarded > 0,
-        `Expected positive authoritative flat grapple bonus, got ${JSON.stringify(releaseEvent)}`);
+            event.type === "player.slingshotReleased" &&
+            event.payload?.clientId === net.clientId
+        );
+        const released = await waitForSnapshotPlayerLabel(
+          "slingshot release snapshot",
+          net.clientId,
+          (remotePlayer) => remotePlayer.slingshot?.engaged === false,
+          { timeout: 10000 }
+        );
+        assert(released.player.slingshot.engaged === false, "Expected authoritative slingshot release");
+        assert(releaseEvent?.payload?.boostAwarded > 0,
+          `Expected positive authoritative flat grapple bonus, got ${JSON.stringify(releaseEvent)}`);
+      } finally {
+        if (slingshotKeyHeld) await page.keyboard.up("KeyF");
+      }
     });
 
     await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {
