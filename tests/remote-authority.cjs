@@ -872,20 +872,39 @@ async function run() {
         `Expected slingshot fixture tangential velocity, got ${resetPlayer.vy}`);
 
       const engageSeq = Date.now() + 100;
+      const captureEventWatermark = Math.max(0, ...(await getEvents(0)).map((event) => event.seq || 0));
       await sendBrowserInput(page, {
         seq: engageSeq,
         moveX: 1,
         moveY: 0,
         thrust: 0,
         brake: 0,
-        slingshot: false,
+        // Grapple Arc is held while orbiting. A false held level is a valid
+        // quick-tap capture, but it releases in the same authority tick and
+        // cannot be asserted through a later snapshot poll.
+        slingshot: true,
         slingshotEdges: [1],
         timestamp: Date.now(),
       });
+      const captureEvents = await waitForEvents((events) => events.some((event) =>
+        event.seq > captureEventWatermark
+          && event.type === "player.slingshotEngaged"
+          && event.payload?.clientId === net.clientId
+      ));
+      const captureEvent = captureEvents.find((event) =>
+        event.seq > captureEventWatermark
+          && event.type === "player.slingshotEngaged"
+          && event.payload?.clientId === net.clientId
+      );
+      assert(captureEvent, "Expected the browser edge to produce an authoritative capture event");
+      assert(captureEvent.payload?.phase === "arc",
+        `Expected capture event phase=arc, got ${captureEvent.payload?.phase}`);
       const engaged = await waitForSnapshotPlayerLabel(
         "slingshot engage",
         net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.arcSpeed > 0,
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true
+          && remotePlayer.slingshot.phase === "arc"
+          && remotePlayer.slingshot.arcSpeed > 0,
         { timeout: 10000 }
       );
       assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
