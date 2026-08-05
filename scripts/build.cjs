@@ -46,6 +46,9 @@ const DESKTOP_SERVER_DIRECTORIES = [
   'content',
   'sim',
 ];
+const DESKTOP_SERVER_SHARED_SOURCE_FILES = [
+  'physics.js',
+];
 
 const TARGET_ALIASES = {
   web: 'web',
@@ -249,6 +252,9 @@ function stageDesktopAuthorityRuntime(stagingRoot) {
   // content wrappers resolve their JSON payloads from src/content.
   copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(stagingRoot, 'src', 'maps'));
   copyIfExists(path.join(ROOT, 'src', 'content'), path.join(stagingRoot, 'src', 'content'));
+  for (const file of DESKTOP_SERVER_SHARED_SOURCE_FILES) {
+    copyIfExists(path.join(ROOT, 'src', file), path.join(stagingRoot, 'src', file));
+  }
 }
 
 function zipDir(sourceDir, zipPath) {
