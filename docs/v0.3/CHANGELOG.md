@@ -1,5 +1,16 @@
 # v0.3 Changelog
 
+- **Round 2 UI readability:** shared key/value rows now reserve measured label
+  width, input chips and captions share one measured footer path, and generic
+  selection/command fills use cyan structure rather than amber value color.
+  Heat remains a presentation-only projection of existing authority truth:
+  hidden below the prior cool epsilon, centered beneath the ship while warm,
+  and explicit during lockout. Shared HUD and ship-local layout now reserve a
+  signature-notice lane clear of HULL and a matte-backed speed/Heat lane clear
+  of fabric on every map; no gameplay, Heat tuning, or fabric grammar changed.
+  T1 is explicit at 18px for critical in-play values and 12px for contact
+  labels, with steady in-play labels/status/actions lowercase.
+
 - **Cosmic signature authority:** each seeded run now freezes its authored
   modifiers once in authority state. Current coupling, coast drag, well pull,
   scheduled well growth, portal-window lifespan, Noise radius/decay, and the

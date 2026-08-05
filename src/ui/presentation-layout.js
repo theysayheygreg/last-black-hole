@@ -35,24 +35,26 @@ export function getShipLocalLabelSlots({ shipX, shipY, canvasW, canvasH } = {}) 
   const y = finite(shipY);
   const width = Math.max(1, finite(canvasW, 1280));
   const height = Math.max(1, finite(canvasH, 800));
-  const velocityBounds = clampRect({ x: x - 82, y: y + 14, w: 164, h: 18 }, width, height);
-  const heatBounds = clampRect({ x: x - 74, y: y + 45, w: 148, h: 23 }, width, height);
+  // One protected world-relative lane clears the fabric behind speed and Heat
+  // on every map without per-map offsets.
+  const velocityBounds = clampRect({ x: x - 98, y: y + 16, w: 196, h: 26 }, width, height);
+  const heatBounds = clampRect({ x: x - 98, y: y + 50, w: 196, h: 30 }, width, height);
   return Object.freeze({
     velocity: Object.freeze({
       id: 'ship-velocity',
       order: 10,
       bounds: Object.freeze(velocityBounds),
       textX: x,
-      textY: velocityBounds.y + 14,
+      textY: velocityBounds.y + 19,
     }),
     heat: Object.freeze({
       id: 'ship-heat',
       order: 20,
       bounds: Object.freeze(heatBounds),
       textX: x,
-      textY: heatBounds.y + 13,
+      textY: heatBounds.y + 18,
       barX: heatBounds.x,
-      barY: heatBounds.y + 18,
+      barY: heatBounds.y + 23,
       barW: heatBounds.w,
     }),
   });

@@ -202,6 +202,13 @@ const assert = require('assert');
   assert(ledgerRows.every((row) => row.label && row.value), 'result ledger cannot render an empty labeled row');
   const hud = layout.hudSurfaceLayout(960, 720);
   assertSurface('HUD surfaces', [hud.vitals, hud.portals, hud.actions, hud.interaction]);
+  for (const [width, height] of [[960, 720], [1280, 800]]) {
+    const surface = layout.hudSurfaceLayout(width, height);
+    assert(!layout.rectsOverlap(surface.signatureNotice, surface.vitals, geometry.viewport.gap),
+      `${width}x${height} signature notice crosses HULL/vitals`);
+    assert(!layout.rectsOverlap(surface.signatureNotice, surface.portals, geometry.viewport.gap),
+      `${width}x${height} signature notice crosses route rail`);
+  }
 
   console.log(`UILayout: ${prompts.PLAYER_ACTION_IDS.length} action ids, focused prompt/compound-row assertions passed.`);
 })().catch((error) => {

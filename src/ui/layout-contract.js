@@ -360,8 +360,14 @@ export function hudSurfaceLayout(width, height) {
   const inventory = rect(warnings.x + warnings.w + gap, portals.y + portals.h + gap, 420,
     Math.max(320, h - (portals.y + portals.h + gap) - edge));
   const signature = rect(Math.max(edge, (w - 320) / 2), edge, 320, 24);
+  const signatureNotice = rect(
+    Math.max(collapse.x + collapse.w, vitals.x + vitals.w) + gap,
+    edge,
+    Math.max(160, portals.x - gap - (Math.max(collapse.x + collapse.w, vitals.x + vitals.w) + gap)),
+    88,
+  );
   return {
     edge, gap, collapse, vitals, ecology, salvage, warnings,
-    portals, actions, interaction, inventory, signature,
+    portals, actions, interaction, inventory, signature, signatureNotice,
   };
 }

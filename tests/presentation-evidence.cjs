@@ -69,6 +69,10 @@ async function run() {
   assert.strictEqual(layout.safeObjectLabel('Lumen', 'STAR 1'), 'Lumen');
   const shipSlots = layout.getShipLocalLabelSlots({ shipX: 640, shipY: 400, canvasW: 1280, canvasH: 800 });
   assert(shipSlots.heat.bounds.y > shipSlots.velocity.bounds.y + shipSlots.velocity.bounds.h);
+  assert(shipSlots.velocity.bounds.w >= 196 && shipSlots.velocity.bounds.h >= 26,
+    'Speed must own a T1 matte-backed safe lane');
+  assert(shipSlots.heat.bounds.w >= 196 && shipSlots.heat.bounds.h >= 30,
+    'Heat must remain centered in the shared ship-local lane');
   const labels = layout.placePresentationLabels([
     { id: 'near-star', order: 20, anchorX: 640, anchorY: 430, width: 120, height: 18 },
     { id: 'near-planet', order: 30, anchorX: 640, anchorY: 430, width: 120, height: 18 },

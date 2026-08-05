@@ -130,7 +130,7 @@ function getInhibitorHUDState(opts = {}) {
   const entities = Array.isArray(state?.entities) ? state.entities : [];
   const active = entities.filter((entity) => entity.lifecycle !== 'expired');
   const counts = active.reduce((result, entity) => {
-    const kind = String(entity.kind || 'threat').toUpperCase();
+    const kind = String(entity.kind || 'threat').toLowerCase();
     result[kind] = (result[kind] || 0) + 1;
     return result;
   }, {});
@@ -449,8 +449,8 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   if (_noiseReadoutEl && opts.noise) {
     const noise = opts.noise;
     const radius = Math.max(0, Number(noise.audibleRadiusMeters) || 0);
-    const trend = String(noise.trend || 'steady').toUpperCase();
-    _noiseReadoutEl.textContent = `NOISE ${Math.round(radius)}m · ${trend}`;
+    const trend = String(noise.trend || 'steady').toLowerCase();
+    _noiseReadoutEl.textContent = `noise ${Math.round(radius)}m · ${trend}`;
     _noiseDetailEl.textContent = formatNoiseDetail(noise);
     _noiseReadoutEl.style.color = radius > 0 ? 'rgba(80, 220, 220, 0.92)' : 'rgba(120, 160, 180, 0.72)';
   }
@@ -489,7 +489,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
       const summary = Object.entries(inhibitorHud.counts)
         .map(([kind, count]) => `${kind} ${count}`)
         .join(' · ');
-      _inhibitorSummaryEl.textContent = `${summary} · PHASE ${Math.max(0, Number(opts.inhibitorState.phase) || 0)}`;
+      _inhibitorSummaryEl.textContent = `${summary} · phase ${Math.max(0, Number(opts.inhibitorState.phase) || 0)}`;
     }
   }
 

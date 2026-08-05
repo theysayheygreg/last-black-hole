@@ -3714,7 +3714,13 @@ function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
   else                   { tierLabel = 'perilous'; color = 'rgba(240, 80, 80, 0.95)'; }
 
   ctx.save();
-  ctx.font = canvasFont(11);
+  // Shared ship-local slots own this void matte. It protects the T1 readout
+  // from fabric glyphs without any Deep Field-only positioning rule.
+  ctx.fillStyle = roleColor('void', 0.76);
+  ctx.fillRect(slot.bounds.x, slot.bounds.y, slot.bounds.w, slot.bounds.h);
+  ctx.strokeStyle = roleColor('muted', 0.30);
+  ctx.strokeRect(slot.bounds.x, slot.bounds.y, slot.bounds.w, slot.bounds.h);
+  ctx.font = canvasFont(UI_IN_PLAY_TYPE.criticalNumber, { weight: '700' });
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
   // Speed line directly below ship — far enough not to overlap the
@@ -5248,7 +5254,7 @@ function gameLoop(now) {
         const edge = drawEdgeArrow(sx, sy, roleColor(accentRole, edgeAlpha), 7);
         if (edge) {
           const label = contact.identity || contact.category;
-          ctx.font = canvasFont(12, { weight: '700' });
+          ctx.font = canvasFont(UI_IN_PLAY_TYPE.contactLabel, { weight: '700' });
           ctx.textAlign = 'center';
           ctx.fillStyle = roleColor(accentRole, Math.max(0.2, alpha * pulse));
           ctx.fillText(`${label} · ${Math.round(contact.rangeMeters || 0)}m`, edge.x, edge.y - 12);
@@ -5451,17 +5457,17 @@ function gameLoop(now) {
       const fadeIn = Math.min(elapsed / 0.35, 1);
       const fadeOut = elapsed > 2.1 ? 1 - ((elapsed - 2.1) / 0.9) : 1;
       const alpha = Math.max(0, fadeIn * fadeOut);
-      const margin = Math.max(28, overlayCanvas.width * 0.055);
-      const panelW = Math.min(520, overlayCanvas.width - margin * 2);
-      const panelX = Math.min(Math.max(286, overlayCanvas.width * 0.22), overlayCanvas.width - panelW - margin);
-      const panelY = Math.max(86, overlayCanvas.height * 0.12);
-      const panelH = 88;
+      const signatureLane = hudSurfaceLayout(overlayCanvas.width, overlayCanvas.height).signatureNotice;
+      const panelW = Math.min(520, signatureLane.w);
+      const panelX = signatureLane.x + Math.max(0, (signatureLane.w - panelW) / 2);
+      const panelY = signatureLane.y;
+      const panelH = signatureLane.h;
       const textX = panelX + 18;
       const textW = panelW - 36;
 
       ctx.save();
       drawUiPanel(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, {
-        role: 'flow',
+        role: UI_INTERACTION_ROLES.command,
         fillAlpha: 0.88 * alpha,
         borderAlpha: 0.22 * alpha,
         cornerLength: 22,

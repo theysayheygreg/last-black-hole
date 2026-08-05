@@ -144,9 +144,9 @@ placeholders.
 The shipped 11px (most common size in the game) migrates to 12; shipped
 8px migrates to 9; 20/21/22/25/26 one-offs snap to the nearest token.
 
-**Floors (hard):** any number the player acts on in-play ≥ **18px**
-(heat %, speed, timers, off-screen contact range). Menu body ≥ **12px**.
-9–10px may never be the only rendering of a fact.
+**Floors (hard):** T1 critical in-play numbers (heat %, speed, timers) are
+≥ **18px**; contact identity/range labels are ≥ **12px**. Menu body ≥
+**12px**. 9–10px may never be the only rendering of a fact.
 
 ### 3.3 Casing (voice rule — Greg-ratified)
 
@@ -155,6 +155,8 @@ The shipped 11px (most common size in the game) migrates to 12; shipped
 - **lowercase: everything else** — body, descriptions, captions, button
   verbs in footers, status lines. A steady-state readout is lowercase
   (`noise 330m · falling`, not `NOISE 330M`).
+- **In-play application:** instrument labels, steady status, and action
+  captions stay lowercase; only terminal lock/warning moments use ALLCAPS.
 - Never Title Case. Never mixed-case acronym styling except EM.
 
 ---
