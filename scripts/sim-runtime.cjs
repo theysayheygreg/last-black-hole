@@ -696,12 +696,20 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = [], s
       metadata: optionalWindows.map((window) => window.metadata),
     });
   }
+  // The test-only match-duration override can combine with a short-lived
+  // signature. Keep the final window at least one Conductor guard wide so its
+  // own open/close fronts remain a valid schedule. Normal map durations stay
+  // on their authored signature-scaled value.
+  const finalExfilDuration = Math.max(
+    PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
+    resolvedGuardSeconds,
+  );
   conductor.scheduleWindows({
     idPrefix: "portal:final-exfil",
     startTime: duration,
     cadence: 1,
     count: 1,
-    durations: PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
+    durations: finalExfilDuration,
     metadata: {
       system: "portals",
       kind: "final-exfil",
@@ -711,10 +719,10 @@ function createInhibitorConductor(seed, runDurationSeconds, mapId, wells = [], s
       countRange: [1, 1],
       effectiveCountRange: [1, 1],
       types: ["standard"],
-      baseDurationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
+      baseDurationSeconds: finalExfilDuration,
       signatureDurationMultiplier: portalLifespanMultiplier,
       durationMultiplier: 1,
-      durationSeconds: PORTAL_CONFIG.schedule.finalExfilDuration * portalLifespanMultiplier,
+      durationSeconds: finalExfilDuration,
       latePhaseRule: { minInhibitorPhase: 0, countMultiplier: 1, durationMultiplier: 1 },
       portalPlacementPolicyId: portalPlacement.policyId,
       spawnRadiusBands: portalPlacement.spawnRadiusBands,

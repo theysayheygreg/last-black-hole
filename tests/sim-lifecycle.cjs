@@ -332,6 +332,10 @@ async function run() {
       const snapshot = await fetchJson(MATCH_CAP_PORT, "/snapshot");
       assert(snapshot.body.session?.status === "running",
         `Expected session to remain running through final open, got ${snapshot.body.session?.status}`);
+      const finalWindow = snapshot.body.world?.portalSchedule?.windows
+        ?.find((window) => window.metadata?.finalExfil);
+      assert(finalWindow?.duration >= 10,
+        `Expected final exfil to respect its 10s schedule guard, got ${finalWindow?.duration}`);
       assert(snapshot.body.world?.portals?.some((portal) => portal.finalInhibitor && portal.alive !== false),
         "Expected the Conductor to materialize a live guaranteed final exfil at the canonical front");
     } finally {
