@@ -33,6 +33,7 @@ const {
 const { recordJourneyStage } = require("./agent-play-report.cjs");
 const {
   planPortalApproach,
+  planRouteApproach,
   resolveAgentPlayControlPriority,
   resolveHazardClearance,
 } = require("./agent-play-route.cjs");
@@ -520,10 +521,22 @@ async function steerTo(page, clientId, target, options = {}) {
           velocity: player,
         });
         steeringTarget = route.waypoint || route.target;
+      } else if (options.hazardAware) {
+        route = planRouteApproach({
+          player,
+          target,
+          wells: snapshot.world?.wells || [],
+          worldScale: ws,
+          velocity: player,
+        });
+        steeringTarget = route.waypoint || route.target;
       }
       const dx = wrappedDelta(player.wx, steeringTarget.wx, ws);
       const dy = wrappedDelta(player.wy, steeringTarget.wy, ws);
       const dist = Math.hypot(dx, dy);
+      const targetDx = wrappedDelta(player.wx, target.wx, ws);
+      const targetDy = wrappedDelta(player.wy, target.wy, ws);
+      const targetDistance = Math.hypot(targetDx, targetDy);
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
       const fuelRatio = player.deltaVRatio || 0;
       const heatRatio = Number.isFinite(Number(player.heatRatio))
@@ -609,7 +622,8 @@ async function steerTo(page, clientId, target, options = {}) {
 
       if (!options.portalId
         && !options.slingshotAnchorId
-        && dist <= radius
+        && !route?.waypoint
+        && targetDistance <= radius
         && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
         return { start, end: last, closest, target: { ...target } };
       }
@@ -628,7 +642,7 @@ async function steerTo(page, clientId, target, options = {}) {
         ? (forwardSpeed * forwardSpeed) / (2 * brakeDeceleration)
         : 0;
       const proximityBuffer = Math.max(radius, options.portalId ? (route?.captureRadius || radius) * 0.35 : 0.025);
-      const hazard = options.portalId ? route?.nearestHazard : null;
+      const hazard = route?.nearestHazard || null;
       const awayMagnitude = Math.hypot(hazard?.awayX || 0, hazard?.awayY || 0) || 1;
       const inwardSpeed = hazard
         ? -((player.vx || 0) * (hazard.awayX / awayMagnitude) + (player.vy || 0) * (hazard.awayY / awayMagnitude))
@@ -864,6 +878,7 @@ async function collectRouteLootAndRaiseNoise(page, clientId, outputDir, screensh
           maxCruiseSpeed: 0.24,
           arrivalSpeed: 0.22,
           timeout: 45000,
+          hazardAware: true,
         });
         looted = await waitForPlayer(clientId, (player) => player.cargoCount > 0, { timeout: 5000 });
         wreck = candidate;

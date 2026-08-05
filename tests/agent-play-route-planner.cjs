@@ -2,6 +2,7 @@ const { TestRunner, assert } = require("./helpers.cjs");
 const {
   DEFAULT_WELL_MARGIN,
   planPortalApproach,
+  planRouteApproach,
   resolveAgentPlayControlPriority,
   resolveHazardClearance,
   routeHazards,
@@ -74,6 +75,22 @@ async function run() {
       wells: [{ id: "well-seam", wx: 4.9, wy: 2.5, killRadius: 0.06 }],
       worldScale: 5,
     });
+  });
+
+  await runner.run("keeps the Shallows salvage controller aware of nearby Mictlan clearance", () => {
+    const player = { wx: 1.2756268407506592, wy: 1.9704539613488983, vx: 0.21058178935445054, vy: -0.35470758553492643 };
+    const wreck = { id: "wreck-shelter", wx: 1.5, wy: 0.5 };
+    const wells = [{ id: "well-2", name: "Mictlan", wx: 1.95, wy: 2.16, killRadius: 0.05 }];
+    const route = planRouteApproach({ player, target: wreck, wells, worldScale: 3, velocity: player });
+    assert(route.nearestHazard?.wellId === "well-2", "Expected the live salvage controller to retain Mictlan as its nearest hazard");
+    const clearance = resolveHazardClearance({
+      distance: route.nearestHazard.clearance + 0.02,
+      clearance: route.nearestHazard.clearance,
+      stoppingDistance: 0.03,
+      driftMargin: route.driftMargin,
+      inwardSpeed: 0.1,
+    });
+    assert(clearance.active, "Expected a close salvage pass to brake out through the published Mictlan margin");
   });
 
   await runner.run("tick-1388 hazard brake overrides recharge coast", () => {

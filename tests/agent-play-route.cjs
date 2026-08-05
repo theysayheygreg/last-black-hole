@@ -246,6 +246,56 @@ function planPortalApproach({
   };
 }
 
+// Wrecks and other ordinary route targets use the same published well-clearance
+// geometry as portal approach. This stays in the AgentPlay planner: it reads
+// snapshots only and never changes world placement, growth, or movement truth.
+function planRouteApproach({
+  player,
+  target,
+  wells = [],
+  worldScale,
+  safetyMargin = DEFAULT_WELL_MARGIN,
+  velocity = null,
+  driftLookahead = DRIFT_LOOKAHEAD_SECONDS,
+}) {
+  const margin = finiteNonNegative(safetyMargin, DEFAULT_WELL_MARGIN);
+  const hazards = routeHazards({
+    from: player,
+    to: target,
+    wells,
+    worldScale,
+    safetyMargin: margin,
+    velocity,
+    driftLookahead,
+  });
+  const blocker = hazards[0] || null;
+  const waypoint = blocker
+    ? chooseClearanceWaypoint({
+      player,
+      target,
+      blocker,
+      wells,
+      worldScale,
+      safetyMargin: margin,
+      velocity,
+      driftLookahead,
+    })
+    : null;
+  return {
+    target,
+    safetyMargin: margin,
+    driftMargin: dynamicMargin({ velocity, driftLookahead }),
+    nearestHazard: nearestHazard({ player, wells, worldScale, safetyMargin: margin, velocity, driftLookahead }),
+    blocker: blocker && {
+      wellId: blocker.well.id,
+      wellName: blocker.well.name || blocker.well.id,
+      clearance: blocker.clearance,
+      closestDistance: blocker.closest.distance,
+    },
+    waypoint,
+  };
+}
+
 module.exports = {
   DEFAULT_WELL_MARGIN,
   DRIFT_LOOKAHEAD_SECONDS,
@@ -254,5 +304,6 @@ module.exports = {
   resolveHazardClearance,
   portalCaptureRadius,
   planPortalApproach,
+  planRouteApproach,
   routeHazards,
 };
