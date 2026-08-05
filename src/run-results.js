@@ -209,11 +209,13 @@ export function projectRunResultsPresentation(view = {}, surface = {}) {
   ]);
   const cargoLabels = meaningfulLines(view.cargoLabels);
   const defaultCargoRows = cargoLabels.length === 0 ? 1 : Math.min(3, cargoLabels.length);
-  const rightContentStartY = panelY + 160;
+  const cargoSectionLabelY = panelY + 160;
   const settlementRows = view.settlement
     ? 1 + (Number(view.settlement.overflowCount) > 0 ? 1 : 0)
     : 0;
-  const cargoStartY = rightContentStartY + permanentRowH * (1 + settlementRows);
+  // Match the renderer's exact order: cargo section label, permanent cargo
+  // truth, then optional detail rows.
+  const cargoStartY = cargoSectionLabelY + sectionLabelH + permanentRowH * (1 + settlementRows);
   let cargoRowBudget = defaultCargoRows;
   let cargoLines = cargoLinesForBudget(cargoLabels, cargoRowBudget);
   const cargoEndY = () => cargoStartY + cargoLines.length * (cargoRowH + cargoGap) + cargoGap;
@@ -229,9 +231,14 @@ export function projectRunResultsPresentation(view = {}, surface = {}) {
   const visibleNotableLines = realNotableLines.slice(0, Math.min(3, notableBudget()));
   return {
     cargoLines,
+    cargoSectionLabelY,
     cargoStartY,
     cargoEndY: cargoEndY(),
     notableLines: visibleNotableLines,
+    notableHeaderY: cargoEndY(),
+    notableEndY: cargoEndY() + (visibleNotableLines.length > 0
+      ? sectionLabelH + visibleNotableLines.length * factLineH
+      : 0),
     showNotable: visibleNotableLines.length > 0,
     notableBudget: notableBudget(),
   };
@@ -383,6 +390,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     }
   }
   const presentation = projectRunResultsPresentation(view, surface);
+  ry = presentation.cargoStartY;
   ctx.textAlign = 'left';
   ctx.font = canvasFont(13);
   const cargoLines = presentation.cargoLines;

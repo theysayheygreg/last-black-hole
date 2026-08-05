@@ -230,10 +230,20 @@ const assert = require('assert');
   for (const [width, height] of [[960, 720], [1280, 800]]) {
     const resultSurface = layout.resultsSurfaceLayout(width, height);
     const factualProjection = runResults.projectRunResultsPresentation(realNotableView, resultSurface);
-    assert.strictEqual(factualProjection.cargoLines.length, 3, `${width}x${height} overflow settlement must retain its three cargo detail rows`);
+    const expectedCargoRows = 2;
+    assert.strictEqual(factualProjection.cargoLines.length, expectedCargoRows,
+      `${width}x${height} overflow settlement must reduce only optional cargo detail needed for a factual line`);
+    assert.deepStrictEqual(factualProjection.cargoLines, ['[T1] relay core 15em', '+2 more items'],
+      `${width}x${height} constrained result space must retain one named cargo row and an honest remainder count`);
     assert(factualProjection.showNotable, `${width}x${height} real notable fact lost its section`);
     assert.strictEqual(factualProjection.notableLines[0], 'first aperture crossing recorded', `${width}x${height} notable line changed or disappeared`);
-    assert(factualProjection.cargoEndY + 40 <= resultSurface.contentBottom, `${width}x${height} factual NOTABLE line crosses the CTA rail`);
+    assert.strictEqual(factualProjection.cargoStartY, factualProjection.cargoSectionLabelY + 24 + 22 * 3,
+      `${width}x${height} cargo rows must clear the section label, value, deposit, and overflow rows`);
+    assert.strictEqual(factualProjection.notableHeaderY,
+      factualProjection.cargoStartY + factualProjection.cargoLines.length * (resultSurface.cargoRowH + resultSurface.cargoGap) + resultSurface.cargoGap,
+      `${width}x${height} NOTABLE must follow every rendered cargo row and gap`);
+    assert(factualProjection.notableEndY <= resultSurface.contentBottom,
+      `${width}x${height} factual NOTABLE header/line crosses the CTA rail`);
     const aiProjection = runResults.projectRunResultsPresentation(aiOnlyView, resultSurface);
     assert(aiProjection.showNotable && aiProjection.notableLines[0].includes('ghost (drifter) extracted / 1 cargo'),
       `${width}x${height} AI-only fact must remain truthful and visible`);
