@@ -210,7 +210,9 @@ async function run() {
       });
       const decoy = withDecoy.players.find((entry) => entry.clientId === CLIENT_ID).abilityState.decoys[0];
 
-      await postDebugPlayerState({ wx: 3.0, wy: 3.0, vx: 0, vy: 0, noiseRadiusMeters: 0 });
+      // Keep the test pilot clear of the nearby seeded well at (3.25, 3.6).
+      // This contract probes target ownership, not a concurrent well death.
+      await postDebugPlayerState({ wx: 4.5, wy: 4.5, vx: 0, vy: 0, noiseRadiusMeters: 0 });
       await postDebugInhibitorState({ phase: 2 });
       const spawned = await waitForSnapshot((snapshot) =>
         snapshot.inhibitor.entities?.some((entity) => entity.kind === "swarm"));
@@ -218,9 +220,12 @@ async function run() {
       await postDebugInhibitorState({ entities: [{ id: swarm.id, wx: decoy.wx, wy: decoy.wy }] });
       const swarmTrackedDecoy = await waitForSnapshot((snapshot) => {
         const current = snapshot.inhibitor.entities?.find((entity) => entity.id === swarm.id);
+        const liveDecoy = snapshot.players.find((entry) => entry.clientId === CLIENT_ID)
+          ?.abilityState?.decoys?.[0];
         return current && ["HEARD", "TRACKING"].includes(current.noiseListenerState)
           && current.lastHeard
-          && worldDistance(current.lastHeard.wx, current.lastHeard.wy, decoy.wx, decoy.wy, snapshot.session.worldScale) < 0.35;
+          && liveDecoy
+          && worldDistance(current.lastHeard.wx, current.lastHeard.wy, liveDecoy.wx, liveDecoy.wy, snapshot.session.worldScale) < 0.35;
       });
       const tracked = swarmTrackedDecoy.inhibitor.entities.find((entity) => entity.id === swarm.id);
       assert(["HEARD", "TRACKING"].includes(tracked.noiseListenerState), "Expected Swarm to hear the decoy through Noise");
@@ -231,7 +236,7 @@ async function run() {
       const vessel = vesselSpawned.inhibitor.entities.find((entity) => entity.kind === "vessel");
       await waitForSnapshot((snapshot) => snapshot.inhibitor.entities
         ?.find((entity) => entity.id === vessel.id)?.lifecycle === "alive");
-      await postDebugPlayerState({ wx: 3.0, wy: 3.0, vx: 0, vy: 0, noiseRadiusMeters: 0 });
+      await postDebugPlayerState({ wx: 4.5, wy: 4.5, vx: 0, vy: 0, noiseRadiusMeters: 0 });
       await postDebugInhibitorState({ entities: [{ id: vessel.id, wx: 2.0, wy: 2.0 }] });
       const before = await getSnapshot();
       const beforeEntity = before.inhibitor.entities.find((entity) => entity.id === vessel.id);
