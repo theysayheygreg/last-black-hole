@@ -281,6 +281,9 @@ export function drawActionGlyph(ctx, descriptor, rect, { alpha = 1, color = null
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = canvasFont(Math.max(10, Math.min(13, size * 0.38)), { weight: '700' });
+  // Chip boxes fit their labels: a keycap/system frame widens to the measured
+  // text plus padding instead of squeezing multi-char labels into a square.
+  const labelBoxW = Math.max(size, Math.ceil(ctx.measureText(label).width) + 12);
 
   if (kind === 'face') {
     ctx.beginPath();
@@ -300,14 +303,18 @@ export function drawActionGlyph(ctx, descriptor, rect, { alpha = 1, color = null
     }
   } else if (kind === 'shoulder' || kind === 'trigger' || kind === 'system') {
     ctx.beginPath();
-    drawGlyphFrame(ctx, x + 1, y + size * 0.2, size - 2, size * 0.6, 3);
+    drawGlyphFrame(ctx, x + 1, y + size * 0.2, labelBoxW - 2, size * 0.6, 3);
     ctx.stroke();
-    ctx.fillText(label, x + size / 2, y + size / 2 + 0.5);
+    ctx.fillText(label, x + labelBoxW / 2, y + size / 2 + 0.5);
+    ctx.restore();
+    return { x, y, w: labelBoxW, h: size };
   } else {
     ctx.beginPath();
-    drawGlyphFrame(ctx, x + 1, y + 2, size - 2, size - 4, 3);
+    drawGlyphFrame(ctx, x + 1, y + 2, labelBoxW - 2, size - 4, 3);
     ctx.stroke();
-    ctx.fillText(label, x + size / 2, y + size / 2 + 0.5);
+    ctx.fillText(label, x + labelBoxW / 2, y + size / 2 + 0.5);
+    ctx.restore();
+    return { x, y, w: labelBoxW, h: size };
   }
   ctx.restore();
   return { x, y, w: size, h: size };
@@ -321,17 +328,17 @@ export function drawActionPrompt(ctx, rect, descriptor, { verb = '', alpha = 1, 
   const glyphSize = Math.max(minGlyphSize, Math.min(32, source.h));
   const glyphRect = { x: source.x, y: source.y, w: glyphSize, h: source.h };
   const copy = prompt.verb;
-  drawActionGlyph(ctx, prompt.descriptor, glyphRect, { alpha, color });
+  const glyph = drawActionGlyph(ctx, prompt.descriptor, glyphRect, { alpha, color });
   if (copy) {
     ctx.save();
     ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall, { weight: '700' });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = color ? withAlpha(color, alpha) : roleColor('muted', alpha);
-    ctx.fillText(copy, source.x + glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap, source.y + source.h / 2);
+    ctx.fillText(copy, source.x + glyph.w + UI_DECK_GEOMETRY.actionGlyph.gap, source.y + source.h / 2);
     ctx.restore();
   }
-  return { glyph: { x: glyphRect.x, y: glyphRect.y, w: glyphSize, h: glyphSize }, copy: true };
+  return { glyph, copy: true };
 }
 
 export function drawActionFooter(ctx, x, y, actions, {

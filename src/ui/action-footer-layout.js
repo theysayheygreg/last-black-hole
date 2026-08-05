@@ -11,10 +11,20 @@ export function measureActionPrompt(entry, { measureText = null } = {}) {
   const prompt = normalizeActionPrompt(entry);
   if (!prompt) return null;
   const glyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight);
+  // Mirror drawActionGlyph: label-bearing chips widen to fit their text plus
+  // padding, so the footer reserves the real chip footprint, not a square.
+  const kind = prompt.descriptor?.glyphKind || 'keycap';
+  const label = String(prompt.descriptor?.fallbackLabel || '').toUpperCase();
+  const labelWidth = (kind === 'face' || kind === 'dpad')
+    ? 0
+    : (typeof measureText === 'function'
+      ? Math.max(0, Number(measureText(label)) || 0)
+      : label.length * 8);
+  const chipWidth = Math.max(glyphSize, Math.ceil(labelWidth) + 12);
   const copyWidth = typeof measureText === 'function'
     ? Math.max(0, Number(measureText(prompt.verb)) || 0)
     : prompt.verb.length * 8;
-  return { ...prompt, w: glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap + copyWidth, h: glyphSize };
+  return { ...prompt, w: chipWidth + UI_DECK_GEOMETRY.actionGlyph.gap + copyWidth, h: glyphSize };
 }
 
 /**

@@ -297,12 +297,8 @@ export function drawRunResultsOverlay(ctx, canvas, {
   let ry = panelY + 160;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });
   ry += 24;
-  drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items`, rightX, ry, {
-    alpha: contentAlpha,
-    valueRole: success ? 'salvage' : 'danger',
-    rowWidth: columnW,
-  });
-  ry += 22;
+  // The header pill already carries the cargo count — a manifest row here
+  // was the same fact twice on one screen (rubric H3).
   drawKeyValueRow(ctx, 'salvage value', `${view.cargoValue} EM`, rightX, ry, {
     alpha: contentAlpha,
     valueRole: success ? 'salvage' : 'danger',
@@ -361,22 +357,28 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ry += cargoGap;
   const notableLines = [...view.notableLines];
   if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
-  drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
-  ry += 24;
-  ctx.font = canvasFont(13);
-  ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
-  const requestedLines = notableLines.length > 0 ? notableLines.slice(0, 3) : ['no unusual telemetry'];
-  const lines = requestedLines.slice(0, Math.max(0, Math.floor((contentBottom - ry) / 16)));
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
-      delay: 1.02,
-      stagger: motion.rowStagger,
-      reducedMotion: motion.reducedMotion,
-    }));
-    ctx.fillStyle = roleColor('muted', 0.84 * rowAlpha);
-    ctx.fillText(fitUiText(ctx, line, panelW / 2 - 72), rightX, ry);
-    ry += 16;
+  // A section header with no room for a single line is worse than no
+  // section — budget the lines before drawing the label so NOTABLE never
+  // renders as an empty heading.
+  const notableBudget = Math.max(0, Math.floor((contentBottom - (ry + 24)) / 16));
+  if (notableBudget >= 1) {
+    drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
+    ry += 24;
+    ctx.font = canvasFont(13);
+    ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
+    const requestedLines = notableLines.length > 0 ? notableLines.slice(0, 3) : ['no unusual telemetry'];
+    const lines = requestedLines.slice(0, notableBudget);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
+        delay: 1.02,
+        stagger: motion.rowStagger,
+        reducedMotion: motion.reducedMotion,
+      }));
+      ctx.fillStyle = roleColor('muted', 0.84 * rowAlpha);
+      ctx.fillText(fitUiText(ctx, line, panelW / 2 - 72), rightX, ry);
+      ry += 16;
+    }
   }
 
   const promptAlpha = motionProgress(reveal, {

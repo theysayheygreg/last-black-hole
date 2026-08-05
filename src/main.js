@@ -6233,10 +6233,18 @@ function gameLoop(now) {
         ctx.fillText(fitUiText(ctx, track.focus, centerTextW - 180), centerX + 152, uy + 17);
 
         if (cost) {
-          ctx.fillStyle = canAfford ? roleColor('muted', 0.78) : roleColor('danger', 0.76);
           const action = selected && canAfford ? { descriptor: actionDescriptor('confirm', currentPromptOptions()), verb: 'buy' } : null;
           const actionX = centerX + centerTextW - 98;
-          ctx.fillText(fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM`, Math.max(56, (action ? actionX : centerX + centerTextW) - (centerX + 22) - 8)), centerX + 22, uy + 31);
+          // Effect text is informational (muted); only the price carries the
+          // affordability state — danger red means "can't have it", never
+          // "this is a price" (style guide §2.2).
+          const costBudget = Math.max(56, (action ? actionX : centerX + centerTextW) - (centerX + 22) - 8);
+          const effectText = fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  `, Math.max(40, costBudget - 90));
+          ctx.fillStyle = roleColor('muted', 0.74);
+          ctx.fillText(effectText, centerX + 22, uy + 31);
+          const effectW = ctx.measureText(effectText).width;
+          ctx.fillStyle = canAfford ? roleColor('muted', 0.78) : roleColor('danger', 0.76);
+          ctx.fillText(fitUiText(ctx, `cost: ${cost.em} EM`, Math.max(40, costBudget - effectW)), centerX + 22 + effectW, uy + 31);
           if (action) drawActionPrompt(ctx, { x: actionX, y: uy + 3, w: 90, h: UI_DECK_GEOMETRY.actionGlyph.minHeight }, action.descriptor, { verb: action.verb, alpha: 0.82, color: roleColor('flow') });
         } else {
           ctx.fillStyle = roleColor('muted', 0.72);
