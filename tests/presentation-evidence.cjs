@@ -73,6 +73,25 @@ async function run() {
     'Speed must own a T1 matte-backed safe lane');
   assert(shipSlots.heat.bounds.w >= 196 && shipSlots.heat.bounds.h >= 30,
     'Heat must remain centered in the shared ship-local lane');
+  for (const [name, shipX, shipY] of [
+    ['top-left', 0, 0], ['top-right', 1280, 0],
+    ['bottom-left', 0, 800], ['bottom-right', 1280, 800], ['center', 640, 400],
+  ]) {
+    const slots = layout.getShipLocalLabelSlots({ shipX, shipY, canvasW: 1280, canvasH: 800 });
+    for (const lane of [slots.velocity, slots.heat]) {
+      assert(lane.bounds.x >= 8 && lane.bounds.y >= 8
+        && lane.bounds.x + lane.bounds.w <= 1272 && lane.bounds.y + lane.bounds.h <= 792,
+      `${name} ${lane.id} escaped the protected viewport`);
+      assert.strictEqual(lane.textX, lane.bounds.x + lane.bounds.w / 2,
+        `${name} ${lane.id} text anchor escaped its safe lane`);
+      assert(lane.textY >= lane.bounds.y && lane.textY <= lane.bounds.y + lane.bounds.h,
+        `${name} ${lane.id} text baseline escaped its safe lane`);
+    }
+    assert(!layout.rectsOverlap(slots.velocity.bounds, slots.heat.bounds),
+      `${name} speed and Heat lanes overlap`);
+    assert(slots.heat.bounds.y >= slots.velocity.bounds.y + slots.velocity.bounds.h + 8,
+      `${name} speed and Heat lost their shared stack gap`);
+  }
   const labels = layout.placePresentationLabels([
     { id: 'near-star', order: 20, anchorX: 640, anchorY: 430, width: 120, height: 18 },
     { id: 'near-planet', order: 30, anchorX: 640, anchorY: 430, width: 120, height: 18 },

@@ -35,23 +35,32 @@ export function getShipLocalLabelSlots({ shipX, shipY, canvasW, canvasH } = {}) 
   const y = finite(shipY);
   const width = Math.max(1, finite(canvasW, 1280));
   const height = Math.max(1, finite(canvasH, 800));
-  // One protected world-relative lane clears the fabric behind speed and Heat
-  // on every map without per-map offsets.
-  const velocityBounds = clampRect({ x: x - 98, y: y + 16, w: 196, h: 26 }, width, height);
-  const heatBounds = clampRect({ x: x - 98, y: y + 50, w: 196, h: 30 }, width, height);
+  // Clamp the entire stack once. Clamping independent lanes can fold Heat
+  // over speed at a viewport edge; the group preserves their order and gap.
+  const velocityHeight = 26;
+  const laneGap = 8;
+  const heatHeight = 30;
+  const group = clampRect({
+    x: x - 98,
+    y: y + 16,
+    w: 196,
+    h: velocityHeight + laneGap + heatHeight,
+  }, width, height);
+  const velocityBounds = { x: group.x, y: group.y, w: group.w, h: velocityHeight };
+  const heatBounds = { x: group.x, y: group.y + velocityHeight + laneGap, w: group.w, h: heatHeight };
   return Object.freeze({
     velocity: Object.freeze({
       id: 'ship-velocity',
       order: 10,
       bounds: Object.freeze(velocityBounds),
-      textX: x,
+      textX: velocityBounds.x + velocityBounds.w / 2,
       textY: velocityBounds.y + 19,
     }),
     heat: Object.freeze({
       id: 'ship-heat',
       order: 20,
       bounds: Object.freeze(heatBounds),
-      textX: x,
+      textX: heatBounds.x + heatBounds.w / 2,
       textY: heatBounds.y + 18,
       barX: heatBounds.x,
       barY: heatBounds.y + 23,
