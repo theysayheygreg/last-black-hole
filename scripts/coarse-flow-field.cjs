@@ -1,5 +1,6 @@
 const { emptyFlowSample, normalizeFlowSample } = require("./flow-sample.cjs");
 const { wellGravityMagnitude } = require("./sim/well-gravity.cjs");
+const { broadOrbitalCurrentSpeed } = require("../src/physics.js");
 const { FABRIC } = require("./content/fabric.cjs");
 const { MOVEMENT } = require("./content/movement.cjs");
 const {
@@ -9,7 +10,6 @@ const {
 const { sampleSeededSea } = require("./sim/seeded-sea.cjs");
 const { assertSerializedJsonBudget } = require("./sim/serialization-budget.cjs");
 const { resolveWellReachMultiplier, wellStrengthMass } = require("../src/content/well-growth.js");
-const FORCE_MIN_DIST = FABRIC.wellGravity.minimumDistance;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
@@ -18,25 +18,6 @@ function clamp01(value) {
 function signatureMultiplier(well, name) {
   const value = Number(well?.fabricSignature?.parameters?.[name]);
   return Number.isFinite(value) && value > 0 ? value : 1;
-}
-
-function broadOrbitalCurrentSpeed(
-  dist,
-  strength,
-  mass,
-  falloff,
-  maxRange,
-  fullGravityRadius = FABRIC.wellGravity.fullGravityRadius,
-  falloffEndRadius = FABRIC.wellGravity.falloffEndRadius,
-  referenceRadius = FABRIC.wellGravity.fullGravityRadius,
-) {
-  if (dist < 0.001 || dist > maxRange) return 0;
-  const baseReference = Math.max(FORCE_MIN_DIST, Number(referenceRadius) || FORCE_MIN_DIST);
-  const baseSpeed = strength * mass / Math.pow(baseReference, falloff);
-  if (dist <= falloffEndRadius) return baseSpeed;
-  const t = Math.max(0, Math.min(1, (dist - falloffEndRadius) / Math.max(0.001, maxRange - falloffEndRadius)));
-  const eased = t * t * (3 - 2 * t);
-  return baseSpeed * (1 - eased);
 }
 
 function buildCoarseFlowField({
@@ -112,9 +93,10 @@ function buildCoarseFlowField({
           wellStrengthMass(well) || 1,
           wellCurrentFalloff,
           wellCurrentMaxRange * currentReach,
-          wellGravityFullRadius * gravityReach,
-          wellCurrentFalloffEnd * growthReach,
-          wellGravityFullRadius,
+          {
+            falloffEndRadius: wellCurrentFalloffEnd * growthReach,
+            referenceRadius: wellGravityFullRadius,
+          },
         );
         if (currentAccel > 0) {
           currentX += (-dy / dist) * dir * currentAccel;

@@ -172,6 +172,32 @@ export function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
 }
 
 /**
+ * Persistent well-current profile shared by local and authoritative field
+ * builders. `falloffEndRadius` sets the end of its plateau; referenceRadius
+ * stays independent so widening a well does not quietly make its current
+ * weaker.
+ */
+export function broadOrbitalCurrentSpeed(
+  dist,
+  strength,
+  mass,
+  falloff,
+  maxRange,
+  {
+    falloffEndRadius = maxRange,
+    referenceRadius = FORCE_REF_DIST,
+  } = {},
+) {
+  if (dist < 0.001 || dist > maxRange) return 0;
+  const baseReference = Math.max(FORCE_MIN_DIST, Number(referenceRadius) || FORCE_MIN_DIST);
+  const baseSpeed = strength * mass / Math.pow(baseReference, falloff);
+  if (dist <= falloffEndRadius) return baseSpeed;
+  const t = Math.max(0, Math.min(1, (dist - falloffEndRadius) / Math.max(0.001, maxRange - falloffEndRadius)));
+  const eased = t * t * (3 - 2 * t);
+  return baseSpeed * (1 - eased);
+}
+
+/**
  * Linear proximity force (constant at center, zero at edge).
  *
  * Formula: strength × (1 - dist/radius)

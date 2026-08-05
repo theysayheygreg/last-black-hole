@@ -2,11 +2,17 @@ import { CONFIG } from '../config.js';
 import { FABRIC } from '../content/fabric.js';
 import { resolveWellReachMultiplier, wellStrengthMass } from '../content/well-growth.js';
 import { fluidVelToWorld, worldDirectionTo, worldToFluidUV } from '../coords.js';
-import { inversePowerForce, orbitalCurrentSpeed } from '../physics.js';
+import { inversePowerMagnitude } from '../content/well-gravity.js';
+import { broadOrbitalCurrentSpeed } from '../physics.js';
 import { emptyFlowSample, normalizeFlowSample } from './flow-sample.js';
 
 function wrapUV(value) {
   return ((value % 1) + 1) % 1;
+}
+
+function signatureMultiplier(well, name) {
+  const value = Number(well?.fabricSignature?.parameters?.[name]);
+  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 export class FlowField {
@@ -46,21 +52,34 @@ export class FlowField {
     for (const well of wells) {
       const dirToWell = worldDirectionTo(wx, wy, well.wx, well.wy);
       if (dirToWell.dist < 0.001) continue;
-      const reach = resolveWellReachMultiplier(well, FABRIC.wellGravity.growthReachPerMass);
-      const orbital = orbitalCurrentSpeed(
+      const growthReach = resolveWellReachMultiplier(well, FABRIC.wellGravity.growthReachPerMass);
+      const gravityReach = growthReach * signatureMultiplier(well, 'gravityReachMultiplier');
+      const currentReach = growthReach * signatureMultiplier(well, 'currentReachMultiplier');
+      const orbital = broadOrbitalCurrentSpeed(
         dirToWell.dist,
-        wellCfg.currentStrength ?? 0.3,
+        (wellCfg.currentStrength ?? 0.3) * signatureMultiplier(well, 'currentStrengthMultiplier'),
         wellStrengthMass(well),
         wellCfg.currentFalloff ?? wellCfg.shipPullFalloff ?? 1.5,
-        currentRange * reach
+        currentRange * currentReach,
+        {
+          falloffEndRadius: wellRange * growthReach,
+          referenceRadius: FABRIC.wellGravity.fullGravityRadius,
+        },
       );
-      const gravity = inversePowerForce(
-        dirToWell.dist,
-        wellCfg.shipPullStrength ?? 0.6,
-        wellStrengthMass(well),
-        wellCfg.shipPullFalloff ?? 1.5,
-        wellRange * reach
-      );
+      const gravity = inversePowerMagnitude(dirToWell.dist, {
+        strength: (wellCfg.shipPullStrength ?? 0.6) * signatureMultiplier(well, 'gravityStrengthMultiplier'),
+        mass: wellStrengthMass(well),
+        falloff: wellCfg.shipPullFalloff ?? 1.5,
+        referenceDistance: FABRIC.wellGravity.referenceDistance * gravityReach,
+        minimumDistance: FABRIC.wellGravity.minimumDistance,
+        fullGravityRadius: FABRIC.wellGravity.fullGravityRadius * gravityReach,
+        falloffEndRadius: wellRange * gravityReach,
+        minimumGravityFraction: FABRIC.wellGravity.minimumGravityFraction,
+        falloffCurve: FABRIC.wellGravity.falloffCurve,
+        featherRadius: FABRIC.wellGravity.featherRadius * gravityReach,
+        rangeMode: 'localized',
+        zeroDistanceThreshold: 0.001,
+      });
       const orbitalDir = well.orbitalDir || 1;
       const tx = -dirToWell.ny * orbitalDir;
       const ty = dirToWell.nx * orbitalDir;
@@ -70,7 +89,7 @@ export class FlowField {
       }
       gravityX += dirToWell.nx * gravity;
       gravityY += dirToWell.ny * gravity;
-      hazard = Math.max(hazard, 1 - Math.max(0, dirToWell.dist - (well.killRadius || 0.04)) / Math.max(0.001, wellRange * reach));
+      hazard = Math.max(hazard, 1 - Math.max(0, dirToWell.dist - (well.killRadius || 0.04)) / Math.max(0.001, wellRange * gravityReach));
       if (orbital > bestCurrent) {
         bestCurrent = orbital;
         sourceWellId = well.name || null;
