@@ -520,12 +520,14 @@ export class ProfileManager {
       const raw = localStorage.getItem(LEGACY_VAULT_KEY);
       if (!raw) return;
       const old = JSON.parse(raw);
-      const profile = createDefaultProfile('Pilot Alpha');
-      profile.exoticMatter = old.exoticMatter ?? 0;
-      profile.vault = old.items ?? [];
-      profile.totalExtractions = old.totalExtractions ?? 0;
-      profile.totalItemsSold = old.totalItemsSold ?? 0;
-      profile.bestSurvivalTime = old.bestSurvivalTime ?? 0;
+      const profile = normalizeProfileShape({
+        name: 'Pilot Alpha',
+        exoticMatter: old.exoticMatter ?? 0,
+        vault: old.items ?? [],
+        totalExtractions: old.totalExtractions ?? 0,
+        totalItemsSold: old.totalItemsSold ?? 0,
+        bestSurvivalTime: old.bestSurvivalTime ?? 0,
+      });
       this.slots[0] = profile;
       this._saveSlot(0);
       this._saveIndex();

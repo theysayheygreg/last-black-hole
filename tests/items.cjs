@@ -89,7 +89,7 @@ async function run() {
     }
   });
 
-  await runner.run("Legacy vault migration removes retired artifacts without losing live profile data", async () => {
+  await runner.run("Stored profile migration removes retired artifacts without losing live profile data", async () => {
     const retired = { id: "legacy-retired", catalogId: "burn-canister", value: 77 };
     const liveVaultItem = { id: "legacy-live", catalogId: "event-horizon-keel", value: 143 };
     const liveEquippedItem = {
@@ -149,6 +149,49 @@ async function run() {
       const persisted = JSON.parse(storage.get("lbh_profile_0"));
       assert(persisted.vault.length === 1 && persisted.vault[0].id === liveVaultItem.id,
         "sanitized vault must persist on load");
+    } finally {
+      delete global.localStorage;
+    }
+  });
+
+  await runner.run("No-profile legacy vault migration sanitizes retired artifacts before persisting slot 0", async () => {
+    const retired = { id: "legacy-retired", catalogId: "burn-canister", value: 77 };
+    const liveVaultItem = { id: "legacy-live", catalogId: "event-horizon-keel", value: 143 };
+    const legacyVault = {
+      exoticMatter: 4096,
+      items: [retired, liveVaultItem],
+      totalExtractions: 9,
+      totalItemsSold: 4,
+      bestSurvivalTime: 321,
+    };
+    const storage = new Map([["lbh_vault", JSON.stringify(legacyVault)]]);
+    global.localStorage = {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, String(value)),
+      removeItem: (key) => storage.delete(key),
+    };
+
+    try {
+      const { ProfileManager } = await loadProfileModule();
+      const manager = new ProfileManager();
+      const profile = manager.loadProfile(0);
+      assert(profile.exoticMatter === legacyVault.exoticMatter,
+        "legacy migration must preserve exotic matter");
+      assert(profile.totalExtractions === legacyVault.totalExtractions
+        && profile.totalItemsSold === legacyVault.totalItemsSold
+        && profile.bestSurvivalTime === legacyVault.bestSurvivalTime,
+      "legacy migration must preserve unrelated vault-era progress");
+      assert(profile.vault.length === 1 && profile.vault[0].id === liveVaultItem.id,
+        "legacy migration must retain live items and remove retired artifacts");
+
+      const persisted = JSON.parse(storage.get("lbh_profile_0"));
+      assert(persisted.vault.length === 1 && persisted.vault[0].id === liveVaultItem.id,
+        "persisted migrated slot must not retain retired artifacts");
+      assert(storage.get("lbh_vault") === undefined,
+        "legacy vault key must be cleared after migration");
+      const index = JSON.parse(storage.get("lbh_profiles_index"));
+      assert(index.slots[0]?.name === profile.name && index.lastActive === 0,
+        "migrated profile must be indexed as the active slot");
     } finally {
       delete global.localStorage;
     }
