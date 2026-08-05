@@ -7,10 +7,14 @@ export function normalizeActionPrompt(entry) {
   return { descriptor, verb };
 }
 
-function promptWidth(entry, gap) {
-  const copyWidth = UI_DECK_GEOMETRY.actionGlyph.gap + entry.verb.length * 8;
-  return Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth,
-    UI_DECK_GEOMETRY.actionGlyph.minWidth + copyWidth) + gap;
+export function measureActionPrompt(entry, { measureText = null } = {}) {
+  const prompt = normalizeActionPrompt(entry);
+  if (!prompt) return null;
+  const glyphSize = Math.max(UI_DECK_GEOMETRY.actionGlyph.minWidth, UI_DECK_GEOMETRY.actionGlyph.minHeight);
+  const copyWidth = typeof measureText === 'function'
+    ? Math.max(0, Number(measureText(prompt.verb)) || 0)
+    : prompt.verb.length * 8;
+  return { ...prompt, w: glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap + copyWidth, h: glyphSize };
 }
 
 /**
@@ -22,15 +26,16 @@ export function measureActionFooter(actions, {
   gap = UI_DECK_GEOMETRY.panel.gap,
   maxWidth = Infinity,
   lineHeight = UI_DECK_GEOMETRY.actionGlyph.minHeight + UI_DECK_GEOMETRY.panel.gap,
+  measureText = null,
 } = {}) {
   const placed = [];
   let cursor = 0;
   let top = 0;
   let rowCount = 0;
   for (const entry of Array.isArray(actions) ? actions : []) {
-    const prompt = normalizeActionPrompt(entry);
+    const prompt = measureActionPrompt(entry, { measureText });
     if (!prompt) continue;
-    const width = promptWidth(prompt, gap);
+    const width = prompt.w + gap;
     if (cursor > 0 && cursor + width > maxWidth) {
       cursor = 0;
       top += lineHeight;

@@ -33,6 +33,14 @@ export const UI_ROLE_ALPHA = Object.freeze({
   selectionFill: 0.14,
 });
 
+export function isUiRoleLegal(surface, role) {
+  const purpose = String(surface || '').trim().toLowerCase();
+  const value = String(role || '').trim().toLowerCase();
+  if (purpose === 'selection' || purpose === 'command' || purpose === 'slab') return value !== 'salvage';
+  if (purpose === 'value' || purpose === 'salvage') return value === 'salvage';
+  return Boolean(value);
+}
+
 export function colorWithAlpha(hex, alpha) {
   const value = String(hex).replace('#', '');
   if (!/^[0-9a-f]{6}$/i.test(value)) throw new Error(`Expected six-digit hex color, got ${hex}`);

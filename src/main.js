@@ -174,8 +174,8 @@ import {
   typeOnText,
 } from './ui/motion.js';
 import { actionDescriptor, isDeckMode, promptLabel } from './ui/input-prompts.js';
-import { UI_DECK_GEOMETRY } from './ui/design-tokens.js';
-import { deckPanelLayout, interruptSurfaceLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
+import { UI_DECK_GEOMETRY, UI_IN_PLAY_TYPE, UI_INTERACTION_ROLES } from './ui/design-tokens.js';
+import { deckPanelLayout, hudSurfaceLayout, interruptSurfaceLayout, itemCompoundLayout, mapSelectSurfaceLayout, profileSurfaceLayout, titleSurfaceLayout } from './ui/layout-contract.js';
 import { formatHullStats, formatItemEffects, formatSlotIdentity } from './ui/loadout-presentation.js';
 import { measureActionFooter } from './ui/action-footer-layout.js';
 import { pauseAbandonIntent } from './ui/pause-presentation.js';
@@ -3771,10 +3771,14 @@ function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
     ? roleColor('danger', 0.95)
     : ratio >= 0.75 ? roleColor('salvage', 0.95) : roleColor('text', 0.94);
   ctx.save();
-  ctx.font = canvasFont(18, { weight: '700' });
+  ctx.fillStyle = roleColor('void', 0.76);
+  ctx.fillRect(slot.bounds.x, slot.bounds.y, slot.bounds.w, slot.bounds.h);
+  ctx.strokeStyle = roleColor('muted', 0.30);
+  ctx.strokeRect(slot.bounds.x, slot.bounds.y, slot.bounds.w, slot.bounds.h);
+  ctx.font = canvasFont(UI_IN_PLAY_TYPE.criticalNumber, { weight: '700' });
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
-  ctx.fillText(overheatRemaining > 0 ? `HEAT LOCK ${overheatRemaining.toFixed(1)}s` : `HEAT ${Math.round(ratio * 100)}%`, sx, top);
+  ctx.fillText(overheatRemaining > 0 ? `HEAT LOCK ${overheatRemaining.toFixed(1)}s` : `heat ${Math.round(ratio * 100)}%`, sx, top);
   ctx.fillStyle = roleColor('void', 0.76);
   ctx.fillRect(left, slot.barY, width, 6);
   ctx.fillStyle = color;
@@ -5999,8 +6003,7 @@ function gameLoop(now) {
       ));
       for (const [index, stat] of hullStats.entries()) {
         drawKeyValueRow(ctx, stat.label, `${stat.base} → ${stat.fitted}`, centerX, centerY + 27 + index * 17, {
-          labelWidth: compactStatStrip ? 86 : 104,
-          valueWidth: Math.max(32, hullStatWidth - (compactStatStrip ? 86 : 104)),
+          rowWidth: hullStatWidth,
           valueRole: stat.base === stat.fitted ? 'text' : 'salvage',
         });
       }
@@ -6368,7 +6371,7 @@ function gameLoop(now) {
         h: UI_DECK_GEOMETRY.button.minHeight,
       }, 'select route', {
         action: actionDescriptor('confirm', currentPromptOptions()),
-        role: 'salvage',
+        role: UI_INTERACTION_ROLES.command,
         active: true,
         alpha: 0.96,
         progress: contentReveal,
@@ -6387,17 +6390,16 @@ function gameLoop(now) {
     sideY += launchActive
       ? UI_DECK_GEOMETRY.button.minHeight + UI_DECK_GEOMETRY.button.gap + UI_DECK_GEOMETRY.actionGlyph.minHeight + 18
       : 82;
-    const valueWidth = Math.max(64, sidebarW - 136);
     const affordableRigLevel = Boolean(profileManager.getRigProgression()?.tracks?.some((track) => (
       track.level < track.maxLevel && profileManager.canAffordRigUpgrade(track.index)
     )));
-    drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM · ${affordableRigLevel ? 'rig level affordable' : 'next rig held'}`, sidebarX, sideY, { labelWidth: 104, valueWidth: Math.max(64, sidebarW - 104), valueRole: 'salvage' });
+    drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM · ${affordableRigLevel ? 'rig level affordable' : 'next rig held'}`, sidebarX, sideY, { rowWidth: sidebarW, valueRole: 'salvage' });
     sideY += 24;
-    drawKeyValueRow(ctx, 'vault value', `${profileVaultValue(p)} EM`, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'salvage' });
+    drawKeyValueRow(ctx, 'vault value', `${profileVaultValue(p)} EM`, sidebarX, sideY, { rowWidth: sidebarW, valueRole: 'salvage' });
     sideY += 24;
-    drawKeyValueRow(ctx, 'best survival', bestLabel, sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'flow' });
+    drawKeyValueRow(ctx, 'best survival', bestLabel, sidebarX, sideY, { rowWidth: sidebarW, valueRole: 'flow' });
     sideY += 24;
-    drawKeyValueRow(ctx, 'extractions', String(p?.totalExtractions || 0), sidebarX, sideY, { labelWidth: 136, valueWidth, valueRole: 'ecology' });
+    drawKeyValueRow(ctx, 'extractions', String(p?.totalExtractions || 0), sidebarX, sideY, { rowWidth: sidebarW, valueRole: 'ecology' });
     sideY += 36;
     drawSectionLabel(ctx, 'readiness', sidebarX, sideY, { role: 'flow', alpha: 0.84 });
     sideY += 24;
@@ -6681,7 +6683,7 @@ function gameLoop(now) {
       }
       ctx.stroke();
       drawCommandButtonMotion(ctx, { x: briefX, y: commandY, w: briefW, h: UI_DECK_GEOMETRY.button.minHeight }, remoteControl?.hasLiveSession ? 'join live cycle' : 'begin drop', {
-        action: actionDescriptor('confirm', promptOptions), role: surveyRole === 'danger' ? 'salvage' : surveyRole,
+        action: actionDescriptor('confirm', promptOptions), role: surveyRole === 'danger' ? UI_INTERACTION_ROLES.command : surveyRole,
         active: true, alpha: 0.96, progress: contentReveal, pulseTime: (totalTime % 1.45) / 1.45,
         reducedMotion: motion.reducedMotion, commandPulse: motion.commandPulse,
       });

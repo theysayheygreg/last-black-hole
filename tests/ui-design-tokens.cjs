@@ -35,6 +35,12 @@ const ROOT = path.resolve(__dirname, '..');
   assert(Object.values(presentation.PRESENTATION_PALETTE).every((color) => canonicalNumbers.has(color)),
     'Three presentation palette still owns a non-canonical hue');
   assert.strictEqual(tokens.UI_TIERS.unique, 'rgba(255, 185, 56, 0.95)');
+  assert.strictEqual(tokens.UI_IN_PLAY_TYPE.criticalNumber, 18, 'T1 critical floor drifted');
+  assert.strictEqual(tokens.UI_IN_PLAY_TYPE.contactLabel, 12, 'Contact-label floor drifted');
+  assert.strictEqual(tokens.UI_INTERACTION_ROLES.selection, 'flow', 'Selection must remain cyan/structural');
+  assert.strictEqual(palette.isUiRoleLegal('selection', 'salvage'), false, 'Amber cannot be a generic selection role');
+  assert.strictEqual(palette.isUiRoleLegal('command', 'salvage'), false, 'Amber cannot be a command slab role');
+  assert.strictEqual(palette.isUiRoleLegal('value', 'salvage'), true, 'Amber remains the value role');
 
   const cssPath = path.join(ROOT, 'src/ui/design-tokens.css');
   assert.strictEqual(fs.readFileSync(cssPath, 'utf8'), await generator.renderUiTokenCss(), 'Generated CSS drifted from JS tokens');

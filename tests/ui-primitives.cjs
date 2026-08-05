@@ -146,7 +146,7 @@ async function run() {
     mod.drawActionPrompt(deckContext, { x: 20, y: 10, w: 150, h: 28 }, deckDescriptor, { verb: 'launch when ready' });
     const deckLabels = deckContext.calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
     assert(deckLabels.includes('L1/R1'), 'Deck prompt must render the resolved controller glyph label');
-    assert(deckLabels.includes('LAUNCH WHEN READY'), 'Deck prompt copy must remain separate from the glyph');
+    assert(deckLabels.includes('launch when ready'), 'Deck prompt copy must remain separate from the glyph');
     assert(!deckLabels.includes('Q/E'), 'Deck prompt must not render the keyboard label');
 
     const keyboardContext = createRecordingContext();
@@ -159,11 +159,27 @@ async function run() {
     const backDescriptor = prompts.actionDescriptor('back', { mode: 'keyboard' });
     const result = mod.drawActionPrompt(duplicateContext, { x: 20, y: 10, w: 150, h: 28 }, backDescriptor, { verb: 'back' });
     const duplicateLabels = duplicateContext.calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
-    assert(result.copy && duplicateLabels.includes('ESC') && duplicateLabels.includes('BACK'), 'Same-word action lost its explicit caption');
+    assert(result.copy && duplicateLabels.includes('ESC') && duplicateLabels.includes('back'), 'Same-word action lost its explicit caption');
 
     const blankContext = createRecordingContext();
     const blank = mod.drawActionPrompt(blankContext, { x: 20, y: 10, w: 150, h: 28 }, backDescriptor);
     assert(blank.glyph === null && !blankContext.calls.some((call) => call[0] === 'fillText'), 'Blank action prompt emitted a glyph');
+  });
+
+  await runner.run('Shared rows and selections keep identifiers readable and amber semantic', async () => {
+    const ctx = createRecordingContext();
+    mod.drawKeyValueRow(ctx, 'unusually long identifier', '12 EM', 20, 30, { labelWidth: 48, rowWidth: 260 });
+    const labels = ctx.calls.filter((call) => call[0] === 'fillText');
+    const label = labels.find((call) => call[1] === 'unusually long identifier');
+    const value = labels.find((call) => call[1] === '12 EM');
+    assert(label && value, 'Key/value row lost a readable identifier or value');
+    assert(value[2] >= label[2] + ctx.measureText(label[1]).width + 12,
+      'Value column crossed a measured key label');
+
+    const selected = createRecordingContext();
+    mod.drawSelectedRow(selected, { x: 0, y: 0, w: 120, h: 58 }, { role: 'salvage' });
+    assert(!selected.calls.some((call) => call[0] === 'fillStyle' && String(call[1]).includes('255, 185, 56')),
+      'Amber escaped value semantics into a generic selection fill');
   });
 
   const allPassed = runner.summary();

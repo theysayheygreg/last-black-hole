@@ -78,6 +78,22 @@ export const UI_TYPOGRAPHY = {
   labelLetterSpacing: '0',
 };
 
+// T1 is the in-play readability floor at the physical 1280x800 Deck target.
+// Canvas consumers use these names rather than introducing 9/11px one-offs.
+export const UI_IN_PLAY_TYPE = Object.freeze({
+  criticalNumber: 18,
+  contactLabel: 12,
+  support: 12,
+});
+
+// Amber is reserved for value/salvage. Selection and command slabs are
+// structural route cues, so their shared role stays cyan.
+export const UI_INTERACTION_ROLES = Object.freeze({
+  selection: 'flow',
+  command: 'flow',
+  value: 'salvage',
+});
+
 export const UI_DECK = {
   edge: 18,
   panelPaddingX: 14,

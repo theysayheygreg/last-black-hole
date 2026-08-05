@@ -3,6 +3,7 @@ import {
   UI_PALETTE,
   UI_DECK,
   UI_DECK_GEOMETRY,
+  UI_INTERACTION_ROLES,
   UI_SPACING,
   UI_TYPOGRAPHY,
 } from './design-tokens.js';
@@ -164,13 +165,14 @@ export function drawSelectedRow(ctx, rect, {
   const r = { ...source, h: Math.max(source.h, UI_DECK_GEOMETRY.listRow.minHeight) };
   const a = clamp01(alpha);
   ctx.save();
+  const selectionRole = role === 'salvage' ? UI_INTERACTION_ROLES.selection : role;
   if (active) {
-    ctx.fillStyle = roleColor(role, fillAlpha * a);
+    ctx.fillStyle = roleColor(selectionRole, fillAlpha * a);
     ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeStyle = roleColor(role, borderAlpha * a);
+    ctx.strokeStyle = roleColor(selectionRole, borderAlpha * a);
     ctx.lineWidth = 1;
     ctx.strokeRect(r.x, r.y, r.w, r.h);
-    ctx.fillStyle = roleColor(role, 0.9 * a);
+    ctx.fillStyle = roleColor(selectionRole, 0.9 * a);
     ctx.fillRect(r.x, r.y, railWidth, r.h);
   } else {
     ctx.fillStyle = withAlpha(UI_COLORS.terminalRowBackground, 0.45 * a);
@@ -326,7 +328,7 @@ export function drawActionPrompt(ctx, rect, descriptor, { verb = '', alpha = 1, 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = color ? withAlpha(color, alpha) : roleColor('muted', alpha);
-    ctx.fillText(copy.toUpperCase(), source.x + glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap, source.y + source.h / 2);
+    ctx.fillText(copy, source.x + glyphSize + UI_DECK_GEOMETRY.actionGlyph.gap, source.y + source.h / 2);
     ctx.restore();
   }
   return { glyph: { x: glyphRect.x, y: glyphRect.y, w: glyphSize, h: glyphSize }, copy: true };
@@ -343,7 +345,15 @@ export function drawActionFooter(ctx, x, y, actions, {
 } = {}) {
   const startX = Number(x) || 0;
   const startY = Number(y) || 0;
-  const measured = measureActionFooter(actions, { gap, maxWidth, lineHeight });
+  ctx.save();
+  ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall, { weight: '700' });
+  const measured = measureActionFooter(actions, {
+    gap,
+    maxWidth,
+    lineHeight,
+    measureText: (text) => ctx.measureText(String(text)).width,
+  });
+  ctx.restore();
   const placed = measured.placed.map((entry) => ({ ...entry, x: startX + entry.x, y: startY + entry.y }));
   if (backing && placed.length > 0) {
     const right = Math.min(startX + maxWidth, Math.max(...placed.map((entry) => entry.x + entry.w)));
@@ -521,6 +531,7 @@ export function drawSectionLabel(ctx, text, x, y, {
 export function drawKeyValueRow(ctx, label, value, x, y, {
   labelWidth = 122,
   valueWidth = Infinity,
+  rowWidth = Infinity,
   alpha = 1,
   valueRole = 'text',
 } = {}) {
@@ -531,9 +542,17 @@ export function drawKeyValueRow(ctx, label, value, x, y, {
   ctx.textBaseline = 'alphabetic';
   ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall);
   applyCanvasTextShadow(ctx);
+  const labelText = String(label);
+  // Labels identify the value and must never paint through its column. Keep
+  // them whole; value fitting retains the existing bounded behavior.
+  const resolvedLabelWidth = Math.max(Number(labelWidth) || 0, ctx.measureText(labelText).width + 12);
   ctx.fillStyle = roleColor('muted', 0.75 * a);
-  ctx.fillText(String(label), x, y);
+  ctx.fillText(labelText, x, y);
+  const remainingWidth = Number.isFinite(Number(rowWidth))
+    ? Math.max(0, Number(rowWidth) - resolvedLabelWidth)
+    : Infinity;
+  const resolvedValueWidth = Math.min(valueWidth, remainingWidth);
   ctx.fillStyle = roleColor(valueRole, 0.9 * a);
-  ctx.fillText(fitUiText(ctx, String(value), valueWidth), x + labelWidth, y);
+  ctx.fillText(fitUiText(ctx, String(value), resolvedValueWidth), x + resolvedLabelWidth, y);
   ctx.restore();
 }

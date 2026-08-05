@@ -269,7 +269,6 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawStatusPill(ctx, { x: cx - 138, y: panelY + 114, w: 118, h: 26 }, mapLabel, { role, alpha: contentAlpha });
   drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
 
-  const summaryValueWidth = Math.max(1, columnW - 128);
   let y = panelY + 160;
 
   drawSectionLabel(ctx, 'RUN SUMMARY', leftX, y, { role, alpha: contentAlpha });
@@ -278,7 +277,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     drawKeyValueRow(ctx, row.label, row.value, leftX, y, {
       alpha: contentAlpha,
       valueRole: row.valueRole,
-      valueWidth: summaryValueWidth,
+      rowWidth: columnW,
     });
     y += 18;
   }
@@ -290,7 +289,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     drawKeyValueRow(ctx, row.label, row.value, leftX, y, {
       alpha: contentAlpha,
       valueRole: row.valueRole,
-      valueWidth: summaryValueWidth,
+      rowWidth: columnW,
     });
     y += 18;
   }
@@ -301,27 +300,27 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items`, rightX, ry, {
     alpha: contentAlpha,
     valueRole: success ? 'salvage' : 'danger',
-    valueWidth: summaryValueWidth,
+    rowWidth: columnW,
   });
   ry += 22;
   drawKeyValueRow(ctx, 'salvage value', `${view.cargoValue} EM`, rightX, ry, {
     alpha: contentAlpha,
     valueRole: success ? 'salvage' : 'danger',
-    valueWidth: summaryValueWidth,
+    rowWidth: columnW,
   });
   ry += 22;
   if (view.settlement) {
     drawKeyValueRow(ctx, 'vault deposit', `${view.settlement.depositedCount} items`, rightX, ry, {
       alpha: contentAlpha,
       valueRole: 'salvage',
-      valueWidth: summaryValueWidth,
+      rowWidth: columnW,
     });
     ry += 22;
     if (view.settlement.overflowCount > 0) {
       drawKeyValueRow(ctx, 'overflow sold', `${view.settlement.overflowCount} / +${view.settlement.overflowValue} EM`, rightX, ry, {
         alpha: contentAlpha,
         valueRole: 'salvage',
-        valueWidth: summaryValueWidth,
+        rowWidth: columnW,
       });
       ry += 22;
     }
