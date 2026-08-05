@@ -106,7 +106,9 @@ async function run() {
         resetSlingshot: true,
         status: 'alive',
       });
-      await post('/input', {
+      const captureEventWatermark = Math.max(0, ...((await request('/events')).body.events || [])
+        .map((event) => event.seq || 0));
+      const captureCommand = await post('/input', {
         ...authority,
         commandSeq: 1,
         seq: 1,
@@ -118,6 +120,19 @@ async function run() {
         slingshotEdges: [1],
         timestamp: Date.now(),
       }, headers(authority));
+      assert.deepStrictEqual(captureCommand.body.acceptedSlingshotEdges, [1],
+        'authority must accept the capture input edge');
+      const captureEvent = await waitForEvent(captureEventWatermark, (event) =>
+        event.type === 'player.slingshotEngaged'
+          && event.payload?.clientId === 'grapple-arc-v3-test');
+      assert(captureEvent.tick >= captureCommand.body.tick,
+        'accepted capture input must produce an authoritative capture event');
+      assert.strictEqual(captureEvent.payload?.phase, 'arc',
+        'capture event must enter the authoritative arc state');
+      assert.strictEqual(captureEvent.payload?.anchorId, anchor.id,
+        'capture event must identify the selected anchor');
+      assert(Math.abs(captureEvent.payload?.boost - geometry.boost) < 1e-9,
+        'capture event must publish the selected anchor flat boost');
       const engaged = await waitForPlayer('grapple-arc-v3-test', (player) => player.slingshot?.engaged);
       assert.strictEqual(engaged.player.slingshot.phase, 'arc');
       assert(engaged.player.slingshot.hookRadius > engaged.player.slingshot.swingRadius);
@@ -126,10 +141,12 @@ async function run() {
           - engaged.player.slingshot.entrySpeed
           - engaged.player.slingshot.boost,
       ) < 1e-6, 'flat boost must be granted once at capture');
-      assert.strictEqual(engaged.player.slingshot.telegraph.ownedArc.reelProgress, 0,
-        'capture tick must precede reel steering');
-      assert(engaged.player.vx < 0 && Math.abs(engaged.player.vy) < 1e-6,
-        'radial capture must preserve its entry direction before reel steering');
+      assert(engaged.player.slingshot.telegraph.ownedArc.reelProgress >= 0
+        && engaged.player.slingshot.telegraph.ownedArc.reelProgress <= 1,
+      'the observable arc state must publish bounded reel progress');
+      // The zero-progress direction is deterministic pure-contract coverage in
+      // slingshot-contract.cjs. This live authority assertion deliberately
+      // observes capture through its event rather than racing the next 15 Hz tick.
 
       await post('/input', {
         ...authority,

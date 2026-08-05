@@ -12,7 +12,7 @@ const {
   assert,
 } = require('./helpers.cjs');
 
-const SIM_PORT = 8794;
+const SIM_PORT = Number(process.env.LBH_TEST_SIM_PORT || 8794);
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const HTML_FILE = process.argv[2] || 'index-a.html?renderer=three';
 
@@ -342,7 +342,9 @@ async function run() {
       await setPad(page, { x: 1, y: 0, slingshot: true });
       await waitFor(page, (count) => (window.__TEST_API.getNetworkState()?.networkMetrics?.slingshotEdgeAcks || []).length === count + 1,
         { timeout: 5000 }, engageAckCount);
-      const lock = await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'lock' && player.slingshot?.engaged === true, 'authoritative lock');
+      const lock = await waitForPlayer(clientId, (player) => player.slingshot?.phase === 'arc'
+        && player.slingshot?.engaged === true
+        && player.slingshot?.telegraph?.lock, 'authoritative lock telegraph');
       const lockSeenAt = Date.now();
       await waitFor(page, () => Boolean(window.__TEST_API.getThreeSceneState()?.slingshot?.telegraph?.lock), { timeout: 1500 });
       const lockScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
@@ -386,11 +388,27 @@ async function run() {
       const releaseScene = await page.evaluate(() => window.__TEST_API.getThreeSceneState());
       assert(releaseScene.slingshot?.telegraph?.releaseGhost, 'Release ghost did not reach the visible scene state');
 
+      // A fresh controller rise edge during the global re-hook cooldown must
+      // be acknowledged by transport but denied by authority. This stays on
+      // the normal input path: no debug placement or direct state mutation.
+      const cooldownAckCount = (await edgeAcks(page)).length;
+      await setPad(page, { x: 1, y: 0, slingshot: true });
+      await waitFor(page, (count) => (window.__TEST_API.getNetworkState()?.networkMetrics?.slingshotEdgeAcks || []).length === count + 1,
+        { timeout: 5000 }, cooldownAckCount);
+      await setPad(page, { x: 1, y: 0 });
+      const cooldownDenied = await waitForPlayer(clientId, (player) => player.slingshot?.engaged === false
+        && player.slingshot?.rehookCooldownSeconds > 0, 'authoritative re-hook cooldown denial');
+      const cooldownEvents = (await events(released.event.seq)).filter((event) =>
+        event.payload?.clientId === clientId && event.type === 'player.slingshotEngaged');
+      assert(cooldownEvents.length === 0,
+        'a controller tap during the re-hook cooldown must not create another capture');
+
       const routeEvents = (await events(baselineSeq)).filter((event) => event.payload?.clientId === clientId && event.type.startsWith('player.slingshot'));
       const routeEventTypes = routeEvents.map((event) => event.type);
       assert(JSON.stringify(routeEventTypes) === JSON.stringify(['player.slingshotEngaged', 'player.slingshotReleased']),
         `Expected slingshot engage/release order, got ${JSON.stringify(routeEventTypes)}`);
-      assert((await edgeAcks(page)).length === initialAckCount + 2, 'Expected no-anchor and engage edge acknowledgements; release uses held-state transition');
+      assert((await edgeAcks(page)).length === initialAckCount + 3,
+        'Expected no-anchor, engage, and cooldown-denied edge acknowledgements; release uses held-state transition');
       assert(errors.length === 0, `browser errors: ${errors.join('; ')}`);
       console.log(JSON.stringify({
         edgeAcks: await edgeAcks(page),
@@ -399,6 +417,11 @@ async function run() {
         promptDuring,
         anchor: { id: routeAnchor.id, type: routeAnchor.type || 'well' },
         approach: { target: approach.target, aimDistance: aim?.distance ?? null },
+        cooldownDeny: {
+          acknowledgedEdges: (await edgeAcks(page)).length - cooldownAckCount,
+          rehookCooldownSeconds: cooldownDenied.player.slingshot.rehookCooldownSeconds,
+          captureEvents: cooldownEvents.length,
+        },
         timingsMs: {
           engageToLock: lockSeenAt - engageStartedAt,
           lockToArc: arcSeenAt - lockSeenAt,
