@@ -23,7 +23,8 @@ async function run() {
   const facade = await import(pathToFileURL(path.join(ROOT, 'src', 'hud.js')).href);
 
   assert(prompts.affordanceCaption('confirm', 'extract', { deck: true }).includes('ui-action-glyph-face'), 'Deck affordance must be a face-button glyph');
-  assert(!prompts.affordanceCaption('confirm', 'confirm', { deck: true }).includes('ui-action-copy'), 'Duplicate action verb must be suppressed');
+  assert(prompts.affordanceCaption('confirm', 'confirm', { deck: true }).includes('ui-action-copy'),
+    'An explicit same-word supporting caption must remain visible instead of leaving an orphaned glyph');
   assert(prompts.affordanceCaption('pulse', 'activate', { deck: true }).includes('X'), 'Deck affordance must retain fallback label data');
   assert.deepStrictEqual([...bindings.GAMEPAD_ACTION_BUTTONS.delete], [3]);
   assert.deepStrictEqual([...bindings.GAMEPAD_ACTION_BUTTONS.slingshot], [3]);
@@ -41,7 +42,7 @@ async function run() {
   assert.strictEqual(hud.fmtSeconds(0.1), '1s');
   const burn = hud.getAbilityPresentationState({ hullType: 'breacher', burnFuel: 12 });
   assert.strictEqual(burn.slots[0].name, 'burn');
-  assert.strictEqual(burn.slots[0].status, 'fuel 12/30');
+  assert.strictEqual(burn.slots[0].status, 'heat headroom 40%');
   assert.deepStrictEqual(hud.getHullPresentationState({ shieldCharges: 1, ratio: 0.4 }),
     { ratio: 0.4, label: 'shielded', tone: 'shielded' });
 
@@ -198,7 +199,8 @@ async function run() {
     assert.strictEqual(layout.commandCaption, 'X activate');
     assert(!/^x\s/i.test(layout.commandLabel), 'button affordance leaked into command label');
     assert(layout.routeLabel.length > 0 && layout.hullLabel.length > 0);
-    assert(layout.panelShadow.includes('rgba(0, 0, 8'), `HUD panel lacks near-black offset shadow: ${layout.panelShadow}`);
+    assert(layout.panelShadow.includes('rgba(0, 0, 33, 0.72)'),
+      `HUD panel shadow drifted from the canonical void token: ${layout.panelShadow}`);
 
     await page.evaluate(() => {
       const api = window.__TEST_API;

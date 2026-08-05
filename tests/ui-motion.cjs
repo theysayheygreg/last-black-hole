@@ -121,16 +121,27 @@ function makeRecordingContext() {
   });
   assert(!fullCtx.calls.some((call) => call[0] === 'clip'), 'full reveal should avoid unnecessary clipping');
 
+  const captionlessButtonCtx = makeRecordingContext();
+  drawCommandButtonMotion(captionlessButtonCtx, { x: 0, y: 0, w: 160, h: 34 }, 'continue', {
+    action: actionDescriptor('confirm', { deck: true }),
+    progress: 1,
+    pulseTime: 0.1,
+    active: true,
+  });
+  assert(!captionlessButtonCtx.calls.some((call) => call[0] === 'arc'),
+    'a command slab must not create a captionless or orphaned input glyph');
+
   const buttonCtx = makeRecordingContext();
   drawCommandButtonMotion(buttonCtx, { x: 0, y: 0, w: 160, h: 34 }, 'continue', {
     action: actionDescriptor('confirm', { deck: true }),
+    prompt: 'continue',
     progress: 1,
     pulseTime: 0.1,
     active: true,
   });
   assert(buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1].includes('CONTINUE')), 'button label should render');
   assert(buttonCtx.calls.some((call) => call[0] === 'arc' || call[0] === 'rect'),
-    'button input prompt should render a graphical glyph below the button');
+    'an explicitly captioned button affordance should render a graphical glyph below the button');
   assert(!buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A CONTINUE'),
     'button label must not fuse input affordance into the main action text');
   assert(buttonCtx.calls.some((call) => call[0] === 'strokeRect'), 'button pulse should draw an edge');

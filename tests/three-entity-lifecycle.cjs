@@ -249,12 +249,16 @@ async function run() {
       && backendSource.includes('this.worldPresentation.camera'),
     'Backend must orchestrate the direct world owner without private scene proxies');
 
-    const reset = sceneSource.slice(sceneSource.indexOf('  reset({ phase, runId }'), sceneSource.indexOf('  _buildBackdropLayers'));
+    const reset = sceneSource.slice(sceneSource.indexOf('  reset({ phase, runId }'), sceneSource.indexOf('  _buildForegroundLayers'));
     assert(reset.includes('family.reset()') && reset.includes('temporalVisibility.reset')
       && reset.includes('this.vfxManager.reset()')
       && !reset.includes('prevCamera') && !reset.includes('motion.set')
       && !reset.includes('Pool.length'),
     'Phase/run reset must clear owned visual families and VFX without rebuilding pools');
+    const resetOrder = ['family.reset()', 'this.vfxManager.reset()', 'this.temporalVisibility.reset'];
+    assert(resetOrder.every((call, index) => reset.indexOf(call) >= 0
+      && (index === 0 || reset.indexOf(call) > reset.indexOf(resetOrder[index - 1]))),
+    'A phase/run reset must clear visual families before VFX and temporal visibility inspect the next frame');
 
     const sync = sceneSource.slice(sceneSource.indexOf('  _syncWorldScene'), sceneSource.indexOf('  _describeWorldLayers'));
     const familyOrder = ['visualFamilies.portal.update', 'visualFamilies.wreck.update',

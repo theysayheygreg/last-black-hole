@@ -52,8 +52,18 @@ async function run() {
     'authoritative snapshot recovery must restore the gameplay audio phase');
   assert(/phase === 'dead'[\s\S]*?gamePhase = 'dead';[\s\S]*?audioRouter\?\.setPhase\('dead'\);/.test(mainSource),
     'snapshot-only death must leave the gameplay audio phase');
-  assert(mainSource.includes("loadingMapName = 'authority recovery';") && mainSource.includes("audioRouter?.setPhase('loading');"),
-    'rematch recovery must enter the loading audio phase');
+  const remoteSnapshot = mainSource.slice(
+    mainSource.indexOf('function applyRemoteSnapshot'),
+    mainSource.indexOf('function applyRemoteSlingshotState'),
+  );
+  assert(/if \(classification\.runChanged\)[\s\S]*?audioRouter\?\.reset\(classification\.incomingRunId\);[\s\S]*?audioRouter\?\.setPhase\('loading'\);/.test(remoteSnapshot),
+    'a rematch must reset held presentation audio and enter loading at the new authority-run boundary');
+  const pauseRecovery = mainSource.slice(
+    mainSource.indexOf('function applyPauseResumeDecision'),
+    mainSource.indexOf('function resumeFromPause'),
+  );
+  assert(/decision\.phase === 'recovery' \|\| decision\.rematched[\s\S]*?gamePhase = 'recovery';[\s\S]*?audioRouter\?\.setPhase\('loading'\);/.test(pauseRecovery),
+    'pause recovery must move the audio bed to loading without relying on retired recovery copy');
   const testApiSource = fs.readFileSync(path.join(ROOT, 'src/test-api.js'), 'utf8');
   assert(testApiSource.includes('getAudioDiagnostics()'), 'reviewers need structural audio diagnostics when output is inaudible');
   console.log('AudioRouter: 1 passed, 0 failed');
