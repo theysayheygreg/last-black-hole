@@ -493,6 +493,11 @@ function resolvePortalWindowPlacement({
   const placements = [];
   for (const [safeStart, safeEnd] of safeIntervals) {
     const availableDuration = safeEnd - safeStart;
+    // A window contributes both an open and a close EventFront. The interval
+    // must therefore be wide enough for those two fronts to satisfy the same
+    // Conductor guard before we publish a diagnostic aperture at all. Normal
+    // authored schedules already clear this floor; short fixture bands do not.
+    if (availableDuration < guardSeconds) continue;
     const resolvedDuration = Math.min(durationSeconds, availableDuration);
     if (resolvedDuration <= 0) continue;
     const latestOpenTime = safeEnd - resolvedDuration;
