@@ -796,12 +796,16 @@ function profileActions(promptOptions = currentPromptOptions()) {
 }
 
 function homeActions(promptOptions = currentPromptOptions()) {
-  return [
+  const actions = [
     { descriptor: actionDescriptor('tabs', promptOptions), verb: 'switch tabs' },
     { descriptor: actionDescriptor('select', promptOptions), verb: 'move' },
     { descriptor: actionDescriptor('confirm', promptOptions), verb: 'use' },
     { descriptor: actionDescriptor('back', promptOptions), verb: 'back out' },
   ];
+  // On LAUNCH the SELECT ROUTE slab owns the commit — advertising confirm
+  // in the footer too was the same action twice on one screen (rubric A1).
+  if (homeTab === 4) return actions.filter((entry) => entry.verb !== 'use');
+  return actions;
 }
 
 function mapSelectActions(promptOptions = currentPromptOptions()) {
@@ -6054,17 +6058,8 @@ function gameLoop(now) {
         { alpha: 0.64, gap: 10, maxWidth: hullFooterWidth });
       sy = hullFooterY + hullFooter.height + 16;
 
-      const shipRigTracks = profileManager.getRigProgression()?.tracks || [];
-      const rigCellW = (centerTextW * 0.72) / Math.max(1, shipRigTracks.length);
-      shipRigTracks.forEach((track, index) => {
-        drawKeyValueRow(ctx, String(track.label).toLowerCase(), `${track.level || 0}/${track.maxLevel}`, centerX + index * rigCellW, sy, {
-          labelWidth: Math.max(68, rigCellW - 34),
-          valueWidth: 32,
-          valueRole: 'ecology',
-        });
-      });
-      sy += 22;
-
+      // Rig progression renders on the RIG tab only — the strip here was
+      // the same facts twice one tab apart (rubric H2/H3).
       drawSectionLabel(ctx, 'loadout', centerX, sy, { role: 'salvage', alpha: 0.86 });
       sy += 24;
       const loadoutRowH = Math.max(
@@ -6155,6 +6150,9 @@ function gameLoop(now) {
       if (p.vault.length === 0) {
         ctx.fillStyle = roleColor('muted', 0.48);
         ctx.fillText('- vault empty -', centerX, vy);
+        ctx.fillStyle = roleColor('muted', 0.38);
+        ctx.font = canvasFont(11);
+        ctx.fillText('salvage returns here after extraction', centerX, vy + 18);
       }
 
       // Item description for selected vault item
@@ -6266,24 +6264,15 @@ function gameLoop(now) {
       ctx.fillText(`${chronicle.stats.totalRuns} cycles  ${chronicle.stats.totalExoticMatterEarned} EM earned`, centerX + centerTextW, centerY);
       ctx.textAlign = 'left';
 
+      // Chronicle keeps only chronicle-exclusive stats — best survival,
+      // EM, and vault occupancy already live on the instrument rail
+      // (rubric H3), and the recent-cycles list is this panel's hero.
       const statY = centerY + 34;
-      drawSelectedRow(ctx, { x: centerX - 6, y: statY - 17, w: centerTextW, h: 46 }, {
-        role: 'anomaly',
-        active: true,
-        alpha: 0.34,
-        fillAlpha: 0.10,
-        borderAlpha: 0.18,
-      });
       ctx.fillStyle = roleColor('text', 0.82);
       ctx.font = canvasFont(12);
-      ctx.fillText(`best survival ${chronicle.stats.bestSurvivalLabel}`, centerX + 8, statY);
-      ctx.fillText(`extract/death ${chronicle.stats.totalExtractions}/${chronicle.stats.totalDeaths}`, centerX + 242, statY);
-      ctx.fillStyle = roleColor('salvage', 0.78);
-      ctx.fillText(`${chronicle.stats.exoticMatter} EM now`, centerX + 8, statY + 18);
-      ctx.fillStyle = roleColor('muted', 0.72);
-      ctx.fillText(`vault ${chronicle.stats.vaultCount}/${chronicle.stats.vaultCapacity}`, centerX + 242, statY + 18);
+      ctx.fillText(`extract/death ${chronicle.stats.totalExtractions}/${chronicle.stats.totalDeaths}`, centerX, statY);
 
-      let cyLine = centerY + 96;
+      let cyLine = centerY + 64;
       drawSectionLabel(ctx, 'recent cycles', centerX, cyLine, { role: 'flow', alpha: 0.84 });
       cyLine += 20;
       ctx.font = canvasFont(11);
