@@ -164,6 +164,35 @@ custodian and Greg, never as implementation-commit side effects.)*
 
 ---
 
+### 3.4 Labeling and text tone (skeleton — Troubadorb owns the flesh)
+
+Human-readability rules the layout system cannot catch on its own.
+These are the load-bearing bones; **Troubadorb's text/voice guide
+expands them into the full wording ruleset**, and the two documents may
+never conflict.
+
+1. **One name, rendered once.** A surface's identity appears exactly
+   once in view. If the tab rail already says CHRONICLE, the panel does
+   not say it again — and never twice more (observed: tab + section
+   label + heading, three CHRONICLEs in one glance). When a panel needs
+   a heading, the heading adds information the tab didn't have
+   (`RIG: DRIFTER` is legal; `RIG` under a RIG tab is not).
+2. **No system identifiers in the player's world.** Element names,
+   fixture defaults, internal ids, and dev vocabulary never surface as
+   text ("UI PILOT" is a test-fixture name wearing a pilot's jacket).
+   Every player-visible string is either diegetic vocabulary or a real
+   value. Test fixtures must seed *diegetic* placeholder data (use the
+   pilot-name generator, not "UI Pilot") precisely so leaks of this
+   class are visible as defects, not camouflage.
+3. **Labels state facts, headings claim identity, captions instruct.**
+   One job per string; a string doing two jobs gets split or cut.
+4. **The empty state teaches in-fiction** (`- vault empty -` +
+   `salvage returns here after extraction`), never in dev voice
+   (`no data`).
+5. **Tone**: laconic, lowercase per §3.3, terminal-flavored, reluctant
+   — the instrument states, it does not chat. Approved vocabulary lives
+   in the theme glossary; new terms get taught once at first use.
+
 ## 4. Strokes, panels, surfaces, light
 
 - **Strokes are 1px, always.** 2px exists only as the selected-state
@@ -400,6 +429,7 @@ check ID, implementers apply the remedy, no relitigating.
 | L2 | | Can any two elements collide at 1280×720 or ×800? (test worst-case: 8 toasts, full inventory, max contacts) | Any overlap | One moves or dies; add the collision case to the capture set |
 | V1 | ✅ | Read every string aloud | Banned vocabulary (§7), raw ids, Title Case, untaught jargon | Rewrite in voice; add teaching line at first use |
 | V2 | | Is any readout a constant? | Constant styled as live data | Restyle as tier-4 texture or delete |
+| V3 | | Scan names and labels (§3.4) | A surface's name rendered more than once in view; system/fixture identifiers surfacing as player text | Delete the duplicate rendering (heading must add information or go); replace the string with diegetic vocabulary and fix the fixture to seed diegetic data |
 | G1 | | Every gauge: label + number + segmented? Every chip: captioned? | Naked gauge, one-bit bar, orphan chip | Add label/number; one-bit → state chip; orphan → caption or cut |
 | S1 | ✅ | Empty, loading, and failure states captured? | Any state blank, missing, or indistinguishable from working | Author the state per §9.8 |
 | M1 | | Watch 10s at rest | Anything blinking/pulsing/bobbing without a state change; square-wave blink | Still it, or convert to a ≥2s sine on an actual ready-state |
