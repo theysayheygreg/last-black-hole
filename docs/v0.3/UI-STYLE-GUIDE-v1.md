@@ -147,6 +147,9 @@ The shipped 11px (most common size in the game) migrates to 12; shipped
 **Floors (hard):** T1 critical in-play numbers (heat %, speed, timers) are
 ≥ **18px**; contact identity/range labels are ≥ **12px**. Menu body ≥
 **12px**. 9–10px may never be the only rendering of a fact.
+*(Split floor ratified retroactively by Greg, 2026-08-06 — originally
+amended in commit `706597f8`. Reminder: guide amendments go through the
+custodian and Greg, never as implementation-commit side effects.)*
 
 ### 3.3 Casing (voice rule — Greg-ratified)
 
