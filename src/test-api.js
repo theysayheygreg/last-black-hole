@@ -5,6 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { generatePilotName } from './profile.js';
 import { WORLD_SCALE, GRID_WINDOW, getFluidCamera, worldToScreen } from './coords.js';
 import { getAbilityPresentationState } from './hud.js';
 
@@ -290,7 +291,7 @@ export function initTestAPI(getState) {
       const state = getState();
       if (!state.setLastRunResult || !state.setEndScreenTimers) return false;
       if (state.profileManager && !state.profileManager.active) {
-        state.profileManager.createProfile(0, 'Results Pilot');
+        state.profileManager.createProfile(0, generatePilotName());
       }
       state.setLastRunResult(runResult || null);
       const outcome = runResult?.outcome === 'extracted' ? 'escaped' : runResult?.outcome === 'escaped' ? 'escaped' : 'dead';
@@ -304,7 +305,7 @@ export function initTestAPI(getState) {
       const name = String(surface || '').toLowerCase().replace(/[-_\s]/g, '');
       const ensureProfile = () => {
         if (state.profileManager && !state.profileManager.active) {
-          state.profileManager.createProfile(0, options.profileName || 'UI Pilot');
+          state.profileManager.createProfile(0, options.profileName || generatePilotName());
         }
       };
 
