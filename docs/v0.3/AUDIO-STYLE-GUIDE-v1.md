@@ -208,6 +208,42 @@ Man's Sky lesson — hybrid wins, §10.10.)*
 
 ## 7. References: how taste becomes law
 
+### 7.0 The founding reference
+
+The original vision for LBH's sound AND its ASCII aesthetic is Nous
+Research's *"The Ballad of Hermes"* — a generated song with an ASCII
+music video made entirely by Hermes Agent
+(x.com/nousresearch/status/2029978375880597911; video:
+video.twimg.com/amplify_video/2029977207875993600/vid/avc1/1920x1080/OKQ-6BQYU4tHFtiC.mp4).
+The prompt that allegedly generated it
+(x.com/shl0ms/status/2032865970318884924), verbatim:
+
+> warm, dark, slow, suspenseful, beautiful, punchy, downbeat,
+> nostalgic, experimental, catchy, earworm, 2-minute composition,
+> saturated, vocoded harmonized deep guttural throat singing, formant
+> sweeps, swelling legato pads and 8-bit crunchy arpeggios, textured,
+> searing contrapuntal fretless leads. simple chord progression.
+> cyclic harmonic minor. circuit bending. lorenzo senni, moroder,
+> the durutti column. omnichord, trautonium. retro video game
+> soundtrack beat, dragging rhythm
+
+Decomposed, this prompt is the guide's own anatomy — mode (`cyclic
+harmonic minor`, simple progression), material (vocoded throat voice,
+legato pads, 8-bit arpeggios, fretless leads, omnichord, trautonium,
+circuit bending), envelope/rhythm (swelling, punchy, formant sweeps,
+dragging retro-game beat), reference artists (Senni, Moroder, Durutti
+Column), and form (2 minutes) — with mood adjectives as seasoning on
+top. The founding song validates the hybrid spine empirically.
+
+**Proposed (awaiting Greg's ratification with this guide):** the
+founding reference seeds the identity — home pitch language in the
+harmonic-minor family; the material palette candidates above
+(vocoded/choral voice, warm pads, 8-bit grit, fretless lead, haunted
+electro-mechanical instruments) as the game's core instrumentarium;
+"dragging rhythm" as the tempo character. First Timbre task after
+ratification: pull the video's audio, run full analysis, and propose
+the founding entry's formal fence.
+
 Greg's ears are the constitution; the reference library is its
 amendments. The loop: **Greg sends a clip with one line of intent →
 Timbre analyzes it and proposes** what it anchors (which family, which
