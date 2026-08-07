@@ -8,6 +8,8 @@ const {
   withFreshSimServer,
   withQuery,
   waitFor,
+  startServer,
+  stopServer,
 } = require('../helpers.cjs');
 const { BrowserJourneyConditionReader, BrowserJourneyDriver } = require('./browser-driver.cjs');
 
@@ -42,9 +44,16 @@ async function runJourney(id, options = {}) {
   ]);
 
   let receipt;
-  await withFreshSimServer(simPort, async () => {
-    await withFreshGame(withQuery('index-a.html', { simServer: simUrl }), async ({ page, errors }) => {
-      await waitFor(page, () => Boolean(window.__TEST_API?.getNetworkState), { timeout: 12_000 });
+  await startServer();
+  try {
+    await withFreshSimServer(simPort, async () => {
+      await withFreshGame(withQuery('index-a.html', { simServer: simUrl }), async ({ page, errors }) => {
+      try {
+        await waitFor(page, () => Boolean(window.__TEST_API?.getNetworkState), { timeout: 12_000 });
+      } catch (error) {
+        const diagnostics = page.getDiagnostics?.() || [];
+        throw new Error(`Journey browser bootstrap failed: ${error.message}; errors=${errors.join(' | ')}; diagnostics=${JSON.stringify(diagnostics.slice(-16))}`);
+      }
       const driver = new BrowserJourneyDriver({ page, simUrl, artifactRoot });
       const conditions = new BrowserJourneyConditionReader({
         page,
@@ -60,8 +69,11 @@ async function runJourney(id, options = {}) {
       if (errors.length > 0 && receipt.status === 'passed') {
         receipt = { ...receipt, browserErrors: [...errors] };
       }
-    }, { resetState: true, resetWaitMs: 500 });
-  });
+      }, { resetState: true, resetWaitMs: 500 });
+    });
+  } finally {
+    stopServer();
+  }
 
   fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
   return { receipt, receiptPath };
