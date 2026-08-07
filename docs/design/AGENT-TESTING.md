@@ -125,6 +125,15 @@ A test script launches disposable headless Chrome by default. Run `npm run
 test:agent-eval:visible` for an attended, headed review of the natural journey.
 The window remains CDP-controlled in both modes.
 
+Durable browser scenarios are authored as validated JSON in
+`src/content/journeys/` and executed by the single Journey runtime in
+`src/journey/`. Journey assertions use the canonical condition vocabulary;
+gameplay actions go through ordinary input/authority seams. Setup policy may
+select a deterministic pilot, seed, map, and stored pilot facts, but it may not
+mutate movement, cargo, pickup, death, portal, grapple, or extraction truth.
+Low-level protocol, geometry, renderer, and lifecycle contracts remain code
+tests because they are not player journeys.
+
 A test script:
 1. Launches headless Chrome (or headed, for screenshot review)
 2. Opens the target HTML file through the LBH harness server on port `8719`

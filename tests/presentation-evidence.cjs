@@ -3,7 +3,6 @@
 const assert = require('assert');
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { recordJourneyStage } = require('./agent-play-report.cjs');
 
 async function run() {
   const hud = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'hud-presentation.js')).href);
@@ -220,8 +219,8 @@ async function run() {
   assert.deepStrictEqual(legacyNoiseEffects, canonicalNoiseEffects);
 
   const report = { journey: {} };
-  recordJourneyStage(report, { briefing: { mapName: 'The Shallows' }, firstRun: { runId: 'run-1' } });
-  recordJourneyStage(report, { slingshot: { anchorType: 'well' } });
+  report.journey = { briefing: { mapName: 'The Shallows' }, firstRun: { runId: 'run-1' } };
+  report.journey = { ...report.journey, slingshot: { anchorType: 'well' } };
   assert.deepStrictEqual(report.journey.briefing, { mapName: 'The Shallows' });
   assert.deepStrictEqual(report.journey.firstRun, { runId: 'run-1' });
   assert.deepStrictEqual(report.journey.slingshot, { anchorType: 'well' });

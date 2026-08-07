@@ -76,15 +76,15 @@ for the claim:
 3. **Visual proof** — screenshots or fixture manifests show that the feature
    can be seen and understood in the Three scene or UI.
 
-`npm run test:agent-eval` is the explicit playable-proof lane. It runs two
-fresh authoritative Shallows sessions in disposable browsers with normal menus
-and virtual Steam-style controller input. The first performs a real slingshot,
-salvages live wrecks, raises signal/Inhibitor pressure, confirms extraction,
-verifies result/Profile/Rig/Chronicle continuity, and starts a changed second
-run. The second selects the public Breacher through Home, dives into a visible
-well, verifies server-owned death, and returns Home. The report carries eighteen
-1280x800 screenshots under `tests/screenshots/agent-play-eval-*`. Neither
-journey mutates sim debug state.
+`npm run test:agent-eval` is the explicit playable-proof lane. It loads the
+validated `agent.salvage-noise-extract` Journey from
+`src/content/journeys/`, drives the real remote input path, reads the Phase 1B
+condition vocabulary, and writes one step receipt plus artifact manifest. The
+natural route remains an explicit known failure while salvage/portal timing is
+nondeterministic; the receipt never converts that result into green status.
+Breacher recovery, menu/profile flows, reproduction routes, and controlled
+captures are sibling data definitions consumed by the same runtime rather than
+bespoke controllers.
 
 This lane is not a replacement for manual playfeel. It is the handoff receipt
 that should exist before asking Greg to spend attention on a build.
@@ -212,8 +212,9 @@ not drift; they cannot prove the ship feels good.
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:sim-structure` | v0.3 structural gate for persistent Ballpark identity/lifecycle, required relevance/pickup/portal queries, toroidal geometry and swept contacts, movement fixtures, protocol v2, bounded growth, journal, and live snapshot rebase. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
-| `npm run test:agent-eval` | Natural Shallows product journey plus 1280x800 visual/readability evidence before Greg reviews feel and taste. |
+| `npm run test:agent-eval` | Validated natural Shallows Journey through real input, with condition/event waits and a receipt/artifact manifest. |
 | `npm run test:agent-eval:visible` | The same agent journey in a visible, CDP-controlled Chrome window for attended review. |
+| `npm run test:journeys` | Pure Journey schema/catalog/driver-contract checks; no browser or authority process. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
 | `npm run test:bench` | Explicit bench-authority probes only; this endpoint is not part of normal authority behavior. |
 | `npm run test:audio-tools` | Optional local audio-toolkit check. A missing Python `numpy` dependency is recorded, not converted into a product-gate failure. |
