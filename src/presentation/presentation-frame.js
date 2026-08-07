@@ -265,6 +265,13 @@ function normalizeLocalPlayer(source = null, scene = {}) {
       }) : null,
       thrusting: source.thrusting === true,
       braking: source.braking === true,
+      affordance: source.movementAffordance ? Object.freeze({
+        requestedHeading: finite(source.movementAffordance.requestedHeading),
+        thrustGateScale: Math.max(0, Math.min(1, finite(source.movementAffordance.thrustGateScale, 1))),
+        plumeScale: Math.max(0, Math.min(1, finite(source.movementAffordance.plumeScale))),
+        plumeCantRadians: finite(source.movementAffordance.plumeCantRadians),
+        stoppingAssist: source.movementAffordance.stoppingAssist === true,
+      }) : null,
       pathState: pathState(source, sling),
     }),
     hull: hull(source),

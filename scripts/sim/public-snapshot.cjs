@@ -133,6 +133,8 @@ function projectPlayer(player, facts) {
     wy: player.wy,
     vx: player.vx,
     vy: player.vy,
+    facing: Number.isFinite(Number(player.movementFacing)) ? Number(player.movementFacing) : 0,
+    movementAffordance: player.movementAffordance ? { ...player.movementAffordance } : null,
     slingshot,
     deltaV: player.deltaV,
     deltaVMax: player.deltaVMax,

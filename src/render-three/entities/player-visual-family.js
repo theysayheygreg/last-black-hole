@@ -54,10 +54,16 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
           : null;
         if (mode) {
           const facing = heading(player);
-          const wake = { x: -Math.cos(facing), y: Math.sin(facing) };
+          const affordance = movement.affordance || {};
+          const plumeCant = mode === 'thrusting' ? Number(affordance.plumeCantRadians) || 0 : 0;
+          const plumeScale = mode === 'thrusting'
+            ? Math.max(0.12, Math.min(1, Number(affordance.plumeScale) || 0))
+            : 1;
+          const wakeHeading = facing + plumeCant;
+          const wake = { x: -Math.cos(wakeHeading), y: Math.sin(wakeHeading) };
           const lateral = { x: -wake.y, y: wake.x };
           const direction = mode === 'braking' ? { x: -wake.x, y: -wake.y } : wake;
-          const length = mode === 'braking' ? 0.018 : 0.034;
+          const length = mode === 'braking' ? 0.018 : 0.034 * plumeScale;
           for (const side of [-1, 1]) {
             const start = {
               x: player.world.x + direction.x * 0.017 + lateral.x * side * 0.010,

@@ -3957,6 +3957,8 @@ function collectPresentationSceneSource() {
       ruler: authorityPlayer?.ruler || null,
       deliveredThrust,
       deliveredBrake,
+      authorityFacing: authorityPlayer?.facing,
+      movementAffordance: authorityPlayer?.movementAffordance || ship?.movementAffordance || null,
     },
     world: {
       wells: wellSystem?.wells || [],

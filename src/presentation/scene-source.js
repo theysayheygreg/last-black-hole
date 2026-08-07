@@ -28,7 +28,10 @@ export function createPresentationSceneSource(input = {}) {
       wy: ship.wy,
       vx: ship.vx,
       vy: ship.vy,
-      facing: ship.facing,
+      facing: Number.isFinite(Number(local.authorityFacing)) ? Number(local.authorityFacing) : ship.facing,
+      ...(local.movementAffordance
+        ? { movementAffordance: { ...local.movementAffordance } }
+        : {}),
       hullType: local.hullType || 'drifter',
       heatRatio,
       overheated: local.authorityOverheated ?? local.localOverheated

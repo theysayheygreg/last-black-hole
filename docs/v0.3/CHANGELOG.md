@@ -1,5 +1,14 @@
 # v0.3 Changelog
 
+- **Endless Sky Phase 1A movement affordances:** human, AI-player, and future
+  Journey input now enter one shared desired-heading/thrust/brake grammar before
+  the existing authority force order. Turns converge on their fractional final
+  step, major redirects smoothly shorten/cant delivered thrust, explicit
+  server-validated salvage and portal approaches share one stopping envelope,
+  and braking resolves negligible post-force drift to zero. Free flight remains
+  free, existing forces and Heat costs retain authority, and no binary movement
+  mode was added.
+
 - **Round 2 UI readability:** shared key/value rows now reserve measured label
   width, input chips and captions share one measured footer path, and generic
   selection/command fills use cyan structure rather than amber value color.

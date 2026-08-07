@@ -214,6 +214,13 @@ async function run() {
         ship: {
           id: 'pilot', wx: 2.95, wy: 0.2, vx: 1.2, vy: -0.4, facing: 0.25,
           deltaVRatio: 0.6, hullType: 'breacher', thrusting: true,
+          movementAffordance: {
+            requestedHeading: 1.2,
+            thrustGateScale: 0.45,
+            plumeScale: 0.36,
+            plumeCantRadians: 0.2,
+            stoppingAssist: true,
+          },
           forceLedger: {
             tick: 42,
             dt: 0.1,
@@ -257,6 +264,10 @@ async function run() {
     assert(frame.camera.x === 2.9 && frame.camera.worldScale === 3, 'Expected normalized camera');
     assert(frame.localPlayer.id === 'pilot', 'Expected local player identity');
     assert(frame.localPlayer.movement.velocity.speed > 1.2, 'Expected renderer-neutral movement state');
+    assert(frame.localPlayer.movement.affordance.plumeScale === 0.36
+      && frame.localPlayer.movement.affordance.plumeCantRadians === 0.2
+      && frame.localPlayer.movement.affordance.stoppingAssist,
+    'Expected shared movement affordance facts to reach renderer presentation unchanged');
     assert(frame.localPlayer.hull.type === 'breacher' && frame.localPlayer.movement.pathState === 'thrusting',
       'Expected normalized hull and path presentation state');
     assert(frame.localPlayer.forceLedger.tick === 42, 'Expected authoritative force-ledger tick');
