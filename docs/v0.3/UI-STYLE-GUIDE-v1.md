@@ -277,6 +277,38 @@ always pair with text; 16px on 44px cells.
 
 ---
 
+### 5.1 World-annotation grammar (in-play — Mosaic's lane)
+
+How the game marks things in the world. Adopted from proven practice
+(Endless Sky's annotation system, re-derived for our canvas contract —
+ratified by Greg 2026-08-07); Mosaic implements as canvas primitives in
+the component library, and reviews measure against these rules.
+
+- **Bracket shape encodes class.** Target/contact brackets are N
+  tapered pointers evenly spaced on a ring: **4 = ship, 5 = aperture/
+  portal, 3 = salvage.** A player learns the count once and reads
+  class at any distance without color or text. Pointers aim inward;
+  ship brackets rotate with the target's facing.
+- **Off-screen contacts clamp, never vanish.** On the audible-contact
+  ring and any radar-like instrument, an out-of-range or off-screen
+  contact clamps to the rim (`position × radius/length`) — the player
+  always knows *where*, even when not *how far*.
+- **Rings, arcs, and dashes are one primitive** with radius, width,
+  fraction, start angle, and dash count — used for timers, noise
+  radius, residence progress, and brackets alike. Dash count scales
+  with zoom so dashes stay constant-size in pixels.
+- **World labels draw UNDER entities.** The world may occlude a label;
+  a label may never occlude a threat. (The IN-RANGE prompt occluding
+  the well at closest approach is the canonical violation.)
+- **Static-body labels are placed once per run**, at run start:
+  candidate anchor angles tested against every other label and body so
+  static labels (wells, portals, wrecks) never collide; moving
+  entities keep the per-frame offset ladder.
+- **Labels never jitter**: world-anchored text renders at non-rounded
+  positions.
+
+*(rubric: check W1 below.)*
+
 ## 6. Information hierarchy
 
 Four tiers, mapped to concrete treatment — every element on every
@@ -430,6 +462,7 @@ check ID, implementers apply the remedy, no relitigating.
 | V1 | ✅ | Read every string aloud | Banned vocabulary (§7), raw ids, Title Case, untaught jargon | Rewrite in voice; add teaching line at first use |
 | V2 | | Is any readout a constant? | Constant styled as live data | Restyle as tier-4 texture or delete |
 | V3 | | Scan names and labels (§3.4) | A surface's name rendered more than once in view; system/fixture identifiers surfacing as player text | Delete the duplicate rendering (heading must add information or go); replace the string with diegetic vocabulary and fix the fixture to seed diegetic data |
+| W1 | | World annotations (§5.1) | A label/prompt occludes a threat; a tracked contact vanishes instead of rim-clamping; bracket count doesn't match class; world text jitters | Reorder below entities; clamp to rim; fix the count; un-round the text position |
 | G1 | | Every gauge: label + number + segmented? Every chip: captioned? | Naked gauge, one-bit bar, orphan chip | Add label/number; one-bit → state chip; orphan → caption or cut |
 | S1 | ✅ | Empty, loading, and failure states captured? | Any state blank, missing, or indistinguishable from working | Author the state per §9.8 |
 | M1 | | Watch 10s at rest | Anything blinking/pulsing/bobbing without a state change; square-wave blink | Still it, or convert to a ≥2s sine on an actual ready-state |
