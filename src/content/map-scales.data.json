@@ -6,6 +6,7 @@
       "dimensions": { "width": 5, "height": 5 },
       "profileId": "small",
       "runDurationSeconds": 480,
+      "unlockCondition": { "condition": "pilot.unlock.map.shallows", "equals": true },
       "sourceFile": "shallows-5x5.js",
       "legacyDimensions": { "width": 3, "height": 3 },
       "survey": {
@@ -28,6 +29,7 @@
       "dimensions": { "width": 15, "height": 15 },
       "profileId": "medium",
       "runDurationSeconds": 600,
+      "unlockCondition": { "condition": "pilot.unlock.map.expanse", "equals": true },
       "sourceFile": "expanse-15x15.js",
       "legacyDimensions": { "width": 5, "height": 5 },
       "survey": {
@@ -50,6 +52,7 @@
       "dimensions": { "width": 25, "height": 25 },
       "profileId": "large",
       "runDurationSeconds": 720,
+      "unlockCondition": { "condition": "pilot.unlock.map.deepField", "equals": true },
       "sourceFile": "deep-field-25x25.js",
       "legacyDimensions": { "width": 10, "height": 10 },
       "survey": {

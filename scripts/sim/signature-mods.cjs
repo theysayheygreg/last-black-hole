@@ -1,5 +1,7 @@
 "use strict";
 
+const { SEEDED_SIGNATURES } = require("../content/signatures.cjs");
+
 // Run signatures are authored as multipliers. Resolve them once at session
 // start so malformed content cannot leak a different value into each seam.
 const SIGNATURE_MOD_RANGES = Object.freeze({
@@ -26,6 +28,17 @@ function resolveSignatureMods(signatureOrMods = null) {
   ])));
 }
 
+function getSeededSignatureById(signatureId) {
+  const id = String(signatureId || "");
+  const signature = SEEDED_SIGNATURES.find((candidate) => candidate.id === id);
+  if (!signature) throw new RangeError(`Unknown seeded signature: ${id}`);
+  return signature;
+}
+
+function resolveSignatureModsById(signatureId) {
+  return resolveSignatureMods(getSeededSignatureById(signatureId));
+}
+
 function applySignatureModsToBrain(brain, signatureMods) {
   const mods = resolveSignatureMods(signatureMods);
   brain.currentCoupling *= mods.currentCouplingMult;
@@ -39,5 +52,7 @@ function applySignatureModsToBrain(brain, signatureMods) {
 module.exports = {
   SIGNATURE_MOD_RANGES,
   resolveSignatureMods,
+  getSeededSignatureById,
+  resolveSignatureModsById,
   applySignatureModsToBrain,
 };

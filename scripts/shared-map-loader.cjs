@@ -9,6 +9,7 @@ const {
 } = require("./content/map-scales.cjs");
 const { migrateAuthoredMap } = require("./map-migration.cjs");
 const { CLIENT_PERF_PROFILES } = require("./content/session-profiles.cjs");
+const { mapAvailabilityFor } = require("./content/map-availability.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const MAP_DIR = path.join(ROOT, "src", "maps");
@@ -58,6 +59,7 @@ function normalizeMap(mapId, authoredMap) {
     mapClass: definition.mapClass,
     profileId: definition.profileId,
     runDurationSeconds: definition.runDurationSeconds,
+    unlockCondition: definition.unlockCondition || null,
     sourceFile: definition.sourceFile,
     dimensions: { ...definition.dimensions },
     name: map.name,
@@ -112,8 +114,17 @@ function loadPlayableMaps() {
   return maps;
 }
 
+function listPlayableMapsForConditions(conditionStore, context) {
+  const maps = loadPlayableMaps();
+  return Object.freeze(Object.values(maps).map((map) => Object.freeze({
+    ...map,
+    available: mapAvailabilityFor(map, conditionStore, context),
+  })));
+}
+
 module.exports = {
   loadAuthoredMap,
   loadAuthoredMaps,
   loadPlayableMaps,
+  listPlayableMapsForConditions,
 };

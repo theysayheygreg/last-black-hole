@@ -79,7 +79,12 @@ const {
   syncPlayerNoiseModifiers,
   createAbilityState,
 } = require("./player-brain.cjs");
-const { resolveSignatureMods } = require("./sim/signature-mods.cjs");
+const {
+  resolveSignatureMods,
+  getSeededSignatureById,
+  resolveSignatureModsById,
+} = require("./sim/signature-mods.cjs");
+const { createRunConditionInitialValues } = require("./sim/condition-adapters.cjs");
 const { createControlPlaneClient } = require("./control-plane-client.cjs");
 const {
   createOverloadController,
@@ -355,11 +360,37 @@ function applyRunSeed(rngStreams, mapState, session) {
   }
 
   session.lootQualityBias = rngStreams.range('qualityBias', 0.8, 1.2);
-  session.cosmicSignature = SEEDED_GEN.pickCosmicSignature(rngStreams.rawStream('signature'));
-  session.signatureMods = resolveSignatureMods(session.cosmicSignature);
-  // The renderer receives the authoritative scale through the normal session
-  // snapshot; it may present sensor reach but cannot decide the modifier.
-  session.sensorRangeMultiplier = session.signatureMods.sensorRangeMult;
+  const signatureId = SEEDED_GEN.pickCosmicSignature(rngStreams.rawStream('signature')).id;
+  // Store the selected identifier once. The displayed signature, its
+  // authority modifiers, and the client presentation scale are derived from
+  // the canonical manifest instead of three mutable session copies.
+  session.cosmicSignatureId = signatureId;
+  Object.defineProperties(session, {
+    cosmicSignature: {
+      enumerable: true,
+      get() { return getSeededSignatureById(this.cosmicSignatureId); },
+    },
+    signatureMods: {
+      enumerable: true,
+      get() { return resolveSignatureModsById(this.cosmicSignatureId); },
+    },
+    // The renderer receives the authoritative scale through the normal
+    // session snapshot; it may present sensor reach but cannot decide it.
+    sensorRangeMultiplier: {
+      enumerable: true,
+      get() { return resolveSignatureModsById(this.cosmicSignatureId).sensorRangeMult; },
+    },
+    // This is a one-shot initialization packet for the central condition
+    // owner, not a second mutable store in session state.
+    conditionInitialValues: {
+      enumerable: false,
+      value: createRunConditionInitialValues({
+        mapId: session.mapId,
+        seed: session.seed,
+        cosmicSignatureId: signatureId,
+      }),
+    },
+  });
   session.aiSeed = Math.floor(rngStreams.float('aiSeed') * 1e9);
   session.hasNamedWreck = rngStreams.chance('namedWreck', 0.10);
   if (session.hasNamedWreck) {
