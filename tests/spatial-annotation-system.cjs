@@ -31,7 +31,22 @@ async function main() {
   assert(stats.submitted >= 8, `expected shared category pieces, got ${JSON.stringify(stats)}`);
   assert.strictEqual(stats.rimContacts, 1);
   assert(group.children.every((child) => child.renderOrder < 14), 'annotations must render before entity mattes');
+  const strokeMeshes = group.children.filter((child) => child.isMesh);
+  assert(strokeMeshes.length > 0 && strokeMeshes.every((child) => !child.isLine), 'annotations use filled stroke meshes rather than 1px WebGL lines');
+  const deckStroke = strokeMeshes[0].geometry.getAttribute('position');
+  const a = { x: deckStroke.getX(0), y: deckStroke.getY(0) };
+  const b = { x: deckStroke.getX(1), y: deckStroke.getY(1) };
+  const widthPx = Math.hypot((a.x - b.x) * 1280 / (2 * 1.6), (a.y - b.y) * 800 / 2);
+  assert(Math.abs(widthPx - 3) < 0.01, `Deck stroke floor must render at 3px, got ${widthPx}`);
   assert(clampViewportRayToRim({ x: 1600, y: 400 }, 1280, 800, 30)?.x === 1250);
+  const offscreenOnly = {
+    phase: 'playing',
+    localPlayer: { world: { x: 1.5, y: 1.5 }, movement: { noise: { audibleRadiusMeters: 0 } } },
+    world: { portals: [{ id: 'hidden', world: { x: 2.35, y: 1.5 }, radius: 0.08 }], wrecks: [], remotePlayers: [], scavengers: [], inhibitors: [], wells: [], stars: [], planetoids: [] },
+    annotations: { audibleContacts: [], reservedRegions: [] },
+  };
+  const hiddenStats = annotations.update(offscreenOnly, { projection, viewportWidth: 1280, viewportHeight: 800, aspect: 1.6 });
+  assert.strictEqual(hiddenStats.submitted, 0, 'off-screen entities must not leak geometry around the viewport edge');
   annotations.reset();
   assert(group.children.every((child) => child.visible === false));
   annotations.dispose();

@@ -87,7 +87,7 @@ export class AnnotationPresentation {
     this.group = group;
     this.group.name = 'analytic-world-annotation-layer';
     this.materials = Object.fromEntries(Object.entries(CATEGORY_COLORS).map(([category, color]) => {
-      const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.86, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending });
+      const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.86, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending });
       material.name = `annotation:${category}`;
       return [category, material];
     }));
@@ -115,11 +115,11 @@ export class AnnotationPresentation {
     this.stats = { submitted: 0, labels: 0, rimContacts: 0 };
   }
 
-  _line(category, anchorPx, verticesPx, viewport, rotation = 0, alpha = 1) {
+  _line(category, anchorPx, verticesPx, viewport, rotation = 0, alpha = 1, strokePx = 2) {
     if (!verticesPx.length) return null;
     let line = this.linePool[this.lineCursor];
     if (!line) {
-      line = new THREE.LineSegments(new THREE.BufferGeometry(), this.materials[category] || this.materials.noise);
+      line = new THREE.Mesh(new THREE.BufferGeometry(), this.materials[category] || this.materials.noise);
       line.frustumCulled = false;
       this.linePool.push(line);
       this.group.add(line);
@@ -128,11 +128,25 @@ export class AnnotationPresentation {
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
     const values = [];
-    for (const [x, y] of verticesPx) {
-      const rx = x * cos - y * sin;
-      const ry = x * sin + y * cos;
-      const scene = viewportPointToScene({ x: anchorPx.x + rx, y: anchorPx.y + ry }, viewport.width, viewport.height, viewport.aspect);
-      values.push(scene.x, scene.y, 0);
+    const halfWidth = Math.max(1, Number(strokePx) || 2) / 2;
+    for (let index = 0; index < verticesPx.length; index += 2) {
+      const [ax, ay] = verticesPx[index];
+      const [bx, by] = verticesPx[index + 1];
+      const arx = ax * cos - ay * sin;
+      const ary = ax * sin + ay * cos;
+      const brx = bx * cos - by * sin;
+      const bry = bx * sin + by * cos;
+      const length = Math.max(1e-6, Math.hypot(brx - arx, bry - ary));
+      const nx = -(bry - ary) / length * halfWidth;
+      const ny = (brx - arx) / length * halfWidth;
+      const corners = [
+        [arx + nx, ary + ny], [arx - nx, ary - ny], [brx + nx, bry + ny],
+        [brx + nx, bry + ny], [arx - nx, ary - ny], [brx - nx, bry - ny],
+      ];
+      for (const [x, y] of corners) {
+        const scene = viewportPointToScene({ x: anchorPx.x + x, y: anchorPx.y + y }, viewport.width, viewport.height, viewport.aspect);
+        values.push(scene.x, scene.y, 0);
+      }
     }
     line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(values, 3));
     line.material = this.materials[category] || this.materials.noise;
@@ -144,7 +158,7 @@ export class AnnotationPresentation {
 
   _plan(category, anchorPx, options, viewport, rotation = 0, alpha = 1) {
     const plan = makeCategoryAnnotationPlan(category, options);
-    for (const piece of plan.pieces) this._line(category, anchorPx, pieceSegments(piece), viewport, rotation, alpha);
+    for (const piece of plan.pieces) this._line(category, anchorPx, pieceSegments(piece), viewport, rotation, alpha, piece.weight.strokePx);
   }
 
   _label(label, viewport) {
@@ -215,6 +229,7 @@ export class AnnotationPresentation {
     }
     for (const portal of frame.world?.portals || []) {
       const anchor = toPx(portal.world);
+      if (!isOnScreen(anchor, 0)) continue;
       this._plan(portal.final ? 'exfil' : 'portal', anchor, {
         extentPx: extentFor(portal, 72), viewportClass,
         collapseProgress: clamp01(portal.collapseProgress), apertureProgress: clamp01(portal.apertureProgress),
@@ -224,16 +239,19 @@ export class AnnotationPresentation {
     for (const wreck of frame.world?.wrecks || []) {
       if (wreck.looted) continue;
       const anchor = toPx(wreck.world);
+      if (!isOnScreen(anchor, 0)) continue;
       this._plan('salvage', anchor, { extentPx: extentFor(wreck, 58), viewportClass }, viewport);
       addLabel(wreck, 'salvage', 40);
     }
     for (const vessel of [...(frame.world?.remotePlayers || []), ...(frame.world?.scavengers || [])]) {
       const anchor = toPx(vessel.world);
+      if (!isOnScreen(anchor, 0)) continue;
       this._plan('vessel', anchor, { extentPx: extentFor(vessel, 62), viewportClass, hostile: vessel.hint?.category === 'threat' }, viewport);
       addLabel(vessel, 'vessel', 60);
     }
     for (const inhibitor of frame.world?.inhibitors || []) {
       const anchor = toPx(inhibitor.world);
+      if (!isOnScreen(anchor, 0)) continue;
       this._plan(inhibitor.kind === 'vessel' ? 'vessel' : 'inhibitor', anchor, { extentPx: extentFor(inhibitor, 68), viewportClass, hostile: true }, viewport);
       addLabel(inhibitor, 'inhibitor', 70);
     }
@@ -241,12 +259,14 @@ export class AnnotationPresentation {
     const slingAnchor = sling?.anchor || sling?.affordance || sling?.telegraph?.aimCue?.anchor;
     if (slingAnchor?.world) {
       const anchor = toPx(slingAnchor.world);
-      this._plan('grapple', anchor, { extentPx: Math.max(92, Math.min(180, extentFor({ ...slingAnchor, radius: slingAnchor.range }, 92))), viewportClass, attached: Boolean(sling.engaged) }, viewport);
-      if (sling.engaged) {
-        const shipPx = toPx(player.world);
-        const dx = shipPx.x - anchor.x;
-        const dy = shipPx.y - anchor.y;
-        this._line('grapple', anchor, [[0, 0], [Math.hypot(dx, dy), 0]], viewport, Math.atan2(dy, dx));
+      if (isOnScreen(anchor, 0)) {
+        this._plan('grapple', anchor, { extentPx: Math.max(92, Math.min(180, extentFor({ ...slingAnchor, radius: slingAnchor.range }, 92))), viewportClass, attached: Boolean(sling.engaged) }, viewport);
+        if (sling.engaged) {
+          const shipPx = toPx(player.world);
+          const dx = shipPx.x - anchor.x;
+          const dy = shipPx.y - anchor.y;
+          this._line('grapple', anchor, [[0, 0], [Math.hypot(dx, dy), 0]], viewport, Math.atan2(dy, dx), 1, viewportClass === 'deck' ? 3 : 2);
+        }
       }
     }
     for (const contact of frame.annotations?.audibleContacts || []) {
