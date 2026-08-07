@@ -1,5 +1,3 @@
-const LABEL_OFFSETS = Object.freeze([0, 22, -22, 44, -44, 66, -66, 88, -88]);
-
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
@@ -20,14 +18,6 @@ export function rectsOverlap(a, b, gap = 0) {
     && a.x + a.w + gap > b.x
     && a.y < b.y + b.h + gap
     && a.y + a.h + gap > b.y;
-}
-
-export function safeObjectLabel(value, fallback) {
-  const text = String(value ?? '').trim();
-  if (!text || text.toLowerCase() === 'undefined' || text.toLowerCase() === 'null') {
-    return fallback;
-  }
-  return text;
 }
 
 export function getShipLocalLabelSlots({ shipX, shipY, canvasW, canvasH } = {}) {
@@ -80,59 +70,4 @@ export function getRulerReadoutBounds(canvasW, canvasH, rowCount = 0) {
     w: panelW,
     h: panelH,
   }, width, height, 0));
-}
-
-export function placePresentationLabels(entries = [], {
-  canvasW = 1280,
-  canvasH = 800,
-  obstacles = [],
-  gap = 5,
-  offsets = LABEL_OFFSETS,
-} = {}) {
-  const occupied = obstacles
-    .filter(Boolean)
-    .map((rect) => ({ ...rect }));
-  const ordered = entries
-    .map((entry, index) => ({ ...entry, order: finite(entry.order, index), index }))
-    .sort((a, b) => a.order - b.order || a.index - b.index);
-  const placed = [];
-  const rejected = [];
-
-  for (const entry of ordered) {
-    const width = Math.max(1, finite(entry.width, 120));
-    const height = Math.max(1, finite(entry.height, 18));
-    const anchorX = finite(entry.anchorX);
-    const anchorY = finite(entry.anchorY);
-    const candidates = Array.isArray(entry.offsets) ? entry.offsets : offsets;
-    let placement = null;
-    for (const offset of candidates) {
-      const bounds = clampRect({
-        x: anchorX - width / 2,
-        y: anchorY + finite(offset) - height / 2,
-        w: width,
-        h: height,
-      }, canvasW, canvasH);
-      if (occupied.some((obstacle) => rectsOverlap(bounds, obstacle, gap))) continue;
-      placement = {
-        ...entry,
-        slot: `${entry.id || 'label'}:${placed.length}`,
-        bounds: Object.freeze(bounds),
-        x: bounds.x + bounds.w / 2,
-        y: bounds.y + bounds.h / 2,
-      };
-      break;
-    }
-    if (!placement) {
-      rejected.push({ ...entry, bounds: null });
-      continue;
-    }
-    occupied.push(placement.bounds);
-    placed.push(Object.freeze(placement));
-  }
-
-  return Object.freeze({
-    placed: Object.freeze(placed),
-    rejected: Object.freeze(rejected),
-    occupied: Object.freeze(occupied),
-  });
 }

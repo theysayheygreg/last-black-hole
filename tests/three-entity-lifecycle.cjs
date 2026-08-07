@@ -219,9 +219,11 @@ async function run() {
     assert(backendSource.includes("const diagnosticView = this.getViewMode() === 'scene';")
       && rendererSource.includes('if (diagnosticView)'),
       'Well diagnostics must have an explicit raw-scene gate');
+    const annotationSource = fs.readFileSync(path.join(ROOT, 'src/render-three/annotations/annotation-presentation.js'), 'utf8');
     assert(!portalSource.includes("portal.visualState === 'blocked'")
-      && portalSource.includes("portal.visualState === 'final'"),
-    'Retired portal blocking must stay absent while final-exfil accents remain family-specific');
+      && !portalSource.includes("portal.visualState === 'final'")
+      && annotationSource.includes("portal.final ? 'exfil' : 'portal'"),
+    'Portal state geometry must live only in the shared annotation owner');
     assert(rendererSource.includes('wellDebugPrimitiveCount'),
       'Renderer stats must expose well diagnostic primitive counts');
   });
@@ -277,7 +279,7 @@ async function run() {
 
   });
 
-  await runner.run('Player family prioritizes local ship and submits authored thrust and slingshot grammar', async () => {
+  await runner.run('Player family prioritizes local ship while annotation grammar owns grapple geometry', async () => {
     const resources = makeResources();
     const family = new PlayerVisualFamily(resources).create();
     const log = makeDrawLog();
@@ -300,9 +302,11 @@ async function run() {
     assert(firstSprite.args[1] === 'shipDrifter', 'Local Drifter sprite must render before remote density');
     assert(stats.activeObjects === 3, `Expected 3 player objects, got ${stats.activeObjects}`);
     assert(stats.droppedObjects === 6, `Expected 6 dropped remotes, got ${stats.droppedObjects}`);
-    assert(log.calls.some((call) => call.type === 'line'), 'Engaged slingshot should submit a tether');
-    assert(log.calls.filter((call) => call.type === 'line').length >= 5,
-      'Player should submit thrust ports plus lane/tether grammar, not a lone diagnostic ring');
+    assert(log.calls.filter((call) => call.type === 'line').length === 2,
+      'Player family must submit only propulsion state lines; grapple geometry belongs to annotations');
+    const annotationSource = fs.readFileSync(path.join(ROOT, 'src/render-three/annotations/annotation-presentation.js'), 'utf8');
+    assert(annotationSource.includes("this._plan('grapple'") && annotationSource.includes('if (sling.engaged)'),
+      'Shared annotation owner must contain reachable and attached grapple presentation');
 
     const propulsionLines = (movement) => {
       const stateLog = makeDrawLog();

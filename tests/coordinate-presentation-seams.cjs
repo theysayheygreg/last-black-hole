@@ -12,25 +12,12 @@ function near(actual, expected, message, epsilon = 1e-9) {
   assert(Math.abs(actual - expected) <= epsilon, `${message}: expected ${expected}, got ${actual}`);
 }
 
-function drawLog() {
-  const lines = [];
-  return {
-    lines,
-    draw: {
-      sprite() { return { visible: true }; },
-      line(...args) { lines.push(args); return { visible: true }; },
-      shipCandidate() { return null; },
-      budgetCull() {},
-      state() {},
-    },
-  };
-}
-
 async function run() {
   const runner = new TestRunner('CoordinatePresentationSeams');
   const coords = await importModule('src/coords.js');
   const { ScavengerSystem } = await importModule('src/scavengers.js');
-  const { PlayerVisualFamily } = await importModule('src/render-three/entities/player-visual-family.js');
+  const { createWorldProjection, scenePointToViewport } = await importModule('src/render-three/world-projection.js');
+  const { makeCategoryAnnotationPlan } = await importModule('src/render-three/annotations/category-grammar.js');
   const { createPresentationFrame } = await importModule('src/presentation/presentation-frame.js');
   const { resolveVesselTargetTell } = await importModule('src/render-three/world-scene-presentation.js');
 
@@ -50,26 +37,15 @@ async function run() {
     }
   });
 
-  await runner.run('grapple chord and ticks use the short wrapped bearing', () => {
-    const family = new PlayerVisualFamily({
-      group: {}, geometries: {}, materials: { tether: {}, thrusterWake: {} },
-    }).create();
-    const log = drawLog();
-    family.update({
-      camera: { worldScale: 5 },
-      localPlayer: {
-        id: 'pilot', status: 'alive', world: { x: 0.1, y: 1 },
-        movement: { facing: 0, velocity: { x: 0, y: 0 } },
-        slingshot: { engaged: true, anchor: { world: { x: 4.9, y: 1 }, range: 0.2 } },
-      },
-      world: { remotePlayers: [], shipCandidates: [] },
-      style: { entityBudgets: { players: 1 } },
-    }, log.draw);
-    const firstTick = log.lines[1];
-    near(firstTick[0], 4.9, 'Grapple tick anchor x');
-    near(firstTick[1], 0.8, 'Grapple tick must sit on the short-arc side');
-    near(firstTick[2], 4.936, 'Grapple tick tip must point toward the wrapped player');
-    near(firstTick[3], 0.8, 'Grapple tick tip y');
+  await runner.run('grapple annotation uses the canonical short wrapped projection', () => {
+    const projection = createWorldProjection({ x: 0.1, y: 1, worldScale: 5, view: 3 }, 1.6);
+    const player = scenePointToViewport(projection.project(0.1, 1), 1280, 800, 1.6);
+    const anchor = scenePointToViewport(projection.project(4.9, 1), 1280, 800, 1.6);
+    assert(Math.abs(anchor.x - player.x) < 100,
+      `Wrapped grapple anchor must remain near the pilot, got ${anchor.x - player.x}px`);
+    const plan = makeCategoryAnnotationPlan('grapple', { extentPx: 92, attached: true, viewportClass: 'deck' });
+    assert(plan.metadata.attached === true && plan.pieces.some((piece) => piece.kind === 'line'),
+      'Attached grapple grammar must contain the shared tether primitive');
   });
 
   await runner.run('Vessel target tells use normalized coordinates and omit incomplete rows', () => {

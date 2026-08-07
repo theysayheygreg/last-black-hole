@@ -448,7 +448,7 @@ export function initTestAPI(getState) {
 
     getRendererBackend() {
       const { getRendererBackend } = getState();
-      return getRendererBackend ? getRendererBackend() : 'legacy';
+      return getRendererBackend ? getRendererBackend() : 'three';
     },
 
     getRendererBackendStats() {

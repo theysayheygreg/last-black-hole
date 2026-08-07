@@ -14,6 +14,7 @@ export const RENDER_QUALITY_TIERS = Object.freeze([
 export const RENDER_PLAN_PASS_IDS = Object.freeze([
   'fabricSource',
   'voidDepth',
+  'worldAnnotations',
   'entityEchoes',
   'vfxEvents',
   'asciiComposite',
@@ -103,6 +104,22 @@ export const RENDER_PLAN_DESCRIPTOR = Object.freeze({
       capturePolicy: 'diagnostic',
       deckCaveats: Object.freeze([
         'Preserve black dominance without hiding route objects or fabric contours.',
+      ]),
+    }),
+    Object.freeze({
+      id: 'worldAnnotations',
+      name: 'World Annotations',
+      purpose: 'Signal-gated analytic category marks and stable labels below entity mattes.',
+      inputs: Object.freeze(['presentationFrame', 'audibleContacts', 'cameraState', 'hudReservedRegions']),
+      outputs: Object.freeze(['annotationFrame', 'labelLayout', 'rimContactStats']),
+      qualityTier: 'minimal',
+      renderTargetSize: 'viewport',
+      debugView: 'labels',
+      budgetTarget: Object.freeze({ defaultMs: 0.7, deckMs: 0.9, captureMs: 1.2 }),
+      fixturePolicy: 'development-and-representative',
+      capturePolicy: 'canonical-through-ascii',
+      deckCaveats: Object.freeze([
+        'Category silhouettes and label clearance remain readable without relying on color.',
       ]),
     }),
     Object.freeze({

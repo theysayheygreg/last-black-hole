@@ -4,7 +4,7 @@
  * Usage:
  *   node tests/run-all.cjs [index-a.html] [--lane=core] [--renderer=three]
  *   node tests/run-all.cjs --lane=three --renderer=three
- *   node tests/run-all.cjs --lane=visual --renderer=both
+ *   node tests/run-all.cjs --lane=visual --renderer=three
  *
  * Lanes keep different questions separate:
  * - fast: cheap commit canary
@@ -63,8 +63,8 @@ options.lane = options.lane || "core";
 if (!LANES.includes(options.lane)) {
   throw new Error(`Unknown lane '${options.lane}'. Known lanes: ${LANES.join(", ")}`);
 }
-if (!["legacy", "three", "both", "target"].includes(options.renderer)) {
-  throw new Error("Renderer must be one of: legacy, three, both, target");
+if (!["three", "target"].includes(options.renderer)) {
+  throw new Error("Renderer must be one of: three, target");
 }
 if (options.suiteFilter) {
   const knownSuites = new Set(SUITES.map((suite) => suite.name));
@@ -105,11 +105,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 
 function variantsForSuite(suite) {
   if (!suite.browser || options.renderer === "target") return [{ label: "target", target }];
-  const renderers = options.renderer === "both" ? ["legacy", "three"] : [options.renderer];
-  return renderers.map((renderer) => ({
-    label: renderer,
-    target: withQuery(target, { renderer }),
-  }));
+  return [{ label: "three", target: withQuery(target, { renderer: "three" }) }];
 }
 
 function selectedSuites() {

@@ -311,10 +311,7 @@ async function setRenderDebug(page, { overlayVisible = false, showWellRadii = fa
 }
 
 function expectedBackendFor(htmlFile) {
-  const queryIndex = String(htmlFile).indexOf('?');
-  if (queryIndex < 0) return 'three';
-  const params = new URLSearchParams(String(htmlFile).slice(queryIndex + 1));
-  return params.get('renderer') === 'legacy' ? 'legacy' : 'three';
+  return 'three';
 }
 
 async function captureFixture(page, outputDir, fixture) {
@@ -323,7 +320,7 @@ async function captureFixture(page, outputDir, fixture) {
 
   const loaded = await page.evaluate((name) => window.__TEST_API.loadRendererFixture(name), fixture.name);
   assert(loaded, `Failed to load renderer fixture '${fixture.name}'`);
-  const backend = await page.evaluate(() => window.__TEST_API.getRendererBackend?.() || 'legacy');
+  const backend = await page.evaluate(() => window.__TEST_API.getRendererBackend?.() || 'three');
   const renderCanvasId = await page.evaluate(() => window.__TEST_API.getRenderCanvasId?.() || 'fluid-canvas');
   assert(backend === expectedBackendFor(htmlFile),
     `Fixture '${fixture.name}' expected ${expectedBackendFor(htmlFile)} renderer, got ${backend}`);

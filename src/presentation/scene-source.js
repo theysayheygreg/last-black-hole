@@ -56,6 +56,7 @@ export function createPresentationSceneSource(input = {}) {
     } : null,
     wells: (world.wells || []).map((well, index) => ({
       id: well.id || well.name || `well-${index}`,
+      label: well.name || `WELL ${index + 1}`,
       catalogId: well.catalogId || 'base-well',
       behaviorId: well.behaviorId || 'base-well',
       wx: well.wx,
@@ -70,6 +71,7 @@ export function createPresentationSceneSource(input = {}) {
     })),
     stars: (world.stars || []).filter((star) => star.alive !== false).map((star, index) => ({
       id: star.id || `star-${index}`,
+      label: star.name || `STAR ${index + 1}`,
       wx: star.wx,
       wy: star.wy,
       mass: star.mass || 1,
@@ -77,6 +79,7 @@ export function createPresentationSceneSource(input = {}) {
     })),
     wrecks: (world.wrecks || []).filter((wreck) => wreck.alive !== false).map((wreck, index) => ({
       id: wreck.id || wreck.name || `wreck-${index}`,
+      label: wreck.name || (wreck.type === 'echo' ? 'ECHO WRECK' : `${wreck.type || 'WRECK'} CONTACT`),
       wx: wreck.wx,
       wy: wreck.wy,
       size: wreck.size || 'medium',
@@ -94,17 +97,22 @@ export function createPresentationSceneSource(input = {}) {
     })),
     portals: (world.portals || []).filter((portal) => portal.alive !== false).map((portal, index) => ({
       id: portal.id || `portal-${index}`,
+      label: portal.finalExfil === true ? 'EXFIL' : portal.type === 'rift' ? 'RIFT' : 'PORTAL',
       wx: portal.wx,
       wy: portal.wy,
       type: portal.type || 'standard',
       opacity: portal.opacity ?? 1,
       radius: portal.captureRadius || defaults.portalCaptureRadius,
       finalInhibitor: portal.finalInhibitor === true,
+      finalExfil: portal.finalExfil === true,
       warning: portal.warning === true,
       critical: portal.critical === true,
+      collapseProgress: Math.max(0, Math.min(1, Number(portal.collapseProgress) || 0)),
+      apertureProgress: Math.max(0, Math.min(1, Number(portal.apertureProgress) || 0)),
     })),
     planetoids: (world.planetoids || []).filter((body) => body.alive !== false).map((body, index) => ({
       id: body.id || `planetoid-${index}`,
+      label: body.name || `PLANETOID ${index + 1}`,
       wx: body.wx,
       wy: body.wy,
       vx: body.vx || 0,
@@ -129,6 +137,7 @@ export function createPresentationSceneSource(input = {}) {
     })),
     scavengers: (world.scavengers || []).filter((scavenger) => scavenger.alive !== false).map((scavenger, index) => ({
       id: scavenger.id || `scav-${index}`,
+      label: scavenger.name || `VESSEL ${index + 1}`,
       wx: scavenger.wx,
       wy: scavenger.wy,
       vx: scavenger.vx || 0,
@@ -139,6 +148,7 @@ export function createPresentationSceneSource(input = {}) {
     })),
     remotePlayers: (world.remotePlayers || []).map((player) => ({
       id: player.clientId,
+      label: player.name || player.pilotName || 'VESSEL',
       wx: player.wx,
       wy: player.wy,
       vx: player.vx || 0,
@@ -171,6 +181,7 @@ export function createPresentationSceneSource(input = {}) {
     })),
     inhibitors: (world.inhibitors || []).filter((entity) => entity.lifecycle !== 'expired').map((entity, index) => ({
       id: entity.id || `inhibitor-glitch-${index + 1}`,
+      label: String(entity.kind || 'inhibitor').toUpperCase(),
       kind: entity.kind || 'glitch',
       lifecycle: entity.lifecycle || 'alive',
       wx: entity.position?.wx ?? entity.wx,
@@ -233,6 +244,19 @@ export function createPresentationSceneSource(input = {}) {
         hazard: fieldSample.hazard || 0,
         current: fieldSample.current || { x: fieldSample.x || 0, y: fieldSample.y || 0 },
       } : null,
+    },
+    annotations: {
+      audibleContacts: (input.annotations?.audibleContacts || []).filter(Boolean).map((contact) => ({
+        id: contact.id,
+        wx: contact.wx,
+        wy: contact.wy,
+        category: contact.category || 'NOISE',
+        identity: contact.identity || null,
+        identified: contact.identified === true,
+        rangeMeters: Math.max(0, Number(contact.rangeMeters) || 0),
+        magnitude: Math.max(0, Math.min(1, Number(contact.magnitude) || 0)),
+      })),
+      reservedRegions: (input.annotations?.reservedRegions || []).map((rect) => ({ ...rect })),
     },
   };
 }

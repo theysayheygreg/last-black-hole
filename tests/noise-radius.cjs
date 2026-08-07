@@ -32,6 +32,7 @@ const snapshotSource = fs.readFileSync(path.join(root, 'scripts/sim/public-snaps
 const runtimeSource = fs.readFileSync(path.join(root, 'scripts/sim-runtime.cjs'), 'utf8');
 const ecologySource = fs.readFileSync(path.join(root, 'scripts/sim/inhibitor-ecology.cjs'), 'utf8');
 const controlSource = fs.readFileSync(path.join(root, 'scripts/control-plane-store.cjs'), 'utf8');
+const annotationSource = fs.readFileSync(path.join(root, 'src/render-three/annotations/annotation-presentation.js'), 'utf8');
 
 let checks = 0;
 function check(condition, message) {
@@ -384,9 +385,9 @@ async function run() {
   check(mainSource.includes('projectAudibleContact') && mainSource.includes('simUnitsToMeters'), 'edge contact projection uses canonical meter conversion');
   check(mainSource.includes('world:inhibitor:') && mainSource.includes('NOISE_CONFIG.world?.inhibitor'),
     'local ecology entities use the shared world Noise contact bridge');
-  check(mainSource.includes("contact.sourceKind === 'exfil'")
-    && mainSource.includes("contact.sourceKind === 'inhibitor'"),
-  'edge contact color ownership separates cyan EXFIL from magenta Inhibitors');
+  check(annotationSource.includes("contact.identity === 'EXFIL'")
+    && annotationSource.includes("['VESSEL', 'VESSEL THRUST'].includes(contact.identity)"),
+  'signal-gated rim grammar separates EXFIL, identified Vessels, and unknown Noise');
   check(!mainSource.includes('radiusMeters / 1000') && !mainSource.includes('radiusMeters * NOISE_IDENTIFICATION_FRACTION) / 1000'), 'Noise presentation has no /1000 conversion folklore');
   check(!mainSource.includes('INHIBITOR EDGE DIM'), 'omniscient Inhibitor edge dim is removed');
   check(mainSource.includes('finalInhibitor') && mainSource.includes('finalExfil'), 'local portal presentation carries final exit flags');

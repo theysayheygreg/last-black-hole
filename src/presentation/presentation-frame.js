@@ -292,6 +292,7 @@ function normalizeLocalPlayer(source = null, scene = {}) {
 function normalizeEntity(family, source, index) {
   const base = {
     id: id(source?.id || source?.name, `${family}-${index}`),
+    label: text(source?.label || source?.name),
     world: point(source, family === 'waveRings' ? 'sourceWX' : 'wx', family === 'waveRings' ? 'sourceWY' : 'wy'),
     opacity: opacity(source),
   };
@@ -361,12 +362,14 @@ function normalizeEntity(family, source, index) {
     case 'portals':
       {
       const variant = text(source.type, 'standard');
-      const final = source.final === true || source.finalInhibitor === true;
+      const final = source.final === true || source.finalInhibitor === true || source.finalExfil === true;
       return Object.freeze({
         ...base,
         variant,
         radius: Math.max(0.001, finite(source.radius ?? source.captureRadius, 0.08)),
         final,
+        collapseProgress: Math.max(0, Math.min(1, finite(source.collapseProgress))),
+        apertureProgress: Math.max(0, Math.min(1, finite(source.apertureProgress))),
         visualState: variant === 'rift'
           ? 'rift'
           : source.ready === true || source.interactionReady === true
@@ -487,6 +490,31 @@ function normalizeWorld(scene = {}) {
   return Object.freeze(world);
 }
 
+function normalizeAnnotations(source = {}) {
+  const contacts = Array.isArray(source.audibleContacts) ? source.audibleContacts : [];
+  const regions = Array.isArray(source.reservedRegions) ? source.reservedRegions : [];
+  return Object.freeze({
+    audibleContacts: Object.freeze(contacts.flatMap((contact, index) => {
+      if (!hasFinitePoint(contact)) return [];
+      return [Object.freeze({
+        id: id(contact.id, `audible-contact-${index}`),
+        world: point(contact),
+        category: text(contact.category, 'NOISE'),
+        identity: contact.identity ? text(contact.identity) : null,
+        identified: contact.identified === true,
+        rangeMeters: Math.max(0, finite(contact.rangeMeters)),
+        magnitude: Math.max(0, Math.min(1, finite(contact.magnitude))),
+      })];
+    })),
+    reservedRegions: Object.freeze(regions.map((rect) => Object.freeze({
+      x: finite(rect.x),
+      y: finite(rect.y),
+      w: Math.max(1, finite(rect.w, 1)),
+      h: Math.max(1, finite(rect.h, 1)),
+    }))),
+  });
+}
+
 function normalizeEvent(source, index) {
   if (!source || !source.type) return null;
   const details = source.payload && typeof source.payload === 'object' ? source.payload : source;
@@ -571,6 +599,7 @@ export function createPresentationFrame(input = {}, defaults = {}) {
     }),
     localPlayer,
     world: normalizeWorld(scene),
+    annotations: normalizeAnnotations(scene.annotations),
     hints: Object.freeze({
       localPlayer: localPlayer?.hint || null,
       semanticField: scene.semanticField ? 'fabric-owned' : 'none',

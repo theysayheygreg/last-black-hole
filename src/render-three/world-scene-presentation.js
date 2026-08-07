@@ -13,6 +13,7 @@ import { TemporalVisibilityContract } from './entities/temporal-visibility.js';
 import { VfxManager } from './vfx/vfx-manager.js';
 import { createWorldProjection, wrappedWorldVector } from './world-projection.js';
 import { resolveEntityPresentationScale, SPRITE_CARD_SCALE } from './entity-presentation-scale.js';
+import { AnnotationPresentation } from './annotations/annotation-presentation.js';
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -89,6 +90,9 @@ export class WorldScenePresentation {
     this.fabricGroup = new THREE.Group();
     this.fabricGroup.name = 'fabric-source-layer';
     this.fabricGroup.position.z = 0;
+    this.annotationGroup = new THREE.Group();
+    this.annotationGroup.name = 'analytic-world-annotation-layer';
+    this.annotationGroup.position.z = 0.14;
     this.semanticGroup = new THREE.Group();
     this.semanticGroup.name = 'semantic-flow-field-layer';
     this.semanticGroup.position.z = 0.16;
@@ -106,7 +110,7 @@ export class WorldScenePresentation {
     this.screenVfxGroup = new THREE.Group();
     this.screenVfxGroup.name = 'screen-vfx-layer';
     this.screenVfxGroup.position.z = 0.42;
-    this.layerRoot.add(this.backgroundGroup, this.fabricGroup, this.semanticGroup, this.entityGroup, this.foregroundGroup, this.screenVfxGroup);
+    this.layerRoot.add(this.backgroundGroup, this.fabricGroup, this.annotationGroup, this.semanticGroup, this.entityGroup, this.foregroundGroup, this.screenVfxGroup);
     this._buildWorldEntityResources();
     this.entityMeshPool = [];
     this.semanticMeshPool = [];
@@ -147,6 +151,7 @@ export class WorldScenePresentation {
     this.entitySpriteMaterials = new Set();
     this.lastPresentationPhase = null;
     this.lastPresentationRunId = null;
+    this.annotationPresentation = new AnnotationPresentation({ group: this.annotationGroup });
 
     this._buildForegroundLayers();
     this.vfxManager = new VfxManager({
@@ -182,6 +187,7 @@ export class WorldScenePresentation {
 
   reset({ phase, runId } = {}) {
     for (const family of Object.values(this.visualFamilies)) family.reset();
+    this.annotationPresentation.reset();
     this.vfxManager.reset();
     this.temporalVisibility.reset({ phase, runId });
     this.temporalFrameId = null;
@@ -550,6 +556,14 @@ export class WorldScenePresentation {
       ),
     };
 
+    this.annotationPresentation.update(frame, {
+      projection: this.currentProjection,
+      viewportWidth: this.viewportWidth,
+      viewportHeight: this.viewportHeight,
+      aspect: this.worldCameraAspect,
+      reservedRegions: frame.annotations?.reservedRegions || [],
+    });
+
     for (const well of sceneState.wells || []) {
       if (diagnosticView) {
         if (addSemantic(this.entityGeometries.ring, this.entityMaterials.hazardRing,
@@ -618,6 +632,7 @@ export class WorldScenePresentation {
     return [
       { name: this.backgroundGroup.name, z: this.backgroundGroup.position.z, role: 'parallax backdrop' },
       { name: this.fabricGroup.name, z: this.fabricGroup.position.z, role: 'Composer-owned ASCII frame' },
+      { name: this.annotationGroup.name, z: this.annotationGroup.position.z, role: 'analytic world annotations and labels' },
       { name: this.semanticGroup.name, z: this.semanticGroup.position.z, role: 'semantic flow/hazard channels' },
       {
         name: this.entityGroup.name,
@@ -661,6 +676,7 @@ export class WorldScenePresentation {
       visualFamilies: Object.fromEntries(
         Object.entries(this.visualFamilies).map(([name, family]) => [name, family.getStats()])
       ),
+      annotations: this.annotationPresentation.getStats(),
       pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,
       pooledLines: this.linePool.length,
       entityAssets: this.entityAssets.getStats(),
@@ -670,6 +686,7 @@ export class WorldScenePresentation {
 
   dispose() {
     for (const family of Object.values(this.visualFamilies)) family.dispose();
+    this.annotationPresentation?.dispose();
     this.vfxManager.dispose();
     for (const material of this.entitySpriteMaterials) material.dispose();
     this.entitySpriteMaterials.clear();

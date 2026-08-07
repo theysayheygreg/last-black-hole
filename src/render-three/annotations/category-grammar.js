@@ -71,9 +71,11 @@ export function makeCategoryAnnotationPlan(category, options = {}) {
   const primitiveOptions = { viewportClass: options.viewportClass || 'desktop' };
 
   if (category === 'noise') {
+    const magnitude = Math.max(0, Math.min(1, Number(options.magnitude) || 0));
     return plan(category, [
       makeDashedRingPlan({ extentPx: e, dashCount: 10, gapFraction: 0.42, ...primitiveOptions }),
-    ], { silhouette: 'expanding dashed ring', motion: 'expansion comes from the owning presentation clock' });
+      makeTaperedPointerPlan({ lengthPx: 14 + magnitude * 22, baseWidthPx: 8, ...primitiveOptions }),
+    ], { silhouette: 'expanding dashed ring with directional magnitude pointer', magnitude, motion: 'expansion comes from the owning presentation clock' });
   }
   if (category === 'portal' || category === 'exfil') {
     return portalPlan(category, { ...primitiveOptions, ...options, extentPx: e });

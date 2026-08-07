@@ -140,8 +140,6 @@ import { resolveHeatInstrumentState } from './presentation/heat-instrument.js';
 import {
   getRulerReadoutBounds,
   getShipLocalLabelSlots,
-  placePresentationLabels,
-  safeObjectLabel,
 } from './ui/presentation-layout.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
@@ -285,7 +283,7 @@ const perfStats = {
   simMs: 0,
   composerMs: 0,
   overlayMs: 0,
-  rendererBackend: 'legacy',
+  rendererBackend: 'three',
   renderQuality: 'rich',
   visibleWellCount: 0,
   totalWellCount: 0,
@@ -437,7 +435,6 @@ let noiseState = {
   lockedOnListenerCount: 0,
 };
 const audibleContactMemory = new Map();
-const noiseRipples = [];
 let inhibitorState = {
   phase: 0,
   waveId: 'inhibitor:phase-0',
@@ -1281,7 +1278,7 @@ function init() {
         rendererBackend?.setViewMode(mode);
       },
       getRendererView: () => rendererBackend?.getViewMode?.() || 'ascii',
-      getRendererBackend: () => rendererBackend?.name || 'legacy',
+      getRendererBackend: () => rendererBackend?.name || 'three',
       getRendererBackendStats: () => rendererBackend?.getPerfStats?.() || null,
       getThreeSceneStateForTest: () => ({
         ...collectPresentationSceneSource(),
@@ -1301,7 +1298,7 @@ function init() {
         return {
           fps,
           perfStats,
-          rendererBackend: rendererBackend?.name || 'legacy',
+          rendererBackend: rendererBackend?.name || 'three',
         };
       },
       get gamePhase() { return gamePhase; },
@@ -2288,7 +2285,6 @@ function resetPhantomForNewSession() {
   };
   audibleContactMemory.clear();
   resetRouteDiscovery();
-  noiseRipples.length = 0;
 }
 
 function phantomEligibleZone(zone) {
@@ -2602,17 +2598,6 @@ function applyRemoteEvents(events) {
 
     switch (event.type) {
       case 'noise.impulse':
-        if (Number.isFinite(Number(payload.wx)) && Number.isFinite(Number(payload.wy))
-          && Number(payload.radiusMeters) > 0) {
-          noiseRipples.push({
-            wx: Number(payload.wx),
-            wy: Number(payload.wy),
-            radiusMeters: Number(payload.radiusMeters),
-            source: noiseCategory(payload.source),
-            startedAt: simState.runElapsedTime,
-          });
-          while (noiseRipples.length > 12) noiseRipples.shift();
-        }
         if (!isLocal) {
           observeAudibleContact(contactKey(payload), {
             wx: Number(payload.wx),
@@ -3811,115 +3796,6 @@ function renderShipHeatInstrument(ctx, ship, camX, camY, canvasW, canvasH) {
   ctx.restore();
 }
 
-function renderNoiseOverlay(ctx, ship, camX, camY, canvasW, canvasH, nowSeconds) {
-  if (!ship) return;
-  const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
-  const radiusMeters = Math.max(0, Number(noiseState.audibleRadiusMeters) || 0);
-  ctx.save();
-  if (radiusMeters > 0) {
-    const radiusPx = worldRadiusToScreen(metersToSimUnits(radiusMeters), canvasW, canvasH);
-    const alpha = noiseState.trend === 'falling' ? 0.24 : 0.36;
-    ctx.strokeStyle = `rgba(90, 220, 220, ${alpha})`;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 5]);
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-  for (let i = noiseRipples.length - 1; i >= 0; i--) {
-    const ripple = noiseRipples[i];
-    const age = Math.max(0, nowSeconds - ripple.startedAt);
-    if (age > 2.5) {
-      noiseRipples.splice(i, 1);
-      continue;
-    }
-    const [rx, ry] = worldToScreen(ripple.wx, ripple.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldRadiusToScreen(
-      metersToSimUnits(ripple.radiusMeters) * (0.35 + age * 0.65),
-      canvasW,
-      canvasH,
-    );
-    const alpha = Math.max(0, 0.35 * (1 - age / 2.5));
-    ctx.strokeStyle = `rgba(120, 230, 230, ${alpha.toFixed(2)})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(rx, ry, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-/**
- * Slingshot color palette by anchor type. Each tier reads visually
- * distinct so a player learns the vocabulary: wells = blue (cold,
- * dangerous), stars = gold (warm, plentiful), planetoids = teal (cool,
- * incidental). The brightness matches each tier's reward magnitude.
- */
-const SLINGSHOT_COLORS = {
-  well:      { ring: 'rgba(120, 180, 255, 0.45)', engaged: 'rgba(160, 220, 255, 0.85)' },
-  star:      { ring: 'rgba(240, 200, 110, 0.55)', engaged: 'rgba(255, 220, 140, 0.9)' },
-  planetoid: { ring: 'rgba(160, 220, 200, 0.55)', engaged: 'rgba(200, 240, 220, 0.9)' },
-};
-
-/**
- * Draw the slingshot overlay: affordance ring on whatever's in snap-to
- * range, full engaged ring + ship lock-line when active. Drawn after
- * ship.render so it sits on top of the basic ship sprite.
- */
-function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
-  if (!slingshotSystem) return;
-  const anchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
-  // Affordance: faint pulsing ring on the nearest in-range anchor.
-  const aff = !ship.slingshotEngaged ? slingshotSystem.findAffordance(ship, anchors) : null;
-  if (aff) {
-    const a = aff.anchor;
-    const [sx, sy] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldRadiusToScreen(a.range, canvasW, canvasH);
-    const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
-    const pulse = 0.85 + 0.15 * Math.sin(time * 4);
-    ctx.save();
-    ctx.strokeStyle = palette.ring;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 6]);
-    ctx.lineDashOffset = -time * 30;
-    ctx.globalAlpha = pulse;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Engaged: solid ring on the locked anchor + a tether line to the
-  // ship that visualizes the orbital lock. Energy bar segment shows
-  // accumulated banked velocity.
-  if (ship.slingshotEngaged && ship.slingshotAnchor) {
-    const a = ship.slingshotAnchor;
-    const [ax, ay] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
-    const [shipX, shipY] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldRadiusToScreen(a.range, canvasW, canvasH);
-    const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
-    ctx.save();
-    // Solid engaged ring.
-    ctx.strokeStyle = palette.engaged;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(ax, ay, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    // Tether line ship → anchor.
-    ctx.strokeStyle = palette.engaged;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 4]);
-    ctx.lineDashOffset = -time * 60;
-    ctx.beginPath();
-    ctx.moveTo(shipX, shipY);
-    ctx.lineTo(ax, ay);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
-}
-
 function collectPresentationSceneSource() {
   const authorityPlayer = remoteSession.active
     ? remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)
@@ -3978,6 +3854,12 @@ function collectPresentationSceneSource() {
         guaranteedFinalExfil: portal.guaranteedFinalExfil === true,
         warning: portal.isWarning?.(runElapsedTime) === true,
         critical: portal.isCritical?.(runElapsedTime) === true,
+        collapseProgress: CONFIG.universe.runDuration > 0
+          ? Math.max(0, Math.min(1, runElapsedTime / CONFIG.universe.runDuration))
+          : 0,
+        apertureProgress: Number(portal.lifespan) > 0
+          ? Math.max(0, Math.min(1, portal.timeLeft?.(runElapsedTime) / portal.lifespan))
+          : 0,
       })),
       planetoids: planetoidSystem?.planetoids || [],
       waveRings: waveRings?.rings || [],
@@ -3996,6 +3878,25 @@ function collectPresentationSceneSource() {
       localAffordance: slingshotAffordance,
     },
     semanticFieldSample: fieldSample,
+    annotations: {
+      audibleContacts: prioritizeAudibleContacts(
+        [...audibleContactMemory.values()].filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt),
+        { limit: NOISE_CONFIG.world?.contactCap || 5 },
+      ).map((contact) => ({
+        ...contact,
+        magnitude: Math.max(0, Math.min(1, (Number(contact.emittedRadiusMeters) || 0) / 5000)),
+      })),
+      reservedRegions: [
+        ...Object.values(getShipLocalLabelSlots({
+          shipX: worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height)[0],
+          shipY: worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height)[1],
+          canvasW: overlayCanvas.width,
+          canvasH: overlayCanvas.height,
+        })).map((slot) => slot.bounds),
+        { x: 0, y: 0, w: 270, h: 150 },
+        { x: Math.max(0, overlayCanvas.width - 310), y: 0, w: 310, h: 190 },
+      ],
+    },
     defaults: {
       wellKillRadius: CONFIG.wells.killRadius,
       portalCaptureRadius: CONFIG.portals.captureRadius,
@@ -4904,7 +4805,7 @@ function gameLoop(now) {
   perfStats.totalWellCount = wellSystem.wells.length;
   perfStats.fluidResolution = fluid?.res || 0;
   const backendStats = rendererBackend?.getPerfStats?.() || null;
-  perfStats.rendererBackend = backendStats?.backend || rendererBackend?.name || 'legacy';
+  perfStats.rendererBackend = backendStats?.backend || rendererBackend?.name || 'three';
   perfStats.renderQuality = backendStats?.renderQuality || 'rich';
   perfStats.composerPasses = backendStats?.composerPasses || composer?.passes?.map((p) => p.name) || [];
   perfStats.three = backendStats?.three || null;
@@ -5047,25 +4948,8 @@ function gameLoop(now) {
   }
 
   if (!inMenu) {
-    const threeOwnsWorld = rendererBackend?.name === 'three';
-    if (!threeOwnsWorld) {
-      starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-      // lootSystem removed — loot anchors replaced with stars
-      wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-      portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
-      planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-      renderFauna(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-      renderSentries(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-      renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      ship.render(ctx, camX, camY);
-    }
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    if (gamePhase === 'playing' && !threeOwnsWorld) {
-      renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    }
     if (gamePhase === 'playing') {
-      renderNoiseOverlay(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime);
       renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
       renderShipHeatInstrument(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
     }
@@ -5219,212 +5103,6 @@ function gameLoop(now) {
       ctx.stroke();
       ctx.restore();
     }
-
-    // === EDGE INDICATORS — emitter-owned audible contacts only ===
-    {
-      ctx.save();
-      const margin = 20;
-      const w = overlayCanvas.width, h = overlayCanvas.height;
-
-      function drawEdgeArrow(screenX, screenY, color, size) {
-        // Clamp to screen edges
-        const cx = w / 2, cy = h / 2;
-        const dx = screenX - cx, dy = screenY - cy;
-        const maxX = w / 2 - margin, maxY = h / 2 - margin;
-        if (Math.abs(dx) < maxX && Math.abs(dy) < maxY) return null; // on screen
-        const scale = Math.min(maxX / Math.abs(dx || 1), maxY / Math.abs(dy || 1));
-        const ax = cx + dx * scale, ay = cy + dy * scale;
-        const angle = Math.atan2(dy, dx);
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(ax + Math.cos(angle) * size, ay + Math.sin(angle) * size);
-        ctx.lineTo(ax + Math.cos(angle + 2.5) * size * 0.5, ay + Math.sin(angle + 2.5) * size * 0.5);
-        ctx.lineTo(ax + Math.cos(angle - 2.5) * size * 0.5, ay + Math.sin(angle - 2.5) * size * 0.5);
-        ctx.closePath();
-        ctx.fill();
-        return { x: ax, y: ay };
-      }
-
-      const contacts = prioritizeAudibleContacts(
-        [...audibleContactMemory.values()]
-          .filter((contact) => contact.live || simState.runElapsedTime < contact.expiresAt),
-        { limit: NOISE_CONFIG.world?.contactCap || 5 },
-      );
-      for (const contact of contacts) {
-        const [sx, sy] = worldToScreen(contact.wx, contact.wy, camX, camY, w, h);
-        const fading = !contact.live;
-        const alpha = fading
-          ? Math.max(0, (contact.expiresAt - simState.runElapsedTime) / NOISE_LAST_HEARD_FADE_SECONDS)
-          : 0.9;
-        const cadence = Math.max(0, Number(contact.cadenceSeconds) || 0);
-        const pulse = cadence > 0
-          ? 0.86 + 0.14 * (0.5 + 0.5 * Math.sin((simState.runElapsedTime / cadence) * Math.PI * 2))
-          : 1;
-        const isExfil = contact.sourceKind === 'exfil' || contact.identity === 'EXFIL' || contact.category === 'EXFIL TONE';
-        const isInhibitor = contact.sourceKind === 'inhibitor'
-          || ['GLITCH', 'SWARM', 'VESSEL', 'VESSEL THRUST'].includes(contact.identity);
-        const edgeAlpha = Math.max(0.15, alpha * pulse * 0.8);
-        const accentRole = isExfil ? 'flow' : isInhibitor ? 'inhibitor' : 'text';
-        const edge = drawEdgeArrow(sx, sy, roleColor(accentRole, edgeAlpha), 7);
-        if (edge) {
-          const label = contact.identity || contact.category;
-          ctx.font = canvasFont(UI_IN_PLAY_TYPE.contactLabel, { weight: '700' });
-          ctx.textAlign = 'center';
-          ctx.fillStyle = roleColor(accentRole, Math.max(0.2, alpha * pulse));
-          ctx.fillText(`${label} · ${Math.round(contact.rangeMeters || 0)}m`, edge.x, edge.y - 12);
-        }
-      }
-
-      ctx.restore();
-    }
-
-    // === PROXIMITY FLAVOR TEXT LABELS ===
-    // Fade in when close, fade out when far. Every named entity gets one.
-    {
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-      ctx.shadowBlur = 6;
-
-      const fadeNear = 0.15;
-      const fadeFar = 0.4;
-
-      function labelAlpha(dist) {
-        if (dist < fadeNear) return 1.0;
-        if (dist > fadeFar) return 0.0;
-        return 1.0 - (dist - fadeNear) / (fadeFar - fadeNear);
-      }
-
-      // World labels use one ordered stack. The ship instruments and debug
-      // ruler reserve collision bounds before nearby objects claim slots.
-      const labelEntries = [];
-      const labelObstacles = Object.values(getShipLocalLabelSlots({
-        shipX: worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height)[0],
-        shipY: worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height)[1],
-        canvasW: overlayCanvas.width,
-        canvasH: overlayCanvas.height,
-      })).map((slot) => slot.bounds);
-      if (CONFIG.debug?.showRulerOverlay) {
-        labelObstacles.push(getRulerReadoutBounds(overlayCanvas.width, overlayCanvas.height, 11));
-      }
-      const addLabel = ({ id, order, x, y, text, color, fontSize = 10, weight, backing = false, offsets }) => {
-        ctx.font = canvasFont(fontSize, weight ? { weight } : undefined);
-        const labelWidth = Math.min(240, ctx.measureText(text).width + (backing ? 14 : 4));
-        labelEntries.push({
-          id,
-          order,
-          anchorX: x,
-          anchorY: y,
-          width: labelWidth,
-          height: backing ? 18 : 16,
-          text,
-          color,
-          fontSize,
-          weight,
-          backing,
-          offsets,
-        });
-      };
-
-      // Wells — foreboding names, dark red, below center.
-      for (let index = 0; index < wellSystem.wells.length; index++) {
-        const well = wellSystem.wells[index];
-        const dist = worldDistance(ship.wx, ship.wy, well.wx, well.wy);
-        const a = labelAlpha(dist);
-        if (a <= 0) continue;
-        const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        const label = safeObjectLabel(well.name, `WELL ${index + 1}`).toUpperCase();
-        const labelY = sy + worldRadiusToScreen(well.killRadius, overlayCanvas.width, overlayCanvas.height).ry + 18;
-        addLabel({ id: `well-${index}`, order: 10 + index, x: sx, y: labelY, text: label,
-          color: `rgba(255, 180, 160, ${a * 0.9})`, weight: 'bold', offsets: [0, 22, -22, 44, -44] });
-      }
-
-      // Stars — scientific designation, type-colored.
-      for (let index = 0; index < starSystem.stars.length; index++) {
-        const star = starSystem.stars[index];
-        if (!star.alive) continue;
-        const dist = worldDistance(ship.wx, ship.wy, star.wx, star.wy);
-        const a = labelAlpha(dist);
-        if (a <= 0) continue;
-        const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        const [cr, cg, cb] = star.typeDef?.color || [220, 220, 180];
-        const haloR = (60 + 20 * (Number(star.mass) || 1)) * (Number(star.typeDef?.sizeMult) || 1);
-        addLabel({ id: `star-${index}`, order: 100 + index, x: sx, y: sy + haloR + 10,
-          text: safeObjectLabel(star.name, `STAR ${index + 1}`), color: `rgba(${cr}, ${cg}, ${cb}, ${a * 0.6})`,
-          offsets: [0, 18, -18, 36, -36] });
-      }
-
-      // Planetoids — names, ice blue, trailing behind body.
-      for (let index = 0; index < planetoidSystem.planetoids.length; index++) {
-        const planetoid = planetoidSystem.planetoids[index];
-        if (!planetoid.alive) continue;
-        const dist = worldDistance(ship.wx, ship.wy, planetoid.wx, planetoid.wy);
-        const a = labelAlpha(dist);
-        if (a <= 0) continue;
-        const [sx, sy] = worldToScreen(planetoid.wx, planetoid.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        addLabel({ id: `planetoid-${index}`, order: 200 + index, x: sx, y: sy + 16,
-          text: safeObjectLabel(planetoid.name, `PLANETOID ${index + 1}`), color: `rgba(180, 210, 240, ${a * 0.6})`,
-          fontSize: 9, offsets: [0, 18, -18, 36, -36] });
-      }
-
-      // Wrecks — dedupe nearby fragments before the shared slot pass.
-      const renderedWreckLabels = [];
-      for (let index = 0; index < wreckSystem.wrecks.length; index++) {
-        const wreck = wreckSystem.wrecks[index];
-        if (!wreck.alive) continue;
-        const dist = worldDistance(ship.wx, ship.wy, wreck.wx, wreck.wy);
-        const a = labelAlpha(dist);
-        if (a <= 0) continue;
-        const [sx, sy] = worldToScreen(wreck.wx, wreck.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        const label = safeObjectLabel(wreck.name, wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
-        const labelKey = label.toLowerCase();
-        if (renderedWreckLabels.some((rendered) => rendered.key === labelKey && Math.hypot(rendered.sx - sx, rendered.sy - sy) < 170)) continue;
-        renderedWreckLabels.push({ key: labelKey, sx, sy });
-        const itemText = wreck.looted ? '' : ` (${Array.isArray(wreck.loot) ? wreck.loot.length : 0})`;
-        const color = wreck.type === 'vault'
-          ? `rgba(255, 215, 60, ${a * 0.7})`
-          : wreck.type === 'debris' ? `rgba(180, 140, 80, ${a * 0.6})` : `rgba(160, 180, 200, ${a * 0.6})`;
-        addLabel({ id: `wreck-${index}`, order: 300 + index, x: sx, y: sy + 18, text: label + itemText,
-          color, backing: true, offsets: [0, 24, -24, 48, -48, 72, -72] });
-      }
-
-      // Scavengers — faction + callsign, archetype-colored.
-      for (let index = 0; index < scavengerSystem.scavengers.length; index++) {
-        const scav = scavengerSystem.scavengers[index];
-        if (!scav.alive) continue;
-        const dist = worldDistance(ship.wx, ship.wy, scav.wx, scav.wy);
-        const a = labelAlpha(dist);
-        if (a <= 0) continue;
-        const [sx, sy] = worldToScreen(scav.wx, scav.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        const color = scav.archetype === 'vulture'
-          ? `rgba(212, 160, 96, ${a * 0.7})` : `rgba(138, 174, 196, ${a * 0.7})`;
-        addLabel({ id: `scavenger-${index}`, order: 400 + index, x: sx, y: sy - 14,
-          text: safeObjectLabel(scav.name, `SCAVENGER ${index + 1}`), color, fontSize: 9,
-          offsets: [0, -18, 18, -36, 36] });
-      }
-
-      const labelLayout = placePresentationLabels(labelEntries, {
-        canvasW: overlayCanvas.width,
-        canvasH: overlayCanvas.height,
-        obstacles: labelObstacles,
-      });
-      ctx.textBaseline = 'middle';
-      for (const label of labelLayout.placed) {
-        ctx.font = canvasFont(label.fontSize, label.weight ? { weight: label.weight } : undefined);
-        if (label.backing) {
-          ctx.fillStyle = 'rgba(0, 0, 8, 0.62)';
-          ctx.fillRect(label.bounds.x, label.bounds.y, label.bounds.w, label.bounds.h);
-          ctx.strokeStyle = label.color.replace(/,\s*[^,)]+\)$/, ', 0.28)');
-          ctx.strokeRect(label.bounds.x, label.bounds.y, label.bounds.w, label.bounds.h);
-        }
-        ctx.fillStyle = label.color;
-        ctx.fillText(label.text, label.x, label.y);
-      }
-      ctx.textBaseline = 'alphabetic';
-
-      ctx.restore();
-    }
-
 
     // Well proximity warning — subtle red vignette as ship approaches wells
     if (gamePhase === 'playing') {

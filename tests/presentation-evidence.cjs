@@ -7,6 +7,7 @@ const { pathToFileURL } = require('url');
 async function run() {
   const hud = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'hud-presentation.js')).href);
   const layout = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'presentation-layout.js')).href);
+  const annotationLayout = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'presentation', 'annotation-label-layout.js')).href);
   const loadout = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'loadout-presentation.js')).href);
   const bindings = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'ui', 'input-bindings.js')).href);
   const remote = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'sim', 'remote-snapshot-presentation.js')).href);
@@ -63,9 +64,6 @@ async function run() {
   assert(finalKeyboardPrompt.caption.includes('>Enter</span>'),
     'Final residence must preserve explicit Enter confirmation');
 
-  assert.strictEqual(layout.safeObjectLabel(undefined, 'STAR 1'), 'STAR 1');
-  assert.strictEqual(layout.safeObjectLabel('undefined', 'PLANETOID 1'), 'PLANETOID 1');
-  assert.strictEqual(layout.safeObjectLabel('Lumen', 'STAR 1'), 'Lumen');
   const shipSlots = layout.getShipLocalLabelSlots({ shipX: 640, shipY: 400, canvasW: 1280, canvasH: 800 });
   assert(shipSlots.heat.bounds.y > shipSlots.velocity.bounds.y + shipSlots.velocity.bounds.h);
   assert(shipSlots.velocity.bounds.w >= 196 && shipSlots.velocity.bounds.h >= 26,
@@ -91,10 +89,10 @@ async function run() {
     assert(slots.heat.bounds.y >= slots.velocity.bounds.y + slots.velocity.bounds.h + 8,
       `${name} speed and Heat lost their shared stack gap`);
   }
-  const labels = layout.placePresentationLabels([
-    { id: 'near-star', order: 20, anchorX: 640, anchorY: 430, width: 120, height: 18 },
-    { id: 'near-planet', order: 30, anchorX: 640, anchorY: 430, width: 120, height: 18 },
-  ], { canvasW: 1280, canvasH: 800, obstacles: [shipSlots.velocity.bounds, shipSlots.heat.bounds] });
+  const labels = annotationLayout.placeAnnotationLabels([
+    { id: 'near-star', order: 20, anchorX: 560, anchorY: 430, width: 120, height: 18, interactionRadius: 18, placement: 'fixed' },
+    { id: 'near-planet', order: 30, anchorX: 720, anchorY: 430, width: 120, height: 18, interactionRadius: 18 },
+  ], { width: 1280, height: 800, reservedRegions: [shipSlots.velocity.bounds, shipSlots.heat.bounds] });
   assert.strictEqual(labels.placed.length, 2);
   assert(!layout.rectsOverlap(labels.placed[0].bounds, labels.placed[1].bounds, 5));
 

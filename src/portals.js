@@ -7,8 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale, wrapWorld } from './coords.js';
-import { canvasFont } from './ui/typography.js';
+import { WORLD_SCALE, worldToFluidUV, worldDistance, shouldCull, uvScale, wrapWorld } from './coords.js';
 
 class Portal {
   constructor(wx, wy, opts = {}) {
@@ -195,74 +194,6 @@ export class PortalSystem {
       if (dist < portal.getCaptureRadius()) return portal;
     }
     return null;
-  }
-
-  render(ctx, camX, camY, canvasW, canvasH, totalTime, runElapsedTime = 0) {
-    const cfg = CONFIG.portals;
-
-    for (const portal of this.portals) {
-      if (!portal.alive) continue;
-      const [sx, sy] = worldToScreen(portal.wx, portal.wy, camX, camY, canvasW, canvasH);
-      const pulse = 0.5 + 0.5 * Math.sin(totalTime * cfg.pulseRate * Math.PI * 2);
-      const alpha = portal.opacity;
-
-      // Critical blink (last 5s)
-      const critBlink = portal.isCritical(runElapsedTime)
-        ? (Math.sin(totalTime * 12) > 0 ? 1 : 0.2)
-        : 1;
-      const a = alpha * critBlink;
-
-      ctx.save();
-
-      // Type-specific colors
-      const ringColor = portal.type === 'rift'
-        ? `rgba(100, 255, 255, ${(0.4 + 0.3 * pulse) * a})`
-        : portal.type === 'unstable'
-        ? `rgba(255, 80, 180, ${(0.3 + 0.2 * pulse) * a})`
-        : `rgba(180, 80, 255, ${(0.3 + 0.2 * pulse) * a})`;
-
-      const innerColor = portal.type === 'rift'
-        ? `rgba(200, 255, 255, ${(0.5 + 0.3 * pulse) * a})`
-        : `rgba(100, 255, 255, ${(0.4 + 0.3 * pulse) * a})`;
-
-      // Outer ring
-      const size = portal.type === 'rift' ? cfg.overlaySize * 1.6 : cfg.overlaySize;
-      ctx.beginPath();
-      ctx.arc(sx, sy, size + 4 + pulse * 3, 0, Math.PI * 2);
-      ctx.strokeStyle = ringColor;
-      ctx.lineWidth = portal.type === 'rift' ? 3 : 2;
-      ctx.stroke();
-
-      // Inner ring
-      ctx.beginPath();
-      ctx.arc(sx, sy, size * 0.7, 0, Math.PI * 2);
-      ctx.strokeStyle = innerColor;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Center dot
-      ctx.beginPath();
-      ctx.arc(sx, sy, portal.type === 'rift' ? 5 : 3, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(200, 150, 255, ${(0.7 + 0.3 * pulse) * a})`;
-      ctx.fill();
-
-      // Label
-      const label = portal.type === 'rift' ? 'RIFT' : portal.type === 'unstable' ? 'EXIT?' : 'EXIT';
-      ctx.fillStyle = `rgba(180, 120, 255, ${(0.5 + 0.2 * pulse) * a})`;
-      ctx.font = canvasFont(10);
-      ctx.textAlign = 'center';
-      ctx.fillText(label, sx, sy - size - 6);
-
-      // Warning: time remaining when in warning phase
-      if (portal.isWarning(runElapsedTime)) {
-        const secs = Math.ceil(portal.timeLeft(runElapsedTime));
-        ctx.fillStyle = `rgba(255, 80, 80, ${a})`;
-        ctx.font = canvasFont(11);
-        ctx.fillText(`${secs}s`, sx, sy + size + 14);
-      }
-
-      ctx.restore();
-    }
   }
 
   getUVPositions() {

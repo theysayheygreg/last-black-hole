@@ -12,7 +12,8 @@ function currentSearch() {
 export function requestedRendererBackend(search = currentSearch()) {
   const params = new URLSearchParams(search);
   const backend = (params.get('renderer') || 'three').toLowerCase();
-  return backend === 'three' ? 'three' : 'legacy';
+  if (backend !== 'three') throw new Error(`Unsupported renderer backend: ${backend}`);
+  return 'three';
 }
 
 export function requestedRenderQuality(search = currentSearch()) {
@@ -20,55 +21,6 @@ export function requestedRenderQuality(search = currentSearch()) {
   if (params.has('minimalrender')) return 'minimal';
   const quality = (params.get('renderQuality') || 'rich').toLowerCase();
   return ['minimal', 'default', 'rich'].includes(quality) ? quality : 'rich';
-}
-
-function setCanvasVisible(canvas, visible) {
-  if (!canvas) return;
-  canvas.style.display = visible ? 'block' : 'none';
-  canvas.style.opacity = visible ? '1' : '0';
-}
-
-export class LegacyRendererBackend {
-  constructor({ composer, asciiPass, sourceCanvas, targetCanvas = null, renderQuality = 'rich' }) {
-    this.name = 'legacy';
-    this.renderQuality = renderQuality;
-    this.composer = composer;
-    this.asciiPass = asciiPass;
-    this.sourceCanvas = sourceCanvas;
-    this.targetCanvas = targetCanvas;
-    setCanvasVisible(this.sourceCanvas, true);
-    setCanvasVisible(this.targetCanvas, false);
-  }
-
-  resize(width, height) {
-    this.composer.resize(width, height);
-  }
-
-  render(frameContext) {
-    return this.composer.render(frameContext);
-  }
-
-  setViewMode(mode) {
-    this.asciiPass.setViewMode(mode);
-  }
-
-  getViewMode() {
-    return this.asciiPass.getViewMode();
-  }
-
-  getCanvasId() {
-    return this.sourceCanvas?.id || 'fluid-canvas';
-  }
-
-  getPerfStats() {
-    return {
-      backend: this.name,
-      renderQuality: this.renderQuality,
-      passCount: this.composer?.passes?.length || 0,
-      composerPasses: this.composer?.passes?.map((p) => p.name) || [],
-      three: null,
-    };
-  }
 }
 
 export function createRendererBackend({
@@ -80,23 +32,11 @@ export function createRendererBackend({
   targetCanvas,
   renderQuality,
 }) {
-  if (backend === 'three' && targetCanvas) {
-    try {
-      return new ThreeRendererBackend({
-        composer,
-        asciiPass,
-        gl,
-        sourceCanvas,
-        targetCanvas,
-        renderQuality,
-      });
-    } catch (err) {
-      console.warn('[render] Three backend failed to initialize; falling back to legacy:', err);
-    }
-  }
-  return new LegacyRendererBackend({
+  if (backend !== 'three' || !targetCanvas) throw new Error('Three renderer target is required');
+  return new ThreeRendererBackend({
     composer,
     asciiPass,
+    gl,
     sourceCanvas,
     targetCanvas,
     renderQuality,
