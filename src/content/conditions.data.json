@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "conditions": [
+    { "name": "pilot.currency.exoticMatter", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.hull.selectedId", "kind": "stored", "type": "identifier", "default": "drifter", "allowedValues": ["drifter", "breacher", "resonant", "shroud", "hauler"], "actions": ["initialize", "set"] },
+
+    { "name": "pilot.rig.drifter.laminarLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 1, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.rig.drifter.edgerunnerLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.rig.drifter.gleaningsLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 1, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.rig.breacher.afterburnerLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 2, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.rig.breacher.ironcladLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 1, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.rig.breacher.salvageDriveLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 2, "actions": ["initialize", "set", "increment", "max"] },
+
+    { "name": "pilot.unlock.vaultAccess", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.secondLoadoutSlot", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.expandedVault", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.hull.drifter", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.hull.breacher", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.hull.resonant", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.hull.shroud", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.hull.hauler", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
+
+    { "name": "pilot.chronicle.runsAttempted", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.runsCompleted", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.extractions", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.deaths", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.itemsSold", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.cargoExtracted", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.cargoLost", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.totalExoticMatterEarned", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.totalSurvivalSeconds", "kind": "stored", "type": "number", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.chronicle.bestSurvivalSeconds", "kind": "stored", "type": "number", "default": 0, "minimum": 0, "actions": ["initialize", "set", "max"] },
+
+    { "name": "run.map.id", "kind": "stored", "type": "identifier", "allowedValues": ["shallows", "expanse", "deep-field"], "actions": ["initialize"] },
+    { "name": "run.seed", "kind": "stored", "type": "integer", "actions": ["initialize"] },
+    { "name": "run.modifier.cosmicSignatureId", "kind": "stored", "type": "identifier", "allowedValues": ["heavy_current", "dead_calm", "signal_storm", "deep_gravity", "thin_space", "dark_run"], "actions": ["initialize"] },
+    { "name": "run.discovery.exfilToneHeard", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
+
+    { "name": "pilot.vault.itemCount", "kind": "derived", "type": "integer", "minimum": 0 },
+    { "name": "run.cargo.count", "kind": "derived", "type": "integer", "minimum": 0 },
+    { "name": "run.hull.id", "kind": "derived", "type": "identifier", "allowedValues": ["drifter", "breacher", "resonant", "shroud", "hauler"] },
+    { "name": "run.hull.integrity", "kind": "derived", "type": "number", "minimum": 0, "maximum": 1 },
+    { "name": "run.heat.ratio", "kind": "derived", "type": "number", "minimum": 0, "maximum": 1 },
+    { "name": "run.extraction.state", "kind": "derived", "type": "identifier", "allowedValues": ["unavailable", "available", "approaching", "confirmable", "confirmed", "expired"] },
+    { "name": "run.map.cycleProgress", "kind": "derived", "type": "number", "minimum": 0, "maximum": 1 },
+    { "name": "run.contacts.count", "kind": "derived", "type": "integer", "minimum": 0 },
+    { "name": "run.noise.radiusMeters", "kind": "derived", "type": "number", "minimum": 0 },
+    { "name": "run.grapple.active", "kind": "derived", "type": "boolean" }
+  ]
+}
