@@ -15,6 +15,8 @@ async function main() {
   assert(!CONDITION_DEFINITIONS.some((definition) => definition.scope === 'install'));
   assert(!CONDITION_DEFINITIONS.some((definition) => definition.scope === 'session'));
   assert.throws(() => getConditionDefinition('pilot.unknown'), /Unknown condition/);
+  assert.strictEqual(getConditionDefinition('pilot.unlock.map.deepField').default, true);
+  assert.strictEqual(getConditionDefinition('pilot.progression.legacy.dragRank').maximum, 3);
 
   const store = new ConditionStore({
     initialValues: {
@@ -39,6 +41,7 @@ async function main() {
   assert.throws(() => store.mutate('set', 'run.map.id', 'expanse'), /not declared/);
   assert.throws(() => store.mutate('set', 'pilot.currency.exoticMatter', -1), /at least 0/);
   assert.throws(() => store.mutate('set', 'pilot.currency.exoticMatter', 1.5), /safe integer/);
+  assert.throws(() => store.mutate('set', 'pilot.progression.legacy.dragRank', 4), /at most 3/);
   assert.throws(() => store.mutate('increment', 'pilot.unlock.vaultAccess', 1), /not declared/);
   assert.throws(() => store.mutate('set', 'run.cargo.count', 2), /read-only/);
 

@@ -11,6 +11,13 @@
     { "name": "pilot.rig.breacher.ironcladLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 1, "actions": ["initialize", "set", "increment", "max"] },
     { "name": "pilot.rig.breacher.salvageDriveLevel", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 2, "actions": ["initialize", "set", "increment", "max"] },
 
+    { "name": "pilot.progression.legacy.thrustRank", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.progression.legacy.hullRank", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.progression.legacy.couplingRank", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.progression.legacy.dragRank", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.progression.legacy.sensorRank", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+    { "name": "pilot.progression.legacy.vaultRank", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "maximum": 3, "actions": ["initialize", "set", "increment", "max"] },
+
     { "name": "pilot.unlock.vaultAccess", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
     { "name": "pilot.unlock.secondLoadoutSlot", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
     { "name": "pilot.unlock.expandedVault", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
@@ -19,6 +26,9 @@
     { "name": "pilot.unlock.hull.resonant", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
     { "name": "pilot.unlock.hull.shroud", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
     { "name": "pilot.unlock.hull.hauler", "kind": "stored", "type": "boolean", "default": false, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.map.shallows", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.map.expanse", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
+    { "name": "pilot.unlock.map.deepField", "kind": "stored", "type": "boolean", "default": true, "actions": ["initialize", "set"] },
 
     { "name": "pilot.chronicle.runsAttempted", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
     { "name": "pilot.chronicle.runsCompleted", "kind": "stored", "type": "integer", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
