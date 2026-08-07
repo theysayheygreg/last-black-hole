@@ -80,6 +80,16 @@ async function run() {
   const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
   assert(mainSource.includes('selectExplicitPortalApproachTarget('),
     'ordinary remote extraction input must forward its explicit portal selection');
+  const remoteLoop = mainSource.slice(
+    mainSource.indexOf('    if (remoteSession.active) {', mainSource.indexOf('function gameLoop')),
+    mainSource.indexOf("      } else if (gamePhase === 'dead')", mainSource.indexOf('function gameLoop')),
+  );
+  const authorityDeclaration = remoteLoop.indexOf('const authorityPlayer = remoteSession.snapshot?.players');
+  const firstAuthorityUse = remoteLoop.indexOf('authorityPlayer?.slingshot');
+  const targetAuthorityUse = remoteLoop.indexOf('selectExplicitPortalApproachTarget(\n            remoteSession.snapshot,\n            authorityPlayer,');
+  assert(authorityDeclaration >= 0 && firstAuthorityUse > authorityDeclaration
+    && targetAuthorityUse > authorityDeclaration,
+  'remote game loop must bind the snapshot-local authority player before every input use');
   const runtimeSource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'sim-runtime.cjs'), 'utf8');
   assert(runtimeSource.includes('player.lastInput.approachTargetId = ai.goal'),
     'AI players must provide the same explicit target identity vocabulary');

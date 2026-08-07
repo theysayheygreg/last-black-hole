@@ -1164,8 +1164,6 @@ function init() {
       // Edge-triggered handling is in the game loop via _prevPause.
       // ESC during play = pause. ESC during pause = resume.
       if (gamePhase === 'playing') {
-        const authorityPlayer = remoteSession.snapshot?.players
-          ?.find((player) => player.clientId === simClient?.clientId);
         togglePause();
       } else if (gamePhase === 'paused') {
         togglePause();  // resume, not quit
@@ -4524,6 +4522,8 @@ function gameLoop(now) {
       }
 
       if (gamePhase === 'playing') {
+        const authorityPlayer = remoteSession.snapshot?.players
+          ?.find((player) => player.clientId === simClient?.clientId);
         if (inventoryNow && !_prevInventory) {
           inventoryOpen = !inventoryOpen;
           if (inventoryOpen) resetInventoryCursor();
