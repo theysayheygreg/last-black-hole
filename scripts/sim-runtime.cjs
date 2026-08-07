@@ -5855,7 +5855,7 @@ function playerApproachTarget(player) {
       id: wreck.id,
       kind: 'salvage',
       distance: worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale),
-      radius: SCAVENGER_CONFIG.pickupRadius,
+      radius: pickupRadiusForPlayer(player),
     };
   }
   const portal = runtime.mapState.portals.find((entry) => entry.id === targetId && isPortalAvailable(entry));
