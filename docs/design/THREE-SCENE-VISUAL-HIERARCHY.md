@@ -91,9 +91,11 @@ The shipped v0.3 graph at the pinned snapshot resolves in this order:
 3. **Three world target.** A top-down orthographic scene renders into a
    full-resolution, byte-backed RGBA target that is cleared for color and depth
    every frame. Its generic background, fabric, and foreground groups are
-   declared but empty in ordinary product play. Live scene content is pooled
-   entity backing, landmark, salvage, active-entity, and immediate-VFX content,
-   plus narrowly owned semantic or screen VFX when their explicit gates fire.
+   declared but empty in ordinary product play. The semantic group sits before
+   entities and carries the source-backed final-portal state ring in ordinary
+   play; diagnostic view may additionally place well shapes there. Pooled
+   entity backing, landmark, salvage, and active-entity content follows, with
+   immediate or screen VFX only when their explicit gates have live events.
 4. **Three composite.** A fullscreen quad presents the transparent Three target
    over the Composer frame with normal alpha blending. Its entity gain/gamma
    and very restrained scan/vignette may affect Three pixels; motion warp and
@@ -131,7 +133,7 @@ allowed local contrast role, not a mandate.
 | 10 | Composer scanlines, `src/render/passes/scanlines-pass.js` | Screen/camera-fixed | Multiplicative display texture | Viewport and phase tuning | May modulate final Composer luminance subtly; glyphs and route edges must remain readable | **Live** |
 | 11 | Generic Three `background-parallax-field`, `WorldScenePresentation.backgroundGroup` | Declared camera/world scene group | Transparent scene layer | None while empty | None | **Declared, empty** |
 | 12 | Generic Three `fabric-source-layer`, `WorldScenePresentation.fabricGroup` | Declared world scene group | Transparent scene layer | None while empty | None; Composer remains fabric owner | **Declared, empty** |
-| 13 | Three semantic layer, `WorldScenePresentation.semanticGroup` | World via `createWorldProjection()` | Usually additive, depth test/write off | Snapshot facts and diagnostic gate | Product-mode semantic content must be source-bound and sparse; diagnostic well primitives never establish product truth | **Declared; ordinary product content effectively empty, diagnostic-only well shapes** |
+| 13 | Three semantic layer, `WorldScenePresentation.semanticGroup`, `PortalVisualFamily` | World anchor through `createWorldProjection()`; final ring uses a screen-stable radius | Additive, depth test/write off; before entity groups | Authoritative portal `visualState`, camera; diagnostic-view gate for well shapes | The final portal may own one local state-accent ring; diagnostic well primitives never establish product truth or ship in ordinary play | **Live for the final-portal ring; diagnostic well shapes are separately gated** |
 | 14 | Entity backing, `entityBackingGroup`, `visual-style.js` | World position, screen-stable family footprint | Normal-alpha dark matte; depth test/write off | Visible/cullable entity snapshot, camera, family treatment | May soften fabric only beneath a visible entity, within its local bounded footprint | **Live** |
 | 15 | Landmark entities, `landmarkEntityGroup` and visual families | World | Normal/additive by material; depth off; explicit render order | Stars, portals, planetoids, route anchors, camera | No independent terrain suppression beyond owned contact matte | **Live** |
 | 16 | Salvage entities, `salvageEntityGroup`, `WreckVisualFamily` | World | Normal/additive by material; depth off | Wreck/cargo state, camera | Same local-matte rule; amber is value/salvage, not generic focus | **Live** |
@@ -399,7 +401,7 @@ above survive later module names and graph changes.
 | Fabric source | `src/render/passes/fluid-display-pass.js`, `src/render/shaders/fluid.glsl.js`, fluid/coarse textures, and frame inputs from `src/main.js`. |
 | ASCII identity | `src/render/passes/ascii-pass.js` and `src/render/shaders/ascii.glsl.js`; screen cells sample a camera/world-aware, world-stable phase. |
 | Three target/composite | `src/render-three/three-renderer.js`; full-resolution RGBA8 target, color/depth clear every frame, normal-alpha copy over the shared Composer framebuffer. |
-| Three scene graph | `src/render-three/world-scene-presentation.js`; top-down orthographic camera, declared generic groups, pooled dynamic content, explicit lifecycle. |
+| Three scene graph | `src/render-three/world-scene-presentation.js`; top-down orthographic camera, declared generic groups, a live pre-entity semantic lane for the final-portal ring, diagnostic-only semantic well shapes, pooled dynamic content, and explicit lifecycle. |
 | Generic Three groups | `background-parallax-field`, `fabric-source-layer`, and `foreground-screen-space-layer` exist but carry no ordinary product content. |
 | Entity layer order/material roles | `src/render-three/visual-style.js` and entity visual families; backing -> landmark -> salvage -> active -> immediate VFX, depth off, explicit normal/additive roles. |
 | Entity assets/pools | `src/render-three/entity-assets.js`, `src/render-three/entities/*`, `WorldScenePresentation`; generated pixel sprites, stable resources, per-frame hidden pool rebuild, reset/dispose/stats. |
