@@ -130,7 +130,8 @@ async function run() {
 
     try {
       const { ProfileManager } = await loadProfileModule();
-      const profile = new ProfileManager().loadProfile(0);
+      const manager = new ProfileManager();
+      const profile = manager.loadProfile(0);
       assert(profile.id === storedProfile.id, "migration must preserve profile identity");
       assert(profile.name === storedProfile.name, "migration must preserve pilot name");
       assert(profile.exoticMatter === storedProfile.exoticMatter, "migration must preserve EM");
@@ -145,6 +146,20 @@ async function run() {
       "migration must clear retired equipment without shifting or losing the live slot");
       assert(profile.recentEchoes[0].fragment === "Still here.",
         "migration must preserve unrelated Chronicle data");
+      let wrongRunScopeFailed = false;
+      try {
+        manager.mutateRunCondition("set", "pilot.currency.exoticMatter", 0);
+      } catch (error) {
+        wrongRunScopeFailed = /requires run scope/.test(error.message);
+      }
+      assert(wrongRunScopeFailed, "run mutation must reject a pilot-scoped condition before mutation");
+      let wrongPilotScopeFailed = false;
+      try {
+        manager.mutatePilotCondition("initialize", "run.map.id", "shallows");
+      } catch (error) {
+        wrongPilotScopeFailed = /requires pilot scope/.test(error.message);
+      }
+      assert(wrongPilotScopeFailed, "pilot mutation must reject a run-scoped condition before mutation");
 
       const persisted = JSON.parse(storage.get("lbh_profile_0"));
       assert(persisted.vault.length === 1 && persisted.vault[0].id === liveVaultItem.id,

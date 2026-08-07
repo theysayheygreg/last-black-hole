@@ -17,7 +17,7 @@ import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
 import { PUBLIC_HULL_IDS, RIG_TRACKS as HULL_RIG_TRACKS } from './content/hulls.js';
 import { sanitizeRetiredItems } from './content/items.js';
 import { normalizeProfileDragUpgradeRank } from './content/tuning.js';
-import { ConditionStore } from './conditions/index.js';
+import { ConditionStore, conditionScope } from './conditions/index.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -323,7 +323,10 @@ export class ProfileManager {
 
   mutatePilotCondition(action, name, value) {
     const profile = this.active;
-    if (!profile || !String(name).startsWith('pilot.')) return null;
+    if (!profile) return null;
+    if (conditionScope(name) !== 'pilot') {
+      throw new TypeError(`Pilot condition mutation requires pilot scope: ${String(name)}`);
+    }
     mutateProfileCondition(profile, action, name, value);
     this.save();
     return this.readCondition(name);
@@ -344,6 +347,9 @@ export class ProfileManager {
   }
 
   mutateRunCondition(action, name, value) {
+    if (conditionScope(name) !== 'run') {
+      throw new TypeError(`Run condition mutation requires run scope: ${String(name)}`);
+    }
     const store = this.getConditionStore();
     store.mutate(action, name, value);
     this.runConditionValues = store.serialize({ scopes: ['run'] });
