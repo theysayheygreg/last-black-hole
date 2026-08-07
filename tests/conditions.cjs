@@ -37,6 +37,7 @@ async function main() {
   assert.strictEqual(store.mutate('max', 'pilot.chronicle.bestSurvivalSeconds', 32.5), 32.5);
   assert.strictEqual(store.mutate('max', 'pilot.chronicle.bestSurvivalSeconds', 12), 32.5);
   assert.strictEqual(store.mutate('initialize', 'run.map.id', 'shallows'), 'shallows');
+  assert.strictEqual(store.mutate('initialize', 'run.id', 'run-123'), 'run-123');
   assert.strictEqual(store.mutate('initialize', 'run.map.id', 'expanse'), 'shallows');
   assert.throws(() => store.mutate('set', 'run.map.id', 'expanse'), /not declared/);
   assert.throws(() => store.mutate('set', 'pilot.currency.exoticMatter', -1), /at least 0/);
@@ -79,6 +80,7 @@ async function main() {
   });
   store.clearScope('run');
   assert.strictEqual(store.read('run.map.id'), undefined);
+  assert.strictEqual(store.read('run.id'), undefined);
   assert.throws(() => store.clearScope('pilot'), /cannot be cleared/);
 
   const sanitized = sanitizeConditionValues({

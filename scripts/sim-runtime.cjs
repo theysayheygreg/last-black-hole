@@ -84,7 +84,11 @@ const {
   getSeededSignatureById,
   resolveSignatureModsById,
 } = require("./sim/signature-mods.cjs");
-const { createRunConditionInitialValues } = require("./sim/condition-adapters.cjs");
+const { ConditionStore } = require("../src/conditions/index.js");
+const {
+  createRunConditionInitialValues,
+  registerSimDerivedConditions,
+} = require("./sim/condition-adapters.cjs");
 const { createControlPlaneClient } = require("./control-plane-client.cjs");
 const {
   createOverloadController,
@@ -361,11 +365,25 @@ function applyRunSeed(rngStreams, mapState, session) {
 
   session.lootQualityBias = rngStreams.range('qualityBias', 0.8, 1.2);
   const signatureId = SEEDED_GEN.pickCosmicSignature(rngStreams.rawStream('signature')).id;
+  const conditionStore = new ConditionStore({
+    initialValues: createRunConditionInitialValues({
+      mapId: session.mapId,
+      seed: session.seed,
+      cosmicSignatureId: signatureId,
+    }),
+  });
   // Store the selected identifier once. The displayed signature, its
   // authority modifiers, and the client presentation scale are derived from
   // the canonical manifest instead of three mutable session copies.
-  session.cosmicSignatureId = signatureId;
   Object.defineProperties(session, {
+    conditionStore: {
+      enumerable: false,
+      value: conditionStore,
+    },
+    cosmicSignatureId: {
+      enumerable: true,
+      get() { return this.conditionStore.read('run.modifier.cosmicSignatureId'); },
+    },
     cosmicSignature: {
       enumerable: true,
       get() { return getSeededSignatureById(this.cosmicSignatureId); },
@@ -379,16 +397,6 @@ function applyRunSeed(rngStreams, mapState, session) {
     sensorRangeMultiplier: {
       enumerable: true,
       get() { return resolveSignatureModsById(this.cosmicSignatureId).sensorRangeMult; },
-    },
-    // This is a one-shot initialization packet for the central condition
-    // owner, not a second mutable store in session state.
-    conditionInitialValues: {
-      enumerable: false,
-      value: createRunConditionInitialValues({
-        mapId: session.mapId,
-        seed: session.seed,
-        cosmicSignatureId: signatureId,
-      }),
     },
   });
   session.aiSeed = Math.floor(rngStreams.float('aiSeed') * 1e9);
@@ -1741,6 +1749,7 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
+  registerSimDerivedConditions(runtime.session.conditionStore, { getRuntime: () => runtime });
   runtime.session.seededSea = createSeededSea({
     seed,
     mapId: mapState.id,

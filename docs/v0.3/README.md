@@ -49,7 +49,9 @@ The working theme is:
 11. `../design/PILLARS.md` and `../design/MOVEMENT.md` - stable pointers to
     the current design guardrails and preserved historical context.
 12. `../design/TEST-HARNESS.md` - current harness contract.
-13. `../v0.2/ROADMAP.md` - active demo/stabilization roadmap.
+13. `CONDITION-STORE.md` - typed content-addressable facts, derived live truth,
+    and persistence migration authority.
+14. `../v0.2/ROADMAP.md` - active demo/stabilization roadmap.
 
 ## What v0.3 Is Not
 

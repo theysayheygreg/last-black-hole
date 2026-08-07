@@ -41,6 +41,7 @@
     { "name": "pilot.chronicle.totalSurvivalSeconds", "kind": "stored", "type": "number", "default": 0, "minimum": 0, "actions": ["initialize", "set", "increment", "max"] },
     { "name": "pilot.chronicle.bestSurvivalSeconds", "kind": "stored", "type": "number", "default": 0, "minimum": 0, "actions": ["initialize", "set", "max"] },
 
+    { "name": "run.id", "kind": "stored", "type": "identifier", "actions": ["initialize"] },
     { "name": "run.map.id", "kind": "stored", "type": "identifier", "allowedValues": ["shallows", "expanse", "deep-field"], "actions": ["initialize"] },
     { "name": "run.seed", "kind": "stored", "type": "integer", "actions": ["initialize"] },
     { "name": "run.modifier.cosmicSignatureId", "kind": "stored", "type": "identifier", "allowedValues": ["heavy_current", "dead_calm", "signal_storm", "deep_gravity", "thin_space", "dark_run"], "actions": ["initialize"] },

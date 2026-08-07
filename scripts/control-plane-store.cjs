@@ -6,7 +6,6 @@ const { sanitizeRetiredItems } = require("./content/items.cjs");
 const {
   migrateProfileConditions,
   mutateProfileCondition,
-  requiredRegistryDeclarations,
 } = require("./condition-profile-adapter.cjs");
 
 // Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
@@ -551,5 +550,4 @@ module.exports = {
   ControlPlaneStore,
   buildRunEntry,
   normalizeProfileSnapshot,
-  requiredConditionRegistryDeclarations: requiredRegistryDeclarations,
 };

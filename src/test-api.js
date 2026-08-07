@@ -642,6 +642,16 @@ export function initTestAPI(getState) {
       };
     },
 
+    readCondition(name) {
+      const { profileManager } = getState();
+      return profileManager?.readCondition?.(name);
+    },
+
+    assertCondition(query) {
+      const { profileManager } = getState();
+      return Boolean(profileManager?.assertCondition?.(query));
+    },
+
     getHomeState() {
       const { gamePhase, homeTab, homeRigCursor, profileManager } = getState();
       const p = profileManager?.active;
@@ -703,18 +713,20 @@ export function initTestAPI(getState) {
       const { profileManager } = getState();
       const p = profileManager?.active;
       if (!p || !Array.isArray(levels)) return false;
-      p.rigLevels = levels.slice(0, 3).map((value) => Math.max(0, Math.min(5, Math.round(Number(value) || 0))));
-      while (p.rigLevels.length < 3) p.rigLevels.push(0);
-      profileManager.save();
+      const hullType = p.hullType || p.shipType || 'drifter';
+      const tracks = hullType === 'breacher'
+        ? ['afterburner', 'ironclad', 'salvageDrive']
+        : ['laminar', 'edgerunner', 'gleanings'];
+      tracks.forEach((track, index) => {
+        profileManager.mutatePilotCondition('set', `pilot.rig.${hullType}.${track}Level`, Math.round(Number(levels[index]) || 0));
+      });
       return true;
     },
 
     seedProfileExoticMatter(amount) {
       const { profileManager } = getState();
-      const p = profileManager?.active;
-      if (!p) return false;
-      p.exoticMatter = Math.max(0, Math.round(Number(amount) || 0));
-      profileManager.save();
+      if (!profileManager?.active) return false;
+      profileManager.mutatePilotCondition('set', 'pilot.currency.exoticMatter', Math.max(0, Math.round(Number(amount) || 0)));
       return true;
     },
 

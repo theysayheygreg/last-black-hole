@@ -2,10 +2,17 @@
 // deliberately owns no gameplay state: it loads the canonical manifest,
 // migrates durable pilot facts, and projects legacy profile fields at the
 // control-plane boundary while consumers finish moving to condition reads.
-const manifest = require("../src/content/conditions.data.json");
+const {
+  CONDITION_DEFINITIONS,
+  CONDITION_SCHEMA_VERSION,
+  ConditionStore,
+  getConditionDefinition,
+  sanitizeConditionValues,
+  validateConditionValue,
+} = require("../src/conditions/index.js");
 const { RIG_TRACKS } = require("./content/hulls.cjs");
 
-const CONDITIONS = new Map(manifest.conditions.map((definition) => [definition.name, definition]));
+const CONDITIONS = new Map(CONDITION_DEFINITIONS.map((definition) => [definition.name, definition]));
 const PILOT_PREFIX = "pilot.";
 const LEGACY_UPGRADE_KEYS = Object.freeze(["thrust", "hull", "coupling", "drag", "sensor", "vault"]);
 
@@ -22,36 +29,22 @@ function declared(name) {
   return CONDITIONS.get(name) || null;
 }
 
-function validate(definition, value) {
-  if (!definition || definition.kind !== "stored") return false;
-  if (definition.type === "boolean" && typeof value !== "boolean") return false;
-  if (definition.type === "integer" && !Number.isSafeInteger(value)) return false;
-  if (definition.type === "number" && (typeof value !== "number" || !Number.isFinite(value))) return false;
-  if (definition.type === "identifier" && typeof value !== "string") return false;
-  if (definition.minimum !== undefined && value < definition.minimum) return false;
-  if (definition.maximum !== undefined && value > definition.maximum) return false;
-  if (definition.allowedValues && !definition.allowedValues.includes(value)) return false;
-  return true;
-}
-
 function setIfDeclared(values, name, value) {
   const definition = declared(name);
-  if (definition && validate(definition, value)) values[name] = value;
+  if (!definition || definition.kind !== "stored") return;
+  try {
+    validateConditionValue(definition, value);
+    values[name] = value;
+  } catch {}
 }
 
 function snapshotValues(snapshot) {
   const candidate = snapshot?.conditionValues?.values || snapshot?.conditionValues || {};
-  const values = {};
-  const issues = [];
-  for (const [name, value] of Object.entries(candidate)) {
-    const definition = declared(name);
-    if (!definition || definition.kind !== "stored" || !name.startsWith(PILOT_PREFIX) || !validate(definition, value)) {
-      issues.push(name);
-      continue;
-    }
-    values[name] = value;
-  }
-  return { values, issues };
+  const sanitized = sanitizeConditionValues(candidate, { scopes: ["pilot"] });
+  return {
+    values: { ...sanitized.values },
+    issues: sanitized.issues.map(({ name }) => name),
+  };
 }
 
 function conditionNameForRig(hullType, trackKey) {
@@ -132,7 +125,7 @@ function migrateProfileConditions(snapshot = {}) {
   legacyConditions(snapshot, values);
   const profile = { ...snapshot };
   profile.conditionValues = {
-    schemaVersion: manifest.schemaVersion,
+    schemaVersion: CONDITION_SCHEMA_VERSION,
     values,
   };
   // Invalid/retired keys are intentionally observable without serializing the
@@ -145,23 +138,15 @@ function migrateProfileConditions(snapshot = {}) {
 
 function mutateProfileCondition(profile, name, action, value) {
   const next = migrateProfileConditions(profile);
-  const definition = declared(name);
-  if (!definition || definition.kind !== "stored" || !name.startsWith(PILOT_PREFIX)) {
+  const definition = getConditionDefinition(name);
+  if (definition.kind !== "stored" || !name.startsWith(PILOT_PREFIX)) {
     throw new Error(`Unknown or non-pilot stored condition: ${name}`);
   }
-  if (!definition.actions.includes(action)) throw new Error(`${action} is not declared for ${name}`);
-  const current = next.conditionValues.values[name] ?? definition.default;
-  const candidate = action === "increment" ? finite(current) + finite(value)
-    : action === "max" ? Math.max(finite(current), finite(value))
-      : value;
-  if (!validate(definition, candidate)) throw new Error(`Invalid ${name} condition value`);
-  next.conditionValues.values[name] = candidate;
+  const store = new ConditionStore({ initialValues: next.conditionValues });
+  store.mutate(action, name, value);
+  next.conditionValues = store.serialize({ scopes: ["pilot"] });
   projectLegacyFields(next, next.conditionValues.values);
   return next;
-}
-
-function requiredRegistryDeclarations() {
-  return [];
 }
 
 module.exports = {
@@ -169,5 +154,4 @@ module.exports = {
   migrateProfileConditions,
   mutateProfileCondition,
   projectLegacyFields,
-  requiredRegistryDeclarations,
 };

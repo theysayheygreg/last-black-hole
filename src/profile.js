@@ -155,9 +155,10 @@ function rigConditionName(hullType, trackIndex) {
   return trackKey ? `pilot.rig.${hullType}.${trackKey}Level` : null;
 }
 
-function conditionStoreForProfile(profile) {
+function conditionStoreForProfile(profile, runConditionValues = {}) {
   const source = profile?.conditionValues?.values || profile?.conditionValues || {};
-  const store = new ConditionStore({ initialValues: source });
+  const runValues = runConditionValues?.values || runConditionValues || {};
+  const store = new ConditionStore({ initialValues: { ...source, ...runValues } });
   const initialize = (name, value) => {
     if (!Object.prototype.hasOwnProperty.call(source, name)) store.mutate('initialize', name, value);
   };
@@ -288,6 +289,7 @@ export class ProfileManager {
   constructor() {
     this.slots = new Array(MAX_SLOTS).fill(null);
     this.activeSlot = -1;
+    this.runConditionValues = {};
     this._loadIndex();
     this._migrateLegacy();
   }
@@ -295,6 +297,61 @@ export class ProfileManager {
   /** Get the active profile, or null. */
   get active() {
     return this.activeSlot >= 0 ? this.slots[this.activeSlot] : null;
+  }
+
+  getConditionStore({ derivedProviders = {} } = {}) {
+    return new ConditionStore({
+      initialValues: {
+        ...(this.active?.conditionValues?.values || {}),
+        ...(this.runConditionValues?.values || this.runConditionValues || {}),
+      },
+      derivedProviders,
+    });
+  }
+
+  readCondition(name, context, options) {
+    return this.getConditionStore(options).read(name, context);
+  }
+
+  evaluateCondition(query, context, options) {
+    return this.getConditionStore(options).evaluate(query, context);
+  }
+
+  assertCondition(query, context, options) {
+    return this.getConditionStore(options).assert(query, context);
+  }
+
+  mutatePilotCondition(action, name, value) {
+    const profile = this.active;
+    if (!profile || !String(name).startsWith('pilot.')) return null;
+    mutateProfileCondition(profile, action, name, value);
+    this.save();
+    return this.readCondition(name);
+  }
+
+  initializeRunConditions({ runId = null, mapId = null, seed = null, cosmicSignatureId = null } = {}) {
+    const store = new ConditionStore({ initialValues: this.active?.conditionValues || {} });
+    const initialize = (name, value) => {
+      if (value !== null && value !== undefined) store.mutate('initialize', name, value);
+    };
+    initialize('run.id', runId);
+    initialize('run.map.id', mapId);
+    initialize('run.seed', seed);
+    initialize('run.modifier.cosmicSignatureId', cosmicSignatureId);
+    store.mutate('initialize', 'run.discovery.exfilToneHeard', false);
+    this.runConditionValues = store.serialize({ scopes: ['run'] });
+    return this.runConditionValues;
+  }
+
+  mutateRunCondition(action, name, value) {
+    const store = this.getConditionStore();
+    store.mutate(action, name, value);
+    this.runConditionValues = store.serialize({ scopes: ['run'] });
+    return store.read(name);
+  }
+
+  clearRunConditions() {
+    this.runConditionValues = {};
   }
 
   /** Does a slot have a profile? */

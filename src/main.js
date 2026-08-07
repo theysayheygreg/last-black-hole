@@ -115,6 +115,7 @@ import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { DEFAULT_PLAYABLE_MAP, MAP_LIST, PLAYABLE_MAPS } from './maps/playable-map-loader.js';
+import { listPlayableMapAvailability } from './content/map-availability.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToGlobalFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
@@ -197,6 +198,21 @@ const MAP_SELECT_ENTRIES = [
   ...PLAYABLE_MAPS.map((entry) => ({ ...entry, available: true })),
   ...LOCKED_SECTOR_REGISTRY,
 ];
+function refreshMapSelectEntries() {
+  const availability = new Map(listPlayableMapAvailability(
+    profileManager.getConditionStore(),
+  ).map((entry) => [entry.mapId, entry]));
+  for (let index = 0; index < PLAYABLE_MAPS.length; index++) {
+    const entry = PLAYABLE_MAPS[index];
+    const gate = availability.get(entry.id);
+    MAP_SELECT_ENTRIES[index] = {
+      ...entry,
+      available: gate?.available !== false,
+      unlockCondition: gate?.unlockCondition || null,
+    };
+  }
+  return MAP_SELECT_ENTRIES;
+}
 function getPlayableMapEntryById(id) {
   return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
 }
@@ -385,6 +401,7 @@ function computeSeedPreview(map, seed) {
 }
 
 function currentMapSelectEntry() {
+  refreshMapSelectEntries();
   return MAP_SELECT_ENTRIES[mapSelectIndex] || MAP_SELECT_ENTRIES[0];
 }
 
@@ -419,7 +436,6 @@ let noiseState = {
   lockedOnListenerCount: 0,
 };
 const audibleContactMemory = new Map();
-let routeDiscoveryState = { runId: null, exfilHeard: false };
 const noiseRipples = [];
 let inhibitorState = {
   phase: 0,
@@ -469,6 +485,7 @@ let _starFlashColor = [255, 255, 255];
 
 // Profile + home screen
 const profileManager = new ProfileManager();
+refreshMapSelectEntries();
 let profileCursor = 0;       // profile select cursor (0-2)
 let homeTab = 0;             // home screen tab (see HOME_TABS)
 let homeShipCursor = 0;      // ship subscreen cursor (0-1 equip, 2-3 consumable)
@@ -556,20 +573,6 @@ function runResultToChronicleRecord(runResult, fallback = {}) {
     deathEntityName: runResult?.deathEntityName || fallback.deathEntityName || null,
     notable: runResult?.notables?.[0]?.description || fallback.notable || null,
   };
-}
-
-function appendProfileRunRecord(record) {
-  const p = profileManager.active;
-  if (!p || !record) return;
-  const existing = profileRunRecords(p);
-  const runId = record.runId || `local-${Date.now()}`;
-  const next = [{ ...record, runId }, ...existing.filter((entry) => entry?.runId !== runId)].slice(0, 50);
-  p.runRecords = next;
-  profileManager.save();
-}
-
-function recordChronicleRun(runResult, fallback = {}) {
-  appendProfileRunRecord(runResultToChronicleRecord(runResult, fallback));
 }
 
 function syncRecentEchoesFromProfile() {
@@ -2491,17 +2494,28 @@ function observeAudibleContact(key, observation, nowSeconds) {
 }
 
 function resetRouteDiscovery(runId = null) {
-  routeDiscoveryState = { runId: runId || null, exfilHeard: false };
+  const candidateMapId = remoteSession.mapId || currentMap?.id || null;
+  profileManager.initializeRunConditions({
+    runId,
+    mapId: PLAYABLE_MAPS.some((entry) => entry.id === candidateMapId) ? candidateMapId : null,
+    seed: remoteSession.snapshot?.session?.seed ?? remoteSession.launchSeed ?? null,
+    cosmicSignatureId: currentSignature?.id || remoteSession.launchSignature?.id || null,
+  });
 }
 
 function updateRouteDiscovery() {
   const runId = snapshotRunId(remoteSession.snapshot) || null;
-  if (runId !== routeDiscoveryState.runId) resetRouteDiscovery(runId);
+  const storedRunId = profileManager.readCondition('run.id') || null;
+  if (runId !== storedRunId) resetRouteDiscovery(runId);
   if ([...audibleContactMemory.values()].some((contact) => contact.live
-    && (contact.category === 'EXFIL TONE' || contact.category === 'EXFIL' || contact.identity === 'EXFIL'))) {
-    routeDiscoveryState = { ...routeDiscoveryState, exfilHeard: true };
+    && (contact.category === 'EXFIL TONE' || contact.category === 'EXFIL' || contact.identity === 'EXFIL'))
+    && !profileManager.readCondition('run.discovery.exfilToneHeard')) {
+    profileManager.mutateRunCondition('set', 'run.discovery.exfilToneHeard', true);
   }
-  return routeDiscoveryState;
+  return {
+    runId: profileManager.readCondition('run.id') || null,
+    exfilHeard: Boolean(profileManager.readCondition('run.discovery.exfilToneHeard')),
+  };
 }
 
 function updateAudibleContactMemory(nowSeconds) {
@@ -4451,13 +4465,7 @@ function gameLoop(now) {
         }
         // Save loadout on death — consumed items stay consumed, equipment changes persist
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
-        const deathCredit = profileManager.recordDeath(simState.runEndTime);
-        recordChronicleRun(lastRunResult, {
-          outcome: 'dead',
-          survivalTime: simState.runEndTime,
-          emEarned: deathCredit,
-          cargo: inventorySystem.getCargoItems?.() || [],
-        });
+        profileManager.recordDeath(simState.runEndTime);
         triggerTransition(() => {
           loadTitleScene();
           gamePhase = 'home';
@@ -4475,11 +4483,6 @@ function gameLoop(now) {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave after extraction failed:', err);
             }).finally(() => {
-              recordChronicleRun(lastRunResult, {
-                outcome: 'extracted',
-                survivalTime: simState.runEndTime,
-                cargo: extractedItems,
-              });
               loadTitleScene();
               gamePhase = 'home';
               homeTab = 0;
@@ -4488,21 +4491,14 @@ function gameLoop(now) {
             });
           });
         } else {
-          const extractionCredit = profileManager.recordExtraction(simState.runEndTime);
+          profileManager.recordExtraction(simState.runEndTime);
           const overflow = profileManager.storeItems(extractedItems.map(i => ({ ...i })));
-          let overflowCredit = 0;
           // Sell overflow items automatically (vault full)
           for (const item of overflow) {
-            overflowCredit += profileManager.addEM(item.value || 0);
+            profileManager.addEM(item.value || 0);
           }
           // Save loadout
           profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
-          recordChronicleRun({ ...(lastRunResult || {}), emEarned: extractionCredit + overflowCredit }, {
-            outcome: 'extracted',
-            survivalTime: simState.runEndTime,
-            emEarned: extractionCredit + overflowCredit,
-            cargo: extractedItems,
-          });
           triggerTransition(() => {
             loadTitleScene();
             gamePhase = 'home';
@@ -5570,7 +5566,7 @@ function gameLoop(now) {
       inventorySystem,
       inventoryOpen,
       noise: noiseState,
-      routeDiscovery: { ...routeDiscoveryState, portalInteraction },
+      routeDiscovery: { ...updateRouteDiscovery(), portalInteraction },
       abilityState: localAbilityState,
       inhibitorState,
       ship,
