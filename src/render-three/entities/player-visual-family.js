@@ -59,7 +59,10 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
           const plumeScale = mode === 'thrusting'
             ? Math.max(0.12, Math.min(1, Number(affordance.plumeScale) || 0))
             : 1;
-          const wakeHeading = facing + plumeCant;
+          // Movement headings are screen/world Y-down; Three presentation is
+          // Y-up, so the delivered cant crosses the same canonical sign seam
+          // as the facing angle above.
+          const wakeHeading = facing - plumeCant;
           const wake = { x: -Math.cos(wakeHeading), y: Math.sin(wakeHeading) };
           const lateral = { x: -wake.y, y: wake.x };
           const direction = mode === 'braking' ? { x: -wake.x, y: -wake.y } : wake;

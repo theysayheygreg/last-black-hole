@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { pathToFileURL } = require('url');
 const nodeAssert = require('assert');
 const { TestRunner, assert } = require('./helpers.cjs');
@@ -308,6 +309,15 @@ async function run() {
       'Route cyan must remain distinct from corruption magenta');
     assert(materials.getMaterialFamily('portalAperture').defaults.paletteRole === 'routeCyan',
       'Portal material family must declare route cyan');
+  });
+
+  await runner.run('Useful-thrust plume cant crosses the renderer Y-axis seam once', async () => {
+    const playerVisualSource = fs.readFileSync(
+      path.join(ROOT, 'src/render-three/entities/player-visual-family.js'),
+      'utf8',
+    );
+    assert(playerVisualSource.includes('const wakeHeading = facing - plumeCant;'),
+      'Expected authority cant to invert exactly once beside the Three-facing projection');
   });
 
   await runner.run('Invalid events are dropped instead of leaking unknown objects to renderers', async () => {
