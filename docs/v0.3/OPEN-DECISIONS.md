@@ -5,6 +5,19 @@
 
 ## Resolved For v0.3
 
+### Endless Sky Phase 1D Spatial HUD And World Annotations
+
+Resolved and authorized on 2026-08-07. One analytic spatial-HUD/annotation
+system replaces the old Noise rings, contact/target brackets, portal timing
+arcs, grapple affordances, off-screen marks, world labels, and their local
+geometry/placement owners. Category silhouette must read without color;
+off-screen truth remains audible-contact-only; one collision-aware,
+hysteresis-stable label owner and one bounded renderer lifecycle own the
+surface. Migration deletes superseded APIs and one-off spatial math rather
+than retaining compatibility layers or dual renderers. Gameplay and signal
+authority do not move. The normative grammar, composition order, coordinate
+law, and migration rule live in `../design/THREE-SCENE-VISUAL-HIERARCHY.md`.
+
 ### Endless Sky Phase 1C Journey Runtime
 
 Resolved on 2026-08-07 and queued behind the accepted Phase 1B condition

@@ -62,6 +62,83 @@ renderer authority.
 - One renderer/backend frame loop owns updates. Visual families do not add
   independent animation loops, timers, or gameplay decisions.
 
+## Spatial HUD and world annotations (Endless Sky Phase 1D)
+
+> **Status:** design-locked and authorized for v0.3 implementation. The
+> migration replaces the older noise rings, brackets, portal timing arcs,
+> grapple marks, off-screen marks, labels, and their local geometry owners. It
+> does not preserve old APIs or dual renderers. Integration remains subject to
+> the active v0.3 worktree hold.
+
+One analytic spatial-HUD/annotation owner supplies both geometry and layout.
+It owns a shared primitive library for solid, dashed, and segmented rings and
+arcs; tapered pointers; lines; brackets/corners; outlines; progress sectors;
+and repeated category marks. Strokes retain a readable pixel weight across
+zoom and desktop/Deck viewport classes. Callers submit semantic facts and
+canonical projected geometry; they do not author placement or spatial math.
+
+### Category grammar
+
+Category must read without color:
+
+| Category | Required analytic silhouette |
+|---|---|
+| Noise | Expanding or dashed rings |
+| Portal / EXFIL | Five-segment route ring plus concentric collapse and final-aperture timing arcs |
+| Grapple | Reachable arc, capture/magnetism allowance, and attached tether |
+| Salvage | Three-notch bracket family |
+| Vessels | Four-corner bracket family, with hostility/selection as a state accent |
+| Inhibitors | Broken or inward-facing containment geometry |
+
+Exact tuning remains a visual-review concern, but these silhouettes are stable
+semantic vocabulary. Interaction affordances occupy several ship lengths at
+ordinary travel speed; pencil-thin or single-character marks may contribute
+texture but cannot carry the whole interaction read.
+
+### Signal and rim law
+
+Off-screen truth follows `SIGNAL-DESIGN.md`. Only heard/audible contacts are
+eligible for the rim. Unknown distant Noise is direction plus magnitude on the
+audible rim. Close identification upgrades that same mark to its entity-family
+grammar; it does not reveal an omniscient second marker. EXFIL and portals emit
+Noise and follow the same law. A legitimately discovered mission-critical
+portal timing fact may persist, but discovery does not reveal unrelated
+contacts or gameplay state.
+
+### Canonical label placement
+
+One placement owner considers the subject silhouette and interaction radius,
+other labels, reserved HUD regions, the ship-local Heat/speed stack, screen
+bounds, zoom, and viewport class. Fixed landmarks choose a stable anchor when
+admitted or generated. Moving contacts choose from a bounded shared candidate
+set and retain their anchor through hysteresis; they do not switch sides every
+frame. Labels never cover their subjects.
+
+The normal spatial composition is:
+
+`fabric -> world annotation/bracket/label -> entity matte -> entity silhouette -> state accent/VFX -> critical HUD`
+
+This Phase 1D order resolves the snapshot's known label-order residual. Text,
+brackets, and annotations remain presentation only; they cannot decide
+visibility, identity, contact, portal, grapple, pickup, or extraction truth.
+
+### Lifecycle, coordinate, and migration law
+
+- A single lifecycle owner creates, updates, resets, disposes, and reports
+  bounded pooled annotation objects from the renderer/backend frame loop.
+  Rebuilds hide/reset pools first. No feature adds a loop or stale annotation
+  cache.
+- Projection, radius, collision, distance, camera, edge clamp, and coordinate
+  math extend and consume the canonical coordinate/geometry owners. No local
+  formula is permitted merely because a mark is presentational.
+- Migration is replacement. Each vertical switches all consumers to the new
+  owner and deletes the superseded helper, constant, test, and import in the
+  same coherent change. Compatibility facades, mirrored geometry, dual
+  renderers, deprecated aliases, and fallbacks are blocking defects unless a
+  concrete external boundary is returned to Greg for approval.
+- Gameplay and signal authority remain unchanged. The system presents supplied
+  facts and never creates a second contact, event, or interaction authority.
+
 ### Player-readable art direction
 
 - Black and blue-black remain the dominant field and negative space. Do not
