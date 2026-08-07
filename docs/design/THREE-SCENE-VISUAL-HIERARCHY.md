@@ -53,6 +53,9 @@ renderer authority.
   matte -> silhouette -> rim/halo -> trail -> state accent -> optional label.
 - Screen-space treatment may modulate presentation. It may not relocate,
   re-phase, duplicate, or invent world terrain.
+- World annotations may never occlude a threat. The UI contract places world
+  labels below entities; the implementation snapshot records the current
+  compositing divergence rather than pretending that ordering already ships.
 - Gameplay truth remains in authority/sim state. Three, shaders, canvas VFX,
   and post-process passes only present supplied state and renderer-neutral
   events.
@@ -91,11 +94,12 @@ The shipped v0.3 graph at the pinned snapshot resolves in this order:
 3. **Three world target.** A top-down orthographic scene renders into a
    full-resolution, byte-backed RGBA target that is cleared for color and depth
    every frame. Its generic background, fabric, and foreground groups are
-   declared but empty in ordinary product play. The semantic group sits before
-   entities and carries the source-backed final-portal state ring in ordinary
-   play; diagnostic view may additionally place well shapes there. Pooled
-   entity backing, landmark, salvage, and active-entity content follows, with
-   immediate or screen VFX only when their explicit gates have live events.
+   declared but empty in ordinary product play. Render order, rather than group
+   name alone, places diagnostic semantic well rings before entity backing;
+   pooled backing, landmark, salvage, and active-entity silhouettes follow;
+   then the source-backed final-portal semantic ring reads as a post-silhouette
+   state accent. Immediate or screen VFX appear only when their explicit gates
+   have live events.
 4. **Three composite.** A fullscreen quad presents the transparent Three target
    over the Composer frame with normal alpha blending. Its entity gain/gamma
    and very restrained scan/vignette may affect Three pixels; motion warp and
@@ -133,11 +137,12 @@ allowed local contrast role, not a mandate.
 | 10 | Composer scanlines, `src/render/passes/scanlines-pass.js` | Screen/camera-fixed | Multiplicative display texture | Viewport and phase tuning | May modulate final Composer luminance subtly; glyphs and route edges must remain readable | **Live** |
 | 11 | Generic Three `background-parallax-field`, `WorldScenePresentation.backgroundGroup` | Declared camera/world scene group | Transparent scene layer | None while empty | None | **Declared, empty** |
 | 12 | Generic Three `fabric-source-layer`, `WorldScenePresentation.fabricGroup` | Declared world scene group | Transparent scene layer | None while empty | None; Composer remains fabric owner | **Declared, empty** |
-| 13 | Three semantic layer, `WorldScenePresentation.semanticGroup`, `PortalVisualFamily` | World anchor through `createWorldProjection()`; final ring uses a screen-stable radius | Additive, depth test/write off; before entity groups | Authoritative portal `visualState`, camera; diagnostic-view gate for well shapes | The final portal may own one local state-accent ring; diagnostic well primitives never establish product truth or ship in ordinary play | **Live for the final-portal ring; diagnostic well shapes are separately gated** |
+| 13 | Diagnostic semantic well ring, `WorldScenePresentation.semanticGroup` | World through `createWorldProjection()` | Additive, depth off; z `0.01`, render order `15`, before entity backing | Diagnostic-view gate, well snapshot, camera | Diagnostic only; never establishes product truth or ships in ordinary play | **Diagnostic-only** |
 | 14 | Entity backing, `entityBackingGroup`, `visual-style.js` | World position, screen-stable family footprint | Normal-alpha dark matte; depth test/write off | Visible/cullable entity snapshot, camera, family treatment | May soften fabric only beneath a visible entity, within its local bounded footprint | **Live** |
 | 15 | Landmark entities, `landmarkEntityGroup` and visual families | World | Normal/additive by material; depth off; explicit render order | Stars, portals, planetoids, route anchors, camera | No independent terrain suppression beyond owned contact matte | **Live** |
 | 16 | Salvage entities, `salvageEntityGroup`, `WreckVisualFamily` | World | Normal/additive by material; depth off | Wreck/cargo state, camera | Same local-matte rule; amber is value/salvage, not generic focus | **Live** |
 | 17 | Active entities, `activeEntityGroup`, player/world sprite families | World | Normal/additive by material; depth off | Player/remote/threat/ecology/Inhibitor snapshots, camera | Same local-matte rule; transparent/absent/cull states must not leave a matte | **Live** |
+| 17a | Final-portal state ring, `WorldScenePresentation.semanticGroup`, `PortalVisualFamily` | World anchor through `createWorldProjection()` with screen-stable radius | Additive, depth off; z `0.145`, render order `29`, after entity silhouettes | Authoritative portal `visualState === 'final'`, camera | One local state accent around a submitted final-portal silhouette; no general terrain suppression | **Live, final portal only** |
 | 18 | Immediate VFX, `immediateVfxGroup`, `VfxManager` | World group for event accents | Additive, depth off, bounded render order | Renderer-neutral events, `dt`, time, quality budget | Short-lived accent only; never persistent terrain or gameplay truth | **Declared, empty at this snapshot** |
 | 19 | Generic Three `foreground-screen-space-layer` | Declared camera-fixed group | Transparent scene layer | None while empty | None | **Declared, empty; motion lens retired** |
 | 20 | Three `screen-vfx-layer`, `VfxManager` | Screen coordinates converted to scene coordinates | Additive, depth off | Explicit renderer-neutral screen events, `dt`, time, quality | May briefly accent an owned screen event; must stay below clean UI and never become ambient terrain | **Live for gated title glyph faults; otherwise empty** |
@@ -223,8 +228,11 @@ is canonized here until representative desktop and Deck scenes justify one.
 - decorative darkness that interrupts a continuous current or creates a
   phantom well/center.
 
-Every transparent world target is cleared before submission. Every dynamic
-pool begins the frame hidden/reset and only then rebuilds visible entries.
+Every transparent world target is cleared before submission. Rebuild-style
+entity, semantic, and line pools begin each frame hidden, then submit only the
+current visible entries. `VfxManager` is deliberately different: live particles
+persist and age across frames; expired or explicitly reset entries are hidden
+and returned to its pool.
 
 ## Post-processing law
 
@@ -287,11 +295,14 @@ factory surface):
 - `dispose` releases owned GPU resources and listeners;
 - `getStats` exposes bounded counts/coverage when diagnostics need them.
 
-Inactive means no visible mesh **and** no hidden state growth. Pools are hidden
-and reset before each rebuild; expired objects cannot retain alpha, material,
-parent, render order, user data, event ids, or occlusion. VFX events contain no
-Three object references. Visual code does not decide collision, pickup, death,
-movement, extraction, inventory, Noise, Heat, or any other gameplay result.
+Inactive means no visible mesh **and** no hidden state growth. Rebuild-style
+pools hide entries before each rebuild. VFX particles may remain live across
+frames only while their bounded lifetime advances; expiration or reset hides
+and returns them to the pool. Reused objects cannot leak stale alpha, material,
+parent, render order, user data, event ids, or occlusion into a new role. VFX
+events contain no Three object references. Visual code does not decide
+collision, pickup, death, movement, extraction, inventory, Noise, Heat, or any
+other gameplay result.
 
 ## Remaining screen-space and time-reactive effects
 
@@ -401,13 +412,15 @@ above survive later module names and graph changes.
 | Fabric source | `src/render/passes/fluid-display-pass.js`, `src/render/shaders/fluid.glsl.js`, fluid/coarse textures, and frame inputs from `src/main.js`. |
 | ASCII identity | `src/render/passes/ascii-pass.js` and `src/render/shaders/ascii.glsl.js`; screen cells sample a camera/world-aware, world-stable phase. |
 | Three target/composite | `src/render-three/three-renderer.js`; full-resolution RGBA8 target, color/depth clear every frame, normal-alpha copy over the shared Composer framebuffer. |
-| Three scene graph | `src/render-three/world-scene-presentation.js`; top-down orthographic camera, declared generic groups, a live pre-entity semantic lane for the final-portal ring, diagnostic-only semantic well shapes, pooled dynamic content, and explicit lifecycle. |
+| Three scene graph | `src/render-three/world-scene-presentation.js`; top-down orthographic camera, declared generic groups, diagnostic semantic well rings before entity backing, a live final-portal semantic ring after silhouettes, pooled dynamic content, and explicit lifecycle. |
 | Generic Three groups | `background-parallax-field`, `fabric-source-layer`, and `foreground-screen-space-layer` exist but carry no ordinary product content. |
 | Entity layer order/material roles | `src/render-three/visual-style.js` and entity visual families; backing -> landmark -> salvage -> active -> immediate VFX, depth off, explicit normal/additive roles. |
 | Entity assets/pools | `src/render-three/entity-assets.js`, `src/render-three/entities/*`, `WorldScenePresentation`; generated pixel sprites, stable resources, per-frame hidden pool rebuild, reset/dispose/stats. |
+| Known matte residual | `_addSpriteEntity()` currently calls `_addContrastBacking()` before applying the submitted entity opacity. At this snapshot, a submitted zero-opacity entity can therefore retain a contact matte. This is an implementation discrepancy against the visible-only matte law above, not accepted visual behavior. |
 | VFX | `src/render-three/vfx/vfx-manager.js`, `vfx-events.js`, `vfx-quality.js`; bounded event consumption and pools. The current concrete screen family is title glyph fault; plans describe more future families. |
 | World projection | `src/coords.js`, shader-side coordinate helpers in `fluid.glsl.js`, and `src/render-three/world-projection.js`. |
 | Canvas overlay | `overlay-canvas` in `index-a.html`, drawn by `src/main.js` and owned helpers after WebGL; it holds gameplay instruments, labels, local cues, and phase surfaces. |
+| Known label-order residual | Because the complete `overlay-canvas` is physically drawn after the Three composite, its current world labels appear above Three entities. That conflicts with UI Style Guide section 5.1's “world labels draw under entities” law. A future ownership/compositing correction is required; this snapshot does not claim the intended order ships or choose its implementation. |
 | DOM/browser shell | `index-a.html`, `src/hud.js`, UI layout/primitives/tokens, and bootstrap/minimum-window owners; HUD z-order is above both canvases. |
 | Retired camera lens | Commit ancestor `fa0ae4fd`; `_buildForegroundLayers()` retains only the explicit retirement note and adds no mesh. |
 | Retired calm mottle | Commit ancestor `a22b6585`; the shader no longer contains the 12x12 `calmMottle` contribution. |
