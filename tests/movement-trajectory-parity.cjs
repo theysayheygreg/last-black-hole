@@ -30,6 +30,7 @@ function makeAuthorityPlayer() {
     wy: 2.1,
     vx: -0.18,
     vy: 0.23,
+    movementFacing: -Math.PI / 2,
     brain: { ...BRAIN },
     heat: INITIAL_HEAT_RATIO,
     heatRatio: INITIAL_HEAT_RATIO,
@@ -84,7 +85,7 @@ async function run() {
       local.setBrakeIntensity(input.brake);
       local.update(DT, flowField, null, null);
 
-      stepPlayerMovementCore(authority, input, DT, {
+      const authorityStep = stepPlayerMovementCore(authority, input, DT, {
         worldScale: 3,
         flowSample: FLOW,
       });
@@ -98,8 +99,10 @@ async function run() {
       assertClose(`tick ${tick} authority Heat/legacy parity`, authority.heatRatio,
         1 - authority.deltaV / authority.deltaVMax);
       assertClose(`tick ${tick} timeSinceThrust`, local.timeSinceThrust, authority.timeSinceThrust);
-      assertClose(`tick ${tick} delivered thrust`, local.lastDeliveredThrustIntensity, input.thrust);
-      assertClose(`tick ${tick} delivered brake`, local.lastDeliveredBrakeIntensity, input.brake);
+      assertClose(`tick ${tick} delivered thrust`, local.lastDeliveredThrustIntensity,
+        authorityStep.thrustIntensity);
+      assertClose(`tick ${tick} delivered brake`, local.lastDeliveredBrakeIntensity,
+        authorityStep.brakeIntensity);
     }
   });
 

@@ -359,7 +359,7 @@ export class SimClient {
     return this.pendingInputs.map((entry) => ({ ...entry }));
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, extractConfirm = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, approachTargetId = null, slingshot = false, slingshotEdges = [], pulse = false, extractConfirm = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
     const sentAt = this._nowMs();
     this.lastSentInput = {
@@ -369,6 +369,7 @@ export class SimClient {
       moveY,
       thrust,
       brake,
+      approachTargetId,
       slingshot,
       slingshotEdges: Array.isArray(slingshotEdges) ? slingshotEdges.slice(0, 8) : [],
       pulse,
@@ -385,6 +386,7 @@ export class SimClient {
       moveY,
       thrust,
       brake,
+      approachTargetId,
     });
     if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
     const inputPayload = { ...this.lastSentInput, timestamp: Date.now() };

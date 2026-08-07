@@ -1,5 +1,9 @@
 import { MOVEMENT } from './movement.js';
 import { dragFactorFromHalfLife } from './tuning.js';
+import {
+  resolveNegligibleVelocity,
+  shapeMovementIntent,
+} from './movement-affordances.js';
 
 export const MOVEMENT_INPUT = Object.freeze({
   coastHalfLifeSeconds: MOVEMENT.player.coastHalfLifeSeconds,
@@ -198,8 +202,8 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   const brain = options.brain || player.brain || {};
   const controlMult = finiteNumber(options.controlMult, 1);
   const worldScale = finiteNumber(options.worldScale, 1);
-  const moveX = finiteNumber(input?.moveX, 0);
-  const moveY = finiteNumber(input?.moveY, 0);
+  const moveX = finiteNumber(input?.brakeX, finiteNumber(input?.moveX, 0));
+  const moveY = finiteNumber(input?.brakeY, finiteNumber(input?.moveY, 0));
   const thrustIntensity = Math.max(0, Number(options.thrustIntensity) || 0);
   const brakeIntensity = consumePlayerHeat(
     player,
@@ -208,6 +212,8 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
     inputConfig.brakeHeatScale ?? inputConfig.brakeFuelScale,
   );
   const thrustDeltaV = { x: 0, y: 0 };
+  const beforeBrakeVX = player.vx;
+  const beforeBrakeVY = player.vy;
 
   if (brakeIntensity > 0) {
     const thrustScale = Number(brain.thrustScale) || 1;
@@ -217,6 +223,11 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
     thrustDeltaV.y = -moveY * brakeAccel * dt;
     player.vx += thrustDeltaV.x;
     player.vy += thrustDeltaV.y;
+    if (options.stoppingActive === true
+      && beforeBrakeVX * player.vx + beforeBrakeVY * player.vy <= 0) {
+      player.vx = 0;
+      player.vy = 0;
+    }
   }
 
   const beforeDragVX = player.vx;
@@ -227,6 +238,12 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   player.vx *= dragFactor;
   player.vy *= dragFactor;
   clampPlayerSpeed(player, inputConfig);
+  const residualResolved = resolveNegligibleVelocity(player, {
+    stoppingActive: options.residualEligible === undefined
+      ? brakeIntensity > 0
+      : options.residualEligible === true,
+    threshold: options.residualSpeedWorld,
+  });
   const dragDeltaV = {
     x: player.vx - beforeDragVX,
     y: player.vy - beforeDragVY,
@@ -234,7 +251,7 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   player.wx = wrapWorldPosition(player.wx + player.vx * dt, worldScale);
   player.wy = wrapWorldPosition(player.wy + player.vy * dt, worldScale);
 
-  return { brakeIntensity, dragFactor, thrustDeltaV, dragDeltaV };
+  return { brakeIntensity, dragFactor, thrustDeltaV, dragDeltaV, residualResolved };
 }
 
 function applyAccelerationChannel(player, acceleration, dt) {
@@ -255,19 +272,36 @@ function applyAccelerationChannel(player, acceleration, dt) {
  * tick. Event waves arrive later as one-shot authority contacts.
  */
 function stepPlayerFreeMovement(player, input, dt, options = {}) {
+  const brain = options.brain || player.brain || {};
+  const inputConfig = options.inputConfig || MOVEMENT_INPUT;
+  const controlMult = finiteNumber(options.controlMult, 1);
+  const brakeAcceleration = MOVEMENT.player.thrustAccel * (Number(brain.thrustScale) || 1)
+    * inputConfig.brakeThrustScale * controlMult;
+  const affordance = shapeMovementIntent(player, input, dt, {
+    ...options.affordance,
+    approachTarget: options.approachTarget,
+    brakeAcceleration: options.brakeAcceleration ?? brakeAcceleration,
+  });
+  player.movementFacing = affordance.heading;
+  player.movementAffordance = affordance.presentation;
+  player.movementStopTargetId = affordance.stopping.targetAssist
+    ? affordance.stopping.targetId
+    : null;
+  const shapedInput = affordance.input;
   const continuous = options.continuousAcceleration || {};
   const inhibitorDeltaV = applyAccelerationChannel(player, continuous.inhibitor, dt);
   const abilityAcceleration = options.resolveAbilityAcceleration
     ? options.resolveAbilityAcceleration(player)
     : continuous.ability;
   const abilityDeltaV = applyAccelerationChannel(player, abilityAcceleration, dt);
-  const drive = applyPlayerDriveAndFlow(player, input, dt, options);
+  const drive = applyPlayerDriveAndFlow(player, shapedInput, dt, options);
 
   // Well contact sits here because protected contact may replace velocity.
   // Returning false stops a newly terminal player before environment/drag.
   if (options.afterDrive && options.afterDrive(player, drive) === false) {
     return {
       ...drive,
+      affordance,
       aborted: true,
       abilityDeltaV,
       inhibitorDeltaV,
@@ -285,9 +319,11 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
   const solarWindDeltaV = applyAccelerationChannel(player, environment.solarWind, dt);
   const bodyPushDeltaV = applyAccelerationChannel(player, environment.bodyPush, dt);
 
-  const brake = applyPlayerBrakeAndIntegrate(player, input, dt, {
+  const brake = applyPlayerBrakeAndIntegrate(player, shapedInput, dt, {
     ...options,
     thrustIntensity: drive.thrustIntensity,
+    stoppingActive: affordance.stopping.active,
+    residualEligible: affordance.stopping.residualEligible,
   });
   const thrustDeltaV = {
     x: drive.thrustDeltaV.x + brake.thrustDeltaV.x,
@@ -296,6 +332,7 @@ function stepPlayerFreeMovement(player, input, dt, options = {}) {
   return {
     ...drive,
     ...brake,
+    affordance,
     thrustDeltaV,
     abilityDeltaV,
     inhibitorDeltaV,

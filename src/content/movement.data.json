@@ -2,6 +2,14 @@
   "authority": {
     "integrationHz": 15
   },
+  "affordances": {
+    "turnRateRadiansPerSecond": 6.283185307179586,
+    "fullThrustAngleRadians": 0.3490658503988659,
+    "minimumThrustAngleRadians": 2.0943951023931953,
+    "minimumThrustScale": 0.12,
+    "stoppingMarginWorld": 0.015,
+    "residualSpeedWorld": 0.004
+  },
   "player": {
     "thrustAccel": 2.5,
     "coastHalfLifeSeconds": 0.7643727575403364,

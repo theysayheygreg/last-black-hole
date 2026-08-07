@@ -1586,6 +1586,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     wy: 0,
     vx: 0,
     vy: 0,
+    movementFacing: 0,
+    movementAffordance: null,
     radius: INTERACTION_VOLUME_CONFIG.playerBodyRadius,
     lastInput: {
       seq: 0,
@@ -1593,6 +1595,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       moveY: 0,
       thrust: 0,
       brake: 0,
+      approachTargetId: null,
       slingshot: false,
       slingshotEdges: [],
       pulse: false,
@@ -3249,7 +3252,7 @@ function expireHeldInput(player, now = Date.now()) {
   }
 
   const input = player.lastInput;
-  if (input.moveX === 0 && input.moveY === 0 && input.thrust === 0 && input.brake === 0
+  if (input.moveX === 0 && input.moveY === 0 && input.thrust === 0 && input.brake === 0 && !input.approachTargetId
     && !input.slingshot && !input.ability1 && !input.ability2) {
     return input;
   }
@@ -3261,6 +3264,7 @@ function expireHeldInput(player, now = Date.now()) {
     moveY: 0,
     thrust: 0,
     brake: 0,
+    approachTargetId: null,
     slingshot: false,
     ability1: false,
     ability2: false,
@@ -4777,7 +4781,7 @@ function refreshPlayerNoiseListeners(player) {
 // Same physics, inventory, signal as human players. Three decision timescales:
 // - Tactical (0.8s): wreck/portal targeting, goal selection
 // - Strategic (3.0s): extraction evaluation
-// - Navigation (per-tick): thrust + steering from aiNavigateToward()
+// - Navigation (per-tick): desired heading + thrust from aiChooseMovementIntent()
 // Personalities are weight tables, not different code paths. See AI-PLAYERS.md.
 
 function createAIPlayer(personalityKey, index, hullType = 'drifter') {
@@ -4797,7 +4801,7 @@ function createAIPlayer(personalityKey, index, hullType = 'drifter') {
     strategicTimer: rng() * AI_PLAYER_CONFIG.strategicInterval,
     lootTarget,
     lootCount: 0,
-    facingAngle: rng() * Math.PI * 2,
+    desiredHeading: rng() * Math.PI * 2,
     thrustIntensity: 0,
   };
   return player;
@@ -5714,7 +5718,7 @@ function aiTacticalDecision(ai) {
   }
 }
 
-function aiNavigateToward(ai, targetWX, targetWY, dt) {
+function aiChooseMovementIntent(ai, targetWX, targetWY) {
   const ws = runtime.session.worldScale;
   const w = ai.personalityWeights;
   const dx = worldDisplacement(ai.wx, targetWX, ws);
@@ -5759,7 +5763,7 @@ function aiNavigateToward(ai, targetWX, targetWY, dt) {
     }
   }
 
-  ai.aiState.facingAngle = Math.atan2(steerY, steerX);
+  ai.aiState.desiredHeading = Math.atan2(steerY, steerX);
 }
 
 function tickAIPlayers(dt) {
@@ -5815,18 +5819,22 @@ function tickAIPlayers(dt) {
     }
 
     if (targetWX !== null) {
-      aiNavigateToward(player, targetWX, targetWY, dt);
+      aiChooseMovementIntent(player, targetWX, targetWY);
     } else {
       // Drift
       ai.thrustIntensity = 0.05;
-      ai.facingAngle += (currentRNG('aiDrift')() - 0.5) * 0.1 * dt;
+      ai.desiredHeading += (currentRNG('aiDrift')() - 0.5) * 0.1 * dt;
     }
 
     // Set lastInput — main tick loop handles all physics (thrust, gravity, drag).
     // Do NOT apply velocity directly here or AI gets double-thrust.
-    player.lastInput.moveX = Math.cos(ai.facingAngle);
-    player.lastInput.moveY = Math.sin(ai.facingAngle);
+    player.lastInput.moveX = Math.cos(ai.desiredHeading);
+    player.lastInput.moveY = Math.sin(ai.desiredHeading);
     player.lastInput.thrust = ai.thrustIntensity;
+    player.lastInput.brake = 0;
+    player.lastInput.approachTargetId = ai.goal === 'loot'
+      ? ai.targetWreckId
+      : ai.goal === 'extract' ? ai.targetPortalId : null;
 
     // Pickup: handled by tickPlayerPickups in main loop (uses same cargo system)
     // Track loot count
@@ -5834,6 +5842,33 @@ function tickAIPlayers(dt) {
 
     // Extraction: handled by tickExtraction in main loop
   }
+}
+
+function playerApproachTarget(player) {
+  const targetId = player?.lastInput?.approachTargetId;
+  if (!targetId) return null;
+  const wreck = runtime.mapState.wrecks.find((entry) => entry.id === targetId
+    && entry.alive !== false && !entry.looted);
+  if (wreck) {
+    return {
+      explicit: true,
+      id: wreck.id,
+      kind: 'salvage',
+      distance: worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale),
+      radius: SCAVENGER_CONFIG.pickupRadius,
+    };
+  }
+  const portal = runtime.mapState.portals.find((entry) => entry.id === targetId && isPortalAvailable(entry));
+  if (portal) {
+    return {
+      explicit: true,
+      id: portal.id,
+      kind: 'portal',
+      distance: worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale),
+      radius: portalCaptureRadius(portal),
+    };
+  }
+  return null;
 }
 
 // --- Hull Ability Tick ---
@@ -6961,6 +6996,7 @@ function tickAuthorityPlayers(dt, relevance) {
       flowSample,
       continuousAcceleration: { inhibitor: inhibitorAcceleration },
       environmentAcceleration,
+      approachTarget: playerApproachTarget(player),
       worldScale: runtime.session.worldScale,
       resolveAbilityAcceleration: (movingPlayer) => recordForceMutation(
         forceLedger,

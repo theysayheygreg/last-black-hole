@@ -22,6 +22,7 @@ async function run() {
       moveY: -8,
       thrust: 3,
       brake: -1,
+      approachTargetId: "  portal-final  ",
       slingshot: false,
       slingshotEdges: [1, { id: 2 }, 2, -1, 3, 4, 5, 6, 7, 8, 9],
       pulse: "yes",
@@ -35,6 +36,7 @@ async function run() {
       "Expected v2 command authority fields to survive normalization");
     assert(Math.abs(Math.hypot(normalized.moveX, normalized.moveY) - 1) < 1e-9, "Expected unit movement vector clamp");
     assert(normalized.thrust === 1 && normalized.brake === 0, "Expected scalar action clamp");
+    assert(normalized.approachTargetId === "portal-final", "Expected explicit approach target identity to normalize");
     assert(normalized.slingshot === false, "Held slingshot state should remain distinct from press edges");
     assert(JSON.stringify(normalized.slingshotEdges) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8]),
       `Expected unique positive edge ids capped at 8, got ${normalized.slingshotEdges}`);

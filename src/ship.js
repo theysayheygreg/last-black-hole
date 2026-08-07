@@ -17,6 +17,7 @@ import {
   isPlayerOverheated,
   setHeatRatio,
 } from './content/movement-step.js';
+import { shapeMovementIntent } from './content/movement-affordances.js';
 import {
   dragPerReferenceFrameFromHalfLife,
   profileDragScaleFromUpgradeRank,
@@ -208,7 +209,6 @@ export class Ship {
   }
 
   setFacingDirect(angle) {
-    this.facing = angle;
     this.targetFacing = angle;
     this.setMoveIntent(Math.cos(angle), Math.sin(angle));
   }
@@ -242,7 +242,7 @@ export class Ship {
     // 1. InputManager supplies facing for presentation and a normalized move
     //    vector for the movement step.
 
-    const movementInput = {
+    const requestedInput = {
       moveX: this.moveX,
       moveY: this.moveY,
       thrust: this.thrustIntensity,
@@ -252,6 +252,13 @@ export class Ship {
       ...MOVEMENT_INPUT,
       coastHalfLifeSeconds: CONFIG.ship.coastHalfLifeSeconds,
     };
+    const affordance = shapeMovementIntent(this, requestedInput, dt, {
+      brakeAcceleration: CONFIG.ship.thrustAccel * this.thrustScale * movementConfig.brakeThrustScale,
+    });
+    this.facing = affordance.heading;
+    this.movementFacing = affordance.heading;
+    this.movementAffordance = affordance.presentation;
+    const movementInput = affordance.input;
 
     // Sample fluid velocity at ship position
     let fluidVelWorld = { x: 0, y: 0 };
@@ -297,6 +304,8 @@ export class Ship {
       inputConfig: movementConfig,
       thrustIntensity: effectiveIntensity,
       worldScale: WORLD_SCALE,
+      stoppingActive: affordance.stopping.active,
+      residualEligible: affordance.stopping.residualEligible,
     });
     this.lastDeliveredThrustIntensity = effectiveIntensity;
     this.lastDeliveredBrakeIntensity = brakeStep.brakeIntensity;

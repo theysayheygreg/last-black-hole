@@ -37,6 +37,11 @@ function normalizeIdentity(value) {
   return String(value || "").trim();
 }
 
+function normalizeOptionalIdentity(value) {
+  const identity = normalizeIdentity(value);
+  return identity || null;
+}
+
 function normalizeCommandEnvelope(body = {}) {
   const playerId = normalizeIdentity(body.playerId || body.clientId);
   return {
@@ -72,6 +77,7 @@ function normalizeInputMessage(body = {}) {
     moveY,
     thrust: clamp(asNumber(body.thrust, 0), 0, 1),
     brake: clamp(asNumber(body.brake, 0), 0, 1),
+    approachTargetId: normalizeOptionalIdentity(body.approachTargetId),
     slingshot: Boolean(body.slingshot),
     slingshotEdges: normalizeSlingshotEdges(body.slingshotEdges),
     pulse: Boolean(body.pulse),
@@ -149,6 +155,7 @@ function createProtocolDescription() {
           moveY: "number[-1..1]",
           thrust: "number[0..1]",
           brake: "number[0..1]",
+          approachTargetId: "optional server-validated interactable id",
           slingshot: "boolean",
           slingshotEdges: "number[] queued press edges, max 8",
           pulse: "boolean",

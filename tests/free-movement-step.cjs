@@ -48,14 +48,17 @@ function makePlayer() {
 
   // Frozen reference is the accepted FREE order: drive/current, well gravity,
   // solar wind, body push, brake/drag/cap, then position integration.
-  const drive = applyPlayerDriveAndFlow(reference, input, 0.1, options);
+  const shapedInput = step.affordance.input;
+  reference.movementFacing = step.affordance.heading;
+  const drive = applyPlayerDriveAndFlow(reference, shapedInput, 0.1, options);
   for (const channel of ['wellGravity', 'solarWind', 'bodyPush']) {
     reference.vx += options.environmentAcceleration[channel].x * 0.1;
     reference.vy += options.environmentAcceleration[channel].y * 0.1;
   }
-  const brake = applyPlayerBrakeAndIntegrate(reference, input, 0.1, {
+  const brake = applyPlayerBrakeAndIntegrate(reference, shapedInput, 0.1, {
     ...options,
     thrustIntensity: drive.thrustIntensity,
+    stoppingActive: step.affordance.stopping.active,
   });
 
   for (const key of ['wx', 'wy', 'vx', 'vy', 'heat', 'heatRatio', 'deltaV', 'timeSinceThrust']) {
