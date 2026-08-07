@@ -5,6 +5,21 @@
 
 ## Resolved For v0.3
 
+### Endless Sky Phase 1C Journey Runtime
+
+Resolved on 2026-08-07 and queued behind the accepted Phase 1B condition
+store. Durable AgentPlay, integration, deterministic reproduction, controlled
+capture, and appropriate benchmark/soak scenarios converge on one
+data-authored Journey runtime; demonstrations, attract sequences, and future
+tutorial beats use that same language when product design calls for them.
+Low-level unit/contract fixtures remain code because they are not journeys.
+Journey actions use real product input and action seams, waits observe events
+or canonical conditions with meaningful timeouts, assertions read the Phase
+1B vocabulary, and setup remains separate from controller policy. The
+migration retires bespoke scenario implementations rather than maintaining a
+parallel harness. The normative architecture and migration law live in
+`../design/AGENT-TESTING.md`.
+
 ### Physics Baseline
 
 Keep the server's provisional `2.5` thrust baseline and tune through hull, rig,

@@ -15,6 +15,79 @@
 > This doc defines what agents verify automatically, what tools they use,
 > and how the test harness fits into the night shift → morning review cycle.
 
+## Journey Runtime Contract (Endless Sky Phase 1C)
+
+> **Status:** design-locked for v0.3; implementation is queued behind the
+> accepted Phase 1B condition-store foundation. Until that dependency is
+> integrated, the existing runners remain implementation truth. Do not add a
+> second journey format in parallel.
+
+Durable scenario-shaped automation converges on one data-authored **Journey**
+runtime. It serves AgentPlay and integration journeys, deterministic bug
+reproductions, controlled visual routes, appropriate benchmark/soak routes,
+and later authored demonstrations, attract sequences, or tutorial beats. A
+low-level unit or contract fixture stays ordinary code when it is not a player
+journey.
+
+### One authoring and authority path
+
+- A journey declares its seed, pilot, hull/loadout, map, run rules, and
+  starting profile conditions. Its schema is validated when loaded; unknown
+  actions, conditions, routines, or setup fields fail clearly.
+- Journey actions express player-facing intent and travel through the real
+  input, movement, and action seams. They never mutate movement, cargo, death,
+  pickup, grapple, portal, extraction, or progression truth directly.
+- Setup and controller policy are separate. The same authored journey may run
+  through different permitted drivers without changing the journey's product
+  assertions or inventing another gameplay authority.
+- Waits observe authority events or Phase 1B conditions with meaningful
+  timeouts. Frame-number choreography is reserved for low-level deterministic
+  fixtures, not durable journeys.
+- Assertions use the canonical Phase 1B condition vocabulary and its stable
+  read/assert API. Journey code does not maintain parallel state mirrors or a
+  second event bus.
+- The Phase 1A movement grammar applies unchanged: human, AI, and Journey
+  controllers differ only in who supplies desired heading and thrust/brake
+  intent.
+
+### Authored routines and receipts
+
+The central registry owns composable routines for launch, navigate/approach,
+grapple/release, salvage, extract, die/recover, and return home. Routines may
+accept targets and policies, but their actions still cross the product input
+boundary and their waits still observe authoritative truth.
+
+Every run produces a human-readable step receipt and artifact manifest. A
+failure receipt identifies the last completed step, active target, relevant
+condition snapshot, authority events, elapsed time, and evidence paths.
+Expected or known failures are first-class declarations with a reason, owner,
+and expiry or review date; they are never silently green or skipped.
+
+The first acceptance journey is one complete player path:
+
+`salvage → Noise consequence → portal approach → extraction → results/progression`
+
+It must use real input/action seams, assert through Phase 1B conditions, and
+return both the readable step receipt and artifact manifest.
+
+### Migration law
+
+Phase 1C is a complete migration, not a compatibility layer. Inventory every
+scenario-style runner and helper, port durable player journeys and shared
+behavior into the central schema/runtime/registry, then delete retired
+scenario implementations or reduce command entry points to thin adapters that
+invoke Journey definitions. The suite manifest, documentation, and commands
+must leave one obvious authoring path. The required coverage includes
+launch/movement, grapple/release, salvage/Noise, portal/extraction,
+death/recovery, a representative full run, controlled map captures, and
+benchmark/soak routes where they truly encode player journeys.
+
+Implementation begins only after Phase 1B is accepted. Its pinned review must
+look for dual-harness leftovers, authority bypasses, frame brittleness, missing
+durable scenario coverage, and misuse of condition vocabulary. Existing
+unrelated red is recorded as a known failure or follow-up; it is not a reason
+to preserve bespoke controllers.
+
 ---
 
 ## The Split
