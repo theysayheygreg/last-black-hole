@@ -1,206 +1,416 @@
 # Three Scene Visual Hierarchy
 
-> **v0.3 status (2026-07-10):** Current master contract for the top-down Three
-> scene. Generated sprite families, entity backing, and the named scene groups
-> are now implemented; remaining sections describe refinement targets.
-> This supersedes the canvas-era layer stack in `DEPTH-LAYERS.md` for new
-> renderer work. The older doc remains useful as historical reasoning.
-> See `docs/project/THREE-VFX-PASS-PLAN.md` for the implementation plan behind
-> the immediate VFX, near-camera atmosphere, and screen-space fault layers.
+> **Canonical design and implementation contract.** This document governs the
+> visual hierarchy of the playable top-down scene. Its laws are durable; the
+> implementation appendix is a source snapshot pinned to
+> `bd9429eb07f590e10e12ca8398b38264180cf79e` and will age as code changes.
 
-## North Star
+## Purpose and authority
 
-Last Singularity should feel like a flat tactical camera pointed down into a
-deep, hostile volume. The view can stay top-down, but the scene should not feel
-flat. Space is black. The void is scary. Every visual layer earns its place by
-making that blackness feel deeper, making the ASCII fabric more legible, or
-making gameplay entities easier to read against the fabric.
+Last Singularity is an ASCII-fluid game, not a conventional space scene with an
+ASCII filter. **Art Is Product** means that the fabric is the terrain, its
+currents are the navigation surface, and every later layer must protect that
+read. When visual goals compete, **Telegraphy > Navigation > Mood**.
 
-Color can widen beyond the original red/cyan terminal pair, but value hierarchy
-comes first:
+This specification answers three questions for every renderer change:
 
-- the void owns most of the frame and should remain near-black;
-- the ASCII fabric carries medium-value motion and field information;
-- interactable entities get brighter silhouettes, contact shadows, halos, and
-  local backplates when needed;
-- rare hazard accents can be saturated, but only in small regions;
-- HUD and text stay cleaner than the world so they do not compete with motion.
+1. What draws behind or in front of what?
+2. Which layers may move, darken, or distort the fabric?
+3. Where does a new effect belong, and what stability/lifecycle laws constrain
+   it?
 
-Contrast is a hard usability requirement. Black is allowed to dominate the
-composition, but player-critical colors should be punched up enough to read
-without squinting. When brightness alone would create bloom mush, use a darker
-contact matte, outline shell, halo, or small affordance background to create a
-controlled contrast pocket.
+Related sources have narrower authority:
 
-## Layer Stack
+- [`THREE-ENTITY-VISUALS.md`](THREE-ENTITY-VISUALS.md) owns category language,
+  asset families, and the entity separation stack.
+- [`../v0.3/FABRIC-VISUAL-CHARTER.md`](../v0.3/FABRIC-VISUAL-CHARTER.md)
+  owns the ranking above and the continuous-route, gravitic-body, and
+  honesty-core/art-directed-surface rules.
+- [`../v0.3/UI-STYLE-GUIDE-v1.md`](../v0.3/UI-STYLE-GUIDE-v1.md) owns canvas
+  and DOM UI hierarchy, typography, role color, matte, and Deck readability.
+- [`../project/THREE-VFX-PASS-PLAN.md`](../project/THREE-VFX-PASS-PLAN.md) owns
+  the staged VFX implementation plan. Aspirational passages there do not prove
+  that a layer ships.
+- [`../project/THREE-ENTITY-VISUAL-PASS-PLAN.md`](../project/THREE-ENTITY-VISUAL-PASS-PLAN.md)
+  owns production sequencing and evidence for entity families.
+- `src/render-three/render-plan.js` describes diagnostic seams and budgets. It
+  is architecture, not evidence that every named pass has live pixels.
 
-This doc uses `stackZ` from back to front. The renderer can map these to actual
-Three `z` values centered around zero, but the ordering should stay stable.
+The historical canvas stack in `DEPTH-LAYERS.md` remains reasoning, not current
+renderer authority.
 
-| stackZ | Layer | Contents | Parallax | Camera/Zoom Behavior | Render Notes |
-|--------|-------|----------|----------|----------------------|--------------|
-| 0 | Black void | Clear color, edge darkening, deep absence | 0.00 | Never scales as an object | The frame should still read as black when all effects are active. |
-| 1 | Far starfield | Sparse pin stars, dead systems, barely visible dust | 0.02-0.06 | More visible at wide zoom, thins near tight zoom | Low brightness, no gameplay color, no dense constellation noise. |
-| 2 | Deep structure haze | Ancient grids, orbital scars, very large nebula shadows | 0.08-0.16 | Slow drift only | Use as atmosphere, not route information. Keep below fabric contrast. |
-| 3 | Background parallax field | Existing `background-parallax-field`, far debris hints | 0.18-0.35 | Moves less than the gameplay plane | Can hold tiny non-interactable silhouettes and far lens flecks. |
-| 4 | Fabric shadow/lensing | Under-well darkness, large local warp shadows | 0.80-1.00 | Tied to world, not screen | Prepares contrast before the ASCII plane without hiding the sim. |
-| 5 | ASCII fluid fabric | Composer fluid, ASCII glyphs, current direction, wells, Inhibitor corruption | 1.00 | The gameplay ocean. It owns world truth and should not parallax away from sim coordinates. | Wells and Inhibitors are fabric-first systems. |
-| 6 | Fabric emboss and hazard wash | Accretion glows, pressure shimmer, well near-side hints, anomaly washes | 1.00 | Scales with world | Prefer shader or shared render-target effects. Avoid entity-only truth here. |
-| 7 | Semantic flow layer | Slingshot lanes, wave rings, current affordances, route hints | 1.00 | Can fade with zoom to avoid clutter | Non-text, low-opacity, diegetic navigation. This is information, not decoration. |
-| 8 | Landmark entity layer | Stars, planetoids, comets, portals, wreck fields, megastructures | 0.96-1.00 | Stable gameplay positions with slight depth offsets | Use contact matte, rim shell, and material families for separation. |
-| 9 | Active entity layer | Player, remote pilots, rivals, scavengers, fauna, sentries | 1.00 | Player remains the most stable read; threats can bob/roll | These objects must be readable at Steam Deck scale with labels off. |
-| 10 | Immediate VFX layer | Thrust ports, brake sparks, pickup glints, release bursts, portal sparks | 1.00-1.04 | Can exaggerate motion during events | Short-lived and pooled. Effects explain action, not just prettiness. |
-| 11 | Near-camera atmosphere | Screen-adjacent dust, speed flecks, lens motes, small foreground occluders | 1.06-1.18 | Stronger at high speed and near hazards | Sparse. This sells depth but must never cover input-critical entities. |
-| 12 | Lens and frame effects | Lens flares, chromatic slip, vignette, CRT bloom prepass | Screen-space | Camera-fixed | Driven by world light sources but resolved in screen space. |
-| 13 | HUD and menus | DOM HUD, status panels, title/results, controller hints | Screen-space | No parallax | HUD can use CSS scanlines, but gameplay CRT should be resolved before HUD. |
+## Normative hierarchy laws
 
-## Post-Processing Order
+- The void frames the image; the fabric owns the world; entities explain
+  contacts; immediate VFX explain events; canvas and DOM UI explain player
+  state and choices.
+- World topology is more important than decorative depth. A visual layer that
+  makes a stable current, well, route, or landmark appear to swim has failed
+  even if the individual frame is beautiful.
+- The canonical product read is the final world plus crisp gameplay/UI layers,
+  not an isolated raw-scene or debug view.
+- Category reads before affiliation and detail. For entities the order is
+  matte -> silhouette -> rim/halo -> trail -> state accent -> optional label.
+- Screen-space treatment may modulate presentation. It may not relocate,
+  re-phase, duplicate, or invent world terrain.
+- Gameplay truth remains in authority/sim state. Three, shaders, canvas VFX,
+  and post-process passes only present supplied state and renderer-neutral
+  events.
+- One renderer/backend frame loop owns updates. Visual families do not add
+  independent animation loops, timers, or gameplay decisions.
 
-The end-state renderer should resolve the world as one composed image, run most
-world-space and lens post, then draw HUD. A final display treatment can sit on
-top only when it is intentionally a screen/monitor effect:
+### Player-readable art direction
 
-1. render background, fabric, semantic, entity, and near-camera world layers;
-2. resolve entity separation and bloom prepass;
-3. run full-frame world post: color grade, vignette, chromatic aberration,
-   source-driven lens flecks, bloom, and any entity/fabric compositing effects;
-4. draw DOM/HUD and menus as crisp UI surfaces;
-5. optionally apply a final CRT/scanline/display-shell treatment over the whole
-   frame, including HUD, or mirror that treatment in CSS when a unified final
-   pass is not available.
+- Black and blue-black remain the dominant field and negative space. Do not
+  fill the void with decorative noise merely to prove depth.
+- The fabric carries medium-value blue/violet movement information. Cyan is
+  reserved for routes/exfil and the player family; bone-white marks peak energy
+  and critical structure; red marks direct danger; amber/gold marks salvage,
+  value, or warm route anchors; green marks ecology; magenta/violet marks
+  Inhibitor or anomaly corruption. Role colors are not generic decoration.
+- Discrete entities remain pixel-resolved at the normal play scale: generated
+  sprite cards or simple top-down forms with nearest-filtered/pixel-authored
+  surfaces. Modern depth, glow, matte, and VFX may support those assets without
+  turning them into smooth vector or glossy low-poly icons.
+- Wide views preserve major routes, wells, portals, and landmarks; small debris
+  and sparks may fade. Normal play must read without tight/debug zoom. Labels
+  are proximity/selection detail, never the first category cue.
 
-The working rule: bloom, lens flecks, color grade, entity separation, and
-fabric effects belong below HUD. CRT can be above everything because it is the
-fictional display, not a world light. When in doubt, keep UI readable first.
+## Back-to-front visual stack
 
-Depth of field should be rare or absent. The Octopath-style vibe is useful
-because it places old-school assets inside modern lens/post staging, but LBH is
-mostly black void and high-contrast glyph fields. Heavy DOF on empty space will
-usually read as blur rather than depth. Prefer parallax, source-driven glow,
-lens flecks, contrast pockets, restrained bloom, and CRT treatment.
+The shipped v0.3 graph at the pinned snapshot resolves in this order:
 
-The current bridge is split: Composer owns the ASCII/fabric post stack, while
-`ThreeRendererBackend` renders a transparent world target and applies its own
-copy pass over the canvas. That is acceptable for v0.2 implementation work as
-long as parameters stay visually aligned, but the split means three things
-cannot be assumed global yet:
+1. **Void and Composer fabric source.** `FluidDisplay` draws the black field,
+   world-anchored continuous current corridors, source-bound waves, compact
+   well bodies/rims/plumes, and localized Inhibitor corruption.
+2. **Composer post chain.** The rich chain is exactly `FluidDisplay -> Gain ->
+   Accretion -> Bloom -> Tonemap -> ColorGrade -> Vignette -> ASCII ->
+   Chromatic -> Scanlines`. It resolves directly into the shared
+   `fluid-canvas` framebuffer. The minimal diagnostic/performance chain is
+   `FluidDisplay -> Tonemap -> ASCII`.
+3. **Three world target.** A top-down orthographic scene renders into a
+   full-resolution, byte-backed RGBA target that is cleared for color and depth
+   every frame. Its generic background, fabric, and foreground groups are
+   declared but empty in ordinary product play. Live scene content is pooled
+   entity backing, landmark, salvage, active-entity, and immediate-VFX content,
+   plus narrowly owned semantic or screen VFX when their explicit gates fire.
+4. **Three composite.** A fullscreen quad presents the transparent Three target
+   over the Composer frame with normal alpha blending. Its entity gain/gamma
+   and very restrained scan/vignette may affect Three pixels; motion warp and
+   motion chromatic displacement are zero in every shipped quality profile.
+5. **Canvas gameplay and UI overlay.** `overlay-canvas` is drawn after the
+   WebGL world. It owns gameplay instruments, labels, local ability cues,
+   explicit warning mattes/tints, menu and results surfaces, and related
+   canvas text. It is not part of the world post chain.
+6. **DOM HUD and browser shell.** The phase-gated DOM HUD sits above the canvas
+   overlay. Minimum-window and fatal/bootstrap surfaces sit above the HUD.
 
-- unified bloom threshold across fabric and entities;
-- one cross-layer contrast budget for mattes, halos, and bright fabric;
-- one final grade/CRT treatment after all world layers are combined.
+This is a composition order, not permission to use every layer in every phase.
+Empty, zero-strength, title-only, diagnostic-only, and retired lanes are named
+below so future work does not mistake architecture for shipped pixels.
 
-Watch those explicitly in screenshots. The final Three-owned graph should move
-toward one global post stack after the fabric and world are combined.
+## Layer and pass contract
 
-## Entity Separation Contract
+In the table, **world** means tied to canonical world coordinates; **camera
+window** means a view of world data whose sampling window follows the camera;
+**screen** means viewport/cell/pixel coordinates. “May suppress” describes an
+allowed local contrast role, not a mandate.
 
-Entities do not become readable by getting larger. They become readable by
-owning a small local contrast system:
+| Back -> front | Layer/pass and owner | Space and anchoring | Blend/depth | Motion, time, camera, player inputs | Fabric suppression/distortion allowance | Snapshot status |
+|---|---|---|---|---|---|---|
+| 0 | Void/clear, `src/render/shaders/fluid.glsl.js`, `src/render/passes/fluid-display-pass.js` | Screen clear carrying a world view | Opaque source color | Camera window and phase tuning | May remain near-black; cannot masquerade as a new world mask | **Live** |
+| 1 | Fluid/current/well display, same owners plus fluid/coarse textures | World topology sampled through the camera window; global toroidal anchors | Opaque Composer source | Authority/coarse flow, fluid textures, wells, source waves, Inhibitors, world camera, time | Currents may vary luminance; legitimate well cores may suppress locally and radially; no generic tiled darkness | **Live** |
+| 2 | Gain, `src/render/passes/gain-pass.js` | Screen | Opaque scalar pass | Phase tuning | May attenuate the complete source only in an authored phase | **Live; 1.0 gameplay, title attenuation** |
+| 3 | Accretion, `src/render/passes/accretion-pass.js` | World anchors projected into the camera window | HDR additive color over source | Well positions/radii, camera, phase strength | May brighten authored title wells; may not add a second gameplay well | **Live in graph; zero gameplay, title-only pixels** |
+| 4 | Bloom, `src/render/passes/bloom-pass.js` | Screen, source-derived | Bright-pass plus additive composite | Source luminance and phase tuning | May spread existing highlights; may not erase route edges or merge categories | **Live** |
+| 5 | Tonemap, `src/render/passes/tonemap-pass.js` | Screen | Opaque HDR-to-LDR transform | Source color/exposure | Global value compression only; preserve relative telegraphy | **Live; core pass** |
+| 6 | Color grade, `src/render/passes/color-grade-pass.js` | Screen | Opaque split-tone transform | Source luminance | Role-bound global color modulation; cannot recolor gameplay categories ambiguously | **Live** |
+| 7 | Composer vignette, `src/render/passes/vignette-pass.js` | Screen/camera-fixed | Multiplicative edge darkening | Viewport and phase tuning | May frame edges gently; cannot conceal threats, route exits, or peripheral current continuity | **Live** |
+| 8 | ASCII, `src/render/passes/ascii-pass.js`, `src/render/shaders/ascii.glsl.js` | Screen-cell raster sampling a world-anchored phase | Opaque quantization | Source color, velocity, camera/world window, time/shimmer, Inhibitor data | May quantize value into glyphs; shimmer cannot slide texture relative to world | **Live; core product identity** |
+| 9 | Composer chromatic, `src/render/passes/chromatic-aberration-pass.js` | Screen/camera-fixed | RGB sample offset | Phase tuning | May fringe the resolved glyph image only when explicitly enabled; never imply world displacement | **Live in graph; zero gameplay, title-only** |
+| 10 | Composer scanlines, `src/render/passes/scanlines-pass.js` | Screen/camera-fixed | Multiplicative display texture | Viewport and phase tuning | May modulate final Composer luminance subtly; glyphs and route edges must remain readable | **Live** |
+| 11 | Generic Three `background-parallax-field`, `WorldScenePresentation.backgroundGroup` | Declared camera/world scene group | Transparent scene layer | None while empty | None | **Declared, empty** |
+| 12 | Generic Three `fabric-source-layer`, `WorldScenePresentation.fabricGroup` | Declared world scene group | Transparent scene layer | None while empty | None; Composer remains fabric owner | **Declared, empty** |
+| 13 | Three semantic layer, `WorldScenePresentation.semanticGroup` | World via `createWorldProjection()` | Usually additive, depth test/write off | Snapshot facts and diagnostic gate | Product-mode semantic content must be source-bound and sparse; diagnostic well primitives never establish product truth | **Declared; ordinary product content effectively empty, diagnostic-only well shapes** |
+| 14 | Entity backing, `entityBackingGroup`, `visual-style.js` | World position, screen-stable family footprint | Normal-alpha dark matte; depth test/write off | Visible/cullable entity snapshot, camera, family treatment | May soften fabric only beneath a visible entity, within its local bounded footprint | **Live** |
+| 15 | Landmark entities, `landmarkEntityGroup` and visual families | World | Normal/additive by material; depth off; explicit render order | Stars, portals, planetoids, route anchors, camera | No independent terrain suppression beyond owned contact matte | **Live** |
+| 16 | Salvage entities, `salvageEntityGroup`, `WreckVisualFamily` | World | Normal/additive by material; depth off | Wreck/cargo state, camera | Same local-matte rule; amber is value/salvage, not generic focus | **Live** |
+| 17 | Active entities, `activeEntityGroup`, player/world sprite families | World | Normal/additive by material; depth off | Player/remote/threat/ecology/Inhibitor snapshots, camera | Same local-matte rule; transparent/absent/cull states must not leave a matte | **Live** |
+| 18 | Immediate VFX, `immediateVfxGroup`, `VfxManager` | World group for event accents | Additive, depth off, bounded render order | Renderer-neutral events, `dt`, time, quality budget | Short-lived accent only; never persistent terrain or gameplay truth | **Declared, empty at this snapshot** |
+| 19 | Generic Three `foreground-screen-space-layer` | Declared camera-fixed group | Transparent scene layer | None while empty | None | **Declared, empty; motion lens retired** |
+| 20 | Three `screen-vfx-layer`, `VfxManager` | Screen coordinates converted to scene coordinates | Additive, depth off | Explicit renderer-neutral screen events, `dt`, time, quality | May briefly accent an owned screen event; must stay below clean UI and never become ambient terrain | **Live for gated title glyph faults; otherwise empty** |
+| 21 | Three RGBA target and copy, `src/render-three/three-renderer.js` | Screen composite of the orthographic scene | Fresh clear; normal-alpha copy; copy depth off | Quality profile; Three target only | Entity-only gain/gamma and restrained scan/vignette allowed; no fabric sampling or camera-motion displacement | **Live** |
+| 22 | Three copy motion/chromatic uniforms, same owner | Screen/camera-fixed | Sample displacement | Motion vector is intentionally zero | No terrain or entity displacement is allowed from ordinary camera/player motion | **Live seam; zero in all shipped profiles** |
+| 23 | Canvas gameplay/world annotations, `src/main.js` and owned UI/presentation helpers | Mixed explicit world-to-screen and screen pixels | Canvas source-over unless locally declared | Player state, camera, time, authority projections, phase | Explicit local labels/mattes and authored event tints only; no unlabeled repeated terrain masks | **Live** |
+| 24 | Canvas menus/results/interrupt surfaces, `src/main.js` and `src/ui/*` | Screen | Explicit panel/matte recipes | Phase, input, UI state, reduced motion | May intentionally dim the world under a named modal surface | **Live, phase-gated** |
+| 25 | DOM HUD, `index-a.html`, `src/hud.js`, UI tokens | Screen/browser | CSS surfaces above canvas | Player/sim projection, phase, reduced motion | Explicit bounded HUD panels only; center playfield remains world-owned | **Live, phase-gated** |
+| 26 | Browser shell/minimum-window/fatal surfaces, `index-a.html`, bootstrap code | Screen/browser | Opaque or high-z emergency surface | Window/bootstrap state | May cover the game only to explain a real non-playable state | **Live, exceptional** |
 
-- **contact matte:** a dark transparent ellipse or hull-shaped shadow between
-  fabric and object, rendered before the object;
-- **core silhouette:** the gameplay shape, rendered as a pixel sprite/card or a
-  top-down pixel-textured mesh;
-- **rim shell:** a thin additive outline or faceted glow outside the silhouette;
-- **halo/backplate:** a brighter or darker affordance pocket for critical
-  states, especially player, portals, pickup-ready wrecks, and danger objects;
-- **velocity trail:** direction and speed cue, never a permanent smear;
-- **state spark:** small family-specific accent for salvage, danger, portal,
-  ecology, or anomaly state.
+### Declared architecture is not shipped imagery
 
-The contact matte is the critical missing piece in the current screenshots. It
-lets the ASCII ocean stay busy while objects remain separate from it.
-For complex objects such as wreck fields, the matte/backing applies to the
-whole entity footprint, not only a single icon point. The goal is partial
-occlusion and softening of the noisy fabric under the object, not a hard
-cutout. Alpha-textured pixel assets can still show black void through their
-transparent surface, but the fabric immediately behind them should be locally
-quieted enough that the silhouette survives.
+`render-plan.js` still names `voidDepth`, `entityEchoes`, `vfxEvents`, and other
+diagnostic seams, and the scene graph retains groups with historical names such
+as `background-parallax-field`. Those names are useful extension points. At the
+pinned snapshot they do **not** prove a starfield, haze, generic parallax field,
+near-camera atmosphere, or separate Three fabric layer is visible.
 
-Silhouette owns **category** first. At Steam Deck scale, a tiny hull-footprint
-mark can reliably separate broad object families: ship, threat, wreck/loot,
-route anchor, ecology, anomaly. It cannot honestly carry every affiliation,
-state, and hull subtype by outline alone. Color, halo, trail heat, and state
-sparks own affiliation and urgency inside each category.
+## Coordinate and camera-stability law
 
-The corrected read order is: silhouette/category first; then color, halo, trail,
-and state for affiliation; then labels only for names and extra detail.
+The terrain/current/well field is world-anchored. With authority time and
+entities frozen, camera translation changes framing only: a reprojected world
+patch retains its current intersections, well influence, large texture
+features, and relative entity registration.
 
-Contact mattes must also have an aggregate budget. One matte preserves
-readability; twenty mattes can punch twenty holes in the ASCII fabric. Tune
-matte opacity/radius with a global ceiling in mind, and reduce matte strength
-or radius when local entity density rises.
+- Well, world, fluid-UV, screen, wrapping, radius, and velocity conversions go
+  through `src/coords.js`, the shader-side canonical adapters in
+  `src/render/shaders/fluid.glsl.js`, or the declared Three projection owner in
+  `src/render-three/world-projection.js`. Call sites do not invent a local
+  `1.0 - y`, toroidal delta, radius scale, camera offset, or projection formula.
+- A camera-following fluid texture is a window onto one global world. It is not
+  a second small torus and must not be sampled as one.
+- Screen-cell ASCII quantization is permitted; its world-derived phase must
+  remain locked to the same world patch as the fabric beneath it.
+- World marks may evolve from authority/time. Camera or player translation
+  alone may not change their phase, centers, density, or topology.
+- Generic camera-reactive overlays over the fabric are forbidden. A future
+  source-driven lens or atmosphere effect must name its world source and pass a
+  frozen-world camera-motion comparison before becoming product imagery.
+- Wells, entities, mattes, trails, and labels consume the shared projection
+  owners. A new effect that needs new spatial math extends the canonical owner
+  first and then calls it.
 
-## Contrast Budgets
+## Occlusion and contrast law
 
-| Family | Minimum Contrast Device | Notes |
-|--------|-------------------------|-------|
-| Player/friend | contact matte + bright hull + rim shell + thrust/brake accents | The player should remain readable in the busiest well field. |
-| Portal | aperture halo + dark inner well + state ticks | Extraction must read at a glance before labels. |
-| Pickup-ready wreck | debris matte + amber glint | Loot value should punch through black and cyan fabric. |
-| Looted wreck | debris silhouette + muted rim | Still present, but no reward sparkle. |
-| Rival/threat | warning-colored shell + trail | Threat movement should be clear in peripheral vision. |
-| Ecology | family silhouette + green/cyan pulse | Avoid hiding ambient entities as black specks. |
-| Star/comet | bright core or tail + local glow | Route anchors can be colorful, but not UI-loud. |
-| Inhibitor | fabric corruption + magenta/violet halo/backplate | Rare enough that it feels invasive every time. |
+The fabric is sovereign. Local contrast is allowed because a readable contact
+is part of navigation; broad anonymous suppression is not.
 
-## Steam Deck Acceptance
+### Allowed suppression
 
-Deck readability is not proven by a desktop screenshot downscaled later. The
-entity pass must capture at Deck-native scale and review it in handheld
-conditions:
+- A gameplay well may own a compact, world-anchored radial dark core and
+  bounded shoulder so its lethal body remains legible. Its silhouette must stay
+  registered to the authoritative well.
+- A visible entity may own one local contact matte shaped and scaled for its
+  family. It must sit below the silhouette, remain within the readable entity
+  footprint, and disappear whenever that entity is absent, transparent,
+  off-screen, expired, reset, or returned to a pool.
+- An explicit modal, HUD panel, label backplate, warning matte, or named
+  full-screen event may darken its documented screen region. The UI owner and
+  player meaning must be obvious.
+- Bloom, vignette, grade, scanlines, and ASCII may modulate the already resolved
+  image within their readability constraints.
 
-- 1280x800 or 1280x720 capture from the Deck path;
-- labels off for the object-family read;
-- small/desaturated review for category separation;
-- bright ambient light check for matte, halo, and bloom washout;
-- CRT/scanline and lens-fleck alias check at the actual panel size.
+### Aggregate budget
 
-## Entity Asset Rule
+Mattes are a shared frame budget, not an entitlement per object. The renderer
+must report matte count and estimated coverage. Review the aggregate and the
+local peak at representative density. If contact pockets join into a second
+terrain mask, lower low-priority opacity/radius, cull stale/low-priority
+contacts, or simplify the family before weakening the fabric. No numeric ceiling
+is canonized here until representative desktop and Deck scenes justify one.
 
-Discrete entities should stay pixel-resolved even as the scene gains depth. Use
-2D pixel sprites/cards or simple 3D meshes whose visible top-down textures are
-pixel-authored or pixelated with nearest-neighbor sampling. Directional
-lighting, shadows, parallax, bloom, trails, and screen-space effects are welcome
-around those assets, but the ship/enemy/wreck surface should not become smooth
-low-poly or glossy vector art.
+### Forbidden suppression
 
-## Palette Hierarchy
+- coarse grid-aligned or threshold-crossing dark tiles;
+- stale pooled mattes, empty/off-screen entity slots, or repeated anonymous
+  terrain masks;
+- transparent render-target history, uncleared alpha/depth, or accumulation
+  from previous frames;
+- hard rectangular backplates presented as world atmosphere;
+- an unlabeled contrast pocket that follows the camera rather than its visible
+  world source;
+- decorative darkness that interrupts a continuous current or creates a
+  phantom well/center.
 
-Use a wider palette, but keep it role-bound.
+Every transparent world target is cleared before submission. Every dynamic
+pool begins the frame hidden/reset and only then rebuilds visible entries.
 
-| Family | Primary Use | Notes |
-|--------|-------------|-------|
-| Black / blue-black | Void, frame edge, negative space | This is the dominant color family. Do not fill it with decorative noise. |
-| Cyan / blue-white | Flow, player, portals, readable route tech | The old terminal identity lives here. |
-| Bone white | Wells, high-energy fabric, player silhouette peaks | Use sparingly so wells remain dangerous and sacred. |
-| Warning red | enemy pilots, collapse, direct danger | Keep red legible but not everywhere. |
-| Salvage gold / amber | wreck value, stars, pickup moments | A warmer counterpoint to cyan; good for reward and route anchors. |
-| Green | ecology, sentries, living systems | Avoid making green another generic UI color. |
-| Magenta / violet | Inhibitor, anomaly, exotic corruption | Keep rare so it always feels invasive. |
+## Post-processing law
 
-## Zoom Rules
+The rich Composer order is normative because each stage consumes the previous
+stage's color domain:
 
-- Wide zoom should favor route readability: wells, stars, portals, major wreck
-  fields, and semantic lanes survive; tiny debris and sparkles fade.
-- Normal gameplay zoom should show all interactables with contact mattes and
-  concise trails.
-- Tight/debug zoom can reveal hull details, debris fragments, and parallax
-  separation, but the normal game should not require it.
-- Labels should fade in only when the player is near or targeting something.
-  Shape language must work before text.
+1. **FluidDisplay** establishes HDR world material and topology.
+2. **Gain** supplies phase-specific source attenuation.
+3. **Accretion** adds the authored title-only HDR well temperature treatment.
+4. **Bloom** spreads source highlights while they are still HDR.
+5. **Tonemap** compresses HDR into displayable LDR.
+6. **ColorGrade** applies the role-bound LDR split tone.
+7. **Vignette** frames the world before glyph selection.
+8. **ASCII** quantizes the image into the core screen-cell language.
+9. **Chromatic** may fringe the resolved glyph buffer in explicitly enabled
+   phases; gameplay strength is zero at the snapshot.
+10. **Scanlines** apply the final Composer display modulation.
 
-## Implementation Notes
+The Three target is composited after this chain and before canvas/DOM UI. Its
+copy pass is not a second world-post pipeline: it grades only the transparent
+Three pixels. Canvas gameplay/UI and DOM HUD remain crisp above world post.
 
-- Keep all coordinate projection through `src/coords.js`; depth and parallax do
-  not excuse local coordinate flips.
-- Prefer separate Three groups for semantic, landmark, active, immediate VFX,
-  and near-camera layers. Use `renderOrder` and material depth flags to preserve
-  the top-down compositing contract.
-- Pool repeated meshes, trails, particles, and glints. The visual hierarchy is
-  not permission to allocate per entity per frame.
-- Drive VFX from renderer-neutral events such as `thrusterBurst`,
-  `titleGlyphFault`, and `portalCollapse`; do not let particles decide gameplay
-  truth.
-- Treat the current canvas/DOM world labels as text surfaces only. New world
-  shape, glow, trail, and aura work should start in the Three scene.
+World post may improve contrast and mood, but may not alter world topology.
+Screen-cell ASCII rasterization is distinct from world-anchored shimmer phase.
+Vignette, chromatic separation, scanlines, grade, bloom, or future exposure
+adaptation may not make currents appear to move, split, vanish, or relocate as
+the camera travels. Heavy depth of field is inappropriate for the ordinary
+play surface because route continuity and small entity categories outrank lens
+spectacle.
+
+## Entity and VFX hierarchy
+
+An entity earns separation through a compact layered read:
+
+1. **Matte:** local, family-shaped, bounded fabric softening.
+2. **Silhouette:** pixel-resolved category truth.
+3. **Rim/halo:** affiliation, focus, or urgent state.
+4. **Trail:** directional/speed evidence, not a permanent smear.
+5. **State accent:** a short family-specific event or condition cue.
+6. **Label:** name or detail only when proximity/selection requires it.
+
+The stable Three subgroup order is:
+
+`entity-backing-layer -> landmark-entity-layer -> salvage-entity-layer -> active-entity-layer -> immediate-vfx-layer`.
+
+All materials currently avoid depth writes/tests and use explicit normal or
+additive blending/render order. If real 3D depth is introduced later, it must
+preserve the player-readable order rather than letting incidental geometry
+sorting decide it.
+
+Each visual family has one owner and the boring lifecycle
+`create -> update(frameState) -> reset -> dispose -> getStats` (or an equivalent
+factory surface):
+
+- `create` allocates stable geometry, materials, assets, and bounded pools;
+- `update` consumes plain snapshot/presentation data and renderer-neutral
+  events from the sole backend frame loop;
+- `reset` clears phase/run/event ids and returns every pooled object to a hidden,
+  inert state;
+- `dispose` releases owned GPU resources and listeners;
+- `getStats` exposes bounded counts/coverage when diagnostics need them.
+
+Inactive means no visible mesh **and** no hidden state growth. Pools are hidden
+and reset before each rebuild; expired objects cannot retain alpha, material,
+parent, render order, user data, event ids, or occlusion. VFX events contain no
+Three object references. Visual code does not decide collision, pickup, death,
+movement, extraction, inventory, Noise, Heat, or any other gameplay result.
+
+## Remaining screen-space and time-reactive effects
+
+These shipped effects deserve continued human judgment because they can change
+the frame even when world geometry does not:
+
+- the fluid display's subtle screen-edge vignette;
+- Composer bloom, grade, vignette, ASCII cell raster, title-only chromatic
+  fringe, and scanlines;
+- world-anchored but time-reactive fabric strokes, source-bound wave swells,
+  Inhibitor corruption, and ASCII shimmer phase;
+- Three entity-only copy gain/gamma plus a restrained copy-pass scanline and
+  vignette;
+- gated title glyph-fault particles in the Three screen VFX group;
+- canvas well-proximity edge vignette, short star-consumption tint, ability and
+  warning accents, explicit UI mattes, and phase-owned canvas scanline recipes;
+- DOM/CSS panel mattes, scanline recipes, and browser emergency overlays.
+
+There is no live generic Three parallax backdrop, near-camera atmosphere, or
+camera-motion warp at the snapshot. A remaining setting name such as
+`parallaxStrength` or scene-group name is not evidence of pixels.
+
+Greg's review question for each screen-space effect is simple: does it help the
+player read the world or the instrument, or does it make the terrain feel less
+stable? The latter does not belong.
+
+## Retired and forbidden approaches
+
+- **`motion-lens-depth-cue` is retired.** The passive camera-reactive ring in
+  the foreground group made terrain appear to re-phase as the view moved. Do
+  not restore it under another name without a source-driven design decision and
+  frozen-world evidence.
+- **`calmMottle` 12x12 coarse tiles are retired.** Calm space may be alive, but
+  not through grid-aligned threshold-crossing darkness that shadows ASCII
+  current glyphs.
+- Do not describe empty background/fabric/foreground groups as shipped
+  starfield, haze, parallax, lens, or atmosphere.
+- Do not add generic camera-reactive fabric/world overlays or one-off projection
+  and wrapping math.
+- Do not use uncleared transparent targets, temporal alpha history, or stale
+  pooled occlusion.
+- Do not add full-field noise carpets, decorative repeated masks, source-free
+  lens flecks, or heavy depth of field that compromises routes.
+- Do not move gameplay truth into Three components, VFX events, post passes,
+  canvas art, or HUD state.
+
+## Allowed future seams
+
+The following are **future**, not shipped. Each requires its own product need,
+owner, gate, and evidence:
+
+- a sparse parallax or near-camera atmosphere group, independently gated and
+  proven not to change world topology;
+- source-driven lens effects keyed to a visible world light/hazard rather than
+  generic camera/player motion;
+- a unified final world post after Composer and Three, while keeping canvas/DOM
+  UI crisp and preserving the canonical hierarchy;
+- continuous route ribbons or richer well/fabric treatments derived from
+  authority/coarse flow through canonical projection owners;
+- independently gated Inhibitor fabric substitutions and screen faults;
+- instanced entity/VFX pools if measured draw-call pressure warrants them.
+
+A future seam does not become a live layer because a group, descriptor, quality
+knob, or plan paragraph exists. It ships only after implementation truth and
+human-readable evidence agree. Every future effect must pass the same laws:
+world stability, route continuity, bounded suppression, role clarity, lifecycle
+ownership, one frame loop, and 60 fps target.
+
+## Human review checklist
+
+Review representative ordinary play at laptop scale and at the physical
+1280x800 Steam Deck scale. Debug views can diagnose a failure but cannot accept
+the product surface.
+
+- **Camera travel:** freeze world time where possible and translate the view.
+  Do current intersections, large texture features, wells, mattes, and entities
+  stay registered to the same world points?
+- **Current continuity:** can the eye follow a route across the frame without
+  dark tiles, overlays, bloom, labels, or post breaking it?
+- **Well alignment:** does every compact dark core/rim/plume stay attached to
+  its actual well with no phantom duplicate?
+- **Category read:** with labels off, can the player distinguish ship, threat,
+  salvage, route anchor, ecology, and anomaly?
+- **Matte coverage:** are contact mattes local and family-shaped? Do dense
+  contacts preserve more fabric than they suppress? Do absent/transparent
+  entities leave no dark footprint?
+- **Event read:** do trails and VFX explain a real source, direction, or state,
+  then expire cleanly?
+- **HUD clarity:** are canvas instruments and DOM HUD crisp, collision-safe,
+  and visually above the world without taking the center playfield?
+- **Screen effects:** inspect vignette, bloom, scanlines, chromatic/title faults,
+  warning tints, and UI mattes one by one. Does any make stable terrain appear
+  to move or hide an input-critical cue?
+- **Deck conditions:** inspect at native scale, labels off, small/desaturated,
+  and in bright ambient light. Desktop downscaling alone is not acceptance.
+
+## Implementation snapshot: `bd9429eb`
+
+This appendix records exact committed implementation truth at
+`bd9429eb07f590e10e12ca8398b38264180cf79e`. The SHA is a snapshot; the laws
+above survive later module names and graph changes.
+
+| Concern | Current owner/truth |
+|---|---|
+| Frame orchestration | `src/main.js` creates one Composer and one selected backend; `ThreeRendererBackend.render()` runs Composer, updates the Three presentation, clears/renders the Three target, and composites it. |
+| Composer graph | `src/main.js`, `src/render/composer.js`, and `src/render/passes/*`; rich order is the ten-pass order specified above; minimal is the three-pass baseline. |
+| Fabric source | `src/render/passes/fluid-display-pass.js`, `src/render/shaders/fluid.glsl.js`, fluid/coarse textures, and frame inputs from `src/main.js`. |
+| ASCII identity | `src/render/passes/ascii-pass.js` and `src/render/shaders/ascii.glsl.js`; screen cells sample a camera/world-aware, world-stable phase. |
+| Three target/composite | `src/render-three/three-renderer.js`; full-resolution RGBA8 target, color/depth clear every frame, normal-alpha copy over the shared Composer framebuffer. |
+| Three scene graph | `src/render-three/world-scene-presentation.js`; top-down orthographic camera, declared generic groups, pooled dynamic content, explicit lifecycle. |
+| Generic Three groups | `background-parallax-field`, `fabric-source-layer`, and `foreground-screen-space-layer` exist but carry no ordinary product content. |
+| Entity layer order/material roles | `src/render-three/visual-style.js` and entity visual families; backing -> landmark -> salvage -> active -> immediate VFX, depth off, explicit normal/additive roles. |
+| Entity assets/pools | `src/render-three/entity-assets.js`, `src/render-three/entities/*`, `WorldScenePresentation`; generated pixel sprites, stable resources, per-frame hidden pool rebuild, reset/dispose/stats. |
+| VFX | `src/render-three/vfx/vfx-manager.js`, `vfx-events.js`, `vfx-quality.js`; bounded event consumption and pools. The current concrete screen family is title glyph fault; plans describe more future families. |
+| World projection | `src/coords.js`, shader-side coordinate helpers in `fluid.glsl.js`, and `src/render-three/world-projection.js`. |
+| Canvas overlay | `overlay-canvas` in `index-a.html`, drawn by `src/main.js` and owned helpers after WebGL; it holds gameplay instruments, labels, local cues, and phase surfaces. |
+| DOM/browser shell | `index-a.html`, `src/hud.js`, UI layout/primitives/tokens, and bootstrap/minimum-window owners; HUD z-order is above both canvases. |
+| Retired camera lens | Commit ancestor `fa0ae4fd`; `_buildForegroundLayers()` retains only the explicit retirement note and adds no mesh. |
+| Retired calm mottle | Commit ancestor `a22b6585`; the shader no longer contains the 12x12 `calmMottle` contribution. |
+| Remaining inert seams | Three copy `motionWarp` and `chromaticMotion` are zero in all quality profiles. `parallaxStrength`/`backdropReveal` settings and generic group names remain declared without corresponding ordinary product geometry. |
+
+When implementation changes, update this appendix and the affected table rows in
+the same committed change. Do not weaken the normative stability, occlusion,
+coordinate, lifecycle, or readability laws merely to describe a new effect.
