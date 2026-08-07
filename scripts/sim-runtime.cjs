@@ -85,7 +85,7 @@ const {
   getSeededSignatureById,
   resolveSignatureModsById,
 } = require("./sim/signature-mods.cjs");
-const { ConditionStore } = require("../src/conditions/index.js");
+const { CONDITION_NAMES, ConditionStore } = require("../src/conditions/index.js");
 const {
   createRunConditionInitialValues,
   registerSimDerivedConditions,
@@ -2023,6 +2023,18 @@ function getPublicSession() {
   return projectPublicSession(runtime.session, runtime.mapState, runtime.waveRings);
 }
 
+function buildPlayerConditionSnapshot(player) {
+  const store = runtime.session?.conditionStore;
+  if (!store) return {};
+  const values = {};
+  for (const name of CONDITION_NAMES) {
+    if (!name.startsWith('run.')) continue;
+    const value = store.read(name, { runtime, player });
+    if (value !== undefined) values[name] = value;
+  }
+  return values;
+}
+
 function snapshotBody({ force = false } = {}) {
   const lastEventSeq = runtime.eventJournal.lastSeq;
   const latest = runtime.snapshotRing.latest({ runId: runtime.session.runId || "idle" });
@@ -2058,6 +2070,7 @@ function snapshotBody({ force = false } = {}) {
   }, {
     buildSlingshotTelegraph,
     buildPlayerRulerFacts,
+    buildPlayerConditionSnapshot,
   });
   return runtime.snapshotRing.append(body, {
     bodySchemaVersion: BODY_SCHEMA_VERSION,

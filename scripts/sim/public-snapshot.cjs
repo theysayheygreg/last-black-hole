@@ -160,6 +160,9 @@ function projectPlayer(player, facts) {
     effectState: player.effectState,
     portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
     noise: projectNoise(player),
+    conditions: facts.buildPlayerConditionSnapshot
+      ? facts.buildPlayerConditionSnapshot(player)
+      : {},
   };
 }
 
