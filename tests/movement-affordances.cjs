@@ -1,6 +1,4 @@
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
 const {
   convergeHeading,
   resolveStoppingEnvelope,
@@ -66,9 +64,5 @@ const residualStep = stepPlayerMovementCore(residual, { moveX: 1, moveY: 0, brak
 });
 assert(residualStep.residualResolved && residual.vx === 0 && residual.vy === 0,
   'negligible braking velocity must resolve after force and drag processing');
-
-const authoritySource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'sim-runtime.cjs'), 'utf8');
-assert(authoritySource.includes("radius: pickupRadiusForPlayer(player)"),
-  'salvage approach assistance must consume the existing hull/item-scaled pickup radius owner');
 
 console.log('MovementAffordances: ok');

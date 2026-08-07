@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const { performance } = require("perf_hooks");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const { createAuthorityDeadlineLoop } = require("./sim/authority-deadline-loop.cjs");
+const { resolveAuthorityApproachTarget } = require("./sim/approach-target.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
 const { getMapDurationSeconds, getPortalPlacementPolicy } = require("./content/map-scales.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
@@ -5845,30 +5846,17 @@ function tickAIPlayers(dt) {
 }
 
 function playerApproachTarget(player) {
-  const targetId = player?.lastInput?.approachTargetId;
-  if (!targetId) return null;
-  const wreck = runtime.mapState.wrecks.find((entry) => entry.id === targetId
-    && entry.alive !== false && !entry.looted);
-  if (wreck) {
-    return {
-      explicit: true,
-      id: wreck.id,
-      kind: 'salvage',
-      distance: worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale),
-      radius: pickupRadiusForPlayer(player),
-    };
-  }
-  const portal = runtime.mapState.portals.find((entry) => entry.id === targetId && isPortalAvailable(entry));
-  if (portal) {
-    return {
-      explicit: true,
-      id: portal.id,
-      kind: 'portal',
-      distance: worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale),
-      radius: portalCaptureRadius(portal),
-    };
-  }
-  return null;
+  return resolveAuthorityApproachTarget({
+    player,
+    targetId: player?.lastInput?.approachTargetId,
+    wrecks: runtime.mapState.wrecks,
+    portals: runtime.mapState.portals,
+    worldScale: runtime.session.worldScale,
+    worldDistance,
+    pickupRadiusForPlayer,
+    portalCaptureRadius,
+    isPortalAvailable,
+  });
 }
 
 // --- Hull Ability Tick ---

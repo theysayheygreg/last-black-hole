@@ -72,6 +72,7 @@ import {
 import { FlowField } from './sim/flow-field.js';
 import { LocalSandboxSimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
+import { selectExplicitPortalApproachTarget } from './sim/explicit-approach-intent.js';
 import {
   advanceLocalPlayerReconciliation,
   createLocalPlayerReconciliationState,
@@ -1163,6 +1164,8 @@ function init() {
       // Edge-triggered handling is in the game loop via _prevPause.
       // ESC during play = pause. ESC during pause = resume.
       if (gamePhase === 'playing') {
+        const authorityPlayer = remoteSession.snapshot?.players
+          ?.find((player) => player.clientId === simClient?.clientId);
         togglePause();
       } else if (gamePhase === 'paused') {
         togglePause();  // resume, not quit
@@ -4549,7 +4552,7 @@ function gameLoop(now) {
           queueRemoteExtractConfirm(remoteSession);
         }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
-          const authoritySlingshot = remoteSession.snapshot?.players?.find((player) => player.clientId === simClient?.clientId)?.slingshot;
+          const authoritySlingshot = authorityPlayer?.slingshot;
           const rehookCooldownSeconds = Math.max(0, Number(authoritySlingshot?.rehookCooldownSeconds) || 0);
           if (!authoritySlingshot?.engaged && rehookCooldownSeconds > 0) {
             showWarning(`grapple cooling // re-hook in ${rehookCooldownSeconds.toFixed(1)}s`, 'rgba(120, 190, 255, 0.92)', 1200);
@@ -4572,6 +4575,14 @@ function gameLoop(now) {
             ? inputManager.moveY
             : (Number.isFinite(facing) ? Math.sin(facing) : 0);
           const sentActions = captureRemotePendingActions(remoteSession);
+          // Extraction is an explicit player-owned target selection. Ordinary
+          // brake remains target-free, and salvage stays brake-assisted until
+          // it gains a real player selection affordance.
+          const approachTargetId = selectExplicitPortalApproachTarget(
+            remoteSession.snapshot,
+            authorityPlayer,
+            !inventoryOpen && extractNow,
+          );
           remoteSession.inputRequestInFlight = true;
           void simClient.sendInput({
             // The scalar action fields decide whether thrust/brake happens;
@@ -4580,6 +4591,7 @@ function gameLoop(now) {
             moveY: intentY,
             thrust,
             brake,
+            approachTargetId,
             slingshot: !inventoryOpen && slingshotNow,
             slingshotEdges: sentActions.slingshotEdges,
             pulse: sentActions.pulse,
