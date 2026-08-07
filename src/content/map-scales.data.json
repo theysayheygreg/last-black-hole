@@ -18,6 +18,8 @@
           { "id": "gravity", "rangeKey": "gravityWells", "label": "GRAVITY WELLS", "description": "broad massing // possible read", "role": "flow" },
           { "id": "derelict", "rangeKey": "derelictFields", "label": "DERELICT FIELDS", "description": "salvage traces // possible read", "role": "salvage" },
           { "id": "stellar", "rangeKey": "stellarContacts", "label": "STELLAR CONTACTS", "description": "bright bodies // possible read", "role": "amber" },
+          { "id": "scavenger", "rangeKey": "scavengerContacts", "label": "SCAVENGER CONTACTS", "description": "hostile vessels // possible read", "role": "danger" },
+          { "id": "anomaly", "rangeKey": "anomalyContacts", "label": "ANOMALY CONTACTS", "description": "data-core distortion // possible read", "role": "anomaly" },
           { "id": "exit", "rangeKey": "possibleExits", "label": "POSSIBLE EXITS", "description": "aperture traces // not guaranteed", "role": "flow" }
         ]
       }
@@ -40,6 +42,8 @@
           { "id": "gravity", "rangeKey": "gravityWells", "label": "GRAVITY WELLS", "description": "broad massing // possible read", "role": "flow" },
           { "id": "derelict", "rangeKey": "derelictFields", "label": "DERELICT FIELDS", "description": "salvage traces // possible read", "role": "salvage" },
           { "id": "stellar", "rangeKey": "stellarContacts", "label": "STELLAR CONTACTS", "description": "bright bodies // possible read", "role": "amber" },
+          { "id": "scavenger", "rangeKey": "scavengerContacts", "label": "SCAVENGER CONTACTS", "description": "hostile vessels // possible read", "role": "danger" },
+          { "id": "anomaly", "rangeKey": "anomalyContacts", "label": "ANOMALY CONTACTS", "description": "data-core distortion // possible read", "role": "anomaly" },
           { "id": "exit", "rangeKey": "possibleExits", "label": "POSSIBLE EXITS", "description": "aperture traces // not guaranteed", "role": "flow" }
         ]
       }
@@ -62,6 +66,8 @@
           { "id": "gravity", "rangeKey": "gravityWells", "label": "GRAVITY WELLS", "description": "broad massing // possible read", "role": "flow" },
           { "id": "derelict", "rangeKey": "derelictFields", "label": "DERELICT FIELDS", "description": "salvage traces // possible read", "role": "salvage" },
           { "id": "stellar", "rangeKey": "stellarContacts", "label": "STELLAR CONTACTS", "description": "bright bodies // possible read", "role": "amber" },
+          { "id": "scavenger", "rangeKey": "scavengerContacts", "label": "SCAVENGER CONTACTS", "description": "hostile vessels // possible read", "role": "danger" },
+          { "id": "anomaly", "rangeKey": "anomalyContacts", "label": "ANOMALY CONTACTS", "description": "data-core distortion // possible read", "role": "anomaly" },
           { "id": "exit", "rangeKey": "possibleExits", "label": "POSSIBLE EXITS", "description": "aperture traces // not guaranteed", "role": "flow" }
         ]
       }
