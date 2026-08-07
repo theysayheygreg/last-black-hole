@@ -93,6 +93,41 @@ async function run() {
   const clientId = `client-${crypto.randomUUID()}`;
   let playerAuthority = null;
 
+  await runner.run("Profile migration stores declared pilot conditions and projects legacy fields", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-condition-profile-"));
+    const store = new ControlPlaneStore(path.join(tmpDir, "store.json"));
+    const profile = store.bootstrapProfile({
+      profileId: `profile-${crypto.randomUUID()}`,
+      snapshot: {
+        exoticMatter: 42,
+        shipType: "breacher",
+        rigLevels: [2, 1, 2],
+        upgrades: { drag: 3, thrust: 1 },
+        totalExtractions: 4,
+        totalDeaths: 2,
+        totalItemsSold: 7,
+        totalExoticMatterEarned: 91,
+        bestSurvivalTime: 123.5,
+        conditionValues: { values: { "pilot.retired.key": true } },
+      },
+    });
+    const values = profile.conditionValues.values;
+    assert(values["pilot.currency.exoticMatter"] === 42, "Expected EM to migrate into condition values");
+    assert(values["pilot.hull.selectedId"] === "breacher", "Expected selected hull condition");
+    assert(values["pilot.rig.breacher.afterburnerLevel"] === 2, "Expected active hull rig migration");
+    assert(values["pilot.progression.legacy.dragRank"] === 3, "Expected legacy upgrade rank migration");
+    assert(values["pilot.chronicle.extractions"] === 4, "Expected chronicle scalar migration");
+    assert(!Object.prototype.hasOwnProperty.call(values, "pilot.retired.key"), "Expected retired condition to be dropped");
+    assert(profile.conditionMigrationIssues.includes("pilot.retired.key"), "Expected migration issue receipt for retired key");
+
+    const reloaded = store.bootstrapProfile({
+      profileId: profile.id,
+      snapshot: { exoticMatter: 1, shipType: "drifter" },
+    });
+    assert(reloaded.exoticMatter === 42 && reloaded.hullType === "breacher",
+      "Expected stored condition truth to win bootstrap over client snapshot");
+  });
+
   await startControlPlane(CONTROL_PORT);
   await startSimServer(SIM_PORT, {
     env: {

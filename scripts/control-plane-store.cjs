@@ -3,6 +3,11 @@ const path = require("path");
 const crypto = require("crypto");
 const { runEmEarned, survivalBonusEm } = require("./content/balance.cjs");
 const { sanitizeRetiredItems } = require("./content/items.cjs");
+const {
+  migrateProfileConditions,
+  mutateProfileCondition,
+  requiredRegistryDeclarations,
+} = require("./condition-profile-adapter.cjs");
 
 // Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
 const DEFAULT_RIG_LEVELS = [0, 0, 0];
@@ -82,7 +87,7 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
     const raw = Number(rawUpgrades[key]);
     upgrades[key] = Number.isFinite(raw) ? Math.max(0, Math.min(3, Math.round(raw))) : defaultValue;
   }
-  return {
+  const normalized = {
     ...base,
     ...clone(snapshot),
     id: profileId || snapshot.id || base.id,
@@ -108,6 +113,7 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
       ? snapshot.recentEchoes.filter((echo) => echo && typeof echo === "object" && String(echo.fragment || "").trim()).slice(0, MAX_RECENT_ECHOES).map((echo) => ({ ...echo }))
       : [],
   };
+  return migrateProfileConditions(normalized);
 }
 
 function sortVault(vault) {
@@ -136,8 +142,9 @@ function normalizeEmCredit(value) {
 function creditProfileEm(profile, amount) {
   const credit = normalizeEmCredit(amount);
   if (credit <= 0) return 0;
-  profile.exoticMatter = normalizeEmCredit(profile.exoticMatter) + credit;
-  profile.totalExoticMatterEarned = normalizeEmCredit(profile.totalExoticMatterEarned) + credit;
+  const credited = mutateProfileCondition(profile, "pilot.currency.exoticMatter", "increment", credit);
+  const earned = mutateProfileCondition(credited, "pilot.chronicle.totalExoticMatterEarned", "increment", credit);
+  Object.assign(profile, earned);
   return credit;
 }
 
@@ -304,7 +311,7 @@ class ControlPlaneStore {
   bootstrapProfile({ profileId, snapshot, fallbackName = "Pilot" }) {
     const normalized = normalizeProfileSnapshot(snapshot || {}, profileId, fallbackName);
     const existing = this.state.profiles[normalized.id];
-    // Stored profile is authoritative for durable fields (EM, vault, stats, loadout).
+    // Stored profile is authoritative for durable fields and condition values.
     // Client snapshot only wins for transient/display fields (name) or if no stored profile exists.
     const nextProfile = existing
       ? {
@@ -373,19 +380,22 @@ class ControlPlaneStore {
       result.emCredited += creditProfileEm(profile, runLedgerCredit);
     }
 
+    Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.runsAttempted", "increment", 1));
+    Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.totalSurvivalSeconds", "increment", survivalTime));
+
     if (normalizedOutcome === "dead") {
-      profile.totalDeaths += 1;
+      Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.deaths", "increment", 1));
     }
 
     if (normalizedOutcome === "extracted") {
-      profile.totalExtractions += 1;
-      if (runDuration > profile.bestSurvivalTime) {
-        profile.bestSurvivalTime = runDuration;
-      }
+      Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.extractions", "increment", 1));
+      Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.runsCompleted", "increment", 1));
+      Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.bestSurvivalSeconds", "max", runDuration));
       const cargoItems = Array.isArray(player?.cargo)
         ? player.cargo.filter(Boolean).map((item) => ({ ...item }))
         : [];
       result.extractedCount = cargoItems.length;
+      Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.cargoExtracted", "increment", cargoItems.length));
       for (const item of cargoItems) {
         if (profile.vault.length < profile.vaultCapacity) {
           profile.vault.push(item);
@@ -396,6 +406,9 @@ class ControlPlaneStore {
         }
       }
       sortVault(profile.vault);
+    } else if (normalizedOutcome === "dead" || normalizedOutcome === "abandoned" || normalizedOutcome === "disconnected") {
+      const cargoLost = Array.isArray(player?.cargo) ? player.cargo.filter(Boolean).length : 0;
+      Object.assign(profile, mutateProfileCondition(profile, "pilot.chronicle.cargoLost", "increment", cargoLost));
     }
 
     const saved = this.saveProfile(profile);
@@ -538,4 +551,5 @@ module.exports = {
   ControlPlaneStore,
   buildRunEntry,
   normalizeProfileSnapshot,
+  requiredConditionRegistryDeclarations: requiredRegistryDeclarations,
 };

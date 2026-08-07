@@ -17,6 +17,7 @@ import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
 import { PUBLIC_HULL_IDS, RIG_TRACKS as HULL_RIG_TRACKS } from './content/hulls.js';
 import { sanitizeRetiredItems } from './content/items.js';
 import { normalizeProfileDragUpgradeRank } from './content/tuning.js';
+import { ConditionStore } from './conditions/index.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -140,6 +141,89 @@ function normalizeRecentEchoes(echoes = []) {
     }));
 }
 
+const PROFILE_CONDITION_FIELDS = Object.freeze({
+  exoticMatter: 'pilot.currency.exoticMatter',
+  totalExtractions: 'pilot.chronicle.extractions',
+  totalDeaths: 'pilot.chronicle.deaths',
+  totalItemsSold: 'pilot.chronicle.itemsSold',
+  totalExoticMatterEarned: 'pilot.chronicle.totalExoticMatterEarned',
+  bestSurvivalTime: 'pilot.chronicle.bestSurvivalSeconds',
+});
+
+function rigConditionName(hullType, trackIndex) {
+  const trackKey = Object.keys(HULL_RIG_TRACKS[hullType] || {})[trackIndex];
+  return trackKey ? `pilot.rig.${hullType}.${trackKey}Level` : null;
+}
+
+function conditionStoreForProfile(profile) {
+  const source = profile?.conditionValues?.values || profile?.conditionValues || {};
+  const store = new ConditionStore({ initialValues: source });
+  const initialize = (name, value) => {
+    if (!Object.prototype.hasOwnProperty.call(source, name)) store.mutate('initialize', name, value);
+  };
+  initialize('pilot.currency.exoticMatter', normalizeEmCredit(profile.exoticMatter));
+  initialize('pilot.hull.selectedId', normalizeHullType(profile.hullType, profile.shipType));
+  const hullType = normalizeHullType(profile.hullType, profile.shipType);
+  normalizeRigLevels(profile.rigLevels, hullType).forEach((level, index) => {
+    const name = rigConditionName(hullType, index);
+    if (name) initialize(name, level);
+  });
+  initialize('pilot.chronicle.extractions', Math.max(0, Math.round(Number(profile.totalExtractions) || 0)));
+  initialize('pilot.chronicle.deaths', Math.max(0, Math.round(Number(profile.totalDeaths) || 0)));
+  initialize('pilot.chronicle.itemsSold', Math.max(0, Math.round(Number(profile.totalItemsSold) || 0)));
+  initialize('pilot.chronicle.totalExoticMatterEarned', Math.max(0, Math.round(Number(profile.totalExoticMatterEarned) || 0)));
+  initialize('pilot.chronicle.bestSurvivalSeconds', Math.max(0, Number(profile.bestSurvivalTime) || 0));
+  for (const key of Object.keys(profile.upgrades || {})) {
+    const name = `pilot.progression.legacy.${key}Rank`;
+    try {
+      initialize(name, Math.max(0, Math.round(Number(profile.upgrades[key]) || 0)));
+    } catch {
+      // Non-condition profile data is not part of the durable condition scope.
+    }
+  }
+  return store;
+}
+
+function synchronizeProfileConditions(profile) {
+  const store = conditionStoreForProfile(profile);
+  const values = store.serialize({ scopes: ['pilot'] });
+  profile.conditionValues = values;
+  const selectedHull = store.read('pilot.hull.selectedId');
+  profile.hullType = selectedHull;
+  profile.shipType = selectedHull;
+  profile.rigLevels = Array.from({ length: RIG_SLOT_COUNT }, (_, index) => {
+    const name = rigConditionName(selectedHull, index);
+    return name ? store.read(name) : 0;
+  });
+  for (const [field, name] of Object.entries(PROFILE_CONDITION_FIELDS)) profile[field] = store.read(name);
+  profile.upgrades = { ...(profile.upgrades || {}) };
+  for (const key of Object.keys(profile.upgrades)) {
+    const name = `pilot.progression.legacy.${key}Rank`;
+    try { profile.upgrades[key] = store.read(name); } catch {}
+  }
+  return store;
+}
+
+function mutateProfileCondition(profile, action, name, value) {
+  const store = conditionStoreForProfile(profile);
+  store.mutate(action, name, value);
+  profile.conditionValues = store.serialize({ scopes: ['pilot'] });
+  const selectedHull = store.read('pilot.hull.selectedId');
+  profile.hullType = selectedHull;
+  profile.shipType = selectedHull;
+  profile.rigLevels = Array.from({ length: RIG_SLOT_COUNT }, (_, index) => {
+    const conditionName = rigConditionName(selectedHull, index);
+    return conditionName ? store.read(conditionName) : 0;
+  });
+  for (const [field, conditionName] of Object.entries(PROFILE_CONDITION_FIELDS)) profile[field] = store.read(conditionName);
+  profile.upgrades = { ...(profile.upgrades || {}) };
+  for (const key of Object.keys(profile.upgrades)) {
+    const legacyName = `pilot.progression.legacy.${key}Rank`;
+    try { profile.upgrades[key] = store.read(legacyName); } catch {}
+  }
+  return profile;
+}
+
 function normalizeProfileShape(profile = {}) {
   const defaults = createDefaultProfile(profile.name);
   const next = { ...defaults, ...profile };
@@ -155,6 +239,7 @@ function normalizeProfileShape(profile = {}) {
     : defaults.vault;
   next.loadout = normalizeLoadoutShape(profile.loadout);
   next.recentEchoes = normalizeRecentEchoes(profile.recentEchoes);
+  synchronizeProfileConditions(next);
   return next;
 }
 
@@ -263,8 +348,8 @@ export class ProfileManager {
     if (!p) return 0;
     const credit = normalizeEmCredit(amount);
     if (credit <= 0) return 0;
-    p.exoticMatter += credit;
-    p.totalExoticMatterEarned += credit;
+    mutateProfileCondition(p, 'increment', 'pilot.currency.exoticMatter', credit);
+    mutateProfileCondition(p, 'increment', 'pilot.chronicle.totalExoticMatterEarned', credit);
     this.save();
     return credit;
   }
@@ -273,7 +358,7 @@ export class ProfileManager {
   spendEM(amount) {
     const p = this.active;
     if (!p || p.exoticMatter < amount) return false;
-    p.exoticMatter -= amount;
+    mutateProfileCondition(p, 'increment', 'pilot.currency.exoticMatter', -amount);
     this.save();
     return true;
   }
@@ -328,7 +413,7 @@ export class ProfileManager {
     const value = item.value || 0;
     this.addEM(value);
     const p = this.active;
-    if (p) p.totalItemsSold++;
+    if (p) mutateProfileCondition(p, 'increment', 'pilot.chronicle.itemsSold', 1);
     this.save();
     return value;
   }
@@ -345,9 +430,7 @@ export class ProfileManager {
     const p = this.active;
     if (!p) return false;
     const nextHull = normalizeHullType(hullType);
-    p.hullType = nextHull;
-    p.shipType = nextHull;
-    p.rigLevels = normalizeRigLevels(p.rigLevels, nextHull);
+    mutateProfileCondition(p, 'set', 'pilot.hull.selectedId', nextHull);
     this.save();
     return true;
   }
@@ -410,9 +493,10 @@ export class ProfileManager {
     const p = this.active;
     if (!p || !this.canAffordRigUpgrade(trackIndex)) return false;
     const cost = this.getRigUpgradeCost(trackIndex);
-    p.exoticMatter -= cost.em;
-    p.rigLevels = normalizeRigLevels(p.rigLevels, p.hullType || p.shipType);
-    p.rigLevels[cost.trackIndex] = cost.nextLevel;
+    mutateProfileCondition(p, 'increment', 'pilot.currency.exoticMatter', -cost.em);
+    const name = rigConditionName(normalizeHullType(p.hullType, p.shipType), cost.trackIndex);
+    if (!name) return false;
+    mutateProfileCondition(p, 'set', name, cost.nextLevel);
     this.save();
     return true;
   }
@@ -437,11 +521,11 @@ export class ProfileManager {
     const p = this.active;
     if (!p) return 0;
     const emCredited = survivalBonusEm(survivalTime);
-    p.totalExtractions++;
-    if (survivalTime > p.bestSurvivalTime) p.bestSurvivalTime = survivalTime;
+    mutateProfileCondition(p, 'increment', 'pilot.chronicle.extractions', 1);
+    mutateProfileCondition(p, 'max', 'pilot.chronicle.bestSurvivalSeconds', survivalTime);
     if (emCredited > 0) {
-      p.exoticMatter += emCredited;
-      p.totalExoticMatterEarned += emCredited;
+      mutateProfileCondition(p, 'increment', 'pilot.currency.exoticMatter', emCredited);
+      mutateProfileCondition(p, 'increment', 'pilot.chronicle.totalExoticMatterEarned', emCredited);
     }
     p.lastPlayed = new Date().toISOString();
     this.save();
@@ -452,10 +536,10 @@ export class ProfileManager {
     const p = this.active;
     if (!p) return 0;
     const emCredited = runEmEarned({ outcome: 'dead', survivalTime });
-    p.totalDeaths++;
+    mutateProfileCondition(p, 'increment', 'pilot.chronicle.deaths', 1);
     if (emCredited > 0) {
-      p.exoticMatter += emCredited;
-      p.totalExoticMatterEarned += emCredited;
+      mutateProfileCondition(p, 'increment', 'pilot.currency.exoticMatter', emCredited);
+      mutateProfileCondition(p, 'increment', 'pilot.chronicle.totalExoticMatterEarned', emCredited);
     }
     p.lastPlayed = new Date().toISOString();
     this.save();
