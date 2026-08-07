@@ -1,0 +1,25 @@
+{
+  "id": "integration.home-rig-chronicle-results",
+  "version": 1,
+  "description": "Navigate the authority-backed Rig, Chronicle, and Results surfaces without bespoke browser choreography.",
+  "setup": {
+    "seed": 5119,
+    "pilot": "journey-meta",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.currency.exoticMatter": 200, "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared" },
+  "steps": [
+    { "id": "rig", "action": "selectRig", "args": {} },
+    { "id": "rig-ready", "waitForEvent": "ui.rig.ready", "timeoutMs": 5000 },
+    { "id": "chronicle", "action": "openChronicle", "args": {} },
+    { "id": "chronicle-ready", "waitForEvent": "ui.chronicle.ready", "timeoutMs": 5000 },
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "return", "routine": "returnHome", "args": {} },
+    { "id": "results", "action": "navigateHome", "args": { "section": "results" } },
+    { "id": "results-ready", "waitForEvent": "ui.results.ready", "timeoutMs": 5000 }
+  ]
+}

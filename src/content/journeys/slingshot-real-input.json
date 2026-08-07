@@ -1,0 +1,20 @@
+{
+  "id": "reproduction.slingshot-real-input",
+  "version": 1,
+  "description": "Drive the shared movement grammar through a real-input slingshot route.",
+  "setup": {
+    "seed": 1219,
+    "pilot": "journey-slingshot",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "deep_gravity" },
+    "startingProfileFacts": { "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared", "targeting": "nearest-well" },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "slingshot", "routine": "navigate", "args": { "policy": "slingshot", "targetPolicy": "nearest-well" }, "target": { "policy": "nearest-well" } },
+    { "id": "slingshot-observed", "waitForEvent": "player.slingshotEngaged", "timeoutMs": 30000 }
+  ]
+}

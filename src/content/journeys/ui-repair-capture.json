@@ -1,0 +1,16 @@
+{
+  "id": "capture.ui-repair",
+  "version": 1,
+  "description": "Capture repaired HUD and prompt surfaces through ordinary product navigation.",
+  "setup": { "seed": 13007, "pilot": "capture-ui-repair", "hull": "drifter", "loadout": [], "map": "deep-field", "runRules": { "signature": "dark_run" }, "startingProfileFacts": { "pilot.unlock.map.deepField": true } },
+  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "remote-safe-position", "autonomousSurvival": false },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "travel", "routine": "navigate", "args": { "policy": "steady-visible-current", "durationMs": 2000 } },
+    { "id": "hold", "action": "brake", "args": { "hold": true } },
+    { "id": "capture", "action": "capture", "args": { "name": "ui-repair-hud", "overlays": false, "provenance": true } },
+    { "id": "pause", "action": "pause", "args": {} },
+    { "id": "pause-capture", "action": "capture", "args": { "name": "ui-repair-pause", "overlays": false } },
+    { "id": "resume", "action": "resume", "args": {} }
+  ]
+}

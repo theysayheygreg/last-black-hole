@@ -1,0 +1,20 @@
+{
+  "id": "reproduction.ruler-live",
+  "version": 1,
+  "description": "Launch and travel under real input while recording the canonical ruler presentation.",
+  "setup": {
+    "seed": 6131,
+    "pilot": "journey-ruler",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared", "evidence": "ruler" },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "travel", "routine": "navigate", "args": { "policy": "straight-line", "durationMs": 3000 } },
+    { "id": "ruler-frame", "action": "capture", "args": { "name": "ruler-live", "overlays": ["ruler"] } }
+  ]
+}

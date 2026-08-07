@@ -42,7 +42,17 @@ function validateSetup(raw) {
   }
   if (!Array.isArray(setup.loadout)) throw new TypeError('journey.setup.loadout must be an array');
   requireRecord(setup.runRules, 'journey.setup.runRules');
-  requireRecord(setup.startingProfileFacts, 'journey.setup.startingProfileFacts');
+  const startingProfileFacts = requireRecord(setup.startingProfileFacts, 'journey.setup.startingProfileFacts');
+  for (const [name, value] of Object.entries(startingProfileFacts)) {
+    const definition = getConditionDefinition(name);
+    if (definition.kind !== 'stored' || !['install', 'pilot'].includes(definition.scope)) {
+      throw new TypeError(`journey.setup.startingProfileFacts.${name} must be an install.* or pilot.* stored condition`);
+    }
+    if (!definition.actions.includes('set') && !definition.actions.includes('initialize')) {
+      throw new TypeError(`journey.setup.startingProfileFacts.${name} has no declared setup mutation`);
+    }
+    validateConditionValue(definition, value, `journey.setup.startingProfileFacts.${name}`);
+  }
   return validateData(setup, 'journey.setup');
 }
 
@@ -116,3 +126,4 @@ export function validateJourneyDefinition(raw, registry) {
 }
 
 export { MIN_TIMEOUT_MS };
+import { getConditionDefinition, validateConditionValue } from '../conditions/index.js';

@@ -1,0 +1,25 @@
+{
+  "id": "agent.breacher-death-recovery",
+  "version": 1,
+  "description": "Breacher follows real movement intent into a well, dies, and recovers to Home.",
+  "setup": {
+    "seed": 9137,
+    "pilot": "journey-breacher",
+    "hull": "breacher",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "deep_gravity" },
+    "startingProfileFacts": { "pilot.unlock.map.shallows": true, "pilot.unlock.hull.breacher": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared", "targeting": "nearest-well" },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "breacher", "assertCondition": { "condition": "run.hull.id", "equals": "breacher" } },
+    { "id": "well-approach", "routine": "navigate", "args": { "policy": "well-intercept", "targetPolicy": "nearest-well" }, "target": { "policy": "nearest-well" } },
+    { "id": "die-through-authority", "routine": "die", "args": { "causePolicy": "nearest-well" } },
+    { "id": "death-result", "waitForEvent": "player.died", "timeoutMs": 60000 },
+    { "id": "death-recorded", "waitForCondition": { "condition": "pilot.chronicle.deaths", "gte": 1 }, "timeoutMs": 5000, "pollMs": 100 },
+    { "id": "recover", "routine": "recover", "args": {} },
+    { "id": "home-ready", "waitForEvent": "ui.home.ready", "timeoutMs": 10000 }
+  ]
+}

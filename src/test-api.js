@@ -560,6 +560,19 @@ export function initTestAPI(getState) {
       };
     },
 
+    getJourneyState() {
+      const { simClient, remoteSnapshot } = getState();
+      const player = remoteSnapshot?.players?.find((entry) => entry.clientId === simClient?.clientId) || null;
+      return {
+        session: clone(remoteSnapshot?.session || null),
+        tick: remoteSnapshot?.tick ?? null,
+        simTime: remoteSnapshot?.simTime ?? null,
+        player: clone(player),
+        world: clone(remoteSnapshot?.world || null),
+        recentEvents: clone(remoteSnapshot?.recentEvents || []),
+      };
+    },
+
     getInhibitorState() {
       const { inhibitorState } = getState();
       return clone(inhibitorState);
@@ -650,6 +663,15 @@ export function initTestAPI(getState) {
     assertCondition(query) {
       const { profileManager } = getState();
       return Boolean(profileManager?.assertCondition?.(query));
+    },
+
+    applyJourneyProfileFacts(facts = {}) {
+      const { profileManager } = getState();
+      if (!profileManager?.active || !facts || typeof facts !== 'object' || Array.isArray(facts)) return false;
+      for (const [name, value] of Object.entries(facts)) {
+        profileManager.mutatePilotCondition('set', name, value);
+      }
+      return true;
     },
 
     getHomeState() {

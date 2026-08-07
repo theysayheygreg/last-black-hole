@@ -1,0 +1,21 @@
+{
+  "id": "integration.pilot-delete",
+  "version": 1,
+  "description": "Delete a pilot through the ordinary profile UI and observe the resulting profile state.",
+  "setup": {
+    "seed": 8111,
+    "pilot": "journey-delete",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.currency.exoticMatter": 17, "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared" },
+  "steps": [
+    { "id": "profile", "action": "navigateHome", "args": { "section": "profile" } },
+    { "id": "delete", "action": "deletePilot", "args": { "confirm": true } },
+    { "id": "deleted", "waitForEvent": "profile.pilotDeleted", "timeoutMs": 5000 },
+    { "id": "title", "waitForEvent": "ui.title.ready", "timeoutMs": 5000 }
+  ]
+}

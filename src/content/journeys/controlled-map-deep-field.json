@@ -1,0 +1,13 @@
+{
+  "id": "capture.controlled-map-deep-field",
+  "version": 1,
+  "description": "Controlled Deep Field boot/navigation/provenance frame using the permitted remote safe hold.",
+  "setup": { "seed": 9059, "pilot": "capture-deep-field", "hull": "drifter", "loadout": [], "map": "deep-field", "runRules": { "signature": "dark_run" }, "startingProfileFacts": { "pilot.unlock.map.deepField": true } },
+  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "remote-safe-position", "autonomousSurvival": false },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "map", "assertCondition": { "condition": "run.map.id", "equals": "deep-field" } },
+    { "id": "settle", "action": "brake", "args": { "hold": true } },
+    { "id": "capture", "action": "capture", "args": { "name": "deep-field-controlled", "overlays": false, "provenance": true } }
+  ]
+}

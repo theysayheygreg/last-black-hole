@@ -1,0 +1,23 @@
+{
+  "id": "integration.run-lifecycle-recovery",
+  "version": 1,
+  "description": "End a real run, return Home, and prove a fresh authority-backed run can start.",
+  "setup": {
+    "seed": 7127,
+    "pilot": "journey-lifecycle",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared" },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "end-run", "action": "exitRun", "args": { "confirm": true } },
+    { "id": "home", "waitForEvent": "ui.home.ready", "timeoutMs": 10000 },
+    { "id": "relaunch", "action": "relaunch", "args": { "seed": 7128 } },
+    { "id": "fresh-run", "waitForEvent": "run.started", "timeoutMs": 15000 },
+    { "id": "attempt-recorded", "waitForCondition": { "condition": "pilot.chronicle.runsAttempted", "gte": 2 }, "timeoutMs": 5000, "pollMs": 100 }
+  ]
+}

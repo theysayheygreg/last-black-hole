@@ -1,0 +1,39 @@
+{
+  "id": "agent.salvage-noise-extract",
+  "version": 1,
+  "description": "Natural authority-backed salvage, Noise consequence, portal approach, extraction, and progression route.",
+  "setup": {
+    "seed": 10317,
+    "pilot": "journey-natural",
+    "hull": "drifter",
+    "loadout": ["grapple"],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.unlock.map.shallows": true, "pilot.unlock.hull.drifter": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared", "targeting": "nearest-visible" },
+  "knownFailure": {
+    "reason": "Natural salvage and optional-portal timing remain nondeterministic under the browser controller.",
+    "owner": "Phase 1C Journey runtime",
+    "reviewDate": "2026-08-21"
+  },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "map-truth", "assertCondition": { "condition": "run.map.id", "equals": "shallows" } },
+    { "id": "approach-salvage", "routine": "approach", "args": { "targetPolicy": "nearest-salvage" }, "target": { "policy": "nearest-salvage" } },
+    { "id": "grapple-salvage", "routine": "grapple", "args": { "targetPolicy": "active-approach" } },
+    { "id": "collect-salvage", "routine": "salvage", "args": { "targetPolicy": "active-grapple" } },
+    { "id": "loot-event", "waitForEvent": "player.loot", "timeoutMs": 20000 },
+    { "id": "cargo-acquired", "waitForCondition": { "condition": "run.cargo.count", "gte": 1 }, "timeoutMs": 20000, "pollMs": 100 },
+    { "id": "noise-consequence", "waitForCondition": { "condition": "run.noise.radiusMeters", "gt": 0 }, "timeoutMs": 10000, "pollMs": 100 },
+    { "id": "contact-consequence", "waitForCondition": { "condition": "run.contacts.count", "gte": 1 }, "timeoutMs": 30000, "pollMs": 200 },
+    { "id": "release-grapple", "routine": "release", "args": {} },
+    { "id": "approach-exfil", "routine": "approach", "args": { "targetPolicy": "next-available-exfil" }, "target": { "policy": "next-available-exfil" } },
+    { "id": "exfil-confirmable", "waitForCondition": { "condition": "run.extraction.state", "equals": "confirmable" }, "timeoutMs": 60000, "pollMs": 100 },
+    { "id": "extract", "routine": "extract", "args": {} },
+    { "id": "result-committed", "waitForEvent": "run.result", "timeoutMs": 15000 },
+    { "id": "extraction-recorded", "waitForCondition": { "condition": "pilot.chronicle.extractions", "gte": 1 }, "timeoutMs": 5000, "pollMs": 100 },
+    { "id": "cargo-recorded", "assertCondition": { "condition": "pilot.chronicle.cargoExtracted", "gte": 1 } },
+    { "id": "return-home", "routine": "returnHome", "args": {} }
+  ]
+}

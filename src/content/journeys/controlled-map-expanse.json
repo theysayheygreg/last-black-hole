@@ -1,0 +1,13 @@
+{
+  "id": "capture.controlled-map-expanse",
+  "version": 1,
+  "description": "Controlled Expanse boot/navigation/provenance frame using the permitted remote safe hold.",
+  "setup": { "seed": 9041, "pilot": "capture-expanse", "hull": "drifter", "loadout": [], "map": "expanse", "runRules": { "signature": "heavy_current" }, "startingProfileFacts": { "pilot.unlock.map.expanse": true } },
+  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "remote-safe-position", "autonomousSurvival": false },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "map", "assertCondition": { "condition": "run.map.id", "equals": "expanse" } },
+    { "id": "settle", "action": "brake", "args": { "hold": true } },
+    { "id": "capture", "action": "capture", "args": { "name": "expanse-controlled", "overlays": false, "provenance": true } }
+  ]
+}

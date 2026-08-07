@@ -1,14 +1,25 @@
 const DEFAULT_ACTIONS = Object.freeze([
   'launch',
+  'navigate',
   'setMovementIntent',
   'selectApproachTarget',
   'brake',
   'grapple',
   'releaseGrapple',
   'salvage',
+  'emitPulse',
   'confirmExtraction',
   'recover',
   'returnHome',
+  'pause',
+  'resume',
+  'exitRun',
+  'relaunch',
+  'navigateHome',
+  'selectRig',
+  'openChronicle',
+  'deletePilot',
+  'capture',
 ]);
 
 const DEFAULT_ROUTINES = Object.freeze([

@@ -1,0 +1,13 @@
+{
+  "id": "capture.controlled-map-shallows",
+  "version": 1,
+  "description": "Controlled Shallows boot/navigation/provenance frame using the permitted remote safe hold.",
+  "setup": { "seed": 9029, "pilot": "capture-shallows", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "dead_calm" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true } },
+  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "remote-safe-position", "autonomousSurvival": false },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "map", "assertCondition": { "condition": "run.map.id", "equals": "shallows" } },
+    { "id": "settle", "action": "brake", "args": { "hold": true } },
+    { "id": "capture", "action": "capture", "args": { "name": "shallows-controlled", "overlays": false, "provenance": true } }
+  ]
+}

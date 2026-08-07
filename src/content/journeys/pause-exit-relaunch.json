@@ -1,0 +1,25 @@
+{
+  "id": "integration.pause-exit-relaunch",
+  "version": 1,
+  "description": "Launch, pause, exit through product UI, then relaunch a fresh run.",
+  "setup": {
+    "seed": 3041,
+    "pilot": "journey-flow",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared" },
+  "steps": [
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "pause", "action": "pause", "args": {} },
+    { "id": "pause-open", "waitForEvent": "ui.pause.ready", "timeoutMs": 5000 },
+    { "id": "exit", "action": "exitRun", "args": { "confirm": true } },
+    { "id": "home", "waitForEvent": "ui.home.ready", "timeoutMs": 10000 },
+    { "id": "relaunch", "action": "relaunch", "args": {} },
+    { "id": "fresh-run", "waitForEvent": "run.started", "timeoutMs": 15000 },
+    { "id": "same-map", "assertCondition": { "condition": "run.map.id", "equals": "shallows" } }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "integration.profile-home-launch",
+  "version": 1,
+  "description": "Create/select a pilot, reach Home, and launch through the ordinary product UI.",
+  "setup": {
+    "seed": 4019,
+    "pilot": "journey-profile",
+    "hull": "drifter",
+    "loadout": [],
+    "map": "shallows",
+    "runRules": { "signature": "dead_calm" },
+    "startingProfileFacts": { "pilot.unlock.hull.drifter": true, "pilot.unlock.map.shallows": true }
+  },
+  "controllerPolicy": { "driver": "product-input", "movement": "shared" },
+  "steps": [
+    { "id": "home", "action": "navigateHome", "args": { "section": "ship" } },
+    { "id": "pilot-selected", "assertCondition": { "condition": "pilot.hull.selectedId", "equals": "drifter" } },
+    { "id": "launch", "routine": "launch", "args": {} },
+    { "id": "run-started", "waitForEvent": "run.started", "timeoutMs": 15000 },
+    { "id": "hull", "assertCondition": { "condition": "run.hull.id", "equals": "drifter" } }
+  ]
+}
