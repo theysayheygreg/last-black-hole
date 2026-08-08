@@ -19,7 +19,7 @@ function baseJourney(overrides = {}) {
       seed: 'journey-seed-1',
       pilot: 'pilot-1',
       hull: 'drifter',
-      loadout: ['grapple'],
+      loadout: ['patched-thruster'],
       map: 'shallows',
       runRules: { signature: 'dead_calm' },
       startingProfileFacts: { 'pilot.unlock.map.shallows': true },

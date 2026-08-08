@@ -6,7 +6,7 @@
     "seed": 10317,
     "pilot": "journey-natural",
     "hull": "drifter",
-    "loadout": [],
+    "loadout": ["patched-thruster"],
     "map": "shallows",
     "runRules": { "signature": "signal_storm" },
     "startingProfileFacts": { "pilot.unlock.map.shallows": true, "pilot.unlock.hull.drifter": true }

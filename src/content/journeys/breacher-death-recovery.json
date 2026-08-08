@@ -15,7 +15,6 @@
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },
     { "id": "breacher", "assertCondition": { "condition": "run.hull.id", "equals": "breacher" } },
-    { "id": "well-approach", "routine": "navigate", "args": { "policy": "well-intercept", "targetPolicy": "nearest-well" }, "target": { "policy": "nearest-well" } },
     { "id": "die-through-authority", "routine": "die", "args": { "causePolicy": "nearest-well" } },
     { "id": "death-recorded", "waitForCondition": { "condition": "pilot.chronicle.deaths", "gte": 1 }, "timeoutMs": 5000, "pollMs": 100 },
     { "id": "recover", "routine": "recover", "args": {} },

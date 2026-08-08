@@ -75,6 +75,8 @@ class BrowserJourneyDriver {
     this.evidencePaths = [];
     this.activeTarget = null;
     this.eventCursor = 0;
+    this.syntheticEventCursor = 0;
+    this.syntheticEventSequence = 0;
     this.expectedRunRules = {};
     this.slingshotEdge = 0;
   }
@@ -82,23 +84,26 @@ class BrowserJourneyDriver {
   async configureSetup(setup) {
     this.mapIndex = MAP_INDEX[setup.map];
     if (!Number.isInteger(this.mapIndex)) throw new RangeError(`Unknown Journey map: ${setup.map}`);
-    if (setup.loadout.length > 0) {
-      throw new Error(`Journey setup loadout is not mapped to a current product item: ${setup.loadout.join(', ')}`);
-    }
     const unsupportedRules = Object.keys(setup.runRules).filter((name) => name !== 'signature');
     if (unsupportedRules.length > 0) throw new Error(`Unsupported Journey run rules: ${unsupportedRules.join(', ')}`);
     this.expectedRunRules = { ...setup.runRules };
-    const configured = await this.page.evaluate(({ pilot, hull, seed, startingProfileFacts, mapIndex }) => {
+    const configured = await this.page.evaluate(({ pilot, hull, seed, loadout, startingProfileFacts, mapIndex }) => {
       const api = window.__TEST_API;
       api?.createTestProfile?.(pilot);
       api?.setProfileShipType?.(hull);
       api?.setPreviewSeed?.(seed);
       api?.setMapSelectIndex?.(mapIndex);
       api?.applyJourneyProfileFacts?.(startingProfileFacts);
+      api?.configureJourneyLoadout?.(loadout);
       return api?.getProfile?.() || null;
     }, { ...setup, mapIndex: this.mapIndex });
     if (!configured || configured.name !== setup.pilot || configured.hullType !== setup.hull) {
       throw new Error(`Journey profile setup mismatch: ${JSON.stringify(configured)}`);
+    }
+    const configuredIds = [...configured.loadout.equipped, ...configured.loadout.consumables]
+      .filter(Boolean).map((item) => item.catalogId);
+    if (JSON.stringify(configuredIds.sort()) !== JSON.stringify([...setup.loadout].sort())) {
+      throw new Error(`Journey loadout setup mismatch: expected ${JSON.stringify(setup.loadout)}, got ${JSON.stringify(configuredIds)}`);
     }
   }
 
@@ -136,21 +141,34 @@ class BrowserJourneyDriver {
     return this.page.evaluate(() => window.__TEST_API?.getGamePhase?.());
   }
 
+  async tap(code, holdMs = 70) {
+    await this.page.keyboard.down(code);
+    await sleep(holdMs);
+    await this.page.keyboard.up(code);
+    await sleep(100);
+  }
+
+  emit(type) {
+    const event = { type, at: Date.now(), journeySeq: ++this.syntheticEventSequence };
+    this.events.push(event);
+    return event;
+  }
+
   async ensureHome() {
     let phase = await this.phase();
     if (phase === 'home') return;
     if (phase === 'mapSelect') {
-      await this.page.keyboard.press('Escape');
+      await this.tap('Escape');
       await this.waitPage(() => this.phase(), (value) => value === 'home');
       return;
     }
     if (phase === 'title') {
       await sleep(650);
-      await this.page.keyboard.press('Space');
+      await this.tap('Space');
       phase = await this.waitPage(() => this.phase(), (value) => value === 'profileSelect');
     }
     if (phase === 'profileSelect') {
-      await this.page.keyboard.press('Enter');
+      await this.tap('Enter');
       await this.waitPage(() => this.phase(), (value) => value === 'home');
       return;
     }
@@ -164,14 +182,14 @@ class BrowserJourneyDriver {
       window.__TEST_API?.setMapSelectIndex?.(mapIndex);
       if (seedValue !== null) window.__TEST_API?.setPreviewSeed?.(seedValue);
     }, { mapIndex: this.mapIndex, seedValue: seed });
-    await this.page.keyboard.press('Enter');
+    await this.tap('Enter');
   }
 
   async continueTerminalToHome(timeoutMs = 15_000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (await this.phase() === 'home') return;
-      await this.page.keyboard.press('Enter');
+      await this.tap('Enter');
       await sleep(250);
     }
     throw new Error(`Journey terminal transition timed out; phase=${String(await this.phase())}`);
@@ -209,7 +227,10 @@ class BrowserJourneyDriver {
     while (Date.now() < deadline) {
       const snapshot = await this.snapshot();
       const player = await this.player(snapshot);
-      if (!player || player.status !== 'alive') throw new Error('Journey navigation requires a live authoritative player');
+      if (!player || player.status !== 'alive') {
+        if (args.allowTerminal && player && player.status !== 'alive') return { terminal: player.status };
+        throw new Error('Journey navigation requires a live authoritative player');
+      }
       const target = this.findTarget(snapshot, player, args);
       if (!target) throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
       this.activeTarget = target.id;
@@ -218,7 +239,16 @@ class BrowserJourneyDriver {
       const dy = wrappedDelta(player.wy, target.wy, worldScale);
       const distance = Math.hypot(dx, dy);
       const speed = Math.hypot(player.vx, player.vy);
+      const navigationPolicy = String(args.policy || 'straight-line');
+      if (navigationPolicy === 'slingshot' && distance <= (Number(args.arrivalRadius) || 0.12) && speed >= 0.08) {
+        return { targetId: target.id, distance, speed, policy: navigationPolicy };
+      }
       if (distance <= arrivalRadius && speed <= (Number(args.arrivalSpeed) || 0.08)) {
+        if (navigationPolicy === 'well-intercept') {
+          await this.sendInput({ moveX: dx / Math.max(1e-9, distance), moveY: dy / Math.max(1e-9, distance), thrust: 0.9 });
+          await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
+          continue;
+        }
         await this.sendInput({ brake: 1, approachTargetId: target.id });
         return { targetId: target.id, distance, speed };
       }
@@ -226,8 +256,8 @@ class BrowserJourneyDriver {
       await this.sendInput({
         moveX: dx / magnitude,
         moveY: dy / magnitude,
-        thrust: Math.max(0, Math.min(1, Number(args.thrust) || 0.72)),
-        brake: distance <= arrivalRadius * 2 ? 1 : 0,
+        thrust: Math.max(0, Math.min(1, Number(args.thrust) || (navigationPolicy === 'slingshot' ? 0.88 : 0.72))),
+        brake: navigationPolicy === 'well-intercept' || navigationPolicy === 'slingshot' ? 0 : distance <= arrivalRadius * 2 ? 1 : 0,
         approachTargetId: String(args.targetPolicy || '').includes('well') ? null : target.id,
       });
       await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
@@ -250,8 +280,8 @@ class BrowserJourneyDriver {
           if (expectedSignature && state.signatureId !== expectedSignature) {
             throw new Error(`Journey run rule signature mismatch: expected ${expectedSignature}, got ${state.signatureId}`);
           }
-          this.events.push({ type: 'ui.playing', at: Date.now() });
-          this.events.push({ type: 'run.started', at: Date.now() });
+          this.emit('ui.playing');
+          this.emit('run.started');
           return;
         }
         await sleep(100);
@@ -269,34 +299,34 @@ class BrowserJourneyDriver {
     if (action === 'emitPulse') return this.sendInput({ pulse: true });
     if (action === 'confirmExtraction') return this.sendInput({ extractConfirm: true });
     if (action === 'pause' || action === 'resume') {
-      await this.page.keyboard.press('Escape');
+      await this.tap('Escape');
       const expectedPhase = action === 'pause' ? 'paused' : 'playing';
       await this.waitPage(
         () => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()),
         (phase) => phase === expectedPhase,
       );
-      this.events.push({ type: action === 'pause' ? 'ui.pause.ready' : 'ui.playing', at: Date.now() });
+      this.emit(action === 'pause' ? 'ui.pause.ready' : 'ui.playing');
       return;
     }
     if (action === 'exitRun') {
       const phase = await this.page.evaluate(() => window.__TEST_API?.getGamePhase?.());
-      if (phase !== 'paused') await this.page.keyboard.press('Escape');
+      if (phase !== 'paused') await this.tap('Escape');
       await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'paused');
-      await this.page.keyboard.press('ArrowDown');
-      await this.page.keyboard.press('Enter');
-      await this.page.keyboard.press('Enter');
+      await this.tap('ArrowDown');
+      await this.tap('Enter');
+      await this.tap('Enter');
       await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'title', 15_000);
-      this.events.push({ type: 'ui.title.ready', at: Date.now() });
+      this.emit('ui.title.ready');
       return;
     }
     if (action === 'returnHome') {
       await this.continueTerminalToHome();
-      this.events.push({ type: 'ui.home.ready', at: Date.now() });
+      this.emit('ui.home.ready');
       return;
     }
     if (action === 'recover') {
       await this.continueTerminalToHome();
-      this.events.push({ type: 'ui.home.ready', at: Date.now() });
+      this.emit('ui.home.ready');
       return;
     }
     if (action === 'navigateHome') {
@@ -305,9 +335,9 @@ class BrowserJourneyDriver {
         const phase = await this.phase();
         if (phase === 'title') {
           await sleep(650);
-          await this.page.keyboard.press('Space');
+          await this.tap('Space');
         } else if (phase === 'home') {
-          await this.page.keyboard.press('Escape');
+          await this.tap('Escape');
         }
         await this.waitPage(() => this.phase(), (value) => value === 'profileSelect');
       } else if (section === 'results') {
@@ -318,36 +348,36 @@ class BrowserJourneyDriver {
         const wanted = section === 'map-select' ? 'LAUNCH' : String(section).toUpperCase();
         await this.waitPage(async () => {
           const state = await this.page.evaluate(() => window.__TEST_API?.getHomeState?.());
-          if (state?.phase === 'home' && state.tabName !== wanted) await this.page.keyboard.press('KeyE');
+          if (state?.phase === 'home' && state.tabName !== wanted) await this.tap('KeyE');
           return state;
         }, (state) => state?.phase === 'home' && state.tabName === wanted);
         if (section === 'map-select') {
-          await this.page.keyboard.press('Enter');
+          await this.tap('Enter');
           await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'mapSelect');
         }
       }
-      this.events.push({ type: `ui.${section === 'map-select' ? 'mapSelect' : section}.ready`, at: Date.now() });
+      this.emit(`ui.${section === 'map-select' ? 'mapSelect' : section}.ready`);
       return;
     }
     if (action === 'selectRig') {
       await this.dispatchAction('navigateHome', { section: 'rig' });
-      this.events.push({ type: 'ui.rig.ready', at: Date.now() });
+      this.emit('ui.rig.ready');
       return;
     }
     if (action === 'openChronicle') {
       await this.dispatchAction('navigateHome', { section: 'chronicle' });
-      this.events.push({ type: 'ui.chronicle.ready', at: Date.now() });
+      this.emit('ui.chronicle.ready');
       return;
     }
     if (action === 'deletePilot') {
       const before = await this.page.evaluate(() => window.__TEST_API?.getProfileSlots?.());
-      await this.page.keyboard.press('KeyX');
-      await this.page.keyboard.press('ArrowRight');
-      await this.page.keyboard.press('Space');
+      await this.tap('KeyX');
+      await this.tap('ArrowRight');
+      await this.tap('Space');
       await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getProfileSlots?.()),
         (slots) => JSON.stringify(slots) !== JSON.stringify(before));
-      this.events.push({ type: 'profile.pilotDeleted', at: Date.now() });
-      this.events.push({ type: 'ui.profile.ready', at: Date.now() });
+      this.emit('profile.pilotDeleted');
+      this.emit('ui.profile.ready');
       return;
     }
     if (action === 'capture') {
@@ -366,8 +396,11 @@ class BrowserJourneyDriver {
   }
 
   async waitForEvent(type, { timeoutMs }) {
-    const existing = this.events.find((event) => event.type === type && event.seq === undefined);
-    if (existing) return existing;
+    const existing = this.events.find((event) => event.type === type && Number(event.journeySeq || 0) > this.syntheticEventCursor);
+    if (existing) {
+      this.syntheticEventCursor = existing.journeySeq;
+      return existing;
+    }
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const events = await this.page.evaluate(() => window.__TEST_API?.getJourneyState?.()?.authorityEvents || []);

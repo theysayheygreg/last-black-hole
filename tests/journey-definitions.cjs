@@ -68,6 +68,14 @@ async function main() {
   invalidPolicy.controllerPolicy.driver = 'authority-bypass';
   assert.throws(() => journeyApi.validateJourneyDefinition(invalidPolicy, registry), /Unknown Journey controller driver/);
 
+  const invalidValue = JSON.parse(fs.readFileSync(path.join(JOURNEY_DIR, 'representative-salvage-extract.json'), 'utf8'));
+  invalidValue.steps.find((step) => step.routine === 'approach').args.thrust = 2;
+  assert.throws(() => journeyApi.validateJourneyDefinition(invalidValue, registry), /Invalid Journey argument thrust/);
+
+  const invalidLoadout = JSON.parse(fs.readFileSync(path.join(JOURNEY_DIR, 'representative-salvage-extract.json'), 'utf8'));
+  invalidLoadout.setup.loadout = ['invented-item'];
+  assert.throws(() => journeyApi.validateJourneyDefinition(invalidLoadout, registry), /Unknown Journey loadout item/);
+
   console.log(`JourneyDefinitions: ${definitions.length}/${files.length} validated`);
 }
 

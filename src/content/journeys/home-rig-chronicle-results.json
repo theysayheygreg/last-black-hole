@@ -18,7 +18,6 @@
     { "id": "chronicle", "action": "openChronicle", "args": {} },
     { "id": "chronicle-ready", "waitForEvent": "ui.chronicle.ready", "timeoutMs": 5000 },
     { "id": "launch", "routine": "launch", "args": {} },
-    { "id": "well-approach", "routine": "navigate", "args": { "policy": "well-intercept", "targetPolicy": "nearest-well" } },
     { "id": "die-through-authority", "routine": "die", "args": { "causePolicy": "nearest-well" } },
     { "id": "results", "action": "navigateHome", "args": { "section": "results" } },
     { "id": "results-ready", "waitForEvent": "ui.results.ready", "timeoutMs": 5000 },

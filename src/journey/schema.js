@@ -1,5 +1,12 @@
+import { ITEM_CATALOG, CONSUMABLE_CATALOG } from '../content/items.js';
+import { getConditionDefinition, validateConditionValue } from '../conditions/index.js';
+
 const IDENTIFIER = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 const MIN_TIMEOUT_MS = 50;
+const LOADOUT_IDS = new Set([
+  ...Object.values(ITEM_CATALOG).flat().map(({ id }) => id),
+  ...CONSUMABLE_CATALOG.map(({ id }) => id),
+]);
 
 function requireRecord(value, path) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -41,7 +48,10 @@ function validateSetup(raw) {
     } else requireString(setup[field], `journey.setup.${field}`);
   }
   if (!Array.isArray(setup.loadout)) throw new TypeError('journey.setup.loadout must be an array');
-  setup.loadout.forEach((item, index) => requireString(item, `journey.setup.loadout[${index}]`));
+  setup.loadout.forEach((item, index) => {
+    requireString(item, `journey.setup.loadout[${index}]`);
+    if (!LOADOUT_IDS.has(item)) throw new RangeError(`Unknown Journey loadout item: ${item}`);
+  });
   requireRecord(setup.runRules, 'journey.setup.runRules');
   const startingProfileFacts = requireRecord(setup.startingProfileFacts, 'journey.setup.startingProfileFacts');
   for (const [name, value] of Object.entries(startingProfileFacts)) {
@@ -135,6 +145,10 @@ export function validateJourneyDefinition(raw, registry) {
   if (controllerPolicy.evidence !== undefined && !['ui', 'ruler'].includes(controllerPolicy.evidence)) {
     throw new RangeError(`Unknown Journey evidence policy: ${String(controllerPolicy.evidence)}`);
   }
+  if (controllerPolicy.inputCadenceMs !== undefined
+    && (!Number.isFinite(controllerPolicy.inputCadenceMs) || controllerPolicy.inputCadenceMs < 50)) {
+    throw new RangeError('Journey inputCadenceMs must be at least 50ms');
+  }
   return Object.freeze({
     id,
     version: 1,
@@ -147,4 +161,3 @@ export function validateJourneyDefinition(raw, registry) {
 }
 
 export { MIN_TIMEOUT_MS };
-import { getConditionDefinition, validateConditionValue } from '../conditions/index.js';

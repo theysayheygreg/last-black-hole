@@ -7,6 +7,7 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, GRID_WINDOW, getFluidCamera, worldToScreen } from './coords.js';
 import { getAbilityPresentationState } from './hud.js';
+import { ITEM_CATALOG, CONSUMABLE_CATALOG } from './content/items.js';
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -642,6 +643,34 @@ export function initTestAPI(getState) {
     setProfileShipType(hullType) {
       const { profileManager } = getState();
       return Boolean(profileManager?.setHullType?.(hullType));
+    },
+
+    configureJourneyLoadout(catalogIds = []) {
+      const { profileManager } = getState();
+      if (!profileManager?.active || !Array.isArray(catalogIds)) return null;
+      const artifacts = Object.values(ITEM_CATALOG).flat();
+      const resolved = catalogIds.map((catalogId, index) => {
+        const artifact = artifacts.find((entry) => entry.id === catalogId);
+        const consumable = CONSUMABLE_CATALOG.find((entry) => entry.id === catalogId);
+        const entry = artifact || consumable;
+        if (!entry) throw new RangeError(`Unknown Journey loadout item: ${String(catalogId)}`);
+        const value = Array.isArray(entry.value) ? entry.value[0] : Number(entry.value) || 0;
+        return artifact ? {
+          ...entry, id: `journey_artifact_${index}`, catalogId: entry.id,
+          category: 'artifact', subcategory: 'equippable', value, baseValue: value, source: 'journey-setup',
+        } : {
+          ...entry, id: `journey_consumable_${index}`, catalogId: entry.id,
+          category: 'artifact', subcategory: 'consumable', value, baseValue: value,
+          source: 'journey-setup', useEffect: entry.effect, useDesc: entry.effect, charges: 1,
+        };
+      });
+      const equipped = resolved.filter((item) => item.subcategory === 'equippable');
+      const consumables = resolved.filter((item) => item.subcategory === 'consumable');
+      if (equipped.length > 2 || consumables.length > 2) {
+        throw new RangeError('Journey loadout exceeds the two artifact/two consumable product slots');
+      }
+      profileManager.setLoadout(equipped, consumables);
+      return clone(profileManager.active.loadout);
     },
 
     getProgression() {

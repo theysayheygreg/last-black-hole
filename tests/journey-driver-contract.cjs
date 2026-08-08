@@ -21,6 +21,12 @@ assert(source.includes('sendRemoteInput'),
   'Journey gameplay actions must use the ordinary remote input seam');
 assert(!source.includes('startRemoteGameNow'),
   'Journey launch must use the ordinary title/profile/Home/map-select input path');
+assert(source.includes('keyboard.down(code)') && source.includes('keyboard.up(code)') && source.includes('holdMs = 70'),
+  'Journey menu actions must hold keys across the frame-polled input seam');
+assert(source.includes('journeySeq') && source.includes('syntheticEventCursor'),
+  'Journey synthetic events must be consumed in sequence across relaunches');
+assert(source.includes("navigationPolicy === 'slingshot'") && source.includes("navigationPolicy === 'well-intercept'"),
+  'Journey movement policies must have executable shared-input behavior');
 assert(!source.includes('/debug/player-state'),
   'Journey gameplay actions must not mutate authoritative player state through debug setup');
 assert(!source.includes('teleportShip'),
