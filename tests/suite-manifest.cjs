@@ -36,6 +36,24 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AnnotationPrimitives",
+    file: "annotation-primitives.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
+    name: "SpatialLabelLayout",
+    file: "spatial-label-layout.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
+    name: "SpatialAnnotationSystem",
+    file: "spatial-annotation-system.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
     name: "Conditions",
     file: "conditions.cjs",
     lanes: ["fast", "core", "static", "full"],

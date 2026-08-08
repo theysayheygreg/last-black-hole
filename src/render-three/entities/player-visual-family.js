@@ -47,8 +47,9 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
           const facing = heading(player);
           const affordance = movement.affordance || {};
           const plumeCant = mode === 'thrusting' ? Number(affordance.plumeCantRadians) || 0 : 0;
+          const rawPlumeScale = Number(affordance.plumeScale);
           const plumeScale = mode === 'thrusting'
-            ? Math.max(0.12, Math.min(1, Number(affordance.plumeScale) || 0))
+            ? (Number.isFinite(rawPlumeScale) ? Math.max(0.12, Math.min(1, rawPlumeScale)) : 1)
             : 1;
           // Movement headings are screen/world Y-down; Three presentation is
           // Y-up, so the delivered cant crosses the same canonical sign seam
