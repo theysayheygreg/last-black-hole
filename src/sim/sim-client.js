@@ -15,6 +15,7 @@ export class SimClient {
     this._commandTail = Promise.resolve();
     this.latestSnapshot = null;
     this.latestEvents = [];
+    this.eventHistory = [];
     this.runId = null;
     this.eventCursor = 0;
     this.lastSnapshotId = 0;
@@ -273,12 +274,14 @@ export class SimClient {
     const watermark = Math.max(0, Number(snapshot?.lastEventSeq) || 0);
     if (!runId) {
       this.latestEvents = [];
+      this.eventHistory = [];
       return;
     }
     if (this.runId !== runId) {
       this.runId = runId;
       this.eventCursor = 0;
       this.latestEvents = [];
+      this.eventHistory = [];
       if (this.authorityRunId && this.authorityRunId !== runId) {
         this._clearAuthority(runId, null);
       }
@@ -295,11 +298,14 @@ export class SimClient {
       // cannot bridge the gap, continue after its watermark instead of
       // applying a partial history to fresh state.
       this.latestEvents = [];
+      this.eventHistory = [];
       this.eventCursor = watermark;
       this.metrics.eventGapRecoveries += 1;
       this.metrics.lastRecoveryReason = window.reason || 'event-window-reset';
     } else {
       this.latestEvents = Array.isArray(window.events) ? window.events : [];
+      this.eventHistory.push(...this.latestEvents);
+      if (this.eventHistory.length > 128) this.eventHistory.splice(0, this.eventHistory.length - 128);
       this.eventCursor = Math.max(this.eventCursor, Number(window.nextSince) || watermark);
       this.metrics.lastRecoveryReason = null;
     }
@@ -310,6 +316,10 @@ export class SimClient {
     const events = this.latestEvents;
     this.latestEvents = [];
     return events;
+  }
+
+  getEventHistory() {
+    return this.eventHistory.map((event) => ({ ...event, payload: event.payload ? { ...event.payload } : event.payload }));
   }
 
   _nowMs() {

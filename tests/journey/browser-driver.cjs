@@ -74,18 +74,31 @@ class BrowserJourneyDriver {
     this.events = [];
     this.evidencePaths = [];
     this.activeTarget = null;
+    this.eventCursor = 0;
+    this.expectedRunRules = {};
+    this.slingshotEdge = 0;
   }
 
   async configureSetup(setup) {
     this.mapIndex = MAP_INDEX[setup.map];
     if (!Number.isInteger(this.mapIndex)) throw new RangeError(`Unknown Journey map: ${setup.map}`);
-    await this.page.evaluate(({ pilot, hull, seed, startingProfileFacts }) => {
+    if (setup.loadout.length > 0) {
+      throw new Error(`Journey setup loadout is not mapped to a current product item: ${setup.loadout.join(', ')}`);
+    }
+    const unsupportedRules = Object.keys(setup.runRules).filter((name) => name !== 'signature');
+    if (unsupportedRules.length > 0) throw new Error(`Unsupported Journey run rules: ${unsupportedRules.join(', ')}`);
+    this.expectedRunRules = { ...setup.runRules };
+    const configured = await this.page.evaluate(({ pilot, hull, seed, startingProfileFacts }) => {
       const api = window.__TEST_API;
-      if (!api?.getProfile?.()) api?.createTestProfile?.(pilot);
+      api?.createTestProfile?.(pilot);
       api?.setProfileShipType?.(hull);
       api?.setPreviewSeed?.(seed);
       api?.applyJourneyProfileFacts?.(startingProfileFacts);
+      return api?.getProfile?.() || null;
     }, setup);
+    if (!configured || configured.name !== setup.pilot || configured.hullType !== setup.hull) {
+      throw new Error(`Journey profile setup mismatch: ${JSON.stringify(configured)}`);
+    }
   }
 
   async configureControllerPolicy(policy) {
@@ -101,6 +114,17 @@ class BrowserJourneyDriver {
     return response.json();
   }
 
+  async waitPage(read, expected, timeoutMs = 10_000) {
+    const deadline = Date.now() + timeoutMs;
+    let last = null;
+    while (Date.now() < deadline) {
+      last = await read();
+      if (expected(last)) return last;
+      await sleep(80);
+    }
+    throw new Error(`Journey UI transition timed out; last=${JSON.stringify(last)}`);
+  }
+
   async player(snapshot = null) {
     const body = snapshot || await this.snapshot();
     const clientId = await this.page.evaluate(() => window.__TEST_API?.getNetworkState?.()?.clientId || null);
@@ -110,8 +134,10 @@ class BrowserJourneyDriver {
   findTarget(snapshot, player, args) {
     const id = args.targetId || null;
     const policy = String(args.targetPolicy || '');
-    const kind = args.targetKind || (policy.includes('exfil') || policy.includes('portal') ? 'portal' : 'wreck');
-    const collection = kind === 'portal' ? snapshot.world?.portals : snapshot.world?.wrecks;
+    const kind = args.targetKind || (policy.includes('exfil') || policy.includes('portal') ? 'portal'
+      : policy.includes('well') ? 'well' : 'wreck');
+    const collection = kind === 'portal' ? snapshot.world?.portals
+      : kind === 'well' ? snapshot.world?.wells : snapshot.world?.wrecks;
     const candidates = (collection || []).filter((entry) => entry.alive !== false && (!id || entry.id === id));
     return candidates.sort((a, b) => wrappedDistance(player.wx, player.wy, a.wx, a.wy, snapshot.session.worldScale)
       - wrappedDistance(player.wx, player.wy, b.wx, b.wy, snapshot.session.worldScale))[0] || null;
@@ -124,6 +150,14 @@ class BrowserJourneyDriver {
   }
 
   async navigate(args = {}) {
+    if (Number(args.durationMs) > 0 && !args.targetId && !args.targetPolicy) {
+      const deadline = Date.now() + Math.max(100, Number(args.durationMs));
+      while (Date.now() < deadline) {
+        await this.sendInput({ moveX: 1, moveY: 0, thrust: 0.55 });
+        await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
+      }
+      return this.sendInput({ brake: 1 });
+    }
     const deadline = Date.now() + Math.max(1_000, Number(args.timeoutMs) || 45_000);
     const arrivalRadius = Math.max(0.01, Number(args.arrivalRadius) || (args.targetKind === 'portal' ? 0.05 : 0.07));
     while (Date.now() < deadline) {
@@ -148,7 +182,7 @@ class BrowserJourneyDriver {
         moveY: dy / magnitude,
         thrust: Math.max(0, Math.min(1, Number(args.thrust) || 0.72)),
         brake: distance <= arrivalRadius * 2 ? 1 : 0,
-        approachTargetId: target.id,
+        approachTargetId: String(args.targetPolicy || '').includes('well') ? null : target.id,
       });
       await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
     }
@@ -164,8 +198,12 @@ class BrowserJourneyDriver {
         const state = await this.page.evaluate(() => ({
           phase: window.__TEST_API?.getGamePhase?.(),
           authority: window.__TEST_API?.getNetworkState?.()?.remoteAuthorityActive,
+          signatureId: window.__TEST_API?.getNetworkState?.()?.remoteSignature?.id || null,
         }));
         if (state.phase === 'playing' && state.authority) {
+          if (this.expectedRunRules.signature && state.signatureId !== this.expectedRunRules.signature) {
+            throw new Error(`Journey run rule signature mismatch: expected ${this.expectedRunRules.signature}, got ${state.signatureId}`);
+          }
           this.events.push({ type: 'ui.playing', at: Date.now() });
           this.events.push({ type: 'run.started', at: Date.now() });
           return;
@@ -177,47 +215,94 @@ class BrowserJourneyDriver {
     if (action === 'navigate' || action === 'selectApproachTarget' || action === 'salvage') return this.navigate(args);
     if (action === 'setMovementIntent') return this.sendInput(args);
     if (action === 'brake') return this.sendInput({ brake: args.intensity ?? 1, approachTargetId: args.targetId || null });
-    if (action === 'grapple' || action === 'releaseGrapple' || action === 'emitPulse') return this.sendInput({ pulse: true });
+    if (action === 'grapple') {
+      this.slingshotEdge += 1;
+      return this.sendInput({ slingshot: true, slingshotEdges: [this.slingshotEdge] });
+    }
+    if (action === 'releaseGrapple') return this.sendInput({ slingshot: false });
+    if (action === 'emitPulse') return this.sendInput({ pulse: true });
     if (action === 'confirmExtraction') return this.sendInput({ extractConfirm: true });
-    if (action === 'pause' || action === 'resume' || action === 'returnHome' || action === 'exitRun') {
-      const key = action === 'returnHome' || action === 'exitRun' ? 'Escape' : 'Escape';
-      await this.page.keyboard.press(key);
-      const type = action === 'pause' ? 'ui.pause.ready'
-        : action === 'resume' ? 'ui.playing'
-          : action === 'returnHome' ? 'ui.home.ready'
-            : 'ui.title.ready';
-      this.events.push({ type, at: Date.now() });
+    if (action === 'pause' || action === 'resume') {
+      await this.page.keyboard.press('Escape');
+      const expectedPhase = action === 'pause' ? 'paused' : 'playing';
+      await this.waitPage(
+        () => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()),
+        (phase) => phase === expectedPhase,
+      );
+      this.events.push({ type: action === 'pause' ? 'ui.pause.ready' : 'ui.playing', at: Date.now() });
+      return;
+    }
+    if (action === 'exitRun') {
+      const phase = await this.page.evaluate(() => window.__TEST_API?.getGamePhase?.());
+      if (phase !== 'paused') await this.page.keyboard.press('Escape');
+      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'paused');
+      await this.page.keyboard.press('ArrowDown');
+      await this.page.keyboard.press('Enter');
+      await this.page.keyboard.press('Enter');
+      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'title', 15_000);
+      this.events.push({ type: 'ui.title.ready', at: Date.now() });
+      return;
+    }
+    if (action === 'returnHome') {
+      await this.page.keyboard.press('Enter');
+      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'home', 15_000);
+      this.events.push({ type: 'ui.home.ready', at: Date.now() });
       return;
     }
     if (action === 'recover') {
       await this.page.keyboard.press('Enter');
+      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'home', 15_000);
       this.events.push({ type: 'ui.home.ready', at: Date.now() });
       return;
     }
     if (action === 'navigateHome') {
-      await this.page.keyboard.press(args.key || 'ArrowRight');
       const section = String(args.section || 'home');
+      if (section === 'profile') {
+        await this.page.keyboard.press('Space');
+        await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'profileSelect');
+      } else if (section === 'results') {
+        await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()),
+          (value) => value === 'escaped' || value === 'dead', 15_000);
+      } else {
+        const wanted = section === 'map-select' ? 'LAUNCH' : String(section).toUpperCase();
+        await this.waitPage(async () => {
+          const state = await this.page.evaluate(() => window.__TEST_API?.getHomeState?.());
+          if (state?.phase === 'home' && state.tabName !== wanted) await this.page.keyboard.press('KeyE');
+          return state;
+        }, (state) => state?.phase === 'home' && state.tabName === wanted);
+        if (section === 'map-select') {
+          await this.page.keyboard.press('Enter');
+          await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'mapSelect');
+        }
+      }
       this.events.push({ type: `ui.${section === 'map-select' ? 'mapSelect' : section}.ready`, at: Date.now() });
       return;
     }
     if (action === 'selectRig') {
-      await this.page.keyboard.press('Enter');
+      await this.dispatchAction('navigateHome', { section: 'rig' });
       this.events.push({ type: 'ui.rig.ready', at: Date.now() });
       return;
     }
     if (action === 'openChronicle') {
-      await this.page.evaluate(() => window.__TEST_API?.showUiFixture?.('chronicle'));
+      await this.dispatchAction('navigateHome', { section: 'chronicle' });
       this.events.push({ type: 'ui.chronicle.ready', at: Date.now() });
       return;
     }
     if (action === 'deletePilot') {
-      await this.page.keyboard.press('Backspace');
+      const before = await this.page.evaluate(() => window.__TEST_API?.getProfileSlots?.());
+      await this.page.keyboard.press('KeyX');
+      await this.page.keyboard.press('ArrowRight');
+      await this.page.keyboard.press('Space');
+      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getProfileSlots?.()),
+        (slots) => JSON.stringify(slots) !== JSON.stringify(before));
       this.events.push({ type: 'profile.pilotDeleted', at: Date.now() });
       return;
     }
     if (action === 'capture') {
       if (args.overlays === false) {
         await this.page.evaluate(() => window.__TEST_API?.setOverlayVisible?.(false));
+      } else if (Array.isArray(args.overlays)) {
+        await this.page.evaluate(() => window.__TEST_API?.setOverlayVisible?.(true));
       }
       fs.mkdirSync(this.artifactRoot, { recursive: true });
       const file = path.join(this.artifactRoot, `${safeName(args.name)}.png`);
@@ -229,19 +314,17 @@ class BrowserJourneyDriver {
   }
 
   async waitForEvent(type, { timeoutMs }) {
-    const existing = this.events.find((event) => event.type === type);
+    const existing = this.events.find((event) => event.type === type && event.seq === undefined);
     if (existing) return existing;
     const deadline = Date.now() + timeoutMs;
-    let since = 0;
     while (Date.now() < deadline) {
-      const response = await fetch(`${this.simUrl}/events?since=${since}`);
-      if (!response.ok) throw new Error(`Journey events failed: HTTP ${response.status}`);
-      const body = await response.json();
-      const events = body.events || [];
-      this.events.push(...events);
-      const match = events.find((event) => event.type === type);
-      if (match) return match;
-      since = body.nextSince ?? since;
+      const events = await this.page.evaluate(() => window.__TEST_API?.getJourneyState?.()?.authorityEvents || []);
+      const match = events.find((event) => Number(event.seq || 0) > this.eventCursor && event.type === type);
+      if (match) {
+        this.eventCursor = Number(match.seq || this.eventCursor);
+        this.events.push(match);
+        return match;
+      }
       await sleep(100);
     }
     return null;

@@ -570,6 +570,7 @@ export function initTestAPI(getState) {
         player: clone(player),
         world: clone(remoteSnapshot?.world || null),
         recentEvents: clone(remoteSnapshot?.recentEvents || []),
+        authorityEvents: clone(simClient?.getEventHistory?.() || []),
       };
     },
 

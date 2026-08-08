@@ -7,7 +7,7 @@ runJourney('agent.salvage-noise-extract', {
   simPort: process.env.LBH_JOURNEY_SIM_PORT,
 }).then(({ receipt, receiptPath }) => {
   console.log(`${receipt.summary}\nreceipt: ${receiptPath}`);
-  if (receipt.status === 'failed') process.exitCode = 1;
+  if (receipt.status !== 'passed') process.exitCode = receipt.status === 'known-failure' ? 2 : 1;
 }).catch((error) => {
   console.error(error);
   process.exit(1);

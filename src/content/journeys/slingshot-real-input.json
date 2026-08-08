@@ -15,6 +15,7 @@
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },
     { "id": "slingshot", "routine": "navigate", "args": { "policy": "slingshot", "targetPolicy": "nearest-well" }, "target": { "policy": "nearest-well" } },
+    { "id": "grapple", "routine": "grapple", "args": {} },
     { "id": "slingshot-observed", "waitForEvent": "player.slingshotEngaged", "timeoutMs": 30000 }
   ]
 }

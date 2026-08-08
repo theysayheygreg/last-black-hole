@@ -3,7 +3,7 @@
   "version": 1,
   "description": "Wait for an authored fabric event and capture its ordinary presentation.",
   "setup": { "seed": 12011, "pilot": "capture-fabric-event", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "signal_storm" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true } },
-  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "remote-safe-position", "autonomousSurvival": false },
+  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "product-brake", "autonomousSurvival": false },
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },
     { "id": "event", "waitForEvent": "wave.announced", "timeoutMs": 30000 },

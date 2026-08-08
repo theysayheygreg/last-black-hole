@@ -3,10 +3,10 @@
   "version": 1,
   "description": "Record a representative rich-current fabric frame without autonomous survival claims.",
   "setup": { "seed": 10037, "pilot": "capture-fabric-rich", "hull": "drifter", "loadout": [], "map": "expanse", "runRules": { "signature": "heavy_current" }, "startingProfileFacts": { "pilot.unlock.map.expanse": true } },
-  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "remote-safe-position", "autonomousSurvival": false },
+  "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "product-brake", "autonomousSurvival": false },
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },
-    { "id": "current", "routine": "navigate", "args": { "policy": "representative-current" } },
+    { "id": "current", "routine": "navigate", "args": { "policy": "representative-current", "durationMs": 2500 } },
     { "id": "hold", "action": "brake", "args": { "hold": true } },
     { "id": "capture", "action": "capture", "args": { "name": "fabric-rich-current", "overlays": false, "provenance": true } }
   ]
