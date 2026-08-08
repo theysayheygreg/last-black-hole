@@ -15,8 +15,8 @@
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },
     { "id": "end-run", "action": "exitRun", "args": { "confirm": true } },
-    { "id": "home", "waitForEvent": "ui.home.ready", "timeoutMs": 10000 },
-    { "id": "relaunch", "action": "relaunch", "args": { "seed": 7128 } },
+    { "id": "title", "waitForEvent": "ui.title.ready", "timeoutMs": 10000 },
+    { "id": "relaunch", "action": "relaunch", "args": { "seed": 7128, "signature": "deep_gravity" } },
     { "id": "fresh-run", "waitForEvent": "run.started", "timeoutMs": 15000 },
     { "id": "attempt-recorded", "waitForCondition": { "condition": "pilot.chronicle.runsAttempted", "gte": 2 }, "timeoutMs": 5000, "pollMs": 100 }
   ]

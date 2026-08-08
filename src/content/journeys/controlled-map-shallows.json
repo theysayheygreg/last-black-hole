@@ -2,7 +2,7 @@
   "id": "capture.controlled-map-shallows",
   "version": 1,
   "description": "Controlled Shallows boot/navigation/provenance frame using ordinary brake input.",
-  "setup": { "seed": 9029, "pilot": "capture-shallows", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "dead_calm" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true } },
+  "setup": { "seed": 9029, "pilot": "capture-shallows", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "signal_storm" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true } },
   "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "product-brake", "autonomousSurvival": false },
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },

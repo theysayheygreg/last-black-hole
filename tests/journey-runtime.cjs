@@ -24,7 +24,7 @@ function baseJourney(overrides = {}) {
       runRules: { signature: 'dead_calm' },
       startingProfileFacts: { 'pilot.unlock.map.shallows': true },
     },
-    controllerPolicy: { driver: 'product-input', steering: 'shared' },
+    controllerPolicy: { driver: 'product-input', movement: 'shared' },
     steps: [{ action: 'launch', args: {} }],
     ...overrides,
   };

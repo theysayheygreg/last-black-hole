@@ -19,6 +19,8 @@ assert(source.includes('approachTargetId: target.id'),
   'Journey approach must pass explicit target intent into shared Phase 1A movement');
 assert(source.includes('sendRemoteInput'),
   'Journey gameplay actions must use the ordinary remote input seam');
+assert(!source.includes('startRemoteGameNow'),
+  'Journey launch must use the ordinary title/profile/Home/map-select input path');
 assert(!source.includes('/debug/player-state'),
   'Journey gameplay actions must not mutate authoritative player state through debug setup');
 assert(!source.includes('teleportShip'),

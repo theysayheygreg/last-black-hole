@@ -8,7 +8,7 @@
     "hull": "drifter",
     "loadout": [],
     "map": "shallows",
-    "runRules": { "signature": "dead_calm" },
+    "runRules": { "signature": "thin_space" },
     "startingProfileFacts": { "pilot.unlock.map.shallows": true }
   },
   "controllerPolicy": { "driver": "product-input", "movement": "shared" },
@@ -17,7 +17,7 @@
     { "id": "pause", "action": "pause", "args": {} },
     { "id": "pause-open", "waitForEvent": "ui.pause.ready", "timeoutMs": 5000 },
     { "id": "exit", "action": "exitRun", "args": { "confirm": true } },
-    { "id": "home", "waitForEvent": "ui.home.ready", "timeoutMs": 10000 },
+    { "id": "title", "waitForEvent": "ui.title.ready", "timeoutMs": 10000 },
     { "id": "relaunch", "action": "relaunch", "args": {} },
     { "id": "fresh-run", "waitForEvent": "run.started", "timeoutMs": 15000 },
     { "id": "same-map", "assertCondition": { "condition": "run.map.id", "equals": "shallows" } }

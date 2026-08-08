@@ -43,7 +43,7 @@ function requireName(name, label) {
 }
 
 export class JourneyRegistry {
-  #actions = new Set();
+  #actions = new Map();
   #routines = new Map();
   #conditionValidator;
 
@@ -56,18 +56,24 @@ export class JourneyRegistry {
     for (const [name, expand] of Object.entries(routines)) this.registerRoutine(name, expand);
   }
 
-  registerAction(name) {
+  registerAction(name, validateArgs = null) {
     const validName = requireName(name, 'Journey action');
     if (this.#actions.has(validName)) throw new Error(`Duplicate Journey action: ${validName}`);
-    this.#actions.add(validName);
+    if (validateArgs !== null && typeof validateArgs !== 'function') {
+      throw new TypeError(`Journey action ${validName} argument validator must be a function`);
+    }
+    this.#actions.set(validName, validateArgs);
     return this;
   }
 
-  registerRoutine(name, expand) {
+  registerRoutine(name, expand, validateArgs = null) {
     const validName = requireName(name, 'Journey routine');
     if (typeof expand !== 'function') throw new TypeError(`Journey routine ${validName} requires an expansion function`);
     if (this.#routines.has(validName)) throw new Error(`Duplicate Journey routine: ${validName}`);
-    this.#routines.set(validName, expand);
+    if (validateArgs !== null && typeof validateArgs !== 'function') {
+      throw new TypeError(`Journey routine ${validName} argument validator must be a function`);
+    }
+    this.#routines.set(validName, { expand, validateArgs });
     return this;
   }
 
@@ -77,9 +83,19 @@ export class JourneyRegistry {
   }
 
   requireRoutine(name) {
-    const expand = this.#routines.get(name);
-    if (!expand) throw new RangeError(`Unknown Journey routine: ${String(name)}`);
-    return expand;
+    const routine = this.#routines.get(name);
+    if (!routine) throw new RangeError(`Unknown Journey routine: ${String(name)}`);
+    return routine.expand;
+  }
+
+  validateActionArgs(name, args) {
+    this.requireAction(name);
+    return this.#actions.get(name)?.(args) ?? args;
+  }
+
+  validateRoutineArgs(name, args) {
+    this.requireRoutine(name);
+    return this.#routines.get(name).validateArgs?.(args) ?? args;
   }
 
   validateConditionQuery(query) {
@@ -94,7 +110,7 @@ export class JourneyRegistry {
 
   list() {
     return Object.freeze({
-      actions: Object.freeze([...this.#actions]),
+      actions: Object.freeze([...this.#actions.keys()]),
       routines: Object.freeze([...this.#routines.keys()]),
     });
   }

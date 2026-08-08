@@ -8,7 +8,7 @@
     "hull": "drifter",
     "loadout": [],
     "map": "shallows",
-    "runRules": { "signature": "dead_calm" },
+    "runRules": { "signature": "deep_gravity" },
     "startingProfileFacts": { "pilot.currency.exoticMatter": 200, "pilot.unlock.map.shallows": true }
   },
   "controllerPolicy": { "driver": "product-input", "movement": "shared" },
@@ -18,8 +18,10 @@
     { "id": "chronicle", "action": "openChronicle", "args": {} },
     { "id": "chronicle-ready", "waitForEvent": "ui.chronicle.ready", "timeoutMs": 5000 },
     { "id": "launch", "routine": "launch", "args": {} },
-    { "id": "return", "routine": "returnHome", "args": {} },
+    { "id": "well-approach", "routine": "navigate", "args": { "policy": "well-intercept", "targetPolicy": "nearest-well" } },
+    { "id": "die-through-authority", "routine": "die", "args": { "causePolicy": "nearest-well" } },
     { "id": "results", "action": "navigateHome", "args": { "section": "results" } },
-    { "id": "results-ready", "waitForEvent": "ui.results.ready", "timeoutMs": 5000 }
+    { "id": "results-ready", "waitForEvent": "ui.results.ready", "timeoutMs": 5000 },
+    { "id": "return", "routine": "returnHome", "args": {} }
   ]
 }

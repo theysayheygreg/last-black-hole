@@ -2,7 +2,7 @@
   "id": "capture.ui-repair",
   "version": 1,
   "description": "Capture repaired HUD and prompt surfaces through ordinary product navigation.",
-  "setup": { "seed": 13007, "pilot": "capture-ui-repair", "hull": "drifter", "loadout": [], "map": "deep-field", "runRules": { "signature": "dark_run" }, "startingProfileFacts": { "pilot.unlock.map.deepField": true } },
+  "setup": { "seed": 13007, "pilot": "capture-ui-repair", "hull": "drifter", "loadout": [], "map": "deep-field", "runRules": { "signature": "thin_space" }, "startingProfileFacts": { "pilot.unlock.map.deepField": true } },
   "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "product-brake", "autonomousSurvival": false },
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },

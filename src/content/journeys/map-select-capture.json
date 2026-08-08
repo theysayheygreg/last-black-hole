@@ -2,7 +2,7 @@
   "id": "capture.map-select",
   "version": 1,
   "description": "Capture the ordinary map-select survey surface for the three authored maps.",
-  "setup": { "seed": 11027, "pilot": "capture-map-select", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "dead_calm" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true, "pilot.unlock.map.expanse": true, "pilot.unlock.map.deepField": true } },
+  "setup": { "seed": 11027, "pilot": "capture-map-select", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "thin_space" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true, "pilot.unlock.map.expanse": true, "pilot.unlock.map.deepField": true } },
   "controllerPolicy": { "driver": "product-input", "movement": "shared", "evidence": "ui" },
   "steps": [
     { "id": "map-select", "action": "navigateHome", "args": { "section": "map-select" } },

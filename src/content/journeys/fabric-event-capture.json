@@ -2,7 +2,7 @@
   "id": "capture.fabric-event-wave",
   "version": 1,
   "description": "Wait for an authored fabric event and capture its ordinary presentation.",
-  "setup": { "seed": 12011, "pilot": "capture-fabric-event", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "signal_storm" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true } },
+  "setup": { "seed": 12011, "pilot": "capture-fabric-event", "hull": "drifter", "loadout": [], "map": "shallows", "runRules": { "signature": "heavy_current" }, "startingProfileFacts": { "pilot.unlock.map.shallows": true } },
   "controllerPolicy": { "driver": "controlled-capture", "movement": "shared", "hold": "product-brake", "autonomousSurvival": false },
   "steps": [
     { "id": "launch", "routine": "launch", "args": {} },

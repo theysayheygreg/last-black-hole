@@ -8,7 +8,7 @@
     "hull": "drifter",
     "loadout": [],
     "map": "shallows",
-    "runRules": { "signature": "dead_calm" },
+    "runRules": { "signature": "deep_gravity" },
     "startingProfileFacts": { "pilot.unlock.hull.drifter": true, "pilot.unlock.map.shallows": true }
   },
   "controllerPolicy": { "driver": "product-input", "movement": "shared" },

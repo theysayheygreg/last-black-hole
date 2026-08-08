@@ -88,14 +88,15 @@ class BrowserJourneyDriver {
     const unsupportedRules = Object.keys(setup.runRules).filter((name) => name !== 'signature');
     if (unsupportedRules.length > 0) throw new Error(`Unsupported Journey run rules: ${unsupportedRules.join(', ')}`);
     this.expectedRunRules = { ...setup.runRules };
-    const configured = await this.page.evaluate(({ pilot, hull, seed, startingProfileFacts }) => {
+    const configured = await this.page.evaluate(({ pilot, hull, seed, startingProfileFacts, mapIndex }) => {
       const api = window.__TEST_API;
       api?.createTestProfile?.(pilot);
       api?.setProfileShipType?.(hull);
       api?.setPreviewSeed?.(seed);
+      api?.setMapSelectIndex?.(mapIndex);
       api?.applyJourneyProfileFacts?.(startingProfileFacts);
       return api?.getProfile?.() || null;
-    }, setup);
+    }, { ...setup, mapIndex: this.mapIndex });
     if (!configured || configured.name !== setup.pilot || configured.hullType !== setup.hull) {
       throw new Error(`Journey profile setup mismatch: ${JSON.stringify(configured)}`);
     }
@@ -129,6 +130,51 @@ class BrowserJourneyDriver {
     const body = snapshot || await this.snapshot();
     const clientId = await this.page.evaluate(() => window.__TEST_API?.getNetworkState?.()?.clientId || null);
     return body.players?.find((entry) => entry.clientId === clientId) || null;
+  }
+
+  async phase() {
+    return this.page.evaluate(() => window.__TEST_API?.getGamePhase?.());
+  }
+
+  async ensureHome() {
+    let phase = await this.phase();
+    if (phase === 'home') return;
+    if (phase === 'mapSelect') {
+      await this.page.keyboard.press('Escape');
+      await this.waitPage(() => this.phase(), (value) => value === 'home');
+      return;
+    }
+    if (phase === 'title') {
+      await sleep(650);
+      await this.page.keyboard.press('Space');
+      phase = await this.waitPage(() => this.phase(), (value) => value === 'profileSelect');
+    }
+    if (phase === 'profileSelect') {
+      await this.page.keyboard.press('Enter');
+      await this.waitPage(() => this.phase(), (value) => value === 'home');
+      return;
+    }
+    throw new Error(`Journey cannot enter Home from ${String(phase)}`);
+  }
+
+  async enterRunThroughMenus(seed = null) {
+    await this.ensureHome();
+    await this.dispatchAction('navigateHome', { section: 'map-select' });
+    await this.page.evaluate(({ mapIndex, seedValue }) => {
+      window.__TEST_API?.setMapSelectIndex?.(mapIndex);
+      if (seedValue !== null) window.__TEST_API?.setPreviewSeed?.(seedValue);
+    }, { mapIndex: this.mapIndex, seedValue: seed });
+    await this.page.keyboard.press('Enter');
+  }
+
+  async continueTerminalToHome(timeoutMs = 15_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await this.phase() === 'home') return;
+      await this.page.keyboard.press('Enter');
+      await sleep(250);
+    }
+    throw new Error(`Journey terminal transition timed out; phase=${String(await this.phase())}`);
   }
 
   findTarget(snapshot, player, args) {
@@ -191,8 +237,8 @@ class BrowserJourneyDriver {
 
   async dispatchAction(action, args = {}) {
     if (action === 'launch' || action === 'relaunch') {
-      const started = await this.page.evaluate((index) => window.__TEST_API?.startRemoteGameNow?.(index), this.mapIndex);
-      if (!started) throw new Error('Journey launch did not enter the ordinary remote run path');
+      await this.enterRunThroughMenus(args.seed ?? null);
+      const expectedSignature = args.signature || (action === 'launch' ? this.expectedRunRules.signature : null);
       const deadline = Date.now() + 15_000;
       while (Date.now() < deadline) {
         const state = await this.page.evaluate(() => ({
@@ -201,8 +247,8 @@ class BrowserJourneyDriver {
           signatureId: window.__TEST_API?.getNetworkState?.()?.remoteSignature?.id || null,
         }));
         if (state.phase === 'playing' && state.authority) {
-          if (this.expectedRunRules.signature && state.signatureId !== this.expectedRunRules.signature) {
-            throw new Error(`Journey run rule signature mismatch: expected ${this.expectedRunRules.signature}, got ${state.signatureId}`);
+          if (expectedSignature && state.signatureId !== expectedSignature) {
+            throw new Error(`Journey run rule signature mismatch: expected ${expectedSignature}, got ${state.signatureId}`);
           }
           this.events.push({ type: 'ui.playing', at: Date.now() });
           this.events.push({ type: 'run.started', at: Date.now() });
@@ -244,26 +290,31 @@ class BrowserJourneyDriver {
       return;
     }
     if (action === 'returnHome') {
-      await this.page.keyboard.press('Enter');
-      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'home', 15_000);
+      await this.continueTerminalToHome();
       this.events.push({ type: 'ui.home.ready', at: Date.now() });
       return;
     }
     if (action === 'recover') {
-      await this.page.keyboard.press('Enter');
-      await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'home', 15_000);
+      await this.continueTerminalToHome();
       this.events.push({ type: 'ui.home.ready', at: Date.now() });
       return;
     }
     if (action === 'navigateHome') {
       const section = String(args.section || 'home');
       if (section === 'profile') {
-        await this.page.keyboard.press('Space');
-        await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'profileSelect');
+        const phase = await this.phase();
+        if (phase === 'title') {
+          await sleep(650);
+          await this.page.keyboard.press('Space');
+        } else if (phase === 'home') {
+          await this.page.keyboard.press('Escape');
+        }
+        await this.waitPage(() => this.phase(), (value) => value === 'profileSelect');
       } else if (section === 'results') {
-        await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()),
+        await this.waitPage(() => this.phase(),
           (value) => value === 'escaped' || value === 'dead', 15_000);
       } else {
+        await this.ensureHome();
         const wanted = section === 'map-select' ? 'LAUNCH' : String(section).toUpperCase();
         await this.waitPage(async () => {
           const state = await this.page.evaluate(() => window.__TEST_API?.getHomeState?.());
@@ -296,6 +347,7 @@ class BrowserJourneyDriver {
       await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getProfileSlots?.()),
         (slots) => JSON.stringify(slots) !== JSON.stringify(before));
       this.events.push({ type: 'profile.pilotDeleted', at: Date.now() });
+      this.events.push({ type: 'ui.profile.ready', at: Date.now() });
       return;
     }
     if (action === 'capture') {

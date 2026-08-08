@@ -41,6 +41,7 @@ function validateSetup(raw) {
     } else requireString(setup[field], `journey.setup.${field}`);
   }
   if (!Array.isArray(setup.loadout)) throw new TypeError('journey.setup.loadout must be an array');
+  setup.loadout.forEach((item, index) => requireString(item, `journey.setup.loadout[${index}]`));
   requireRecord(setup.runRules, 'journey.setup.runRules');
   const startingProfileFacts = requireRecord(setup.startingProfileFacts, 'journey.setup.startingProfileFacts');
   for (const [name, value] of Object.entries(startingProfileFacts)) {
@@ -83,11 +84,11 @@ export function validateJourneyStep(raw, registry, path = 'journey.steps[0]') {
 
   if (kind === 'action') {
     normalized.action = registry.requireAction(requireString(step.action, `${path}.action`));
-    normalized.args = validateData(step.args || {}, `${path}.args`);
+    normalized.args = registry.validateActionArgs(normalized.action, validateData(step.args || {}, `${path}.args`));
   } else if (kind === 'routine') {
     registry.requireRoutine(requireString(step.routine, `${path}.routine`));
     normalized.routine = step.routine;
-    normalized.args = validateData(step.args || {}, `${path}.args`);
+    normalized.args = registry.validateRoutineArgs(normalized.routine, validateData(step.args || {}, `${path}.args`));
   } else if (kind === 'waitForCondition') {
     normalized.waitForCondition = registry.validateConditionQuery(step.waitForCondition);
     normalized.timeoutMs = validateTimeout(step.timeoutMs, `${path}.timeoutMs`);
@@ -114,6 +115,26 @@ export function validateJourneyDefinition(raw, registry) {
     throw new TypeError('journey.steps must be a non-empty array');
   }
   const controllerPolicy = validateData(requireRecord(journey.controllerPolicy, 'journey.controllerPolicy'), 'journey.controllerPolicy');
+  const policyKeys = new Set(['driver', 'movement', 'targeting', 'inputCadenceMs', 'hold', 'autonomousSurvival', 'evidence']);
+  for (const key of Object.keys(controllerPolicy)) {
+    if (!policyKeys.has(key)) throw new TypeError(`Unknown Journey controller policy field: ${key}`);
+  }
+  if (!['product-input', 'controlled-capture'].includes(controllerPolicy.driver)) {
+    throw new RangeError(`Unknown Journey controller driver: ${String(controllerPolicy.driver)}`);
+  }
+  if (controllerPolicy.movement !== 'shared') throw new RangeError('Journey controller movement must be shared');
+  if (controllerPolicy.targeting !== undefined && !['nearest-well', 'nearest-visible'].includes(controllerPolicy.targeting)) {
+    throw new RangeError(`Unknown Journey targeting policy: ${String(controllerPolicy.targeting)}`);
+  }
+  if (controllerPolicy.hold !== undefined && controllerPolicy.hold !== 'product-brake') {
+    throw new RangeError(`Unknown Journey hold policy: ${String(controllerPolicy.hold)}`);
+  }
+  if (controllerPolicy.autonomousSurvival !== undefined && typeof controllerPolicy.autonomousSurvival !== 'boolean') {
+    throw new TypeError('Journey autonomousSurvival policy must be boolean');
+  }
+  if (controllerPolicy.evidence !== undefined && !['ui', 'ruler'].includes(controllerPolicy.evidence)) {
+    throw new RangeError(`Unknown Journey evidence policy: ${String(controllerPolicy.evidence)}`);
+  }
   return Object.freeze({
     id,
     version: 1,

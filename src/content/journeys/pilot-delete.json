@@ -8,7 +8,7 @@
     "hull": "drifter",
     "loadout": [],
     "map": "shallows",
-    "runRules": { "signature": "dead_calm" },
+    "runRules": { "signature": "dark_run" },
     "startingProfileFacts": { "pilot.currency.exoticMatter": 17, "pilot.unlock.map.shallows": true }
   },
   "controllerPolicy": { "driver": "product-input", "movement": "shared" },
@@ -16,6 +16,6 @@
     { "id": "profile", "action": "navigateHome", "args": { "section": "profile" } },
     { "id": "delete", "action": "deletePilot", "args": { "confirm": true } },
     { "id": "deleted", "waitForEvent": "profile.pilotDeleted", "timeoutMs": 5000 },
-    { "id": "title", "waitForEvent": "ui.title.ready", "timeoutMs": 5000 }
+    { "id": "profile-ready", "waitForEvent": "ui.profile.ready", "timeoutMs": 5000 }
   ]
 }

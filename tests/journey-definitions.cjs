@@ -7,11 +7,7 @@ const JOURNEY_DIR = path.join(__dirname, '..', 'src', 'content', 'journeys');
 async function main() {
   const journeyApi = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'journey', 'index.js')).href);
   const conditions = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'conditions', 'index.js')).href);
-  const registry = journeyApi.createJourneyRegistry({
-    actions: journeyApi.DEFAULT_ACTIONS,
-    conditionValidator: conditions.validateConditionQuery,
-  });
-  for (const routine of journeyApi.DEFAULT_ROUTINES) registry.registerRoutine(routine, () => []);
+  const registry = journeyApi.createDefaultJourneyRegistry();
 
   const files = fs.readdirSync(JOURNEY_DIR).filter((file) => file.endsWith('.json')).sort();
   assert.strictEqual(files.length, 16, 'Expected the complete durable Journey definition set');
@@ -23,6 +19,12 @@ async function main() {
     assert(!ids.has(validated.id), `Duplicate Journey id ${validated.id}`);
     ids.add(validated.id);
     definitions.push(validated);
+
+    const { buildRunBriefing } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'run-briefing.js')).href);
+    const { PLAYABLE_MAPS } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'maps', 'playable-map-loader.js')).href);
+    const map = PLAYABLE_MAPS.find(({ id }) => id === validated.setup.map);
+    assert.strictEqual(buildRunBriefing(map, validated.setup.seed).signature.id, validated.setup.runRules.signature,
+      `${file} declares a signature inconsistent with its deterministic seed`);
 
     for (const [name, value] of Object.entries(validated.setup.startingProfileFacts)) {
       const definition = conditions.getConditionDefinition(name);
@@ -57,6 +59,14 @@ async function main() {
   assert(definitions.some((definition) => definition.id === 'capture.map-select'));
   assert(definitions.some((definition) => definition.id === 'capture.fabric-event-wave'));
   assert(definitions.some((definition) => definition.id === 'capture.ui-repair'));
+
+  const invalidArgs = JSON.parse(fs.readFileSync(path.join(JOURNEY_DIR, 'representative-salvage-extract.json'), 'utf8'));
+  invalidArgs.steps[0].args = { policy: 'teleport' };
+  assert.throws(() => journeyApi.validateJourneyDefinition(invalidArgs, registry), /Unknown Journey argument/);
+
+  const invalidPolicy = JSON.parse(fs.readFileSync(path.join(JOURNEY_DIR, 'representative-salvage-extract.json'), 'utf8'));
+  invalidPolicy.controllerPolicy.driver = 'authority-bypass';
+  assert.throws(() => journeyApi.validateJourneyDefinition(invalidPolicy, registry), /Unknown Journey controller driver/);
 
   console.log(`JourneyDefinitions: ${definitions.length}/${files.length} validated`);
 }
