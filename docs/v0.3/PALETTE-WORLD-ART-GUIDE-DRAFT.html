@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LBH Palette World-Art Guide — Draft</title><style>:root{--void:#000021;--ink:#e7f2ff;--route:#00e2ff;--value:#ffd966;--line:#193755}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 52% 0,#063746,var(--void) 48%),#000;color:var(--ink);font:15px/1.58 ui-monospace,monospace}main{max-width:1280px;margin:auto;padding:32px}header,article{border:1px solid var(--line);background:rgba(2,10,26,.9);padding:clamp(18px,3vw,38px);box-shadow:0 0 28px #001224}header{margin-bottom:22px}h1{margin:0;color:#fff;letter-spacing:.08em;text-transform:uppercase;font-size:clamp(24px,4vw,46px)}.deck{color:var(--value)}.notice{color:#90aac0;border-left:3px solid var(--route);padding-left:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:inherit}@media print{body{background:#fff;color:#111}main{max-width:none;padding:0}header,article{box-shadow:none;border-color:#555;background:#fff}h1{color:#111}}</style></head><body><main><header><h1>Palette World-Art Guide <span style="color:var(--value)">/ Draft</span></h1><p class="deck">Last Singularity · world-frame production contract · revised 2026-08-07</p><p class="notice">Rendered source mirror. The exact Markdown payload below is canonical; CSS changes presentation only.</p></header><article aria-label="Exact Markdown source mirror"><pre id="guide-source"># Palette World-Art Guide — DRAFT
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LBH Palette World-Art Guide — Draft</title><style>:root{--void:#000021;--ink:#e7f2ff;--route:#00e2ff;--value:#ffd966;--line:#193755}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 52% 0,#063746,var(--void) 48%),#000;color:var(--ink);font:15px/1.58 ui-monospace,monospace}main{max-width:1280px;margin:auto;padding:32px}header,article{border:1px solid var(--line);background:rgba(2,10,26,.9);padding:clamp(18px,3vw,38px);box-shadow:0 0 28px #001224}header{margin-bottom:22px}h1{margin:0;color:#fff;letter-spacing:.08em;text-transform:uppercase;font-size:clamp(24px,4vw,46px)}.deck{color:var(--value)}.notice{color:#90aac0;border-left:3px solid var(--route);padding-left:12px}pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:inherit}@media print{body{background:#fff;color:#111}main{max-width:none;padding:0}header,article{box-shadow:none;border-color:#555;background:#fff}h1{color:#111}}</style></head><body><main><header><h1>Palette World-Art Guide <span style="color:var(--value)">/ Draft</span></h1><p class="deck">Last Singularity · world-frame production contract · revised 2026-08-11</p><p class="notice">Rendered source mirror. The exact Markdown payload below is canonical; CSS changes presentation only.</p></header><article aria-label="Exact Markdown source mirror"><pre id="guide-source"># Palette World-Art Guide — DRAFT
 
 **Status:** department draft, revised 2026-08-07. This is a production guide for world art, not a claim of current visual acceptance. **Greg ratifies every substantive amendment.**
 
@@ -41,7 +41,7 @@ Void owns at least half of perceived frame mass. Fabric owns movement evidence, 
 
 ### Deck presentation radii
 
-These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture. They are presentation minima/base/maxima, owned by `src/render-three/entity-presentation-scale.js`; they never substitute authority collision, gravity, Noise, or interaction radii.
+These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture, transcribed from the presentation-scale table in `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` (not a runtime scale owner at this SHA). They are design-contract minima/base/maxima and never substitute authority collision, gravity, Noise, or interaction radii. Runtime binding remains unverified by this guide.
 
 | Family / subtype | Deck min / base / max px radius | Presentation owner | Authority / interaction truth |
 |---|---:|---|---|
@@ -119,16 +119,18 @@ The shipped directional atlas is **six rows × sixteen columns**. Each row is a 
 
 Rows 0–3 are exactly the `16`-glyph directional atlas rows. The authored source ramps are padded/trimmed to 16 cells; their order is sparse → dense. The runtime samples them at `(atlas column, atlas row)` and all normal flow selection stays inside rows 0–3.
 
-| Flow row | Authored ramp source (sparse → dense) | Read |
+| Flow row | Shipped source | Read |
 |---|---|---|
-| 0 Isotropic | ` .\`&#x27;-,_:;&quot;~^!/&gt;+=*?|%#&amp;$@` | still/slow water; density without directional bias |
-| 1 Horizontal | ` .-~─—=═≡░▒▓█` | left/right flow |
-| 2 Vertical | ` .:|!¦‖║│░▒▓█` | up/down flow |
-| 3 Diagonal | ` ./\\×╱╲╳░▒▓█` | 45° flow |
+| 0 Isotropic | `RAMPS[0]` in `src/render/shaders/ascii.glsl.js` | still/slow water; density without directional bias |
+| 1 Horizontal | `RAMPS[1]` in `src/render/shaders/ascii.glsl.js` | left/right flow |
+| 2 Vertical | `RAMPS[2]` in `src/render/shaders/ascii.glsl.js` | up/down flow |
+| 3 Diagonal | `RAMPS[3]` in `src/render/shaders/ascii.glsl.js` | 45° flow |
 
-**Selection law:** `u_numChars = 16`. The shader maps scene luminance to a column. It samples fluid velocity; speed above `u_dirThreshold` selects horizontal, vertical, or diagonal sectors by flow angle. `smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed)` uses existing world-anchored shimmer noise to blend back to row 0, preventing hard seams. At high density, shared `░ ▒ ▓ █` deliberately makes mass read before direction. Glitch may probabilistically choose rows 0–3; active Inhibitors override with rows 4/5. This is the shader’s selection law, not a semantic mark assignment.
+The guide deliberately does not transcribe individual characters: the runtime `RAMPS[0..3]` literals are the canonical atlas payload, and their order/count is verified directly against the code at review time.
 
-**Texture guardrails:** glyphs communicate fabric material and motion; they do not replace required interaction icons, redraw every field sample, or become full-screen static. Preserve reduced-motion state when mark travel/shimmer is removed. Font fallback is Monaspace then bundled Noto Sans Mono / Symbols; runtime probe fallbacks are `═ → =`, `║ → |`, `╱ → /`, `╲ → \\`, `╳ → x`.
+**Selection law:** `u_numChars = 16`. The shader maps scene luminance to a column. It samples fluid velocity; speed above `u_dirThreshold` selects horizontal, vertical, or diagonal sectors by flow angle. `smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed)` uses existing world-anchored shimmer noise to blend back to row 0, preventing hard seams. At high density, the normal-space rows converge on `# % @` (with repeated `@` padding where authored) so mass reads before direction. Glitch may probabilistically choose rows 0–3; active Inhibitors override with rows 4/5. This is the shipped shader selection law, not a semantic mark assignment.
+
+**Texture guardrails:** glyphs communicate fabric material and motion; they do not replace required interaction icons, redraw every field sample, or become full-screen static. Preserve reduced-motion state when mark travel/shimmer is removed. Font fallback is Monaspace then bundled Noto Sans Mono / Symbols. A substitution table for unsupported glyphs is **proposed only**; this SHA contains a typography probe string but no runtime substitution logic, so fallback behavior must not be claimed as shipped.
 
 ## 7. Asset landing, binding, and provenance
 
@@ -186,9 +188,10 @@ Substantive changes to hierarchy, palette role meaning, glyph grammar, well/wave
 ## Provenance
 
 - `docs/design/VISUAL-DENSITY.md` — additive density-buffer policy and measured budget.
-- `docs/design/THREE-ENTITY-VISUALS.md` — entity hierarchy, separation stack, pixel-surface rules, family targets, and presentation radii.
-- `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` — north star, scene stack, palette, scale, glyph/sprite and acceptance rules.
-- `docs/design/DIRECTIONAL-ASCII.md`, `src/render/shaders/ascii.glsl.js`, `src/render/passes/ascii-pass.js` — six-row × sixteen-column live atlas, selector law, and fallback law.
+- **Shipped glyph truth:** `src/render/shaders/ascii.glsl.js` (`RAMPS`, `CHARS_PER_RAMP`, atlas generation) and `src/render/passes/ascii-pass.js` (velocity input/pass ABI) — live six-row × sixteen-column atlas and selection law at this SHA.
+- **Proposal/reference only:** `docs/design/DIRECTIONAL-ASCII.md` — directional ASCII intent and a future-facing alternate character proposal; it is not the source for live `RAMPS` values or runtime fallback behavior.
+- **Design-contract radii source:** `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` — Deck presentation radius table; its named runtime owner is absent at this SHA, so the table is documented guidance rather than a verified runtime binding.
+- `docs/design/THREE-ENTITY-VISUALS.md` — entity hierarchy, separation stack, pixel-surface rules, and family targets.
 - `docs/reference/target-visuals/2026-06-26/{README.md,01-playable-separation-target.png,02-entity-readability-target.png,03-scene-stack-style-board.png}` — inspected directional composites; not gameplay proof.
 - `docs/v0.3/reviews/2026-08-01-movement-physics-fabric-redesign.md` — Greg-approved 2026-08-02 lane/well/wave composites.
 - `docs/project/reviews/2026-08-04-orrery-v03-visual-clarity-milestone-review.md` — current contrast, well-landmark, palette, and evidence pressure.

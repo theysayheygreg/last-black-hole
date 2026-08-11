@@ -41,7 +41,7 @@ Void owns at least half of perceived frame mass. Fabric owns movement evidence, 
 
 ### Deck presentation radii
 
-These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture. They are presentation minima/base/maxima, owned by `src/render-three/entity-presentation-scale.js`; they never substitute authority collision, gravity, Noise, or interaction radii.
+These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture, transcribed from the presentation-scale table in `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` (not a runtime scale owner at this SHA). They are design-contract minima/base/maxima and never substitute authority collision, gravity, Noise, or interaction radii. Runtime binding remains unverified by this guide.
 
 | Family / subtype | Deck min / base / max px radius | Presentation owner | Authority / interaction truth |
 |---|---:|---|---|
@@ -119,16 +119,18 @@ The shipped directional atlas is **six rows × sixteen columns**. Each row is a 
 
 Rows 0–3 are exactly the `16`-glyph directional atlas rows. The authored source ramps are padded/trimmed to 16 cells; their order is sparse → dense. The runtime samples them at `(atlas column, atlas row)` and all normal flow selection stays inside rows 0–3.
 
-| Flow row | Authored ramp source (sparse → dense) | Read |
+| Flow row | Shipped source | Read |
 |---|---|---|
-| 0 Isotropic | ` .\`'-,_:;"~^!/>+=*?|%#&$@` | still/slow water; density without directional bias |
-| 1 Horizontal | ` .-~─—=═≡░▒▓█` | left/right flow |
-| 2 Vertical | ` .:|!¦‖║│░▒▓█` | up/down flow |
-| 3 Diagonal | ` ./\\×╱╲╳░▒▓█` | 45° flow |
+| 0 Isotropic | `RAMPS[0]` in `src/render/shaders/ascii.glsl.js` | still/slow water; density without directional bias |
+| 1 Horizontal | `RAMPS[1]` in `src/render/shaders/ascii.glsl.js` | left/right flow |
+| 2 Vertical | `RAMPS[2]` in `src/render/shaders/ascii.glsl.js` | up/down flow |
+| 3 Diagonal | `RAMPS[3]` in `src/render/shaders/ascii.glsl.js` | 45° flow |
 
-**Selection law:** `u_numChars = 16`. The shader maps scene luminance to a column. It samples fluid velocity; speed above `u_dirThreshold` selects horizontal, vertical, or diagonal sectors by flow angle. `smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed)` uses existing world-anchored shimmer noise to blend back to row 0, preventing hard seams. At high density, shared `░ ▒ ▓ █` deliberately makes mass read before direction. Glitch may probabilistically choose rows 0–3; active Inhibitors override with rows 4/5. This is the shader’s selection law, not a semantic mark assignment.
+The guide deliberately does not transcribe individual characters: the runtime `RAMPS[0..3]` literals are the canonical atlas payload, and their order/count is verified directly against the code at review time.
 
-**Texture guardrails:** glyphs communicate fabric material and motion; they do not replace required interaction icons, redraw every field sample, or become full-screen static. Preserve reduced-motion state when mark travel/shimmer is removed. Font fallback is Monaspace then bundled Noto Sans Mono / Symbols; runtime probe fallbacks are `═ → =`, `║ → |`, `╱ → /`, `╲ → \\`, `╳ → x`.
+**Selection law:** `u_numChars = 16`. The shader maps scene luminance to a column. It samples fluid velocity; speed above `u_dirThreshold` selects horizontal, vertical, or diagonal sectors by flow angle. `smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed)` uses existing world-anchored shimmer noise to blend back to row 0, preventing hard seams. At high density, the normal-space rows converge on `# % @` (with repeated `@` padding where authored) so mass reads before direction. Glitch may probabilistically choose rows 0–3; active Inhibitors override with rows 4/5. This is the shipped shader selection law, not a semantic mark assignment.
+
+**Texture guardrails:** glyphs communicate fabric material and motion; they do not replace required interaction icons, redraw every field sample, or become full-screen static. Preserve reduced-motion state when mark travel/shimmer is removed. Font fallback is Monaspace then bundled Noto Sans Mono / Symbols. A substitution table for unsupported glyphs is **proposed only**; this SHA contains a typography probe string but no runtime substitution logic, so fallback behavior must not be claimed as shipped.
 
 ## 7. Asset landing, binding, and provenance
 
@@ -186,9 +188,10 @@ Substantive changes to hierarchy, palette role meaning, glyph grammar, well/wave
 ## Provenance
 
 - `docs/design/VISUAL-DENSITY.md` — additive density-buffer policy and measured budget.
-- `docs/design/THREE-ENTITY-VISUALS.md` — entity hierarchy, separation stack, pixel-surface rules, family targets, and presentation radii.
-- `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` — north star, scene stack, palette, scale, glyph/sprite and acceptance rules.
-- `docs/design/DIRECTIONAL-ASCII.md`, `src/render/shaders/ascii.glsl.js`, `src/render/passes/ascii-pass.js` — six-row × sixteen-column live atlas, selector law, and fallback law.
+- **Shipped glyph truth:** `src/render/shaders/ascii.glsl.js` (`RAMPS`, `CHARS_PER_RAMP`, atlas generation) and `src/render/passes/ascii-pass.js` (velocity input/pass ABI) — live six-row × sixteen-column atlas and selection law at this SHA.
+- **Proposal/reference only:** `docs/design/DIRECTIONAL-ASCII.md` — directional ASCII intent and a future-facing alternate character proposal; it is not the source for live `RAMPS` values or runtime fallback behavior.
+- **Design-contract radii source:** `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` — Deck presentation radius table; its named runtime owner is absent at this SHA, so the table is documented guidance rather than a verified runtime binding.
+- `docs/design/THREE-ENTITY-VISUALS.md` — entity hierarchy, separation stack, pixel-surface rules, and family targets.
 - `docs/reference/target-visuals/2026-06-26/{README.md,01-playable-separation-target.png,02-entity-readability-target.png,03-scene-stack-style-board.png}` — inspected directional composites; not gameplay proof.
 - `docs/v0.3/reviews/2026-08-01-movement-physics-fabric-redesign.md` — Greg-approved 2026-08-02 lane/well/wave composites.
 - `docs/project/reviews/2026-08-04-orrery-v03-visual-clarity-milestone-review.md` — current contrast, well-landmark, palette, and evidence pressure.

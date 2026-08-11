@@ -37,9 +37,22 @@ The rendered companion embeds the exact escaped Markdown payload. A direct extra
 
 **Roll-up:** **REWORK for product visual acceptance** because the guide patch does not manufacture runtime visual evidence. **PASS for the packet’s documentation-contract scope**: all named review blockers are addressed and the MD/HTML source payload is value-identical. Greg’s ratification remains required for substantive guide amendments; runtime `SHIP` remains unavailable until applicable capture-backed gates pass.
 
+## Correction addendum — 2026-08-11
+
+Orrery found that the prior packet’s §6 character strings were taken from the directional-ASCII proposal rather than live `RAMPS`, that the normal-row heavy-end claim was wrong, that runtime fallback substitution was overstated, and that the Deck table cited a runtime file absent at the packet SHA.
+
+This descendant corrects only those mechanical claims:
+
+- §6 now points each normal-flow row directly to `RAMPS[0..3]` in `src/render/shaders/ascii.glsl.js` rather than transcribing stale proposal characters; normal rows converge on `# % @`, not `░ ▒ ▓ █`.
+- Unsupported-glyph substitution is explicitly proposed/unimplemented at this SHA; a typography probe string is not substitution logic.
+- The Deck radii are now sourced as design-contract guidance from `docs/design/VISUAL-STYLE-GUIDE-v0.3.md`; the missing runtime owner and unverified binding are disclosed.
+- Provenance explicitly separates shipped atlas truth from the `DIRECTIONAL-ASCII.md` proposal/reference.
+- HTML is regenerated from the corrected Markdown payload.
+
 ## Verification
 
-- Markdown/HTML payload extraction + HTML unescape: PASS (`21,164` characters identical).
+- Markdown/HTML payload extraction + HTML unescape: PASS (`22,151` characters identical).
 - Banned literal `#FF5353` search across both deliverables: PASS (absent).
-- Required additions (`six rows × sixteen columns`, Deck radii, rubric ship criterion, image-generation capsule): PASS.
+- Shipped atlas import: PASS — `RAMPS.length === 6`, `CHARS_PER_RAMP === 16`, and all normal rows have 16 glyphs; the guide points to every `RAMPS[0..3]` source rather than copying proposal glyphs.
+- Heavy-end, proposed-only fallback posture, and absent runtime-scale-owner attribution: PASS.
 - `git diff --check`: PASS.
