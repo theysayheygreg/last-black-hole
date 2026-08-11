@@ -305,7 +305,12 @@ export class ProfileManager {
         ...(this.active?.conditionValues?.values || {}),
         ...(this.runConditionValues?.values || this.runConditionValues || {}),
       },
-      derivedProviders,
+      derivedProviders: {
+        'pilot.vault.itemCount': () => (
+          Array.isArray(this.active?.vault) ? this.active.vault.filter(Boolean).length : 0
+        ),
+        ...derivedProviders,
+      },
     });
   }
 

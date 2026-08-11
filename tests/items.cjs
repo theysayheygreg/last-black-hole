@@ -164,6 +164,11 @@ async function run() {
       const persisted = JSON.parse(storage.get("lbh_profile_0"));
       assert(persisted.vault.length === 1 && persisted.vault[0].id === liveVaultItem.id,
         "sanitized vault must persist on load");
+      assert(manager.readCondition("pilot.vault.itemCount") === 1,
+        "derived vault count must read the authoritative active profile");
+      manager.storeItems([{ id: "new-live", catalogId: "last-wake-codex", value: 89 }]);
+      assert(manager.readCondition("pilot.vault.itemCount") === 2,
+        "derived vault count must follow authoritative vault changes without a mirror");
     } finally {
       delete global.localStorage;
     }
