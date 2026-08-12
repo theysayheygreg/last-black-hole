@@ -1,0 +1,199 @@
+# Palette World-Art Guide — DRAFT
+
+**Status:** department draft, revised 2026-08-07. This is a production guide for world art, not a claim of current visual acceptance. **Greg ratifies every substantive amendment.**
+
+**Scope:** inside the playable world frame: fluid fabric, wells, world sprites/cards, Three materials, world glyphs, local VFX, and promo/title-world staging. HUD, wordmark, CTA, menus, and player-facing instructional copy remain Mosaic territory.
+
+## 1. World read: the non-negotiable hierarchy
+
+Last Singularity is a failing astronomical instrument looking into a dying fluid universe. ASCII fabric is the route-reading medium; pixel-resolved entities are physical evidence caught in it; void makes both legible.
+
+1. **Flow and route first.** Find an open travel line, direction, and well danger before texture.
+2. **Actionable category second.** Player, immediate threat, portal/anchor, and salvage separate without labels.
+3. **State third.** One persistent state accent plus one brief event cue is the normal maximum.
+4. **Dread/detail last.** Texture, parallax, bloom, and CRT only earn their place after the first three reads hold.
+
+Void owns at least half of perceived frame mass. Fabric owns movement evidence, not decorative coverage. A later read never wins by compromising an earlier one.
+
+## 2. Scene and density grammar
+
+| Back-to-front role | World-art rule |
+|---|---|
+| Void / far marks | Near-black field, sparse low-contrast stars and ancient marks; no gameplay coding. |
+| Deep structure | Dim scars, grids, orbital traces: atmosphere only, below fabric value. |
+| ASCII fabric | Broad world-anchored lanes with broken downstream marks. A lane is roughly 4–5 visible ship widths; strength changes mark length/speed, not lane count. |
+| Fabric shadow | Well core, lensing pocket, and local contact matte. Quiet a small footprint; do not erase the field. |
+| Anchors / entities | Pixel-surface cards or pixel-textured top-down meshes with category silhouette, rim, restrained accent, and role-bound motion. |
+| Immediate VFX / post | Pooled, source-bound, brief, explanatory. Bloom/CRT preserve glyph edges, aperture black, and category colors. |
+
+**Density rule:** calm space is necessary. Recover glyph variety and luminance rhythm only inside a lane envelope or well neighborhood; never restore a full-frame hash carpet. In clusters, decay low-priority matte coverage first (ambient ecology, wreck debris), never player core, portal aperture, or category silhouette.
+
+**Accumulated density buffer:** cosmetic-only, additive-only, 256×256 RGB float, double-buffered, with intentional fade persistence. It may boost a well’s analytical ring but does not create it. Do not add negative splats, use splats to cut entity-shaped holes, or use RGB channels as system tags. Darkness belongs in an analytical shader path or a future isolated buffer.
+
+## 3. Sprite/card production grammar
+
+### Surface and scale
+
+- Use hand-authored pixel sprites/sheets, pixel masks, or simple top-down meshes with pixel-authored/pixelated surfaces. Nearest filtering; no automatic smoothing or unproven mip blur.
+- Snap card scale to stable pixel multiples when practical. Preserve source aspect ratio. Drive orientation only from published heading/velocity facts.
+- Improve silhouette and local separation before enlarging an unreadable entity. World scale hierarchy is: major landmarks > objectives/large wrecks > ships/enemies > pickups/debris.
+- Pool cards, materials, trails, and particles. No per-frame asset/material/geometry allocation.
+
+### Deck presentation radii
+
+These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture. `src/render-three/entity-presentation-scale.js` is the live presentation-scale owner at this SHA: its `FAMILY_SPECS` values match this table and its resolver preserves the authority radius as input rather than substituting it. These presentation minima/base/maxima never substitute authority collision, gravity, Noise, or interaction radii.
+
+| Family / subtype | Deck min / base / max px radius | Presentation owner | Authority / interaction truth |
+|---|---:|---|---|
+| Rift portal | 29 / 33 / 42 | `portal-rift` sprite | Capture radius: `1.8 × 0.08` |
+| Standard portal | 24 / 27 / 34 | `portal-extraction` sprite | Capture radius: `0.08` (`unstable`: half) |
+| Valuable large wreck | 25 / 30 / 38 | `wreck-valuable` sprite | Pickup radius: `0.08` |
+| Large/intact wreck | 22 / 26 / 34 | `wreck-intact` sprite | Pickup radius: `0.08` |
+| Player Breacher | 21 / 24 / 30 | `ship-breacher` sprite | Ballpark body fallback: `0.035` |
+| Player Drifter / remote ship | 19 / 22 / 28; 16 / 18 / 24 | authored ship sprite | Sim-owned body and heading |
+| Scavenger Breacher / Drifter / Raider | 19 / 22 / 28; 16 / 19 / 24; 17 / 20 / 26 | subtype sprite | Bump radius: `0.04` |
+| Sentry / fauna | 16 / 19 / 24; 13 / 15 / 20 | threat / organic sprite | Ecology state is authoritative |
+| Star | 20 / 23 / 28 | `star-warm` sprite plus fabric rays | Star range: `0.6` max range |
+| Planetoid / comet | 16 / 18 / 24; 18 / 20 / 26 | body / transit sprite | Ship push radius: `0.1` |
+| Glitch / Swarm / Vessel | 18 / 21 / 27; 23 / 27 / 34; 29 / 35 / 44 | authored anomaly sprite | Core/contact/outer: `.045` / `.09` / `.18` |
+| Well / fabric | fabric-owned, no sprite minimum | ASCII contour and fluid core | Kill/gravity sim-owned (`.04` baseline) |
+
+### Local separation stack
+
+1. **Contact matte:** hard, transparent local patch beneath core; normally ≤1.25× core footprint.
+2. **Core silhouette:** readable in one Deck-scale frame and in grayscale.
+3. **Rim shell:** thin pixel-equivalent edge; preserves category against fabric highlights.
+4. **Halo/backplate:** only critical affordance or energy/state; never a substitute for core.
+5. **Motion trail:** short, velocity/state-specific, pooled, settled when published state ends.
+6. **State accent:** small role-colored tick, port, spark, or desaturation—not a new base identity each frame.
+
+### Family anchors
+
+| Family | Must read as | Allowed state/motion grammar | Do not do |
+|---|---|---|---|
+| Player/friend | clean forward hull; bilateral nose/spine | bone/blue-white core, cyan instruments, thrust/brake ports | full halo/ring/trail stack; generic triangle |
+| Rival/threat | hooked, swept, or segmented directional form | localized warm-red heat/trail | red blob that loses hull read |
+| Wreck/salvage | broken asymmetric clustered mass, no thrust axis | one amber glint if intact; looted loses glint; drift lean when published | rotated square or live-ship silhouette |
+| Star/route anchor | radial corona around stable center | warm/cold type corona, restrained flare ticks | anomaly treatment |
+| Portal/rift | open black aperture | outer unstable ring, inner funnel/ticks; blocked is sealed not absent | bloom that fills center |
+| Comet/planetoid | dense body, not arrow | velocity-opposed ice tail; orbital lane/history tick | perpetual full-length ribbon |
+| Fauna/sentry | fauna organic/asymmetric; sentry segmented/directional | pulse/coast vs scan/lunge | one shared base asset |
+| Inhibitor/anomaly | wrong geometry, hard discontinuity | rare magenta/violet corruption and unstable edge | decorative generic neon |
+
+## 4. Shader and material rules
+
+- Fabric is sovereign: wells, currents, pressure, and corruption remain terrain. Renderer objects consume presentation facts; they never infer pickup, collision, death, extraction, AI, or signal truth.
+- Flow lanes are broad, sparse, anchored to accepted current. Broken marks move downstream. Bend/compression/split/rejoin near wells exposes pull and orbital handedness without radial arrows, repeated contour rings, or a binary capture zone.
+- A well is threatening: dark body wins; fabric separates around it; compact rim is secondary. Accepted direction includes an asymmetric directional hot plume, not a broad symmetric halo.
+- A source-bound wave deforms/bunches existing lanes. It has one sparse crest, source compression/brightening, fast recovery, and no sonar ring, filled trailing zone, or intersection-node lattice.
+- Keep parallax subtle and role-bound. No heavy depth of field. Post stages depth, glow, and CRT but keeps one-pixel glyph edges stable.
+- Quality reduction removes secondary halo/trail density before category silhouette, player/portal separation, black apertures, or reduced-motion static equivalents.
+
+## 5. Palette rules
+
+| Semantic role | Canonical family | Use | Guardrail |
+|---|---|---|---|
+| Void | `#000021` / blue-black | negative space, deep backing | remains dominant |
+| Fabric | `#008080` teal with restrained blue-violet lane pressure | movement medium | no all-frame cyan carpet |
+| Route / technology | `#00E2FF`, `#9DFCFF` | player instruments, extraction, chosen route | reserve cyan for route/exfil distinction |
+| Value / stellar energy | `#FFD966`, `#FFF2CC` | salvage, stars, hot well highlights | amber means value/stellar energy, never generic selection |
+| Danger | warm red (implementation-selected) | immediate damage, hostile intent | localized; never generic status; **no canonical danger hex is declared here** |
+| Ecology | `#38F58A` + cyan-white core | living systems | does not replace danger red |
+| Inhibitor / anomaly | `#FF3EB5`, `#B84CFF` | corruption, invasive anomaly | rare; never generic rarity/decor |
+| Neutral wreck | bone white / cool gray | hull structure, debris | retain value hierarchy |
+
+A normal world frame is void + neutral + no more than two active semantic roles. White is peak value: player-critical edge, tiny specular accent, or hot well core—not a large fill. Color never stands alone; pair it with silhouette, motion, pattern, or position.
+
+## 6. Glyph atlas and texture rules
+
+The shipped directional atlas is **six rows × sixteen columns**. Each row is a full luminance ramp selected by shader logic; glyphs do **not** receive per-cell semantic jobs. Luminance chooses column 0–15, then speed/flow angle or an explicit Inhibitor state chooses row. §6 therefore specifies atlas/procedural behavior, not an invented semantic glyph vocabulary.
+
+| Atlas row | Runtime selector | Source / use |
+|---:|---|---|
+| 0 | slow flow, or shimmer-selected fallback | isotropic density ramp |
+| 1 | directional speed; horizontal flow sector | horizontal ramp |
+| 2 | directional speed; vertical flow sector | vertical ramp |
+| 3 | directional speed; diagonal flow sector | diagonal ramp |
+| 4 | Inhibitor Glitch / Swarm override | Inhibitor math row |
+| 5 | Inhibitor Vessel override | Inhibitor Vessel row |
+
+Rows 0–3 are exactly the `16`-glyph directional atlas rows. The authored source ramps are padded/trimmed to 16 cells; their order is sparse → dense. The runtime samples them at `(atlas column, atlas row)` and all normal flow selection stays inside rows 0–3.
+
+| Flow row | Shipped source | Read |
+|---|---|---|
+| 0 Isotropic | `RAMPS[0]` in `src/render/shaders/ascii.glsl.js` | still/slow water; density without directional bias |
+| 1 Horizontal | `RAMPS[1]` in `src/render/shaders/ascii.glsl.js` | left/right flow |
+| 2 Vertical | `RAMPS[2]` in `src/render/shaders/ascii.glsl.js` | up/down flow |
+| 3 Diagonal | `RAMPS[3]` in `src/render/shaders/ascii.glsl.js` | 45° flow |
+
+The guide deliberately does not transcribe individual characters: the runtime `RAMPS[0..3]` literals are the canonical atlas payload, and their order/count is verified directly against the code at review time.
+
+**Selection law:** `u_numChars = 16`. The shader maps scene luminance to a column. It samples fluid velocity; speed above `u_dirThreshold` selects horizontal, vertical, or diagonal sectors by flow angle. `smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed)` uses existing world-anchored shimmer noise to blend back to row 0, preventing hard seams. At high density, the normal-space rows converge on `# % @` (with repeated `@` padding where authored) so mass reads before direction. Glitch may probabilistically choose rows 0–3; active Inhibitors override with rows 4/5. This is the shipped shader selection law, not a semantic mark assignment.
+
+**Texture guardrails:** glyphs communicate fabric material and motion; they do not replace required interaction icons, redraw every field sample, or become full-screen static. Preserve reduced-motion state when mark travel/shimmer is removed. Font fallback is Monaspace then bundled Noto Sans Mono / Symbols. A substitution table for unsupported glyphs is **proposed only**; this SHA contains a typography probe string but no runtime substitution logic, so fallback behavior must not be claimed as shipped.
+
+## 7. Asset landing, binding, and provenance
+
+**Landing rule:** use the existing destination for asset class; do not create a second ad-hoc art tree. Source art vocabulary is `assets/visual/entities`; manifest binding is `assets/visual/manifest.json`; renderer consumers remain under the existing Three/render asset path. Proposed new landing zones require Maestro registration before production.
+
+Every binary/world-art package ships with a sibling manifest entry:
+
+```yaml
+asset_id: entity.portal.extraction.v01
+kind: sprite-sheet | texture | shader | glyph-set | concept-reference
+source: hand-authored | generated | derived
+source_tool_or_backend: <tool/version or authoring app>
+inputs_or_prompt: <path or concise immutable input reference>
+dimensions_format_color: "128x128 PNG RGBA sRGB"
+intended_use: "Three portal extraction card"
+rights_provenance: "project-authored | licensed reference only | generated; review required"
+binding_owner: "Palette / named integration owner"
+binding_status: "awaiting Greg review/tuning | approved — binding dispatched | binding in progress | integrated | deferred: reason"
+verified_at: "YYYY-MM-DDTHH:MM:SSZ"
+```
+
+Generated and hand-authored sources stay distinguishable. `awaiting Greg review/tuning` is active custody, not abandonment. When Greg ratifies a package, land/merge it and dispatch its named binding owner in the same motion.
+
+## 8. Visual-fidelity rubric
+
+Evaluate target-scale material at 1280×800, 1280×720 compact where relevant, grayscale, bright-light conditions, 25% couch proxy, normal motion, and reduced motion. Label evidence **fixture**, **natural journey**, or **representative flow**; fixtures never establish player-reachable claims.
+
+| Check ID | Gate / fail condition | Remedy if failed | Evidence | Verdict language |
+|---|---|---|---|---|
+| `PAL-WOR-01` | **Gate:** ≤1 s shows flow direction and one open travel line before labels. **Fail:** route read needs labels or direction is indeterminate. | Reduce fabric noise; strengthen/broaden accepted lane envelope and directional contrast before adding overlays. | current still + motion | `PASS`, `TUNE — below route-read threshold`, `REWORK — route unreadable`, `BLOCKED — no current frame` |
+| `PAL-WOR-02` | **Gate:** well is dark/dangerous; lanes bend/compress/split; directional plume visible; no broad halo. **Fail:** contact-dot/bullseye, missing plume, or erased fabric. | Restore dark body and local fabric separation; tune plume; remove broad ring/halo. | approach capture | `PASS`, `TUNE — <named well read>`, `REWORK — contact dot / missing plume`, `BLOCKED — well absent` |
+| `PAL-WOR-03` | **Gate:** player, threat, wreck, anchor, portal, fauna, anomaly separate by silhouette at Deck scale and grayscale. **Fail:** label/color dependency or family collision. | Re-author silhouette and local separation; do not solve by enlarging every entity. | showcase + grayscale + 25% | `PASS`, `TUNE — family collision: <A>/<B>`, `REWORK — label-dependent` |
+| `PAL-WOR-04` | **Gate:** critical core reads over quiet and dense fabric; matte contained; fabric remains legible. **Fail:** weak core or matte erases route. | Tune core/rim/matte; decay low-priority cluster matte first. | quiet/dense paired capture | `PASS`, `TUNE — separation weak`, `REWORK — matte erases fabric` |
+| `PAL-WOR-05` | **Gate:** palette matches semantic roles; danger stays implementation-selected warm red; no untracked role. **Fail:** semantic inversion or fixed unratified color. | Reassign by role; remove accidental color; obtain ratification before declaring a new canonical hex. | scene + grayscale notes | `PASS`, `TUNE — role collision: <roles>`, `REWORK — semantic inversion` |
+| `PAL-WOR-06` | **Gate:** trails/rims/halos/sparks explain published state without hiding core or becoming permanent decoration. **Fail:** overstack, occlusion, or invented state. | Cut/remap accent stack; bind timing to published state. | temporal capture | `PASS`, `TUNE — accent overstack`, `REWORK — state fiction / occlusion` |
+| `PAL-WOR-07` | **Gate:** pixel surface is nearest, crisp, aspect-correct, stable under target-scale motion/post. **Fail:** blur, smoothing, distortion, unstable edge. | Restore nearest/filtering/aspect; reduce post before repainting pixel surface. | target-scale crop + motion | `PASS`, `TUNE — unstable edge`, `REWORK — smooth/blurred surface` |
+| `PAL-WOR-08` | **Gate:** portal aperture stays black/open and stateful; blocked is sealed, not absent. **Fail:** bloom closes aperture or state ambiguous. | Restore aperture value hierarchy and explicit blocked treatment. | state matrix | `PASS`, `REWORK — aperture closed or state ambiguous`, `BLOCKED — states unavailable` |
+| `PAL-WOR-09` | **Gate:** normal and reduced motion retain equivalent required state information. **Fail:** meaning exists only in shimmer/travel/flicker. | Add static state accent/backing; remove motion-only dependency. | paired temporal/still | `PASS`, `REWORK — motion-only meaning`, `BLOCKED — reduced-motion evidence absent` |
+| `PAL-WOR-10` | **Gate:** every package has landing, manifest, binding owner/status, provenance; renderer manufactures no authority. **Fail:** missing custody/provenance or presentation invents truth. | Complete manifest/binding or move claim to authoritative source. | manifest + source review | `PASS`, `BLOCKED — provenance/binding missing`, `REWORK — renderer invents truth` |
+
+**Ship criterion:** **SHIP** only when every applicable `PAL-WOR` check is `PASS`, none is `BLOCKED`/`REWORK`, all `TUNE` items are either resolved to `PASS` or have a Greg-approved waiver named in the receipt, and the evidence includes the required target-scale/read modes. `PASS` is evidence, not aesthetic ratification. `TUNE` is bounded with a named family/read. `REWORK` means grammar is broken and must be re-authored. `BLOCKED` means evidence or authoritative state is missing; it is never permission to guess. Final taste, feel, physical Deck, and waiver acceptance remain Greg’s review.
+
+## 9. World image-generation capsule
+
+**Use:** direction for concept/promo world imagery only; not a claim of a shipped feature, UI, or authority state. Generated output remains `source: generated` and needs manifest provenance, Palette review, and Greg ratification before canonical use.
+
+> A top-down orthographic view into a dying fluid universe, viewed through a failing astronomical instrument. Near-black blue void owns more than half the frame. Broad sparse teal ASCII current lanes bend, split, and compress around a dark black-hole well with a compact asymmetric warm-white/amber plume; the fabric is the movement medium, not a screen filter. A tiny bone-white and cyan pixel-authored ship cuts across one readable open route. One broken cool-gray wreck carries a restrained amber value glint; one cyan extraction aperture remains black at its center. Compact pixel surfaces, nearest-neighbor edges, restrained CRT and bloom, no heavy depth of field, no generic nebula, no glossy 3D miniatures, no full-screen glyph carpet, no UI, wordmark, labels, weapons, or invented objectives. Accents: void `#000021`, fabric `#008080`, route `#00E2FF`, value `#FFD966`, anomaly only as rare `#FF3EB5`/`#B84CFF`; danger stays a localized warm red without a fixed canonical hex.
+
+## 10. Reference and amendment protocol
+
+Source hierarchy: current product/design contract first; accepted concept composites are composition, texture, palette-pressure, and separation anchors—not shipped-feature claims or literal silhouette specifications. The 2026-06-26 target visuals are directional, not source assets. The 2026-08-02 fabric composites are locked direction for lane/well/wave grammar. The 2026-08-04 clarity review identifies current evidence gaps and fix-forward pressure; it does not independently prove a new acceptance state.
+
+Substantive changes to hierarchy, palette role meaning, glyph grammar, well/wave language, entity-family silhouettes, or rubric require **Greg ratification**. Record source revision, evidence type, and decision in amendment/asset package.
+
+## Provenance
+
+- `docs/design/VISUAL-DENSITY.md` — additive density-buffer policy and measured budget.
+- **Shipped glyph truth:** `src/render/shaders/ascii.glsl.js` (`RAMPS`, `CHARS_PER_RAMP`, atlas generation) and `src/render/passes/ascii-pass.js` (velocity input/pass ABI) — live six-row × sixteen-column atlas and selection law at this SHA.
+- **Proposal/reference only:** `docs/design/DIRECTIONAL-ASCII.md` — directional ASCII intent and a future-facing alternate character proposal; it is not the source for live `RAMPS` values or runtime fallback behavior.
+- **Shipped radii truth:** `src/render-three/entity-presentation-scale.js` (`FAMILY_SPECS`, `resolveEntityPresentationScale`) — live Deck presentation owner and pixel-half-radius values; `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` is the matching design-contract table.
+- `docs/design/THREE-ENTITY-VISUALS.md` — entity hierarchy, separation stack, pixel-surface rules, and family targets.
+- `docs/reference/target-visuals/2026-06-26/{README.md,01-playable-separation-target.png,02-entity-readability-target.png,03-scene-stack-style-board.png}` — inspected directional composites; not gameplay proof.
+- `docs/v0.3/reviews/2026-08-01-movement-physics-fabric-redesign.md` — Greg-approved 2026-08-02 lane/well/wave composites.
+- `docs/project/reviews/2026-08-04-orrery-v03-visual-clarity-milestone-review.md` — current contrast, well-landmark, palette, and evidence pressure.
+
+Rendered companion: `docs/v0.3/PALETTE-WORLD-ART-GUIDE-DRAFT.html`.
