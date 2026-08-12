@@ -312,3 +312,93 @@ require Greg's ratification through the §7 loop.
    ambience (S. Gumbleton); Hunt: Showdown audio-readability posts.
 10. Synthesis-first practice — P. Weir, "The Sound of No Man's Sky"
     (GDC 2017); Ape Out (M. Boch).
+
+---
+
+## Appendix A — v0.3 runtime binding and production state
+
+This appendix is the normative v0.3 attachment to the style guide. It carries
+the existing runtime specifics forward without turning this guide into a
+second cue sheet. On a conflict, `docs/v0.3/audio-cue-sheet.md` and
+`docs/v0.3/audio-soundscape-contract.md` remain runtime truth until Greg
+ratifies a replacement; this appendix is the binding Timbre direction for
+authored treatments and review.
+
+### A.1 Spectrum, duration, and headroom
+
+| Family | Frequency / space | Runtime duration and policy |
+|---|---|---|
+| Void / fabric bed | 35–300 Hz weight; filtered 1–3 kHz particulate | 8–30 s crossfades; one base and at most one texture layer |
+| Route / navigation | 500 Hz–2.5 kHz, narrow and clear | 70–650 ms gesture; held portal presence is spatial, never a reminder chirp |
+| Player action | 120 Hz–1.6 kHz, panned but speaker-stable | control-rate continuous voice plus one transient maximum |
+| Salvage | 650 Hz–3.2 kHz, softened upper partials | **100–550 ms runtime ceiling**; one privacy-filtered pickup gesture |
+| Consequence | 45–250 Hz body plus a selective 1.2–4 kHz edge | hard, dry attack; state transitions may last 0.5–4 s |
+| UI | 700 Hz–2.8 kHz, dry and near-center | 25–180 ms except launch/result settles |
+| Results / pause | sparse 80 Hz–1.2 kHz, reduced stereo motion | 0.6–3 s settle; no score-counting cadence |
+
+The older 100–900 ms figure described an authored-review envelope, not a
+runtime admission allowance. It is withdrawn for salvage: every runtime
+salvage cue is 100–550 ms. A longer source render may exist only as an
+unintegrated review/reference tail, is not a cue candidate until edited to the
+ceiling, and may not be used to bypass the cue spec.
+
+Protect 2–4 kHz for brief critical/UI intelligibility and keep bass below
+140 Hz mono-compatible. Source-layer masters target **−3 dBFS sample peak**
+before the runtime/master chain. Final captured delivery separately obeys §5's
+−1 dBTP true-peak ceiling and platform LUFS targets; neither target replaces
+the other.
+
+### A.2 Runtime inventory, variation, and authority
+
+The normative live cue inventory is `src/audio/cue-spec.js` (`CUE_SPECS`):
+`loot`; `slingshotEngage`, `slingshotRelease`; `portalProximity`,
+`portalReady`, `portalAbort`, `portalFinal`, `portalConfirm`, `extract`;
+`death`; `pulse`, `shieldActivate`, `shieldAbsorb`, `breachFlare`;
+`starConsumed`, `scavengerBump`, `scavDeath`; `inhibitorGlitch`,
+`inhibitorWake`, `inhibitorVessel`, `inhibitorFinalPortal`;
+`fabricWaveTelegraph`; `hullWarning`, `fuelWarning`, `signalWarning`;
+`pause`, `resume`, `results`; and `menuMove`, `menuConfirm`, `menuBack`,
+`tabSwitch`, `sellItem`, `equipItem`, `upgrade`, `cantAfford`, `launch`.
+That file, not a copied row list, owns each cue's bus, priority, cooldown,
+voice cost, spatiality, and duration.
+
+Repeated UI, movement, impact, and salvage events use at least four
+round-robin takes where authored takes exist: no adjacent repeat; small
+within-family pitch/level offsets only; interval, family, and semantic role do
+not change. Captureable choices derive deterministically from event ID/run
+seed using the existing `src/rng-stream.js` helpers. Nonsemantic particulate
+texture may vary freely only when it cannot alter a cue's identity or result.
+Audio remains presentation: `AudioRouter` is the authority-event entry;
+authoritative events render at most once; snapshots control only already-owned
+continuous voices; contact identity comes only from admitted audible-contact
+records; spatial helpers come from `src/coords.js`.
+
+### A.3 Authored production state
+
+**Stage A — ratified direction:** `lbh_direction_restraint`, **32 s, 82 BPM,
+D Dorian**. Sparse subharmonic floor, particulate fabric breath, and an
+occasional glass route cell protect Shallows navigation and make later melody
+meaningful. **Direction B is rejected for the first vertical:**
+`lbh_direction_assertive`, 32 s, 96 BPM, D minor; its tracker-adjacent melody
+and pulse crowd the learning space. This is a recorded design decision, not a
+new choice in this revision.
+
+**Stage B — produced original review material:** `lbh_title_theme`,
+`lbh_pregame_suite`, `lbh_shallows_phase_1`, `lbh_shallows_phase_4`,
+`lbh_results_extract`, and `lbh_results_death`. These are deterministic
+original renders/review material, not an assertion that files are bound into
+the runtime. Expanse/Deep Field adaptive suites, phases 2–3, transitions,
+alternate results, and the remaining authored mappings are Stage C and must
+not be claimed complete.
+
+### A.4 Binding claim and change control
+
+This is a **draft submitted to Greg for ratification**. Until ratified it is
+not a runtime-integration authorization and it does not supersede the cue
+sheet or soundscape contract. Once ratified, §§0–10 plus this appendix bind
+Timbre-authored direction, reference intake, motif/family treatment, and
+review; Forge remains the runtime-binding owner. New motifs, moved fences, new
+signals, source assets, runtime duration changes, or a replacement of either
+runtime source require a recorded proposal and Greg's ratification. Human
+listening and device acceptance remain Greg's gate; a mechanical check cannot
+manufacture that verdict.
