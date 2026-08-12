@@ -275,11 +275,14 @@ class BrowserJourneyDriver {
         return { targetId: target.id, distance, speed };
       }
       const magnitude = Math.max(1e-9, Math.hypot(dx, dy));
+      const braking = navigationPolicy !== 'well-intercept'
+        && navigationPolicy !== 'slingshot'
+        && distance <= arrivalRadius * 2;
       await this.sendInput({
         moveX: dx / magnitude,
         moveY: dy / magnitude,
-        thrust: Math.max(0, Math.min(1, Number(args.thrust) || (navigationPolicy === 'slingshot' ? 0.88 : 0.72))),
-        brake: navigationPolicy === 'well-intercept' || navigationPolicy === 'slingshot' ? 0 : distance <= arrivalRadius * 2 ? 1 : 0,
+        thrust: braking ? 0 : Math.max(0, Math.min(1, Number(args.thrust) || (navigationPolicy === 'slingshot' ? 0.88 : 0.72))),
+        brake: braking ? 1 : 0,
         approachTargetId: String(args.targetPolicy || '').includes('well') ? null : target.id,
       });
       await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
