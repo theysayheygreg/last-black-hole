@@ -200,7 +200,11 @@ class BrowserJourneyDriver {
       window.__TEST_API?.setMapSelectIndex?.(mapIndex);
       if (seedValue !== null) window.__TEST_API?.setPreviewSeed?.(seedValue);
     }, { mapIndex: this.mapIndex, seedValue: seed });
-    await this.tap('Enter');
+    await this.pressUntilTransition(
+      'Enter',
+      () => this.phase(),
+      (value) => value === 'loading' || value === 'playing',
+    );
   }
 
   async continueTerminalToHome(timeoutMs = 15_000) {

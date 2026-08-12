@@ -41,6 +41,8 @@ assert(!source.includes('showUiFixture'),
   'Journey UI actions must not fabricate state through fixture APIs');
 assert(source.includes("value === 'paused'") && source.includes("value === 'profileSelect'"),
   'Journey UI actions must observe real phase transitions');
+assert(source.includes("value === 'loading' || value === 'playing'"),
+  'Journey map confirmation must remain held until the real launch transition consumes it');
 
 async function probeDriverPolicies() {
   const sent = [];
