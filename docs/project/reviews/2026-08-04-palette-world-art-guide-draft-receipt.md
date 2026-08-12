@@ -39,13 +39,13 @@ The rendered companion embeds the exact escaped Markdown payload. A direct extra
 
 ## Correction addendum — 2026-08-11
 
-Orrery found that the prior packet’s §6 character strings were taken from the directional-ASCII proposal rather than live `RAMPS`, that the normal-row heavy-end claim was wrong, that runtime fallback substitution was overstated, and that the Deck table cited a runtime file absent at the packet SHA.
+Orrery found that the prior packet’s §6 character strings were taken from the directional-ASCII proposal rather than live `RAMPS`, that the normal-row heavy-end claim was wrong, and that runtime fallback substitution was overstated. Orrery's associated claim that the Deck table's runtime owner was absent was itself erroneous.
 
 This descendant corrects only those mechanical claims:
 
 - §6 now points each normal-flow row directly to `RAMPS[0..3]` in `src/render/shaders/ascii.glsl.js` rather than transcribing stale proposal characters; normal rows converge on `# % @`, not `░ ▒ ▓ █`.
 - Unsupported-glyph substitution is explicitly proposed/unimplemented at this SHA; a typography probe string is not substitution logic.
-- The Deck radii are now sourced as design-contract guidance from `docs/design/VISUAL-STYLE-GUIDE-v0.3.md`; the missing runtime owner and unverified binding are disclosed.
+- The Deck radii cite the live `src/render-three/entity-presentation-scale.js` owner; its `FAMILY_SPECS` matches the guide table and the resolver preserves authority radius as input.
 - Provenance explicitly separates shipped atlas truth from the `DIRECTIONAL-ASCII.md` proposal/reference.
 - HTML is regenerated from the corrected Markdown payload.
 
@@ -54,5 +54,5 @@ This descendant corrects only those mechanical claims:
 - Markdown/HTML payload extraction + HTML unescape: PASS (`22,151` characters identical).
 - Banned literal `#FF5353` search across both deliverables: PASS (absent).
 - Shipped atlas import: PASS — `RAMPS.length === 6`, `CHARS_PER_RAMP === 16`, and all normal rows have 16 glyphs; the guide points to every `RAMPS[0..3]` source rather than copying proposal glyphs.
-- Heavy-end, proposed-only fallback posture, and absent runtime-scale-owner attribution: PASS.
+- Heavy-end, proposed-only fallback posture, and live runtime-scale-owner citation: PASS.
 - `git diff --check`: PASS.

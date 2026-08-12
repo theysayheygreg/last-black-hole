@@ -41,7 +41,7 @@ Void owns at least half of perceived frame mass. Fabric owns movement evidence, 
 
 ### Deck presentation radii
 
-These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture, transcribed from the presentation-scale table in `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` (not a runtime scale owner at this SHA). They are design-contract minima/base/maxima and never substitute authority collision, gravity, Noise, or interaction radii. Runtime binding remains unverified by this guide.
+These are **pixel half-radii** on the 1280×720 backing used for the 1280×800 Deck capture. `src/render-three/entity-presentation-scale.js` is the live presentation-scale owner at this SHA: its `FAMILY_SPECS` values match this table and its resolver preserves the authority radius as input rather than substituting it. These presentation minima/base/maxima never substitute authority collision, gravity, Noise, or interaction radii.
 
 | Family / subtype | Deck min / base / max px radius | Presentation owner | Authority / interaction truth |
 |---|---:|---|---|
@@ -190,7 +190,7 @@ Substantive changes to hierarchy, palette role meaning, glyph grammar, well/wave
 - `docs/design/VISUAL-DENSITY.md` — additive density-buffer policy and measured budget.
 - **Shipped glyph truth:** `src/render/shaders/ascii.glsl.js` (`RAMPS`, `CHARS_PER_RAMP`, atlas generation) and `src/render/passes/ascii-pass.js` (velocity input/pass ABI) — live six-row × sixteen-column atlas and selection law at this SHA.
 - **Proposal/reference only:** `docs/design/DIRECTIONAL-ASCII.md` — directional ASCII intent and a future-facing alternate character proposal; it is not the source for live `RAMPS` values or runtime fallback behavior.
-- **Design-contract radii source:** `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` — Deck presentation radius table; its named runtime owner is absent at this SHA, so the table is documented guidance rather than a verified runtime binding.
+- **Shipped radii truth:** `src/render-three/entity-presentation-scale.js` (`FAMILY_SPECS`, `resolveEntityPresentationScale`) — live Deck presentation owner and pixel-half-radius values; `docs/design/VISUAL-STYLE-GUIDE-v0.3.md` is the matching design-contract table.
 - `docs/design/THREE-ENTITY-VISUALS.md` — entity hierarchy, separation stack, pixel-surface rules, and family targets.
 - `docs/reference/target-visuals/2026-06-26/{README.md,01-playable-separation-target.png,02-entity-readability-target.png,03-scene-stack-style-board.png}` — inspected directional composites; not gameplay proof.
 - `docs/v0.3/reviews/2026-08-01-movement-physics-fabric-redesign.md` — Greg-approved 2026-08-02 lane/well/wave composites.
