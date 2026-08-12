@@ -1,0 +1,23 @@
+{
+  "package_id": "2026-08-04-mosaic-map-contact-icons",
+  "status": "REVISED DRAFT — awaiting Greg review/tuning",
+  "binding_owner": "Forge",
+  "binding_status": "awaiting Greg review/tuning",
+  "provenance_class": "hand-authored original vector; no generated or external source material",
+  "path_to_reality": "src/content/map-scales.data.json changes survey contents from four to six rows; src/ui/map-select-survey.js emits and sanitizes scavengerContacts and anomalyContacts. Forge binds the six SVGs to map-select 44×44 cells after ratification.",
+  "arrival_test": "Focused survey test proves every canonical registry rangeKey survives emit + sanitize with max > 0; after Forge binding, a map-select capture renders all six named glyphs paired with text in 44×44 cells.",
+  "source_of_truth": ["docs/v0.3/UI-STYLE-GUIDE-v1.md §5 Iconography", "docs/v0.3/ui-style-guide/UI-STYLE-GUIDE-v1.html", "docs/project/reviews/2026-08-05-orrery-department-drafts-review.md"],
+  "authoring": {"kind": "hand-authored vector", "tool": "Mosaic / SVG", "generation_inputs": "Six contact-family definitions; 16×16 viewBox; 1px currentColor stroke; square caps/miter joins; source geometry retains curved/diagonal coordinates; no crispEdges on curved or diagonal glyphs."},
+  "assets": [
+    {"asset_id":"map-contact-well-spiral","file":"well-spiral.svg","family":"well","format":"SVG 1.1","dimensions":"16×16 viewBox; intrinsic 16×16 px","color":"currentColor; specimen route cyan","intended_surface":"map-select contact row, centered in 44×44 icon cell","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-derelict-diamond","file":"derelict-diamond.svg","family":"derelict","format":"SVG 1.1","dimensions":"16×16 viewBox; intrinsic 16×16 px","color":"currentColor; specimen value amber","intended_surface":"map-select contact row, centered in 44×44 icon cell","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-stellar-star","file":"stellar-star.svg","family":"stellar","format":"SVG 1.1","dimensions":"16×16 viewBox; intrinsic 16×16 px","color":"currentColor; specimen value amber","intended_surface":"map-select contact row, centered in 44×44 icon cell","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-scavenger-skull","file":"scavenger-skull.svg","family":"scavenger","format":"SVG 1.1","dimensions":"16×16 viewBox; intrinsic 16×16 px","color":"currentColor; specimen danger red","intended_surface":"map-select contact row, centered in 44×44 icon cell","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-anomaly-burst","file":"anomaly-burst.svg","family":"anomaly","format":"SVG 1.1","dimensions":"16×16 viewBox; intrinsic 16×16 px","color":"currentColor; specimen anomaly violet","intended_surface":"map-select contact row, centered in 44×44 icon cell","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-aperture-ring","file":"aperture-ring.svg","family":"exit","format":"SVG 1.1","dimensions":"16×16 viewBox; intrinsic 16×16 px","color":"currentColor; specimen route cyan","intended_surface":"map-select contact row, centered in 44×44 icon cell","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-family-specimen-source","file":"map-contact-family-specimen.svg","format":"SVG 1.1","dimensions":"1280×720 px","color":"UI guide palette only","intended_surface":"review specimen","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-family-specimen-render","file":"map-contact-family-specimen.png","format":"PNG","dimensions":"1280×720 px RGB","color":"RGB","intended_surface":"review specimen render","rights_provenance":"derived locally from hand-authored SVG via rsvg-convert","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-family-16px-sheet-source","file":"map-contact-family-16px-sheet.svg","format":"SVG 1.1","dimensions":"96×16 px","color":"UI guide semantic role colors","intended_surface":"true-size visual review","rights_provenance":"hand-authored original vector","verified_at":"2026-08-07T22:54:33Z"},
+    {"asset_id":"map-contact-family-16px-sheet-render","file":"map-contact-family-16px-sheet.png","format":"PNG","dimensions":"96×16 px RGBA","color":"RGBA","intended_surface":"true-size visual review render","rights_provenance":"derived locally from hand-authored SVG via rsvg-convert","verified_at":"2026-08-07T22:54:33Z"}
+  ]
+}

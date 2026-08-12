@@ -156,6 +156,8 @@ function surveyAggregates(map, registry, rng) {
     gravityWells: range(Math.max(2, Math.round(wellCount * 0.58)), Math.max(4, Math.ceil(wellCount * 1.18)), rng, Math.max(1, Math.round(scaleFactor))),
     derelictFields: range(Math.max(3, Math.round(wreckCount * 0.48)), Math.max(6, Math.ceil(wreckCount * 0.92)), rng, Math.max(1, Math.round(scaleFactor))),
     stellarContacts: range(Math.max(1, Math.round(starCount * 0.42)), Math.max(3, Math.ceil(starCount * 0.86)), rng, 1),
+    scavengerContacts: range(Math.max(1, Math.round(wreckCount * 0.20)), Math.max(2, Math.ceil(wreckCount * 0.44)), rng, 1),
+    anomalyContacts: range(Math.max(1, Math.round(wellCount * 0.16)), Math.max(2, Math.ceil(wellCount * 0.34)), rng, 1),
     possibleExits: range(1, deepExitMax(registry), rng, 1),
   };
 }
@@ -226,7 +228,7 @@ export function sanitizeSurveyPreview(candidate) {
       }))
       : [],
   };
-  for (const key of ['gravityWells', 'derelictFields', 'stellarContacts', 'possibleExits']) {
+  for (const key of ['gravityWells', 'derelictFields', 'stellarContacts', 'scavengerContacts', 'anomalyContacts', 'possibleExits']) {
     safe.aggregateRanges[key] = {
       min: Math.max(0, Math.floor(Number(aggregates[key]?.min) || 0)),
       max: Math.max(0, Math.floor(Number(aggregates[key]?.max) || 0)),

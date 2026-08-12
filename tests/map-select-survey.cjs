@@ -73,6 +73,12 @@ async function run() {
       canonical.survey.contents.map(({ id, label, description, role }) => ({ id, label, description, role })),
       `${mapId}: sanitized preview content copy drifted`,
     );
+    for (const [familyIndex, { rangeKey }] of canonical.survey.contents.entries()) {
+      const aggregate = preview.aggregateRanges[rangeKey];
+      assert(aggregate, `${mapId}: ${rangeKey} was dropped by the survey whitelist`);
+      assert(aggregate.max > 0, `${mapId}: ${rangeKey} resolved to a dead aggregate`);
+      assert.deepStrictEqual(preview.possibleContactFamilies[familyIndex].range, aggregate, `${mapId}: ${rangeKey} did not reach its visible contact family`);
+    }
   }
 
   const valid = survey.buildValidSurveySelection({ id: 'expanse', map: maps[1].MAP }, briefing, 42);
