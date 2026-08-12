@@ -64,7 +64,29 @@ async function probeDriverPolicies() {
   assert.deepStrictEqual(sent[1], { slingshot: false });
 }
 
-probeDriverPolicies().then(() => {
+async function probeFramePolledMenuTransition() {
+  let pressed = false;
+  let frames = 0;
+  const keyEvents = [];
+  const page = {
+    keyboard: {
+      down: async (code) => { pressed = true; keyEvents.push(`down:${code}`); },
+      up: async (code) => { pressed = false; keyEvents.push(`up:${code}`); },
+    },
+    evaluate: async () => { frames += 1; },
+  };
+  const driver = new BrowserJourneyDriver({ page, simUrl: 'http://journey.invalid', artifactRoot: '/tmp' });
+  let polls = 0;
+  const state = await driver.pressUntilTransition('KeyE', async () => {
+    polls += 1;
+    return { tabIndex: pressed && polls >= 2 ? 1 : 0 };
+  }, (value) => value.tabIndex === 1, 1_000);
+  assert.strictEqual(state.tabIndex, 1, 'Held Home input must survive until the frame-polled UI consumes it');
+  assert.deepStrictEqual(keyEvents, ['down:KeyE', 'up:KeyE']);
+  assert.strictEqual(frames, 1, 'Released Home input must remain up across one animation frame before the next edge');
+}
+
+Promise.all([probeDriverPolicies(), probeFramePolledMenuTransition()]).then(() => {
   console.log('JourneyDriverContract: real input and shared movement owner PASS');
 }).catch((error) => {
   console.error(error);

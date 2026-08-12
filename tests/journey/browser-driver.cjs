@@ -148,6 +148,16 @@ class BrowserJourneyDriver {
     await sleep(100);
   }
 
+  async pressUntilTransition(code, read, expected, timeoutMs = 10_000) {
+    await this.page.keyboard.down(code);
+    try {
+      return await this.waitPage(read, expected, timeoutMs);
+    } finally {
+      await this.page.keyboard.up(code);
+      await this.page.evaluate(() => window.__TEST_API?.stepFrameForTest?.(1 / 60));
+    }
+  }
+
   emit(type) {
     const event = { type, at: Date.now(), journeySeq: ++this.syntheticEventSequence };
     this.events.push(event);
@@ -346,14 +356,26 @@ class BrowserJourneyDriver {
       } else {
         await this.ensureHome();
         const wanted = section === 'map-select' ? 'LAUNCH' : String(section).toUpperCase();
-        await this.waitPage(async () => {
-          const state = await this.page.evaluate(() => window.__TEST_API?.getHomeState?.());
-          if (state?.phase === 'home' && state.tabName !== wanted) await this.tap('KeyE');
-          return state;
-        }, (state) => state?.phase === 'home' && state.tabName === wanted);
+        const deadline = Date.now() + 10_000;
+        let state = await this.page.evaluate(() => window.__TEST_API?.getHomeState?.());
+        while (state?.phase === 'home' && state.tabName !== wanted && Date.now() < deadline) {
+          const previousTab = state.tabIndex;
+          state = await this.pressUntilTransition(
+            'KeyE',
+            () => this.page.evaluate(() => window.__TEST_API?.getHomeState?.()),
+            (next) => next?.phase === 'home' && next.tabIndex !== previousTab,
+            Math.max(1, deadline - Date.now()),
+          );
+        }
+        if (state?.phase !== 'home' || state.tabName !== wanted) {
+          throw new Error(`Journey UI transition timed out; last=${JSON.stringify(state)}`);
+        }
         if (section === 'map-select') {
-          await this.tap('Enter');
-          await this.waitPage(() => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()), (value) => value === 'mapSelect');
+          await this.pressUntilTransition(
+            'Enter',
+            () => this.page.evaluate(() => window.__TEST_API?.getGamePhase?.()),
+            (value) => value === 'mapSelect',
+          );
         }
       }
       this.emit(`ui.${section === 'map-select' ? 'mapSelect' : section}.ready`);
