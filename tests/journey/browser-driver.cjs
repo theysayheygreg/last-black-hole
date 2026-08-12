@@ -151,7 +151,15 @@ class BrowserJourneyDriver {
   async pressUntilTransition(code, read, expected, timeoutMs = 10_000) {
     await this.page.keyboard.down(code);
     try {
-      return await this.waitPage(read, expected, timeoutMs);
+      const deadline = Date.now() + timeoutMs;
+      let last = null;
+      while (Date.now() < deadline) {
+        last = await read();
+        if (expected(last)) return last;
+        await this.page.evaluate(() => window.__TEST_API?.stepFrameForTest?.(1 / 60));
+        await sleep(80);
+      }
+      throw new Error(`Journey UI transition timed out; last=${JSON.stringify(last)}`);
     } finally {
       await this.page.keyboard.up(code);
       await this.page.evaluate(() => window.__TEST_API?.stepFrameForTest?.(1 / 60));

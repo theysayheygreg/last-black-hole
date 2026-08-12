@@ -76,14 +76,12 @@ async function probeFramePolledMenuTransition() {
     evaluate: async () => { frames += 1; },
   };
   const driver = new BrowserJourneyDriver({ page, simUrl: 'http://journey.invalid', artifactRoot: '/tmp' });
-  let polls = 0;
   const state = await driver.pressUntilTransition('KeyE', async () => {
-    polls += 1;
-    return { tabIndex: pressed && polls >= 2 ? 1 : 0 };
+    return { tabIndex: pressed && frames >= 1 ? 1 : 0 };
   }, (value) => value.tabIndex === 1, 1_000);
   assert.strictEqual(state.tabIndex, 1, 'Held Home input must survive until the frame-polled UI consumes it');
   assert.deepStrictEqual(keyEvents, ['down:KeyE', 'up:KeyE']);
-  assert.strictEqual(frames, 1, 'Released Home input must remain up across one animation frame before the next edge');
+  assert.strictEqual(frames, 2, 'Home input must step once held and once released before the next edge');
 }
 
 Promise.all([probeDriverPolicies(), probeFramePolledMenuTransition()]).then(() => {
