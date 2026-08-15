@@ -42,7 +42,7 @@
     "test:agent-eval": "node scripts/run-journey.cjs agent.salvage-noise-extract",
     "test:bench": "node tests/run-all.cjs --lane=bench --renderer=three",
     "test:audio-tools": "node tests/run-all.cjs --lane=audio-tools --renderer=three",
-    "test:agent-eval:visible": "LBH_BROWSER_MODE=headed node scripts/run-journey.cjs agent.salvage-noise-extract",
+    "test:agent-eval:visible": "node scripts/run-visible-agent-eval.cjs",
     "test:journeys": "node tests/journey-runtime.cjs && node tests/journey-definitions.cjs && node tests/journey-driver-contract.cjs",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",
     "test:solo-authority": "node tests/solo-authority-launch.cjs",

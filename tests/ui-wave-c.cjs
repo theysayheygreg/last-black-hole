@@ -19,7 +19,10 @@ const ROOT = path.resolve(__dirname, '..');
   assert.deepStrictEqual(caps.drifter, [1, 3, 1]);
   assert.deepStrictEqual(caps.breacher, [2, 1, 2]);
   assert(mainSource.includes('track.maxLevel'), 'Ship/Rig surfaces do not consume per-track authority caps');
-  assert(mainSource.includes('shipRigTracks.forEach'), 'Ship tab does not allocate each track denominator independently');
+  assert(mainSource.includes('for (let ti = 0; ti < tracks.length; ti++)')
+    && mainSource.includes('const maxLevel = Math.max(0, Number(track.maxLevel) || 0)')
+    && mainSource.includes('${Math.min(rank, maxLevel)}/${maxLevel}'),
+  'Ship tab does not allocate each track denominator independently');
   assert(!mainSource.includes('/${MAX_RIG_LEVEL}'), 'Fabricated global rig denominator survived');
   assert(!mainSource.includes("const filledBars = '#'.repeat"), 'ASCII rig gauge survived');
 

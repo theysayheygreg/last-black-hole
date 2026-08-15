@@ -66,13 +66,14 @@ async function run() {
       },
       wells: [{
         id: 'gravity', catalogId: 'base-well', behaviorId: 'base-well',
+        label: 'gravity',
         wx: 1, wy: 2, mass: 1, visualMass: 0, orbitalDir: 1,
         overdriveTier: 0, overdriveMultiplier: 1,
         killRadius: 0.05, ringOuter: 0.125,
       }],
-      stars: [{ id: 'live', wx: 2, wy: 3, mass: 1, type: 'mainSequence' }],
+      stars: [{ id: 'live', label: 'STAR 1', wx: 2, wy: 3, mass: 1, type: 'mainSequence' }],
       remotePlayers: [{
-        id: 'gone', wx: 4, wy: 5, vx: 0, vy: 0, status: 'dead', hullType: 'drifter',
+        id: 'gone', label: 'VESSEL', wx: 4, wy: 5, vx: 0, vy: 0, status: 'dead', hullType: 'drifter',
       }],
       fauna: [{ id: 'ghost-fauna', wx: 6, wy: 7, size: 2, kind: 'fauna' }],
       slingshot: {
@@ -178,11 +179,12 @@ async function run() {
         slingshotEngaged: true, thrusting: false, braking: false,
       },
       portals: [{
-        id: 'portal-a', wx: 7, wy: 8, type: 'standard', opacity: 0, radius: 0.12,
-        finalInhibitor: true, warning: true, critical: false,
+        id: 'portal-a', label: 'PORTAL', wx: 7, wy: 8, type: 'standard', opacity: 0, radius: 0.12,
+        finalInhibitor: true, finalExfil: false, warning: true, critical: false,
+        collapseProgress: 0, apertureProgress: 0,
       }],
       wrecks: [{
-        id: 'vault', wx: 9, wy: 10, size: 'medium', tier: 1, type: 'vault',
+        id: 'vault', label: 'vault CONTACT', wx: 9, wy: 10, size: 'medium', tier: 1, type: 'vault',
         vx: 0, vy: 0, lootCount: 0, pickupCooldown: 0, isEcho: false,
         looted: false, valuable: true, valueTier: null, visualState: null,
       }],

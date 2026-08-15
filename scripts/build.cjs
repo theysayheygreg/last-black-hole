@@ -249,9 +249,10 @@ function stageDesktopAuthorityRuntime(stagingRoot) {
   }
 
   // shared-map-loader resolves maps one level above server/, while the CJS
-  // content wrappers resolve their JSON payloads from src/content.
+  // content and condition wrappers resolve payloads/modules from src/.
   copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(stagingRoot, 'src', 'maps'));
   copyIfExists(path.join(ROOT, 'src', 'content'), path.join(stagingRoot, 'src', 'content'));
+  copyIfExists(path.join(ROOT, 'src', 'conditions'), path.join(stagingRoot, 'src', 'conditions'));
   for (const file of DESKTOP_SERVER_SHARED_SOURCE_FILES) {
     copyIfExists(path.join(ROOT, 'src', file), path.join(stagingRoot, 'src', file));
   }
