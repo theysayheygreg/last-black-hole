@@ -224,6 +224,7 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
     player.vx += thrustDeltaV.x;
     player.vy += thrustDeltaV.y;
     if (options.stoppingActive === true
+      && Math.hypot(beforeBrakeVX, beforeBrakeVY) > 1e-9
       && beforeBrakeVX * player.vx + beforeBrakeVY * player.vy <= 0) {
       player.vx = 0;
       player.vy = 0;
