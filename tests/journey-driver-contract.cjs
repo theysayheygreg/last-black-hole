@@ -27,6 +27,12 @@ assert(source.includes('sendRemoteInput'),
   'Journey gameplay actions must use the ordinary remote input seam');
 assert(source.includes('applyProductApproachInput') && source.includes("setHeldProductKey('Enter', approach === true)"),
   'Journey exfil approach must hold the real browser-owned extraction input instead of racing the ambient input loop');
+assert(source.includes("setHeldProductKey('Enter', false)") && source.includes('clearInputForTest'),
+  'Journey exfil arrival and cleanup must release approach input and neutralize synthetic pointer state');
+assert(source.includes('renderToWindowCoords'),
+  'Journey aim must use the canonical render-to-window coordinate adapter');
+assert(!source.includes('extractConfirm: true'),
+  'Journey extraction confirmation must use a fresh product Enter edge, not direct remote input');
 assert(!source.includes('startRemoteGameNow'),
   'Journey launch must use the ordinary title/profile/Home/map-select input path');
 assert(source.includes('keyboard.down(code)') && source.includes('keyboard.up(code)') && source.includes('holdMs = 70'),
@@ -86,14 +92,73 @@ assert.strictEqual(navigationEvidence.stoppingState.assistActive, true);
 assert.strictEqual(navigationEvidence.steeringWaypoint.targetId, 'wreck-7');
 assert.strictEqual(navigationEvidence.hazardClearance.assistActive, false);
 
-assert.deepStrictEqual(productAimClientPoint({
-  ship: { x: 640, y: 360 },
-  rect: { left: 10, top: 20, width: 640, height: 360, renderWidth: 1280, renderHeight: 720 },
-  moveX: 0,
-  moveY: 1,
-}), { x: 330, y: 290 }, 'Product aim must map render-space intent through the letterboxed canvas rectangle');
-assert.strictEqual(productAimClientPoint({ ship: null, rect: {}, moveX: 1, moveY: 0 }), null,
-  'Product aim must fail closed without canonical ship/canvas geometry');
+async function probeProductAimUsesCanonicalViewport() {
+  assert.deepStrictEqual(await productAimClientPoint({
+    ship: { x: 640, y: 360 },
+    rect: { left: 10, top: 20, width: 640, height: 360 },
+    moveX: 0,
+    moveY: 1,
+  }), { x: 330, y: 290 }, 'Product aim must map render-space intent through the letterboxed canvas rectangle');
+  assert.strictEqual(await productAimClientPoint({ ship: null, rect: {}, moveX: 1, moveY: 0 }), null,
+    'Product aim must fail closed without canonical ship/canvas geometry');
+}
+
+async function probeProductExtractionInputLifecycle() {
+  const events = [];
+  let cleared = 0;
+  const page = {
+    keyboard: {
+      down: async (code) => { events.push(`down:${code}`); },
+      up: async (code) => { events.push(`up:${code}`); },
+    },
+    mouse: { move: async (x, y) => { events.push(`mouse:${x},${y}`); } },
+    evaluate: async (fn) => {
+      const body = String(fn);
+      if (body.includes("getElementById('fluid-canvas')")) {
+        return { ship: { x: 640, y: 360 }, rect: { left: 0, top: 0, width: 1280, height: 720 } };
+      }
+      if (body.includes('clearInputForTest')) {
+        cleared += 1;
+        events.push('clear');
+        return null;
+      }
+      if (body.includes('stepFrameForTest')) {
+        events.push('frame');
+        return null;
+      }
+      if (body.includes('portalInteraction')) {
+        events.push('ready');
+        return true;
+      }
+      return null;
+    },
+  };
+  const driver = new BrowserJourneyDriver({ page, artifactRoot: '/tmp' });
+
+  await driver.applyProductApproachInput({ moveX: 1, moveY: 0, thrust: 0.72, approach: true });
+  assert(events.includes('down:Space') && events.includes('down:Enter'),
+    'Distant exfil approach must hold ordinary thrust and approach edges');
+
+  await driver.setHeldProductKey('Enter', false);
+  await driver.applyProductApproachInput({ moveX: 1, moveY: 0, brake: 1, approach: false });
+  assert(events.indexOf('up:Enter') < events.indexOf('down:ControlLeft'),
+    'Arrival must release the held approach edge before braking in the portal envelope');
+
+  await driver.releaseProductApproachInput();
+  assert.strictEqual(driver.heldProductKeys.size, 0, 'Approach cleanup must release every held product key');
+  assert.strictEqual(cleared, 1, 'Approach cleanup must neutralize synthetic mouse/key state once');
+
+  const confirmationStart = events.length;
+  await driver.confirmExtractionThroughProductInput();
+  const confirmation = events.slice(confirmationStart);
+  assert(confirmation.indexOf('frame') < confirmation.indexOf('ready'),
+    'Extraction confirmation must service an authority frame before testing confirmability');
+  assert(confirmation.indexOf('ready') < confirmation.indexOf('down:Enter'),
+    'Extraction confirmation must begin with a fresh Enter edge only after the portal is ready');
+  assert(confirmation.indexOf('down:Enter') < confirmation.indexOf('up:Enter'),
+    'Extraction confirmation must complete the fresh Enter edge');
+  assert.strictEqual(cleared, 2, 'Fresh confirmation must begin from a second fully neutralized input state');
+}
 
 async function probeDriverPolicies() {
   const sent = [];
@@ -229,6 +294,8 @@ async function probeLaunchWaitsForAdvancingAuthority() {
 }
 
 Promise.all([
+  probeProductAimUsesCanonicalViewport(),
+  probeProductExtractionInputLifecycle(),
   probeDriverPolicies(),
   probeAuthenticatedSnapshot(),
   probeConditionReaderServicesAuthority(),

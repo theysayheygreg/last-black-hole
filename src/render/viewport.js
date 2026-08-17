@@ -20,6 +20,8 @@
 //                             render loop when the window is too small.
 //   windowToRenderCoords(...) — converts mouse clientX/Y → render-space
 //                               pixel coords via the canvas bounding rect.
+//   renderToWindowCoords(...) — converts render-space pixel coords back to
+//                               window/client coords through the same rect.
 
 export const RENDER_W = 1280;
 export const RENDER_H = 720;
@@ -78,5 +80,20 @@ export function windowToRenderCoords(clientX, clientY, canvas) {
   return [
     Math.max(0, Math.min(RENDER_W, nx * RENDER_W)),
     Math.max(0, Math.min(RENDER_H, ny * RENDER_H)),
+  ];
+}
+
+/**
+ * Convert fixed render-space pixel coords to window/client coords through the
+ * canvas bounding rect. This is the canonical inverse of windowToRenderCoords.
+ */
+export function renderToWindowCoords(renderX, renderY, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return [rect.left, rect.top];
+  const x = Math.max(0, Math.min(RENDER_W, Number(renderX) || 0));
+  const y = Math.max(0, Math.min(RENDER_H, Number(renderY) || 0));
+  return [
+    rect.left + (x / RENDER_W) * rect.width,
+    rect.top + (y / RENDER_H) * rect.height,
   ];
 }

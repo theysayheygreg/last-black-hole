@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const { wrappedDelta, wrappedDistance } = require('../../scripts/sim/world-geometry.cjs');
 
 const MAP_INDEX = Object.freeze({ shallows: 0, expanse: 1, 'deep-field': 2, deep_field: 2 });
@@ -41,16 +42,23 @@ function finiteOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
-function productAimClientPoint({ ship, rect, moveX, moveY, radius = 180 }) {
+let viewportAdapterPromise = null;
+
+async function productAimClientPoint({ ship, rect, moveX, moveY, radius = 180 }) {
   const magnitude = Math.hypot(Number(moveX) || 0, Number(moveY) || 0);
   if (!ship || !rect || magnitude <= 1e-9 || !(rect.width > 0) || !(rect.height > 0)) return null;
   const nx = (Number(moveX) || 0) / magnitude;
   const ny = (Number(moveY) || 0) / magnitude;
-  const renderWidth = Math.max(1, Number(rect.renderWidth) || rect.width);
-  const renderHeight = Math.max(1, Number(rect.renderHeight) || rect.height);
+  viewportAdapterPromise ||= import(pathToFileURL(path.join(__dirname, '../../src/render/viewport.js')).href);
+  const { renderToWindowCoords } = await viewportAdapterPromise;
+  const [x, y] = renderToWindowCoords(
+    Number(ship.x) + nx * radius,
+    Number(ship.y) + ny * radius,
+    { getBoundingClientRect: () => rect },
+  );
   return Object.freeze({
-    x: rect.left + ((Number(ship.x) + nx * radius) / renderWidth) * rect.width,
-    y: rect.top + ((Number(ship.y) + ny * radius) / renderHeight) * rect.height,
+    x,
+    y,
   });
 }
 
@@ -377,7 +385,7 @@ class BrowserJourneyDriver {
         },
       };
     });
-    const aim = productAimClientPoint({ ...geometry, moveX, moveY });
+    const aim = await productAimClientPoint({ ...geometry, moveX, moveY });
     if (!aim) throw new Error('Journey product input has no ship/canvas aim geometry');
     await this.page.mouse.move(aim.x, aim.y);
     await this.setHeldProductKey('Space', Number(thrust) > 0.01);
@@ -387,6 +395,18 @@ class BrowserJourneyDriver {
 
   async releaseProductApproachInput() {
     for (const code of ['Space', 'ControlLeft', 'Enter']) await this.setHeldProductKey(code, false);
+    await this.page.evaluate(() => window.__TEST_API?.clearInputForTest?.());
+  }
+
+  async confirmExtractionThroughProductInput() {
+    await this.releaseProductApproachInput();
+    await this.serviceAuthorityFrame();
+    const confirmable = await this.page.evaluate(
+      () => window.__TEST_API?.getJourneyState?.()?.player?.portalInteraction?.ready === true,
+    );
+    if (!confirmable) throw new Error('Journey extraction confirmation requires a ready authority portal');
+    await this.tap('Enter');
+    await this.serviceAuthorityFrame();
   }
 
   async navigate(args = {}) {
@@ -439,7 +459,8 @@ class BrowserJourneyDriver {
             continue;
           }
           if (productExfil) {
-            await this.applyProductApproachInput({ moveX: dx, moveY: dy, brake: 1, approach: true });
+            await this.setHeldProductKey('Enter', false);
+            await this.applyProductApproachInput({ moveX: dx, moveY: dy, brake: 1, approach: false });
             await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
           } else {
             await this.sendInput({ brake: 1, approachTargetId: target.id });
@@ -504,7 +525,7 @@ class BrowserJourneyDriver {
     }
     if (action === 'releaseGrapple') return this.sendInput({ slingshot: false });
     if (action === 'emitPulse') return this.sendInput({ pulse: true });
-    if (action === 'confirmExtraction') return this.sendInput({ extractConfirm: true });
+    if (action === 'confirmExtraction') return this.confirmExtractionThroughProductInput();
     if (action === 'pause' || action === 'resume') {
       await this.tap('Escape');
       const expectedPhase = action === 'pause' ? 'paused' : 'playing';
