@@ -34,6 +34,7 @@ const {
   resolveNoiseSourceProjection,
   recordNoisePeak,
   enemyListenerStateFor,
+  selectLocalNoiseListenerHost,
 } = require("./sim/noise-radius.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
@@ -6322,11 +6323,10 @@ function tickFauna(dt) {
 
   // Blooms are local listener entities. Their existence is not gated by a
   // global player meter, so Conductor timing and Noise remain separate.
-  let spawnPlayer = null;
-  for (const player of runtime.players.values()) {
-    if (player.status !== "alive") continue;
-    spawnPlayer = spawnPlayer || player;
-  }
+  // AI pilots are created before browser pilots, but local listener ecology is
+  // a player-facing Noise affordance. Do not let insertion order move every
+  // Signal Bloom into an AI-only pocket of the map.
+  const spawnPlayer = selectLocalNoiseListenerHost(runtime.players.values());
 
   const faunaRng = currentRNG('fauna');
 
@@ -6350,7 +6350,7 @@ function tickFauna(dt) {
   }
 
   // Spawn signal blooms based on signal zone
-    const bloomRate = spawnPlayer ? cfg.bloomSpawnRatePerSecond : 0;
+  const bloomRate = spawnPlayer ? cfg.bloomSpawnRatePerSecond : 0;
   if (bloomRate > 0 && spawnPlayer && fauna.length < cfg.maxTotal) {
     runtime._bloomSpawnAccum = (runtime._bloomSpawnAccum || 0) + bloomRate * dt;
     while (runtime._bloomSpawnAccum >= 1) {

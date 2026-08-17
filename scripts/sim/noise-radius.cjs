@@ -89,6 +89,11 @@ function publicSourceClass(value) {
   return NOISE_CONFIG.publicSourceClasses.includes(className) ? className : null;
 }
 
+function selectLocalNoiseListenerHost(players = []) {
+  const alive = Array.from(players || []).filter((player) => player?.status === "alive");
+  return alive.find((player) => !player.isAI) || alive[0] || null;
+}
+
 function resolveNoiseSourceProjection({
   continuousRadiusMeters = 0,
   continuousSource = "IDLE",
@@ -153,4 +158,5 @@ module.exports = {
   recordNoisePeak,
   resolvePlayerNoiseModifiers,
   resolveThreatWarningBudget,
+  selectLocalNoiseListenerHost,
 };

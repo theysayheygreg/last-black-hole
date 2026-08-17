@@ -16,6 +16,7 @@ const {
   recordNoisePeak,
   resolvePlayerNoiseModifiers,
   resolveThreatWarningBudget,
+  selectLocalNoiseListenerHost,
 } = require('../scripts/sim/noise-radius.cjs');
 const {
   createPlayerBrain,
@@ -54,6 +55,16 @@ async function run() {
   const { formatNoiseDetail } = await import(
     pathToFileURL(path.join(root, 'src/ui/hud-presentation.js')).href
   );
+
+  const aiFirst = { clientId: 'ai-first', isAI: true, status: 'alive' };
+  const deadHuman = { clientId: 'human-dead', isAI: false, status: 'dead' };
+  const liveHuman = { clientId: 'human-live', isAI: false, status: 'alive' };
+  check(selectLocalNoiseListenerHost([aiFirst, deadHuman, liveHuman]) === liveHuman,
+    'local Noise listener ecology prefers a live human over earlier AI insertion');
+  check(selectLocalNoiseListenerHost([aiFirst]) === aiFirst,
+    'AI-only sessions retain local Noise listener ecology');
+  check(selectLocalNoiseListenerHost([deadHuman]) === null,
+    'terminal sessions do not retain a listener ecology host');
   const { InventorySystem } = await import(pathToFileURL(path.join(root, 'src/inventory.js')).href);
   const { CAMERA_VIEW } = await import(pathToFileURL(path.join(root, 'src/coords.js')).href);
   const { minimumOffscreenHearingMeters, referenceOffscreenCornerMeters } = await import(
