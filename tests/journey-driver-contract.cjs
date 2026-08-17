@@ -26,6 +26,8 @@ assert(source.includes('adoptProductSalvageTarget') && source.includes("setHeldP
   'Journey salvage must use the real browser-owned target action');
 assert(source.includes('retainedSalvageTargetId'),
   'Journey salvage must retain the product-selected live wreck while navigating');
+assert(source.includes('refreshProductSalvageTarget'),
+  'Journey salvage must revalidate retained wreck lifecycle and browser selection every navigation loop');
 assert(!source.includes('selectProductSalvageTarget(target.id'),
   'Journey salvage must not cycle toward a separately recomputed wreck identity');
 assert(!source.includes('brake: 1, approachTargetId: target.id'),
@@ -243,6 +245,7 @@ async function probeProductSalvageSelectionLifecycle() {
   assert.strictEqual(targetPresses, 1,
     'Journey must press the real target action once, then retain the product-selected live wreck');
 
+  selected = 'wreck-selected';
   const snapshots = [
     {
       session: { worldScale: 3 },
@@ -256,22 +259,35 @@ async function probeProductSalvageSelectionLifecycle() {
       session: { worldScale: 3 },
       players: [{ status: 'alive', wx: 0, wy: 0, vx: 0, vy: 0 }],
       world: { wrecks: [
-        { id: 'wreck-selected', wx: 0.05, wy: 0, alive: true },
-        { id: 'wreck-other', wx: 0.01, wy: 0, alive: true },
+        { id: 'wreck-selected', wx: 0.2, wy: 0, alive: true, looted: true },
+        { id: 'wreck-other', wx: 0.3, wy: 0, alive: true, looted: false },
+      ] },
+    },
+    {
+      session: { worldScale: 3 },
+      players: [{ status: 'alive', wx: 0, wy: 0, vx: 0, vy: 0 }],
+      world: { wrecks: [
+        { id: 'wreck-other', wx: 0.05, wy: 0, alive: true, looted: false },
       ] },
     },
   ];
   driver.policy = { inputCadenceMs: 50 };
   driver.snapshot = async () => snapshots.shift();
   driver.player = async (body) => body.players[0];
-  driver.adoptProductSalvageTarget = async () => 'wreck-selected';
+  driver.readProductSalvageTargetId = async () => selected;
+  driver.cycleProductSalvageTarget = async () => {
+    targetPresses += 1;
+    selected = 'wreck-other';
+  };
   driver.applyProductApproachInput = async () => {};
   driver.releaseProductApproachInput = async () => {};
   const result = await driver.navigate({
     targetPolicy: 'nearest-salvage', arrivalRadius: 0.07, arrivalSpeed: 0.08,
   });
-  assert.strictEqual(result.targetId, 'wreck-selected',
-    'Journey must retain the product-selected wreck when another wreck becomes nearer');
+  assert.strictEqual(result.targetId, 'wreck-other',
+    'Journey must bind the new product-selected live wreck after the retained wreck is looted');
+  assert.strictEqual(targetPresses, 2,
+    'Mid-navigation invalidation must cause exactly one additional real target press');
 }
 
 async function probeDriverPolicies() {

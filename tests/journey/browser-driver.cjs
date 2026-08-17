@@ -461,11 +461,13 @@ class BrowserJourneyDriver {
     );
   }
 
-  async adoptProductSalvageTarget(snapshot) {
+  async adoptProductSalvageTarget(snapshot, currentSelection = undefined) {
     const liveIds = new Set((snapshot.world?.wrecks || [])
       .filter((wreck) => wreck?.id && wreck.alive !== false && wreck.looted !== true)
       .map((wreck) => String(wreck.id)));
-    let selected = await this.readProductSalvageTargetId();
+    let selected = currentSelection === undefined
+      ? await this.readProductSalvageTargetId()
+      : currentSelection;
     if (!liveIds.has(String(selected || ''))) {
       await this.cycleProductSalvageTarget();
       selected = await this.readProductSalvageTargetId();
@@ -474,6 +476,14 @@ class BrowserJourneyDriver {
       throw new Error('Journey product salvage action did not select a live wreck');
     }
     return String(selected);
+  }
+
+  async refreshProductSalvageTarget(snapshot, retainedTargetId = null) {
+    const selected = await this.readProductSalvageTargetId();
+    const retained = (snapshot.world?.wrecks || []).find((wreck) => String(wreck?.id || '') === String(retainedTargetId || '')
+      && wreck.alive !== false && wreck.looted !== true);
+    if (retained && String(selected || '') === String(retainedTargetId)) return String(retainedTargetId);
+    return this.adoptProductSalvageTarget(snapshot, selected);
   }
 
   async confirmExtractionThroughProductInput() {
@@ -518,8 +528,11 @@ class BrowserJourneyDriver {
           if (args.allowTerminal && player && player.status !== 'alive') return { terminal: player.status };
           throw new Error('Journey navigation requires a live authoritative player');
         }
-        if (productSalvage && retainedSalvageTargetId === null) {
-          retainedSalvageTargetId = await this.adoptProductSalvageTarget(snapshot);
+        if (productSalvage) {
+          retainedSalvageTargetId = await this.refreshProductSalvageTarget(
+            snapshot,
+            retainedSalvageTargetId,
+          );
         }
         const target = this.findTarget(snapshot, player, retainedSalvageTargetId
           ? { ...args, targetId: retainedSalvageTargetId }
