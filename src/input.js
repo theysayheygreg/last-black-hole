@@ -98,6 +98,7 @@ export class InputManager {
       y: window.innerHeight / 2,
       active: false,
       left: false,
+      middle: false,
       right: false,
       distancePx: 0,
       lastMoveAt: 0,
@@ -134,6 +135,7 @@ export class InputManager {
     window.addEventListener('blur', () => {
       this._keys = {};
       this._mouse.left = false;
+      this._mouse.middle = false;
       this._mouse.right = false;
       // Deactivate mouse so the ship doesn't keep aiming toward a
       // stale cursor position after tab-switch / alt-tab.
@@ -174,9 +176,10 @@ export class InputManager {
     const updateMouseButton = (e, pressed) => {
       updateMousePosition(e);
       if (e.button === 0) this._mouse.left = pressed;
+      if (e.button === 1) this._mouse.middle = pressed;
       if (e.button === 2) this._mouse.right = pressed;
       this._mouse.lastButtonAt = performance.now();
-      if (e.button === 0 || e.button === 2) e.preventDefault();
+      if (e.button === 0 || e.button === 1 || e.button === 2) e.preventDefault();
     };
 
     window.addEventListener('mousemove', updateMousePosition);
@@ -223,6 +226,23 @@ export class InputManager {
     if (this._keys['KeyF']) return true;
     const gp = this._getGamepad();
     if (gamepadActionPressed(gp, 'slingshot')) return true;
+    return false;
+  }
+
+  /** Cycle the authority-projected salvage target. T, middle mouse, or R3. */
+  get targetPressed() {
+    if (this._keys['KeyT']) {
+      this.lastInputSource = 'keyboard';
+      return true;
+    }
+    if (this._mouse.middle) {
+      this.lastInputSource = 'mouse';
+      return true;
+    }
+    if (gamepadActionPressed(this._getGamepad(), 'target')) {
+      this.lastInputSource = 'gamepad';
+      return true;
+    }
     return false;
   }
 

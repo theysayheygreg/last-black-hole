@@ -9,7 +9,7 @@ async function run() {
   const { SimClient } = await import(pathToFileURL(
     path.join(__dirname, '..', 'src', 'sim', 'sim-client.js'),
   ).href);
-  const { selectExplicitPortalApproachTarget } = await import(pathToFileURL(
+  const { resolveExplicitSalvageApproachSelection, selectExplicitPortalApproachTarget } = await import(pathToFileURL(
     path.join(__dirname, '..', 'src', 'sim', 'explicit-approach-intent.js'),
   ).href);
   const snapshot = {
@@ -18,6 +18,10 @@ async function run() {
         { id: 'portal-far', wx: 1.8, wy: 0.3, alive: true },
         { id: 'portal-final', wx: 0.7, wy: 0.3, alive: true },
       ],
+      wrecks: [
+        { id: 'wreck-far', wx: 1.4, wy: 0.3, alive: true },
+        { id: 'wreck-near', wx: 0.4, wy: 0.3, alive: true },
+      ],
     },
   };
   const human = { wx: 0.2, wy: 0.3 };
@@ -25,6 +29,16 @@ async function run() {
     'free flight must not infer a target without the extraction action');
   assert.strictEqual(selectExplicitPortalApproachTarget(snapshot, human, true), 'portal-final',
     'held extraction intent must choose the nearest live authority-projected portal');
+  const selectedWreck = resolveExplicitSalvageApproachSelection(snapshot, human, null, true);
+  assert.strictEqual(selectedWreck.id, 'wreck-near', 'first target press selects the nearest live wreck');
+  assert.strictEqual(resolveExplicitSalvageApproachSelection(snapshot, human, selectedWreck.id, false).id, 'wreck-near',
+    'selection persists without another product input edge');
+  assert.strictEqual(resolveExplicitSalvageApproachSelection(snapshot, human, selectedWreck.id, true).id, 'wreck-far',
+    'subsequent target presses cycle nearest-first');
+  assert.strictEqual(resolveExplicitSalvageApproachSelection(snapshot, human, 'wreck-far', true).id, null,
+    'target cycle ends with an explicit clear state');
+  assert.strictEqual(resolveExplicitSalvageApproachSelection({ world: { wrecks: [] } }, human, 'wreck-near', false).id, null,
+    'missing or looted wrecks invalidate client selection immediately');
   const client = new SimClient('http://movement.invalid');
   client.commandCredential = 'movement-test-credential';
   client.authorityRunId = 'movement-test-run';
@@ -80,6 +94,14 @@ async function run() {
   const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
   assert(mainSource.includes('selectExplicitPortalApproachTarget('),
     'ordinary remote extraction input must forward its explicit portal selection');
+  assert(mainSource.includes('resolveExplicitSalvageApproachSelection(')
+    && mainSource.includes('portalApproachTargetId || selectedSalvageTargetId'),
+  'ordinary product input must own salvage selection and forward only its authority target ID');
+  const inputSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'input.js'), 'utf8');
+  const bindingSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'input-bindings.js'), 'utf8');
+  assert(inputSource.includes("this._keys['KeyT']") && inputSource.includes('this._mouse.middle')
+    && bindingSource.includes('target: [11]'),
+  'keyboard, middle mouse, and R3 must share the target action');
   const remoteLoop = mainSource.slice(
     mainSource.indexOf('    if (remoteSession.active) {', mainSource.indexOf('function gameLoop')),
     mainSource.indexOf("      } else if (gamePhase === 'dead')", mainSource.indexOf('function gameLoop')),

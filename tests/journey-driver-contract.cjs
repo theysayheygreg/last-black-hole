@@ -22,8 +22,10 @@ assert.strictEqual(evaluateValues({ not: { condition: 'run.grapple.active' } }, 
 
 assert(source.includes("require('../../scripts/sim/world-geometry.cjs')"),
   'Journey movement must consume the canonical authority geometry owner');
-assert(source.includes('approachTargetId: target.id'),
-  'Journey approach must pass explicit target intent into shared Phase 1A movement');
+assert(source.includes('selectProductSalvageTarget') && source.includes("setHeldProductKey('KeyT', true)"),
+  'Journey salvage must use the real browser-owned target action');
+assert(!source.includes('brake: 1, approachTargetId: target.id'),
+  'Journey salvage arrival must not bypass product input with direct target injection');
 assert(source.includes('sendRemoteInput'),
   'Journey gameplay actions must use the ordinary remote input seam');
 assert(source.includes('applyProductApproachInput') && source.includes("setHeldProductKey('Enter', approach === true)"),
@@ -46,7 +48,7 @@ assert(source.includes("String(args.targetPolicy || '') === 'next-available-exfi
   'The next-available-exfil policy must wait through honest closed-aperture intervals');
 assert(source.includes('this.heldProductKeys.size > 0') && source.includes('await this.releaseProductApproachInput()'),
   'Waiting between exfil windows must not keep stale product thrust or interaction input held');
-assert(!source.includes('arrivalRadius * 2') && source.includes('approachTargetId: String(args.targetPolicy'),
+assert(!source.includes('arrivalRadius * 2') && source.includes('productApproach = productExfil || productSalvage'),
   'Journey must delegate hazard clearance and stopping to shared explicit-target movement');
 assert(!source.includes('/debug/player-state'),
   'Journey gameplay actions must not mutate authoritative player state through debug setup');

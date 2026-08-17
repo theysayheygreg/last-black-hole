@@ -1,5 +1,12 @@
 # v0.3 Changelog
 
+- **Player-owned salvage targeting:** `T`, middle mouse, and `R3` now cycle
+  nearest-first through live authority-projected wrecks and end on a clear
+  state. The selected wreck receives the same server-validated approach assist
+  used by other explicit targets, appears in the HUD, and clears if the wreck
+  disappears or is looted. Journey salvage uses this exact browser action
+  instead of injecting a wreck ID through the test API.
+
 - **Endless Sky Phase 1A movement affordances:** human, AI-player, and future
   Journey input now enter one shared desired-heading/thrust/brake grammar before
   the existing authority force order. Turns converge on their fractional final

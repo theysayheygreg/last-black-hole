@@ -526,7 +526,7 @@ export function initTestAPI(getState) {
     },
 
     getNetworkState() {
-      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot, remoteControlState, remotePendingSlingshotEdges } = getState();
+      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot, remoteControlState, remotePendingSlingshotEdges, selectedSalvageTargetId } = getState();
       const pendingSlingshotEdges = Array.isArray(remotePendingSlingshotEdges)
         ? remotePendingSlingshotEdges.slice()
         : [];
@@ -556,6 +556,7 @@ export function initTestAPI(getState) {
         remotePendingSlingshotEdges: pendingSlingshotEdges,
         // Compatibility count for older controller probes.
         remotePendingSlingshotPresses: pendingSlingshotEdges.length,
+        selectedSalvageTargetId: selectedSalvageTargetId || null,
         lastRemoteInput: simClient?.lastSentInput ? { ...simClient.lastSentInput } : null,
         networkMetrics: simClient?.getMetrics ? simClient.getMetrics() : null,
       };

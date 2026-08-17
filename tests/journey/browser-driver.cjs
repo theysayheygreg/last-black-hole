@@ -448,6 +448,24 @@ class BrowserJourneyDriver {
     await this.page.evaluate(() => window.__TEST_API?.clearInputForTest?.());
   }
 
+  async cycleProductSalvageTarget() {
+    await this.setHeldProductKey('KeyT', true);
+    await this.serviceAuthorityFrame();
+    await this.setHeldProductKey('KeyT', false);
+    await this.serviceAuthorityFrame();
+  }
+
+  async selectProductSalvageTarget(targetId, candidateCount = 1) {
+    for (let attempt = 0; attempt <= Math.max(1, candidateCount); attempt += 1) {
+      const selected = await this.page.evaluate(
+        () => window.__TEST_API?.getNetworkState?.()?.selectedSalvageTargetId || null,
+      );
+      if (selected === String(targetId)) return selected;
+      await this.cycleProductSalvageTarget();
+    }
+    throw new Error(`Journey product salvage target did not select ${targetId}`);
+  }
+
   async confirmExtractionThroughProductInput() {
     await this.releaseProductApproachInput();
     await this.serviceAuthorityFrame();
@@ -479,6 +497,8 @@ class BrowserJourneyDriver {
     this.lastNavigationSnapshot = null;
     const productExfil = String(args.targetPolicy || '').includes('exfil')
       || String(args.targetPolicy || '').includes('portal');
+    const productSalvage = !productExfil && !String(args.targetPolicy || '').includes('well');
+    const productApproach = productExfil || productSalvage;
     try {
       while (Date.now() < deadline) {
         const snapshot = await this.snapshot();
@@ -497,6 +517,11 @@ class BrowserJourneyDriver {
           throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
         }
         this.activeTarget = target.id;
+        if (productSalvage) {
+          const salvageCandidates = (snapshot.world?.wrecks || [])
+            .filter((wreck) => wreck?.id && wreck.alive !== false && wreck.looted !== true).length;
+          await this.selectProductSalvageTarget(target.id, salvageCandidates);
+        }
         const worldScale = snapshot.session.worldScale;
         const dx = wrappedDelta(player.wx, target.wx, worldScale);
         const dy = wrappedDelta(player.wy, target.wy, worldScale);
@@ -520,12 +545,12 @@ class BrowserJourneyDriver {
             await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
             continue;
           }
-          if (productExfil) {
+          if (productApproach) {
             await this.setHeldProductKey('Enter', false);
             await this.applyProductApproachInput({ moveX: dx, moveY: dy, brake: 1, approach: false });
             await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
           } else {
-            await this.sendInput({ brake: 1, approachTargetId: target.id });
+            await this.sendInput({ brake: 1, approachTargetId: null });
           }
           return { targetId: target.id, distance, speed };
         }
@@ -536,19 +561,19 @@ class BrowserJourneyDriver {
           thrust: Math.max(0, Math.min(1, Number(args.thrust) || (navigationPolicy === 'slingshot' ? 0.88 : 0.72))),
           brake: 0,
         };
-        if (productExfil) {
-          await this.applyProductApproachInput({ ...movement, approach: true });
+        if (productApproach) {
+          await this.applyProductApproachInput({ ...movement, approach: productExfil });
         } else {
           await this.sendInput({
             ...movement,
-            approachTargetId: String(args.targetPolicy || '').includes('well') ? null : target.id,
+            approachTargetId: null,
           });
         }
         await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
       }
       throw new Error(`Journey navigation timed out for ${this.activeTarget || args.targetKind || 'target'}`);
     } finally {
-      if (productExfil) await this.releaseProductApproachInput();
+      if (productApproach) await this.releaseProductApproachInput();
     }
   }
 

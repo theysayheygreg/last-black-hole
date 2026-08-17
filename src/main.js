@@ -72,7 +72,10 @@ import {
 import { FlowField } from './sim/flow-field.js';
 import { LocalSandboxSimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
-import { selectExplicitPortalApproachTarget } from './sim/explicit-approach-intent.js';
+import {
+  resolveExplicitSalvageApproachSelection,
+  selectExplicitPortalApproachTarget,
+} from './sim/explicit-approach-intent.js';
 import {
   advanceLocalPlayerReconciliation,
   createLocalPlayerReconciliationState,
@@ -380,6 +383,7 @@ let camY = 1.5;
 // Map state
 let currentMap = DEFAULT_PLAYABLE_MAP;
 const remoteSession = createRemoteSessionState();
+let selectedSalvageTargetId = null;
 let fixtureShipCandidates = [];
 let pauseResumeState = createPauseResumeState();
 let startingMasses = [];
@@ -1380,6 +1384,7 @@ function init() {
       get remoteAuthorityActive() { return remoteSession.active; },
       get remoteMapId() { return remoteSession.mapId; },
       get remoteSnapshot() { return remoteSession.snapshot; },
+      get selectedSalvageTargetId() { return selectedSalvageTargetId; },
       get remotePendingSlingshotEdges() { return remoteSession.pendingSlingshotEdges; },
       get remoteSessionHealth() { return remoteSession.health; },
       get remoteControlState() { return currentRemoteControlState(); },
@@ -2774,6 +2779,7 @@ function syncRemoteWorldState(world) {
 
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   resetPhantomForNewSession();
+  selectedSalvageTargetId = null;
   if (!simClient?.enabled) {
     if (RUNTIME_FLAGS.allowLegacySoloFallback) {
       console.warn('[LBH] legacy solo fallback enabled by explicit dev/sandbox gate');
@@ -2876,6 +2882,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
 }
 
 async function leaveRemoteSessionToHome() {
+  selectedSalvageTargetId = null;
   const activeProfileId = profileManager.active?.id || null;
   if (simClient?.enabled && remoteSession.active) {
     try {
@@ -2967,6 +2974,7 @@ function updateCamera(dt) {
 // Pattern: if (buttonNow && !_prevButton) { /* fires once */ }
 let _prevConfirm = false;
 let _prevExtract = false;
+let _prevTarget = false;
 let _prevPause = false;
 let _prevBack = false;
 let _prevUp = false;
@@ -4077,6 +4085,7 @@ function gameLoop(now) {
 
   const confirmNow = inputManager.confirmPressed;
   const extractNow = inputManager.extractPressed;
+  const targetNow = inputManager.targetPressed;
   const pauseNow = inputManager.pausePressed;
   const backNow = inputManager.backPressed;
   const upNow = inputManager.upPressed;
@@ -4349,6 +4358,7 @@ function gameLoop(now) {
           });
           _prevConfirm = confirmNow;
           _prevExtract = extractNow;
+          _prevTarget = targetNow;
           _prevPause = pauseNow;
           _prevBack = backNow;
           _prevUp = upNow;
@@ -4452,6 +4462,24 @@ function gameLoop(now) {
         if (!inventoryOpen && extractNow && !_prevExtract) {
           queueRemoteExtractConfirm(remoteSession);
         }
+        const salvageSelection = resolveExplicitSalvageApproachSelection(
+          remoteSession.snapshot,
+          authorityPlayer,
+          selectedSalvageTargetId,
+          !inventoryOpen && targetNow && !_prevTarget,
+        );
+        if (salvageSelection.id !== selectedSalvageTargetId) {
+          selectedSalvageTargetId = salvageSelection.id;
+          if (salvageSelection.reason === 'selected' || salvageSelection.reason === 'cycled') {
+            const label = salvageSelection.wreck?.name || salvageSelection.wreck?.label || selectedSalvageTargetId;
+            showWarning(`salvage target // ${label}`, 'rgba(120, 220, 235, 0.95)', 1400);
+          } else if (salvageSelection.reason === 'cleared') {
+            showWarning('salvage target clear', 'rgba(150, 190, 205, 0.92)', 1000);
+          }
+        } else if (!selectedSalvageTargetId && salvageSelection.reason === 'unavailable'
+          && !inventoryOpen && targetNow && !_prevTarget) {
+          showWarning('no salvage contact', 'rgba(150, 190, 205, 0.92)', 1200);
+        }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
           const authoritySlingshot = authorityPlayer?.slingshot;
           const rehookCooldownSeconds = Math.max(0, Number(authoritySlingshot?.rehookCooldownSeconds) || 0);
@@ -4476,14 +4504,14 @@ function gameLoop(now) {
             ? inputManager.moveY
             : (Number.isFinite(facing) ? Math.sin(facing) : 0);
           const sentActions = captureRemotePendingActions(remoteSession);
-          // Extraction is an explicit player-owned target selection. Ordinary
-          // brake remains target-free, and salvage stays brake-assisted until
-          // it gains a real player selection affordance.
-          const approachTargetId = selectExplicitPortalApproachTarget(
+          const portalApproachTargetId = selectExplicitPortalApproachTarget(
             remoteSession.snapshot,
             authorityPlayer,
             !inventoryOpen && extractNow,
           );
+          const approachTargetId = inventoryOpen
+            ? null
+            : (portalApproachTargetId || selectedSalvageTargetId);
           remoteSession.inputRequestInFlight = true;
           void simClient.sendInput({
             // The scalar action fields decide whether thrust/brake happens;
@@ -4736,6 +4764,7 @@ function gameLoop(now) {
 
   _prevConfirm = confirmNow;
   _prevExtract = extractNow;
+  _prevTarget = targetNow;
   _prevPause = pauseNow;
   _prevBack = backNow;
   _prevUp = upNow;
@@ -5248,6 +5277,15 @@ function gameLoop(now) {
           : null,
       }),
     );
+    const selectedSalvageWreck = remoteSession.active && selectedSalvageTargetId
+      ? remoteSession.snapshot?.world?.wrecks?.find((wreck) => String(wreck.id) === selectedSalvageTargetId)
+      : null;
+    const salvageInteraction = selectedSalvageWreck ? {
+      action: 'target',
+      label: `salvage target // ${selectedSalvageWreck.name || selectedSalvageWreck.label || selectedSalvageTargetId}`,
+      detail: 'approach assist locked',
+      verb: 'cycle / clear',
+    } : null;
     if (gamePhase === 'playing') updateHUD(simState.runElapsedTime, portalSystem, cargoItems,
       remoteSession.active ? (remoteSession.snapshot?.world?.growthTimer ?? 0) : simState.growthTimer, {
       terminal: gamePhase === 'dead' || gamePhase === 'escaped' || authoritativePlayer?.status === 'escaped'
@@ -5273,7 +5311,7 @@ function gameLoop(now) {
         label: 'confirm extraction',
         detail: 'remain inside cyan aperture',
         verb: 'extract',
-      } : slingshotInteraction,
+      } : (salvageInteraction || slingshotInteraction),
       portalSchedule: remoteSession.active ? remoteSession.snapshot?.portalSchedule : null,
       runDurationSeconds: remoteSession.active ? remoteSession.snapshot?.session?.runDurationSeconds : null,
       wellCount: wellSystem?.wells?.length || 1,
