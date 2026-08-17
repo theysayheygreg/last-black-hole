@@ -1,7 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { BrowserJourneyDriver, evaluateValues } = require('./journey/browser-driver.cjs');
+const { BrowserJourneyDriver, buildNavigationSnapshot, evaluateValues } = require('./journey/browser-driver.cjs');
 
 const driverPath = path.join(__dirname, 'journey', 'browser-driver.cjs');
 const source = fs.readFileSync(driverPath, 'utf8');
@@ -37,7 +37,7 @@ assert(!/stoppingDistance|v\s*\*\s*v|resolveHazard/.test(source),
   'Journey controller must not reintroduce retired stopping or hazard controller math');
 assert(source.includes('getJourneyState?.()?.authorityEvents'),
   'Journey waits must consume the authenticated client event history');
-assert(source.includes('getJourneyState?.() || null') && source.includes('players: state.player ? [state.player] : []'),
+assert(source.includes('api?.getJourneyState?.() || {}') && source.includes('players: state.player ? [state.player] : []'),
   'Journey navigation must consume the browser-authenticated authority snapshot');
 assert(!source.includes("fetch(`${this.simUrl}/snapshot`)"),
   'Journey navigation must not bypass browser authority through the public snapshot route');
@@ -51,6 +51,28 @@ assert(source.includes("value === 'loading' || value === 'playing'"),
   'Journey map confirmation must remain held until the real launch transition consumes it');
 assert(source.includes("state.playerStatus === 'alive'"),
   'Journey launch must wait for the browser-owned authoritative player before navigation');
+
+const navigationEvidence = buildNavigationSnapshot({
+  snapshot: {
+    session: { worldScale: 3 }, tick: 44, simTime: 2.933,
+    lastRemoteInput: { seq: 9, moveX: 1, moveY: 0, thrust: 0.72, brake: 0, approachTargetId: 'wreck-7', commandCredential: 'do-not-record' },
+  },
+  player: {
+    status: 'alive', wx: 2.98, wy: 1, vx: 0.12, vy: -0.02, facing: 0.1,
+    deliveredThrust: 0.4, deliveredBrake: 0, lastInputBrake: 0,
+    movementAffordance: { requestedHeading: 0.2, stoppingAssist: true, hazardAssist: false },
+  },
+  target: { id: 'wreck-7', wx: 0.04, wy: 1.1, radius: 0.02 },
+  policy: 'straight-line', arrivalRadius: 0.07, arrivalSpeed: 0.08,
+});
+assert.strictEqual(navigationEvidence.source, 'browser-authenticated-authority');
+assert.ok(navigationEvidence.canonicalDistance < 0.13, 'Navigation evidence must use canonical wrapped distance');
+assert.strictEqual(navigationEvidence.rawInput.approachTargetId, 'wreck-7');
+assert(!('commandCredential' in navigationEvidence.rawInput), 'Navigation receipts must not persist credentials');
+assert.strictEqual(navigationEvidence.authorityShapedIntent.movementAffordance.stoppingAssist, true);
+assert.strictEqual(navigationEvidence.stoppingState.assistActive, true);
+assert.strictEqual(navigationEvidence.steeringWaypoint.targetId, 'wreck-7');
+assert.strictEqual(navigationEvidence.hazardClearance.assistActive, false);
 
 async function probeDriverPolicies() {
   const sent = [];
@@ -83,12 +105,13 @@ async function probeAuthenticatedSnapshot() {
     world: { wrecks: [{ id: 'wreck-1', wx: 1.1, wy: 1.1 }] },
     recentEvents: [{ seq: 1, type: 'player.joined' }],
   };
-  const page = { evaluate: async () => authorityState };
+  const page = { evaluate: async () => ({ ...authorityState, lastRemoteInput: { seq: 12, thrust: 0.72 } }) };
   const driver = new BrowserJourneyDriver({ page, artifactRoot: '/tmp' });
   const snapshot = await driver.snapshot();
   assert.strictEqual(snapshot.players[0].clientId, 'browser-player');
   assert.strictEqual(snapshot.session.runId, 'run-1');
   assert.strictEqual(snapshot.world.wrecks[0].id, 'wreck-1');
+  assert.strictEqual(snapshot.lastRemoteInput.seq, 12);
 }
 
 async function probeFramePolledMenuTransition() {

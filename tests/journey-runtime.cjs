@@ -77,6 +77,7 @@ async function main() {
     getAuthorityEvents: () => [{ type: 'salvage.collected', tick: 12 }],
     getEvidencePaths: () => ['/tmp/journey/frame.png'],
     getArtifactManifest: () => [{ type: 'receipt', path: '/tmp/journey/receipt.json' }],
+    getNavigationSnapshot: () => ({ tick: 12, canonicalDistance: 0.14, rawInput: { thrust: 0.72 } }),
   };
   const conditions = {
     evaluate: async (query) => query.condition === 'run.cargo.count' && state.salvage >= query.gte,
@@ -103,6 +104,7 @@ async function main() {
   assert.strictEqual(result.authorityEvents[0].type, 'salvage.collected');
   assert.strictEqual(result.evidencePaths[0], '/tmp/journey/frame.png');
   assert.strictEqual(result.artifactManifest.length, 2);
+  assert.strictEqual(result.navigationSnapshot.canonicalDistance, 0.14);
   assert.match(result.summary, /completed/);
 
   const failingDriver = {
@@ -121,6 +123,7 @@ async function main() {
   assert.strictEqual(knownFailure.status, 'known-failure');
   assert.strictEqual(knownFailure.lastCompletedStep.id, 'action:journey.steps[0]');
   assert.strictEqual(knownFailure.activeTarget, 'portal-9');
+  assert.strictEqual(knownFailure.navigationSnapshot.tick, 12);
   assert.match(knownFailure.error.message, /portal.ready/);
   assert.ok(Array.isArray(knownFailure.authorityEvents));
   assert.ok(Number.isFinite(knownFailure.elapsedMs));

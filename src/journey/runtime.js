@@ -142,6 +142,7 @@ export class JourneyRuntime {
     const authorityEvents = await optionalRead(this.#driver, 'getAuthorityEvents', []);
     const evidencePaths = await optionalRead(this.#driver, 'getEvidencePaths', []);
     const driverArtifacts = await optionalRead(this.#driver, 'getArtifactManifest', []);
+    const navigationSnapshot = await optionalRead(this.#driver, 'getNavigationSnapshot', null);
     const finishedAt = this.#clock.now();
     return Object.freeze({
       journeyId: journey.id,
@@ -150,6 +151,7 @@ export class JourneyRuntime {
       lastCompletedStep,
       activeStep: activeStep ? { id: activeStep.id, kind: stepKind(activeStep) } : null,
       activeTarget: activeTarget ?? await optionalRead(this.#driver, 'getActiveTarget', null),
+      navigationSnapshot,
       conditionSnapshot,
       authorityEvents,
       elapsedMs: finishedAt - startedAt,

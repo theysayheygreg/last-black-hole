@@ -28,6 +28,76 @@ function safeName(value) {
   return String(value || 'artifact').replace(/[^a-z0-9._-]+/gi, '-').toLowerCase();
 }
 
+function finiteOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function navigationInput(input) {
+  if (!input) return null;
+  return {
+    seq: finiteOrNull(input.seq),
+    moveX: finiteOrNull(input.moveX),
+    moveY: finiteOrNull(input.moveY),
+    thrust: finiteOrNull(input.thrust),
+    brake: finiteOrNull(input.brake),
+    approachTargetId: input.approachTargetId || null,
+  };
+}
+
+function buildNavigationSnapshot({ snapshot, player, target, policy, arrivalRadius, arrivalSpeed }) {
+  const worldScale = finiteOrNull(snapshot?.session?.worldScale);
+  const dx = wrappedDelta(player.wx, target.wx, worldScale);
+  const dy = wrappedDelta(player.wy, target.wy, worldScale);
+  const affordance = player.movementAffordance ? { ...player.movementAffordance } : null;
+  const rawInput = navigationInput(snapshot?.lastRemoteInput);
+  return {
+    source: 'browser-authenticated-authority',
+    tick: finiteOrNull(snapshot?.tick),
+    simTime: finiteOrNull(snapshot?.simTime),
+    policy,
+    player: {
+      status: player.status || null,
+      wx: finiteOrNull(player.wx),
+      wy: finiteOrNull(player.wy),
+      vx: finiteOrNull(player.vx),
+      vy: finiteOrNull(player.vy),
+      speed: Math.hypot(Number(player.vx) || 0, Number(player.vy) || 0),
+    },
+    target: {
+      id: target.id || null,
+      wx: finiteOrNull(target.wx),
+      wy: finiteOrNull(target.wy),
+      radius: finiteOrNull(target.radius),
+    },
+    canonicalDistance: wrappedDistance(player.wx, player.wy, target.wx, target.wy, worldScale),
+    rawInput,
+    authorityShapedIntent: {
+      facing: finiteOrNull(player.facing),
+      deliveredThrust: finiteOrNull(player.deliveredThrust),
+      deliveredBrake: finiteOrNull(player.deliveredBrake),
+      movementAffordance: affordance,
+    },
+    stoppingState: {
+      assistActive: affordance?.stoppingAssist === true,
+      acceptedBrake: finiteOrNull(player.lastInputBrake),
+      deliveredBrake: finiteOrNull(player.deliveredBrake),
+    },
+    steeringWaypoint: {
+      targetId: target.id || null,
+      wx: finiteOrNull(target.wx),
+      wy: finiteOrNull(target.wy),
+      wrappedDeltaX: dx,
+      wrappedDeltaY: dy,
+      arrivalRadius,
+      arrivalSpeed,
+    },
+    hazardClearance: {
+      assistActive: affordance?.hazardAssist === true,
+    },
+  };
+}
+
 class BrowserJourneyConditionReader {
   constructor({ page, conditionNames, validateConditionQuery }) {
     this.page = page;
@@ -78,6 +148,7 @@ class BrowserJourneyDriver {
     this.syntheticEventSequence = 0;
     this.expectedRunRules = {};
     this.slingshotEdge = 0;
+    this.lastNavigationSnapshot = null;
   }
 
   async configureSetup(setup) {
@@ -114,7 +185,13 @@ class BrowserJourneyDriver {
   }
 
   async snapshot() {
-    const state = await this.page.evaluate(() => window.__TEST_API?.getJourneyState?.() || null);
+    const state = await this.page.evaluate(() => {
+      const api = window.__TEST_API;
+      return {
+        ...(api?.getJourneyState?.() || {}),
+        lastRemoteInput: api?.getNetworkState?.()?.lastRemoteInput || null,
+      };
+    });
     if (!state?.session || !state?.world) {
       throw new Error('Journey browser has no authenticated authority snapshot');
     }
@@ -125,6 +202,7 @@ class BrowserJourneyDriver {
       players: state.player ? [state.player] : [],
       world: state.world,
       recentEvents: state.recentEvents || [],
+      lastRemoteInput: state.lastRemoteInput || null,
     };
   }
 
@@ -254,6 +332,8 @@ class BrowserJourneyDriver {
     }
     const deadline = Date.now() + Math.max(1_000, Number(args.timeoutMs) || 45_000);
     const arrivalRadius = Math.max(0.01, Number(args.arrivalRadius) || (args.targetKind === 'portal' ? 0.05 : 0.07));
+    const arrivalSpeed = Number(args.arrivalSpeed) || 0.08;
+    this.lastNavigationSnapshot = null;
     while (Date.now() < deadline) {
       const snapshot = await this.snapshot();
       const player = await this.player(snapshot);
@@ -270,10 +350,18 @@ class BrowserJourneyDriver {
       const distance = Math.hypot(dx, dy);
       const speed = Math.hypot(player.vx, player.vy);
       const navigationPolicy = String(args.policy || 'straight-line');
+      this.lastNavigationSnapshot = buildNavigationSnapshot({
+        snapshot,
+        player,
+        target,
+        policy: navigationPolicy,
+        arrivalRadius,
+        arrivalSpeed,
+      });
       if (navigationPolicy === 'slingshot' && distance <= (Number(args.arrivalRadius) || 0.12) && speed >= 0.08) {
         return { targetId: target.id, distance, speed, policy: navigationPolicy };
       }
-      if (distance <= arrivalRadius && speed <= (Number(args.arrivalSpeed) || 0.08)) {
+      if (distance <= arrivalRadius && speed <= arrivalSpeed) {
         if (navigationPolicy === 'well-intercept') {
           await this.sendInput({ moveX: dx / Math.max(1e-9, distance), moveY: dy / Math.max(1e-9, distance), thrust: 0.9 });
           await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
@@ -461,7 +549,8 @@ class BrowserJourneyDriver {
   getAuthorityEvents() { return this.events; }
   getEvidencePaths() { return this.evidencePaths; }
   getActiveTarget() { return this.activeTarget; }
+  getNavigationSnapshot() { return this.lastNavigationSnapshot; }
   getArtifactManifest() { return []; }
 }
 
-module.exports = { BrowserJourneyConditionReader, BrowserJourneyDriver, evaluateValues };
+module.exports = { BrowserJourneyConditionReader, BrowserJourneyDriver, buildNavigationSnapshot, evaluateValues };
