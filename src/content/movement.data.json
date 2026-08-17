@@ -8,7 +8,10 @@
     "minimumThrustAngleRadians": 2.0943951023931953,
     "minimumThrustScale": 0.12,
     "stoppingMarginWorld": 0.015,
-    "residualSpeedWorld": 0.004
+    "residualSpeedWorld": 0.004,
+    "approachHazardMarginWorld": 0.035,
+    "approachHazardLookaheadSeconds": 0.45,
+    "approachHazardMaxDriftWorld": 0.12
   },
   "player": {
     "thrustAccel": 2.5,

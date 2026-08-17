@@ -1,6 +1,7 @@
 const assert = require('assert');
 const {
   convergeHeading,
+  resolveApproachHazard,
   resolveStoppingEnvelope,
   shapeMovementIntent,
   usefulThrustScale,
@@ -29,6 +30,37 @@ const target = resolveStoppingEnvelope({ vx: 0.4, vy: 0 }, { brake: 0 }, {
   brakeAcceleration: 1,
 });
 assert(target.targetAssist && target.brake > 0, 'explicit approach must enter the shared stopping envelope');
+
+const acheronTarget = {
+  explicit: true,
+  id: 'wreck-route',
+  kind: 'salvage',
+  distance: 0.8,
+  radius: 0.08,
+  hazardDriftMargin: 0.035,
+  hazard: { id: 'well-2', distance: 0.0987, clearance: 0.12, awayX: 1, awayY: 0 },
+};
+const acheronActor = { movementFacing: Math.PI, vx: -0.08, vy: 0 };
+const acheronStopping = resolveStoppingEnvelope(acheronActor, { thrust: 0.72, brake: 0 }, {
+  approachTarget: acheronTarget,
+  brakeAcceleration: 0.0975609756097561,
+});
+const acheronHazard = resolveApproachHazard(acheronActor, acheronTarget, acheronStopping.stoppingDistance);
+close(acheronHazard.dynamicClearance, 0.1528, 1e-9, 'Acheron dynamic clearance');
+const acheronEscape = shapeMovementIntent(acheronActor, {
+  moveX: -1,
+  moveY: 0,
+  thrust: 0.72,
+  brake: 0,
+}, 1 / 15, {
+  approachTarget: acheronTarget,
+  brakeAcceleration: 0.0975609756097561,
+});
+assert(acheronHazard.active && acheronHazard.insideDynamicClearance,
+  'recorded Acheron approach must activate shared hazard clearance');
+assert(acheronEscape.hazard.active && acheronEscape.input.moveX > 0
+  && acheronEscape.input.thrust > 0 && acheronEscape.input.brake === 0,
+  'inside dynamic clearance, explicit approach must thrust outward without reverse braking');
 
 const rawActions = [
   normalizeInputMessage({ moveX: 0, moveY: 1, thrust: 0.8, brake: 0 }),

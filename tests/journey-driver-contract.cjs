@@ -27,8 +27,8 @@ assert(source.includes('journeySeq') && source.includes('syntheticEventCursor'),
   'Journey synthetic events must be consumed in sequence across relaunches');
 assert(source.includes("navigationPolicy === 'slingshot'") && source.includes("navigationPolicy === 'well-intercept'"),
   'Journey movement policies must have executable shared-input behavior');
-assert(source.includes('thrust: braking ? 0') && source.includes('brake: braking ? 1 : 0'),
-  'Journey arrival braking must release thrust instead of issuing contradictory full-drive input');
+assert(!source.includes('arrivalRadius * 2') && source.includes('approachTargetId: String(args.targetPolicy'),
+  'Journey must delegate hazard clearance and stopping to shared explicit-target movement');
 assert(!source.includes('/debug/player-state'),
   'Journey gameplay actions must not mutate authoritative player state through debug setup');
 assert(!source.includes('teleportShip'),

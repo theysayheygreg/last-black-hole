@@ -95,9 +95,45 @@ export function resolveStoppingEnvelope(actor = {}, intent = {}, options = {}) {
   });
 }
 
+export function resolveApproachHazard(actor = {}, approachTarget = null, stoppingDistance = 0) {
+  const hazard = approachTarget?.explicit === true ? approachTarget.hazard : null;
+  const awayMagnitude = Math.hypot(finite(hazard?.awayX), finite(hazard?.awayY));
+  const valid = awayMagnitude > 1e-9
+    && Number.isFinite(Number(hazard?.distance))
+    && Number.isFinite(Number(hazard?.clearance));
+  if (!valid) return Object.freeze({ active: false, insideDynamicClearance: false });
+  const awayX = finite(hazard.awayX) / awayMagnitude;
+  const awayY = finite(hazard.awayY) / awayMagnitude;
+  const inwardSpeed = -(finite(actor.vx) * awayX + finite(actor.vy) * awayY);
+  const dynamicClearance = Math.max(0, finite(hazard.clearance))
+    + Math.max(0, finite(stoppingDistance));
+  const brakeDistance = dynamicClearance + Math.max(
+    finite(DEFAULTS.approachHazardMarginWorld),
+    Math.max(0, finite(approachTarget.hazardDriftMargin)),
+  );
+  return Object.freeze({
+    active: finite(hazard.distance) <= brakeDistance && inwardSpeed > -0.01,
+    insideDynamicClearance: finite(hazard.distance) <= dynamicClearance,
+    awayX,
+    awayY,
+    inwardSpeed,
+    distance: finite(hazard.distance),
+    dynamicClearance,
+    brakeDistance,
+    hazardId: String(hazard.id || ''),
+  });
+}
+
 export function shapeMovementIntent(actor = {}, intent = {}, dt = 0, options = {}) {
-  const inputX = finite(intent.moveX);
-  const inputY = finite(intent.moveY);
+  const rawStopping = resolveStoppingEnvelope(actor, intent, { ...options, dt });
+  const hazard = resolveApproachHazard(actor, options.approachTarget, rawStopping.stoppingDistance);
+  const steering = options.approachTarget?.explicit === true ? options.approachTarget.steering : null;
+  const inputX = hazard.active ? hazard.awayX
+    : Number.isFinite(Number(steering?.x)) ? Number(steering.x)
+      : finite(intent.moveX);
+  const inputY = hazard.active ? hazard.awayY
+    : Number.isFinite(Number(steering?.y)) ? Number(steering.y)
+      : finite(intent.moveY);
   const inputMagnitude = Math.hypot(inputX, inputY);
   const fallbackHeading = Number.isFinite(Number(actor.movementFacing))
     ? Number(actor.movementFacing)
@@ -107,16 +143,31 @@ export function shapeMovementIntent(actor = {}, intent = {}, dt = 0, options = {
   const desiredHeading = inputMagnitude > 1e-6
     ? Math.atan2(inputY, inputX)
     : fallbackHeading;
-  const heading = convergeHeading(
-    fallbackHeading,
-    desiredHeading,
-    dt,
-    options.turnRateRadiansPerSecond ?? DEFAULTS.turnRateRadiansPerSecond,
-  );
+  // Explicit-target hazard escape is an emergency controller, not free-flight
+  // steering. Once the authority says the actor is inside the dynamic
+  // clearance envelope, the drive vector must point out immediately; a slow
+  // turn would spend the grace window applying even a small inward thrust.
+  const heading = hazard.active
+    ? normalizeHeading(desiredHeading)
+    : convergeHeading(
+      fallbackHeading,
+      desiredHeading,
+      dt,
+      options.turnRateRadiansPerSecond ?? DEFAULTS.turnRateRadiansPerSecond,
+    );
   const remainingTurn = shortestHeadingDelta(heading, desiredHeading);
   const requestedThrust = clamp01(intent.thrust);
   const thrustGateScale = usefulThrustScale(remainingTurn, options);
-  const stopping = resolveStoppingEnvelope(actor, intent, { ...options, dt });
+  const stopping = hazard.active
+    ? Object.freeze({
+      ...rawStopping,
+      active: false,
+      targetAssist: false,
+      brake: 0,
+      needsCreep: false,
+      residualEligible: false,
+    })
+    : rawStopping;
   const driveDirection = { x: Math.cos(heading), y: Math.sin(heading) };
   const brakeDirection = stopping.active && stopping.direction
     ? stopping.direction
@@ -141,6 +192,7 @@ export function shapeMovementIntent(actor = {}, intent = {}, dt = 0, options = {
     thrustGateScale,
     redirectRadians: remainingTurn,
     stopping,
+    hazard,
     presentation: Object.freeze({
       facing: heading,
       requestedHeading: desiredHeading,
@@ -148,6 +200,7 @@ export function shapeMovementIntent(actor = {}, intent = {}, dt = 0, options = {
       plumeScale: deliveredThrust,
       plumeCantRadians: remainingTurn * 0.5,
       stoppingAssist: stopping.targetAssist,
+      hazardAssist: hazard.active,
     }),
   });
 }

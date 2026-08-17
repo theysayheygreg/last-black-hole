@@ -5864,6 +5864,7 @@ function playerApproachTarget(player) {
     targetId: player?.lastInput?.approachTargetId,
     wrecks: runtime.mapState.wrecks,
     portals: runtime.mapState.portals,
+    wells: runtime.mapState.wells,
     worldScale: runtime.session.worldScale,
     worldDistance,
     pickupRadiusForPlayer,
