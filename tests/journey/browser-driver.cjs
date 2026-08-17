@@ -405,8 +405,13 @@ class BrowserJourneyDriver {
       () => window.__TEST_API?.getJourneyState?.()?.player?.portalInteraction?.ready === true,
     );
     if (!confirmable) throw new Error('Journey extraction confirmation requires a ready authority portal');
-    await this.tap('Enter');
-    await this.serviceAuthorityFrame();
+    await this.setHeldProductKey('Enter', true);
+    try {
+      await this.serviceAuthorityFrame();
+    } finally {
+      await this.setHeldProductKey('Enter', false);
+      await this.serviceAuthorityFrame();
+    }
   }
 
   async navigate(args = {}) {

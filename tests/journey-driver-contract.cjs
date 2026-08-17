@@ -155,8 +155,16 @@ async function probeProductExtractionInputLifecycle() {
     'Extraction confirmation must service an authority frame before testing confirmability');
   assert(confirmation.indexOf('ready') < confirmation.indexOf('down:Enter'),
     'Extraction confirmation must begin with a fresh Enter edge only after the portal is ready');
-  assert(confirmation.indexOf('down:Enter') < confirmation.indexOf('up:Enter'),
-    'Extraction confirmation must complete the fresh Enter edge');
+  const confirmDown = confirmation.indexOf('down:Enter');
+  const heldFrame = confirmation.findIndex((event, index) => index > confirmDown && event === 'frame');
+  const confirmUp = confirmation.indexOf('up:Enter');
+  const releasedFrame = confirmation.findIndex((event, index) => index > confirmUp && event === 'frame');
+  assert(confirmDown < heldFrame && heldFrame < confirmUp,
+    'Extraction confirmation must service a product frame while the fresh Enter edge is held');
+  assert(confirmUp < releasedFrame,
+    'Extraction confirmation must service the released Enter state before returning');
+  assert.strictEqual(driver.heldProductKeys.size, 0,
+    'Extraction confirmation cleanup must leave no product key held');
   assert.strictEqual(cleared, 2, 'Fresh confirmation must begin from a second fully neutralized input state');
 }
 
