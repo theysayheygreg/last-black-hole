@@ -10,11 +10,48 @@ function sleep(milliseconds) {
 }
 
 async function serviceAuthorityFrame(page) {
+  const readState = () => page.evaluate(() => {
+    const api = window.__TEST_API;
+    const network = api?.getNetworkState?.() || {};
+    const journey = api?.getJourneyState?.() || {};
+    return {
+      phase: api?.getGamePhase?.() || null,
+      authorityActive: network.remoteAuthorityActive === true,
+      sentInputSeq: Number(network.lastRemoteInput?.seq) || 0,
+      acceptedInputSeq: Number(network.networkMetrics?.lastAcceptedSeq) || 0,
+      snapshotInputSeq: Number(journey.player?.lastInputSeq) || 0,
+    };
+  });
+  const before = await readState() || {};
   await page.evaluate(() => window.__TEST_API?.stepFrameForTest?.(1 / 60));
-  // Headless Chrome can suspend ambient requestAnimationFrame delivery. The
-  // frame above starts the ordinary browser-owned snapshot request; yield so
-  // that request can settle before Journey reads authenticated authority.
-  await sleep(20);
+  if (!before.authorityActive || before.phase !== 'playing') {
+    await sleep(20);
+    return;
+  }
+
+  // Headless Chrome can suspend ambient requestAnimationFrame delivery. A
+  // frame starts the ordinary async input and snapshot requests, but returning
+  // after a blind delay can strand held product input behind an in-flight
+  // request until the authority's 750ms lease expires. Keep servicing the
+  // product loop until one input produced after this call is both HTTP-acked
+  // and visible in an authenticated authority snapshot.
+  const deadline = Date.now() + 650;
+  let targetInputSeq = null;
+  while (Date.now() < deadline) {
+    await sleep(20);
+    const state = await readState() || {};
+    if (!state.authorityActive || state.phase !== 'playing') return;
+    if (targetInputSeq === null && state.sentInputSeq > before.sentInputSeq) {
+      targetInputSeq = state.sentInputSeq;
+    }
+    if (targetInputSeq !== null
+      && state.acceptedInputSeq >= targetInputSeq
+      && state.snapshotInputSeq >= targetInputSeq) {
+      return;
+    }
+    await page.evaluate(() => window.__TEST_API?.stepFrameForTest?.(1 / 60));
+  }
+  throw new Error('Journey browser authority frame did not settle fresh product input within 650ms');
 }
 
 function comparison(query, actual) {
@@ -694,4 +731,5 @@ module.exports = {
   buildNavigationSnapshot,
   evaluateValues,
   productAimClientPoint,
+  serviceAuthorityFrame,
 };

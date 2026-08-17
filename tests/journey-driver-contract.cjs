@@ -7,6 +7,7 @@ const {
   buildNavigationSnapshot,
   evaluateValues,
   productAimClientPoint,
+  serviceAuthorityFrame,
 } = require('./journey/browser-driver.cjs');
 
 const driverPath = path.join(__dirname, 'journey', 'browser-driver.cjs');
@@ -71,6 +72,8 @@ assert(source.includes("state.playerStatus === 'alive'"),
   'Journey launch must wait for the browser-owned authoritative player before navigation');
 assert(source.includes('serviceAuthorityFrame') && source.includes('stepFrameForTest'),
   'Journey must service the ordinary browser frame and snapshot-poll owner in headless runs');
+assert(source.includes('snapshotInputSeq >= targetInputSeq') && source.includes('acceptedInputSeq >= targetInputSeq'),
+  'Journey frame service must not sample held product input before authority accepts and publishes it');
 assert(source.includes('state.tick > 0'),
   'Journey launch must observe advancing authority before starting navigation');
 
@@ -119,6 +122,37 @@ async function probeProductAimUsesCanonicalViewport() {
   }), { x: 330, y: 290 }, 'Product aim must map render-space intent through the letterboxed canvas rectangle');
   assert.strictEqual(await productAimClientPoint({ ship: null, rect: {}, moveX: 1, moveY: 0 }), null,
     'Product aim must fail closed without canonical ship/canvas geometry');
+}
+
+async function probeAuthorityFrameSettlesFreshProductInput() {
+  const state = {
+    frames: 0,
+    sentInputSeq: 40,
+    acceptedInputSeq: 40,
+    snapshotInputSeq: 40,
+  };
+  const page = {
+    evaluate: async (fn) => {
+      const body = String(fn);
+      if (body.includes('stepFrameForTest')) {
+        state.frames += 1;
+        if (state.frames === 1) state.sentInputSeq = 41;
+        if (state.frames === 2) state.acceptedInputSeq = 41;
+        if (state.frames === 3) state.snapshotInputSeq = 41;
+        return null;
+      }
+      return {
+        phase: 'playing',
+        authorityActive: true,
+        sentInputSeq: state.sentInputSeq,
+        acceptedInputSeq: state.acceptedInputSeq,
+        snapshotInputSeq: state.snapshotInputSeq,
+      };
+    },
+  };
+  await serviceAuthorityFrame(page);
+  assert.strictEqual(state.frames, 3,
+    'Headless frame service must keep the ordinary product loop alive until fresh input reaches authority');
 }
 
 async function probeProductExtractionInputLifecycle() {
@@ -321,6 +355,7 @@ async function probeLaunchWaitsForAdvancingAuthority() {
 
 Promise.all([
   probeProductAimUsesCanonicalViewport(),
+  probeAuthorityFrameSettlesFreshProductInput(),
   probeProductExtractionInputLifecycle(),
   probeDriverPolicies(),
   probeAuthenticatedSnapshot(),
