@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.3. Updated 2026-08-02. This file answers “what can I
+> Document revision: v0.3. Updated 2026-08-17. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -16,38 +16,25 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
-**Current playtest build:** exact source `c467916b79c19028cd6d46ca6b21206a40edb8b9`
-is packaged as local playtest build `0.3.1.c467916b`, not an RC-green release.
-`release:internal -- --skip-tests` built web, iPad, macOS arm64, Windows x64,
-and Linux x64. `release:status` and `test:package` passed. The archive is
-`builds/last-singularity-playtest-v0.3.1.c467916b.zip` (SHA-256
-`ab74b953c78d07cf376ae16eba4158782225520c44c01a2c11add2072b9f09d5`);
-the manifest and desktop payload hashes are listed in
-`builds/v0.3.1.c467916b/SHA256SUMS.txt`.
+**Current source status:** `codex/v0.3-ballpark-roadmap` is the v0.3.1
+integration and release-candidate lineage. Exact product source
+`1ecabcc521aabebb9b2c63265b0a01d978464194` contains the accepted Ballpark,
+Noise, Heat, slingshot, Inhibitor ecology, extraction, Pilot Delete, master
+mute, audible-contact, and fabric-readability work plus:
 
-**Current RC status:** still red. The preceding full gate was 120/124, and
-AgentPlay stayed red at portal routing before the final harness-only
-hazard-clearance-over-recharge priority fix. The focused retained-state
-regression is green, but AgentPlay was intentionally not rerun after that
-mechanical fix. Treat this archive as a playtest handoff only; Greg's movement,
-visual, audio, and physical Deck review remain open.
+- Endless Sky Phase 1's typed condition authority, shared player/AI/Journey
+  movement affordances, unified data-authored Journey runtime, and analytic
+  spatial annotation/label/rim replacement;
+- Palette's world-art direction, Timbre's audio direction, and Mosaic's
+  generated map-contact package;
+- follow-up condition-provider, Journey launch, braking, package-contract, and
+  reverse-braking corrections.
 
-**Source status:** `codex/v0.3-ballpark-roadmap` is the current v0.3.1
-integration and release-candidate lineage. Exact product source `00cca067`
-contains the completed fabric-readability V1-V6 candidate plus the accepted
-Ballpark, Noise, Heat, slingshot, Inhibitor ecology, extraction, Pilot Delete,
-master mute, and audible-contact work. Promotion to `main` remains a separate
-explicitly approved operation.
-
-**Current RC status:** red and not built. The one accepted no-retry full lane
-selected 124 suites and finished 96 passed / 28 failed in 280.73 seconds wall
-time (434.59 seconds summed), using four workers and two browser workers. Its
-isolated worktree lacked `three` and `@electron/packager`, invalidating 23
-dependency/browser suites and all current AgentPlay, Renderer, UIVisual, and
-package evidence. Four failures were stale fixtures, and AuthorityCadence
-measured 14.77/15 Hz while AuthorityBudget independently passed at 14.96/15 Hz.
-No release build, ZIP, package closure, or Deck artifact exists for
-`00cca067`. See `docs/v0.3/RC-GATE.md` for exact evidence and classification.
+**Current package status:** absent for `1ecabcc5`. No exact-head full RC,
+hash-named build, playtest ZIP, package checksum, or current-source Deck deploy
+has been produced. Focused commit-level checks do not substitute for those
+release receipts, so the current source is neither RC-green nor deploy-ready.
+See `docs/v0.3/RC-GATE.md` for the required next gate.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
@@ -68,8 +55,9 @@ controller, readability, suspend/resume, feel, and audio acceptance remain
 pending.
 
 **Human status:** Greg approved the v0.3.1 slingshot and schedule baselines;
-final movement feel, visual taste, audio, physical Deck acceptance, and any
-future RC/promotion remain open.
+final movement/braking feel, route pleasure, spatial UI and map-contact
+readability, Palette visual direction, Timbre authored-audio mix, physical Deck
+acceptance, and any future RC/promotion remain open.
 
 ### What Is Implemented
 

@@ -1,9 +1,41 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-08-02. This is branch acceptance
+> Document revision: v0.3. Updated 2026-08-17. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
+
+### `1ecabcc5` Current Source: Integration Complete, RC Evaluation Pending
+
+Exact product source `1ecabcc521aabebb9b2c63265b0a01d978464194` on
+`codex/v0.3-ballpark-roadmap` contains the accepted Endless Sky Phase 1 system
+replacements, Palette/Timbre/Mosaic integration, and the subsequent Journey,
+braking, fixture, and package-contract repairs. Its focused commit-level proof
+is accepted, but it has not run a fresh exact-head RC gate and it has not been
+packaged.
+
+There is no `0.3.1.1ecabcc5` build directory, playtest archive, package hash,
+or current-source Steam Deck deployment. Do not call this checkpoint RC-green
+or deployable until an immutable current-source RC/package pass produces those
+receipts.
+
+The last checksum-verified physical Deck preview remains historical source
+`dd9e5149`, build `0.3.1.dd9e5149`, installed beside the preserved v0.2 build.
+That proves the older artifact's package identity and boot path only; it does
+not prove the current movement, Journey, spatial HUD, Palette, Timbre, or
+Mosaic changes.
+
+Remaining gates:
+
+- run the fresh exact-head RC and package checks from a provisioned immutable
+  checkout;
+- build and deploy the resulting hash-named artifact beside v0.2;
+- Greg reviews ordinary movement and braking feel, route pleasure, spatial UI
+  and map-contact readability, Palette visual direction, and authored Timbre
+  audio on the target mix;
+- verify physical Deck controls, 1280x800 readability, performance,
+  suspend/resume, and logs;
+- Greg explicitly approves promotion to `main`.
 
 ### `c467916b` Playtest Build: Packaged, RC Red
 

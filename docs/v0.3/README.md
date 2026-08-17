@@ -1,6 +1,6 @@
 # Last Singularity v0.3 Docs
 
-> Document revision: v0.3. Updated 2026-07-26.
+> Document revision: v0.3. Updated 2026-08-17.
 
 This folder is the source-of-truth home for the v0.3 candidate line. The
 architecture is implemented; remaining work is release evidence, physical
@@ -9,14 +9,28 @@ device acceptance, Greg's feel/taste review, and explicit promotion.
 ## Branch Contract
 
 v0.3 structural work happens on a version-owned branch, not directly on
-`main`. The accepted simulation/harness source branch is:
+`main`. The current integration and release-candidate branch is:
 
-`codex/v0.3-sim-harness-simplification`
+`codex/v0.3-ballpark-roadmap`
+
+The current product-source checkpoint is
+`1ecabcc521aabebb9b2c63265b0a01d978464194`. It contains the accepted Endless
+Sky Phase 1 replacements (typed conditions, shared movement affordances, the
+data-authored Journey runtime, and analytic spatial annotations), plus the
+integrated Palette world-art direction, Timbre audio direction, and Mosaic map
+contact package. Later Journey launch/braking and RC package-contract repairs
+are included. This exact source has not been packaged or deployed.
 
 `main` remains the v0.2 demo and stabilization line for small fixes, Deck
 deploys, and weekend-build polish. Do not merge, cherry-pick, or rebase v0.2
 or later-version work into this source line. Promotion remains an explicit
 Greg decision after its exact-source gates.
+
+The last checksum-verified physical Deck preview remains historical build
+`0.3.1.dd9e5149`; it is not evidence for the current checkpoint. Current-source
+RC/package proof, ordinary play, movement feel, visual/readability, authored
+audio, physical Deck controls/suspend-resume, and explicit promotion remain
+open gates.
 
 ## Release Thesis
 

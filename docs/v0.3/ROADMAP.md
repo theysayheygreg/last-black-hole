@@ -1,27 +1,39 @@
 # v0.3 Roadmap: Ballpark Authority
 
-> Document revision: v0.3. Updated 2026-07-26 from the simulation/harness
-> evidence. Earlier mirror-scaffold plans are retained as history in the review
+> Document revision: v0.3. Updated 2026-08-17 from the recovered integration
+> line. Earlier mirror-scaffold plans are retained as history in the review
 > documents they came from, not as current implementation claims.
 
 ## Status
 
-**Current integration branch:** `codex/v0.3-sim-harness-simplification`
+**Current integration branch:** `codex/v0.3-ballpark-roadmap`
 
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** source `ffbcc0ba28f8fa17f5d5d2146b7bd9ae28832844`
-completes the v0.3-only human-clarity program over behavioral baseline
-`20184fae84b559abf27717c046811673040d987a`. It retains the accepted gameplay
-clock, Deep Field relevance/transport work, deadline delivery, runner
-isolation, and current-contract fixtures, then separates authority, client,
-renderer, HUD, audio, content-adapter, deployment, and service-lifecycle
-ownership. Exact-head core, full, natural journey, product-loop, cadence,
-Deep Field, and LoC receipts are complete. The responsibility and commit map is in
-`docs/v0.3/SIM-HARNESS-SIMPLIFICATION.md`. No package, Deck, RC, or promotion
-claim is attached to this source; earlier hash-specific package and
-Deck receipts remain historical evidence only.
+**Current product source:**
+`1ecabcc521aabebb9b2c63265b0a01d978464194` is the recovered v0.3.1
+integration checkpoint. It retains the accepted Ballpark/protocol/product-loop
+architecture and adds the complete Endless Sky Phase 1 replacement program:
+
+- one typed condition store replaces parallel scalar profile/run ownership;
+- player, AI, and Journey movement share desired-heading/thrust/brake
+  affordances before the existing authority-force order;
+- one data-authored Journey runtime replaces the durable bespoke scenario and
+  AgentPlay controllers;
+- analytic category geometry, stable label placement, and signal-gated audible
+  rim presentation replace one-off spatial HUD paths.
+
+The same line integrates Palette's world-art guide, Timbre's authored-audio
+direction, and Mosaic's generated map-contact family, followed by condition
+provider, Journey launch, braking, package-contract, and reverse-braking
+fixes. The focused receipts attached to those commits remain accepted.
+
+No exact-head full RC, hash-named package, current-source Deck deploy, or
+promotion claim is attached to `1ecabcc5`. The last known packaged and
+checksum-verified Deck preview is historical source/build
+`dd9e5149` / `0.3.1.dd9e5149`. A fresh package must use the current committed
+source rather than republishing that artifact.
 
 The v0.3.1 map-relative schedule migration is source-complete: map-scale
 content owns the 480/600/720-second durations, the match Conductor resolves
