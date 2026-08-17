@@ -37,6 +37,10 @@ assert(!/stoppingDistance|v\s*\*\s*v|resolveHazard/.test(source),
   'Journey controller must not reintroduce retired stopping or hazard controller math');
 assert(source.includes('getJourneyState?.()?.authorityEvents'),
   'Journey waits must consume the authenticated client event history');
+assert(source.includes('getJourneyState?.() || null') && source.includes('players: state.player ? [state.player] : []'),
+  'Journey navigation must consume the browser-authenticated authority snapshot');
+assert(!source.includes("fetch(`${this.simUrl}/snapshot`)"),
+  'Journey navigation must not bypass browser authority through the public snapshot route');
 assert(!source.includes("fetch(`${this.simUrl}/events"),
   'Journey waits must not use the unauthenticated public event route');
 assert(!source.includes('showUiFixture'),
@@ -45,6 +49,8 @@ assert(source.includes("value === 'paused'") && source.includes("value === 'prof
   'Journey UI actions must observe real phase transitions');
 assert(source.includes("value === 'loading' || value === 'playing'"),
   'Journey map confirmation must remain held until the real launch transition consumes it');
+assert(source.includes("state.playerStatus === 'alive'"),
+  'Journey launch must wait for the browser-owned authoritative player before navigation');
 
 async function probeDriverPolicies() {
   const sent = [];
@@ -68,6 +74,23 @@ async function probeDriverPolicies() {
   assert.deepStrictEqual(sent[1], { slingshot: false });
 }
 
+async function probeAuthenticatedSnapshot() {
+  const authorityState = {
+    session: { runId: 'run-1', worldScale: 3 },
+    tick: 12,
+    simTime: 0.8,
+    player: { clientId: 'browser-player', status: 'alive', wx: 1, wy: 1 },
+    world: { wrecks: [{ id: 'wreck-1', wx: 1.1, wy: 1.1 }] },
+    recentEvents: [{ seq: 1, type: 'player.joined' }],
+  };
+  const page = { evaluate: async () => authorityState };
+  const driver = new BrowserJourneyDriver({ page, artifactRoot: '/tmp' });
+  const snapshot = await driver.snapshot();
+  assert.strictEqual(snapshot.players[0].clientId, 'browser-player');
+  assert.strictEqual(snapshot.session.runId, 'run-1');
+  assert.strictEqual(snapshot.world.wrecks[0].id, 'wreck-1');
+}
+
 async function probeFramePolledMenuTransition() {
   let pressed = false;
   let frames = 0;
@@ -88,7 +111,7 @@ async function probeFramePolledMenuTransition() {
   assert.strictEqual(frames, 2, 'Home input must step once held and once released before the next edge');
 }
 
-Promise.all([probeDriverPolicies(), probeFramePolledMenuTransition()]).then(() => {
+Promise.all([probeDriverPolicies(), probeAuthenticatedSnapshot(), probeFramePolledMenuTransition()]).then(() => {
   console.log('JourneyDriverContract: real input and shared movement owner PASS');
 }).catch((error) => {
   console.error(error);

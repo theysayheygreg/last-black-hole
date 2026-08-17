@@ -67,7 +67,6 @@ class BrowserJourneyConditionReader {
 class BrowserJourneyDriver {
   constructor({ page, simUrl, artifactRoot }) {
     this.page = page;
-    this.simUrl = String(simUrl).replace(/\/$/, '');
     this.artifactRoot = artifactRoot;
     this.mapIndex = 0;
     this.policy = null;
@@ -115,9 +114,18 @@ class BrowserJourneyDriver {
   }
 
   async snapshot() {
-    const response = await fetch(`${this.simUrl}/snapshot`);
-    if (!response.ok) throw new Error(`Journey snapshot failed: HTTP ${response.status}`);
-    return response.json();
+    const state = await this.page.evaluate(() => window.__TEST_API?.getJourneyState?.() || null);
+    if (!state?.session || !state?.world) {
+      throw new Error('Journey browser has no authenticated authority snapshot');
+    }
+    return {
+      session: state.session,
+      tick: state.tick,
+      simTime: state.simTime,
+      players: state.player ? [state.player] : [],
+      world: state.world,
+      recentEvents: state.recentEvents || [],
+    };
   }
 
   async waitPage(read, expected, timeoutMs = 10_000) {
@@ -300,8 +308,9 @@ class BrowserJourneyDriver {
           phase: window.__TEST_API?.getGamePhase?.(),
           authority: window.__TEST_API?.getNetworkState?.()?.remoteAuthorityActive,
           signatureId: window.__TEST_API?.getNetworkState?.()?.remoteSignature?.id || null,
+          playerStatus: window.__TEST_API?.getJourneyState?.()?.player?.status || null,
         }));
-        if (state.phase === 'playing' && state.authority) {
+        if (state.phase === 'playing' && state.authority && state.playerStatus === 'alive') {
           if (expectedSignature && state.signatureId !== expectedSignature) {
             throw new Error(`Journey run rule signature mismatch: expected ${expectedSignature}, got ${state.signatureId}`);
           }
