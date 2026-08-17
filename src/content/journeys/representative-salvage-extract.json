@@ -1,7 +1,7 @@
 {
   "id": "agent.salvage-noise-extract",
   "version": 1,
-  "description": "Natural authority-backed salvage, Noise consequence, portal approach, extraction, and progression route.",
+  "description": "Natural authority-backed product-selected salvage, Noise consequence, portal approach, extraction, and progression route.",
   "setup": {
     "seed": 10317,
     "pilot": "journey-natural",
@@ -13,7 +13,7 @@
   },
   "controllerPolicy": { "driver": "product-input", "movement": "shared", "targeting": "nearest-visible" },
   "knownFailure": {
-    "reason": "Natural salvage and optional-portal timing remain nondeterministic under the browser controller.",
+    "reason": "Natural optional-portal timing remains nondeterministic under the browser controller.",
     "owner": "Phase 1C Journey runtime",
     "reviewDate": "2026-08-21"
   },

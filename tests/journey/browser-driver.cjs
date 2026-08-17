@@ -455,15 +455,25 @@ class BrowserJourneyDriver {
     await this.serviceAuthorityFrame();
   }
 
-  async selectProductSalvageTarget(targetId, candidateCount = 1) {
-    for (let attempt = 0; attempt <= Math.max(1, candidateCount); attempt += 1) {
-      const selected = await this.page.evaluate(
-        () => window.__TEST_API?.getNetworkState?.()?.selectedSalvageTargetId || null,
-      );
-      if (selected === String(targetId)) return selected;
+  async readProductSalvageTargetId() {
+    return this.page.evaluate(
+      () => window.__TEST_API?.getNetworkState?.()?.selectedSalvageTargetId || null,
+    );
+  }
+
+  async adoptProductSalvageTarget(snapshot) {
+    const liveIds = new Set((snapshot.world?.wrecks || [])
+      .filter((wreck) => wreck?.id && wreck.alive !== false && wreck.looted !== true)
+      .map((wreck) => String(wreck.id)));
+    let selected = await this.readProductSalvageTargetId();
+    if (!liveIds.has(String(selected || ''))) {
       await this.cycleProductSalvageTarget();
+      selected = await this.readProductSalvageTargetId();
     }
-    throw new Error(`Journey product salvage target did not select ${targetId}`);
+    if (!liveIds.has(String(selected || ''))) {
+      throw new Error('Journey product salvage action did not select a live wreck');
+    }
+    return String(selected);
   }
 
   async confirmExtractionThroughProductInput() {
@@ -499,6 +509,7 @@ class BrowserJourneyDriver {
       || String(args.targetPolicy || '').includes('portal');
     const productSalvage = !productExfil && !String(args.targetPolicy || '').includes('well');
     const productApproach = productExfil || productSalvage;
+    let retainedSalvageTargetId = null;
     try {
       while (Date.now() < deadline) {
         const snapshot = await this.snapshot();
@@ -507,7 +518,12 @@ class BrowserJourneyDriver {
           if (args.allowTerminal && player && player.status !== 'alive') return { terminal: player.status };
           throw new Error('Journey navigation requires a live authoritative player');
         }
-        const target = this.findTarget(snapshot, player, args);
+        if (productSalvage && retainedSalvageTargetId === null) {
+          retainedSalvageTargetId = await this.adoptProductSalvageTarget(snapshot);
+        }
+        const target = this.findTarget(snapshot, player, retainedSalvageTargetId
+          ? { ...args, targetId: retainedSalvageTargetId }
+          : args);
         if (!target) {
           if (String(args.targetPolicy || '') === 'next-available-exfil') {
             if (this.heldProductKeys.size > 0) await this.releaseProductApproachInput();
@@ -517,11 +533,6 @@ class BrowserJourneyDriver {
           throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
         }
         this.activeTarget = target.id;
-        if (productSalvage) {
-          const salvageCandidates = (snapshot.world?.wrecks || [])
-            .filter((wreck) => wreck?.id && wreck.alive !== false && wreck.looted !== true).length;
-          await this.selectProductSalvageTarget(target.id, salvageCandidates);
-        }
         const worldScale = snapshot.session.worldScale;
         const dx = wrappedDelta(player.wx, target.wx, worldScale);
         const dy = wrappedDelta(player.wy, target.wy, worldScale);

@@ -22,8 +22,12 @@ assert.strictEqual(evaluateValues({ not: { condition: 'run.grapple.active' } }, 
 
 assert(source.includes("require('../../scripts/sim/world-geometry.cjs')"),
   'Journey movement must consume the canonical authority geometry owner');
-assert(source.includes('selectProductSalvageTarget') && source.includes("setHeldProductKey('KeyT', true)"),
+assert(source.includes('adoptProductSalvageTarget') && source.includes("setHeldProductKey('KeyT', true)"),
   'Journey salvage must use the real browser-owned target action');
+assert(source.includes('retainedSalvageTargetId'),
+  'Journey salvage must retain the product-selected live wreck while navigating');
+assert(!source.includes('selectProductSalvageTarget(target.id'),
+  'Journey salvage must not cycle toward a separately recomputed wreck identity');
 assert(!source.includes('brake: 1, approachTargetId: target.id'),
   'Journey salvage arrival must not bypass product input with direct target injection');
 assert(source.includes('sendRemoteInput'),
@@ -222,6 +226,54 @@ async function probeProductExtractionInputLifecycle() {
   assert.strictEqual(cleared, 2, 'Fresh confirmation must begin from a second fully neutralized input state');
 }
 
+async function probeProductSalvageSelectionLifecycle() {
+  const driver = new BrowserJourneyDriver({ page: {}, artifactRoot: '/tmp' });
+  let selected = null;
+  let targetPresses = 0;
+  driver.readProductSalvageTargetId = async () => selected;
+  driver.cycleProductSalvageTarget = async () => {
+    targetPresses += 1;
+    selected = 'wreck-selected';
+  };
+  const snapshot = {
+    world: { wrecks: [{ id: 'wreck-selected', alive: true, looted: false }] },
+  };
+  assert.strictEqual(await driver.adoptProductSalvageTarget(snapshot), 'wreck-selected');
+  assert.strictEqual(await driver.adoptProductSalvageTarget(snapshot), 'wreck-selected');
+  assert.strictEqual(targetPresses, 1,
+    'Journey must press the real target action once, then retain the product-selected live wreck');
+
+  const snapshots = [
+    {
+      session: { worldScale: 3 },
+      players: [{ status: 'alive', wx: 0, wy: 0, vx: 0, vy: 0 }],
+      world: { wrecks: [
+        { id: 'wreck-selected', wx: 0.5, wy: 0, alive: true },
+        { id: 'wreck-other', wx: 0.6, wy: 0, alive: true },
+      ] },
+    },
+    {
+      session: { worldScale: 3 },
+      players: [{ status: 'alive', wx: 0, wy: 0, vx: 0, vy: 0 }],
+      world: { wrecks: [
+        { id: 'wreck-selected', wx: 0.05, wy: 0, alive: true },
+        { id: 'wreck-other', wx: 0.01, wy: 0, alive: true },
+      ] },
+    },
+  ];
+  driver.policy = { inputCadenceMs: 50 };
+  driver.snapshot = async () => snapshots.shift();
+  driver.player = async (body) => body.players[0];
+  driver.adoptProductSalvageTarget = async () => 'wreck-selected';
+  driver.applyProductApproachInput = async () => {};
+  driver.releaseProductApproachInput = async () => {};
+  const result = await driver.navigate({
+    targetPolicy: 'nearest-salvage', arrivalRadius: 0.07, arrivalSpeed: 0.08,
+  });
+  assert.strictEqual(result.targetId, 'wreck-selected',
+    'Journey must retain the product-selected wreck when another wreck becomes nearer');
+}
+
 async function probeDriverPolicies() {
   const sent = [];
   const page = {
@@ -359,6 +411,7 @@ Promise.all([
   probeProductAimUsesCanonicalViewport(),
   probeAuthorityFrameSettlesFreshProductInput(),
   probeProductExtractionInputLifecycle(),
+  probeProductSalvageSelectionLifecycle(),
   probeDriverPolicies(),
   probeAuthenticatedSnapshot(),
   probeConditionReaderServicesAuthority(),

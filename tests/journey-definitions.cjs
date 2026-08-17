@@ -39,6 +39,10 @@ async function main() {
 
   const representative = definitions.find(({ id }) => id === 'agent.salvage-noise-extract');
   assert(representative?.knownFailure, 'Natural representative route must carry an explicit known-failure record');
+  assert.match(representative.description, /product-selected salvage/,
+    'Representative salvage must follow the live product-selected wreck');
+  assert(!representative.steps.some((step) => step.args?.targetId),
+    'Representative salvage must never author a drifting wreck identity');
   assert(representative.steps.some((step) => step.waitForCondition?.condition === 'run.cargo.count'));
   assert(representative.steps.some((step) => step.waitForCondition?.condition === 'run.noise.radiusMeters'));
   const extractionWaits = representative.steps.filter((step) => step.waitForCondition?.condition === 'run.extraction.state');
