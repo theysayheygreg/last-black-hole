@@ -19,7 +19,8 @@ Sky Phase 1 replacements (typed conditions, shared movement affordances, the
 data-authored Journey runtime, and analytic spatial annotations), plus the
 integrated Palette world-art direction, Timbre audio direction, and Mosaic map
 contact package. Later Journey launch/braking and RC package-contract repairs
-are included. This exact source has not been packaged or deployed.
+are included. This exact source has a hash-named playtest package, but its full
+RC gate is red and it has not been deployed.
 
 `main` remains the v0.2 demo and stabilization line for small fixes, Deck
 deploys, and weekend-build polish. Do not merge, cherry-pick, or rebase v0.2
@@ -28,9 +29,10 @@ Greg decision after its exact-source gates.
 
 The last checksum-verified physical Deck preview remains historical build
 `0.3.1.dd9e5149`; it is not evidence for the current checkpoint. Current-source
-RC/package proof, ordinary play, movement feel, visual/readability, authored
-audio, physical Deck controls/suspend-resume, and explicit promotion remain
-open gates.
+RC closure, ordinary play, movement feel, visual/readability, authored audio,
+physical Deck controls/suspend-resume, and explicit promotion remain open
+gates. Current build `0.3.1.1ecabcc5` is a package-green playtest artifact, not
+an RC, Deck, or public-release claim.
 
 ## Release Thesis
 

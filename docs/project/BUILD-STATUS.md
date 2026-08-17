@@ -30,11 +30,23 @@ mute, audible-contact, and fabric-readability work plus:
 - follow-up condition-provider, Journey launch, braking, package-contract, and
   reverse-braking corrections.
 
-**Current package status:** absent for `1ecabcc5`. No exact-head full RC,
-hash-named build, playtest ZIP, package checksum, or current-source Deck deploy
-has been produced. Focused commit-level checks do not substitute for those
-release receipts, so the current source is neither RC-green nor deploy-ready.
-See `docs/v0.3/RC-GATE.md` for the required next gate.
+**Current RC status:** red. The exact-head full lane ran 170 suite processes;
+`AuthorityCadence` failed at 9.51 Hz on Shallows and
+`JourneyRepresentative` lost its live authority player during salvage
+approach. `KeyboardMouse` also required one retry before its 6/6 pass. This is
+real current-source evidence, not a pending or unrun gate.
+
+**Current package status:** green for playtest build `0.3.1.1ecabcc5`.
+`release:internal` passed its 105-suite fast lane, built web, iPad, macOS arm64,
+Windows x64, and Linux x64, and passed `release:status` plus `test:package`.
+The preserved archive is
+`/private/tmp/lbh-v03-ballpark-integration-residue-20260817T120156/builds/last-singularity-playtest-v0.3.1.1ecabcc5.zip`
+(442,278,610 bytes; SHA-256
+`8c45427449bca6873304e9e8306258f01481ddd6970684c9cf3cf9c59a4f70a6`).
+Its build root is the adjacent `v0.3.1.1ecabcc5` directory. This is
+package-green/playtest-only: no current-source Deck deployment, human
+acceptance, RC-green claim, or promotion follows from it. See
+`docs/v0.3/RC-GATE.md` for the red paths and evidence boundary.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.

@@ -5,19 +5,44 @@
 
 ## Current Verdict
 
-### `1ecabcc5` Current Source: Integration Complete, RC Evaluation Pending
+### `1ecabcc5` Current Source: RC Red, Package Green
 
 Exact product source `1ecabcc521aabebb9b2c63265b0a01d978464194` on
 `codex/v0.3-ballpark-roadmap` contains the accepted Endless Sky Phase 1 system
 replacements, Palette/Timbre/Mosaic integration, and the subsequent Journey,
 braking, fixture, and package-contract repairs. Its focused commit-level proof
-is accepted, but it has not run a fresh exact-head RC gate and it has not been
-packaged.
+is accepted.
 
-There is no `0.3.1.1ecabcc5` build directory, playtest archive, package hash,
-or current-source Steam Deck deployment. Do not call this checkpoint RC-green
-or deployable until an immutable current-source RC/package pass produces those
-receipts.
+The exact-head full lane ran 170 suite processes in 292.29 seconds and remained
+red on two current paths:
+
+- `AuthorityCadence` measured Shallows at 9.51 Hz, outside the 1% wall-clock
+  tolerance;
+- `JourneyRepresentative` lost the live authoritative player during the
+  approach-salvage stage.
+
+`KeyboardMouse` is an additional stability caveat: its remote-authority input
+check timed out on attempt one, then passed all 6/6 assertions on the allowed
+second attempt. The source is therefore not RC-green even though the remaining
+named full-lane results, Renderer, and UIVisual completed.
+
+The separate supported `release:internal` path passed its 105-suite fast lane,
+built web, iPad, macOS arm64, Windows x64, and Linux x64, and passed
+`release:status` plus `test:package` authority boot. The preserved artifacts
+are:
+
+- build root:
+  `/private/tmp/lbh-v03-ballpark-integration-residue-20260817T120156/builds/v0.3.1.1ecabcc5`;
+- playtest archive:
+  `/private/tmp/lbh-v03-ballpark-integration-residue-20260817T120156/builds/last-singularity-playtest-v0.3.1.1ecabcc5.zip`
+  (442,278,610 bytes; SHA-256
+  `8c45427449bca6873304e9e8306258f01481ddd6970684c9cf3cf9c59a4f70a6`).
+
+Treat `0.3.1.1ecabcc5` as a package-green playtest artifact only. Packaging
+does not erase the RC failures and makes no current-source Deck, human-review,
+or promotion claim. Exact logs are
+`/private/tmp/lbh-v03-rc-checkpoint-1ecabcc5.log` and
+`/private/tmp/lbh-v03-package-1ecabcc5.log`.
 
 The last checksum-verified physical Deck preview remains historical source
 `dd9e5149`, build `0.3.1.dd9e5149`, installed beside the preserved v0.2 build.
@@ -27,9 +52,9 @@ Mosaic changes.
 
 Remaining gates:
 
-- run the fresh exact-head RC and package checks from a provisioned immutable
-  checkout;
-- build and deploy the resulting hash-named artifact beside v0.2;
+- close and re-evaluate the AuthorityCadence and JourneyRepresentative paths,
+  including the KeyboardMouse retry caveat;
+- deploy an accepted hash-named artifact beside v0.2;
 - Greg reviews ordinary movement and braking feel, route pleasure, spatial UI
   and map-contact readability, Palette visual direction, and authored Timbre
   audio on the target mix;

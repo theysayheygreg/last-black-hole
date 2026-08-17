@@ -29,11 +29,16 @@ direction, and Mosaic's generated map-contact family, followed by condition
 provider, Journey launch, braking, package-contract, and reverse-braking
 fixes. The focused receipts attached to those commits remain accepted.
 
-No exact-head full RC, hash-named package, current-source Deck deploy, or
-promotion claim is attached to `1ecabcc5`. The last known packaged and
-checksum-verified Deck preview is historical source/build
-`dd9e5149` / `0.3.1.dd9e5149`. A fresh package must use the current committed
-source rather than republishing that artifact.
+The exact-head full RC ran 170 suite processes and remains red on
+`AuthorityCadence` and `JourneyRepresentative`; `KeyboardMouse` passed only on
+its allowed second attempt. A separate package run passed the fast lane, built
+all five targets, passed `release:status`, and passed `test:package` authority
+boot as `0.3.1.1ecabcc5`. This is a package-green playtest artifact, not an
+RC-green or deployed build.
+
+The last checksum-verified physical Deck preview remains historical
+source/build `dd9e5149` / `0.3.1.dd9e5149`. The current package has not been
+deployed, physically reviewed, or promoted.
 
 The v0.3.1 map-relative schedule migration is source-complete: map-scale
 content owns the 480/600/720-second durations, the match Conductor resolves
