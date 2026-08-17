@@ -14,13 +14,16 @@ v0.3 structural work happens on a version-owned branch, not directly on
 `codex/v0.3-ballpark-roadmap`
 
 The current product-source checkpoint is
-`1ecabcc521aabebb9b2c63265b0a01d978464194`. It contains the accepted Endless
+`b584350e2469ca5af96a57dfcf7ebe6aa7ab075b`. It contains the accepted Endless
 Sky Phase 1 replacements (typed conditions, shared movement affordances, the
 data-authored Journey runtime, and analytic spatial annotations), plus the
 integrated Palette world-art direction, Timbre audio direction, and Mosaic map
-contact package. Later Journey launch/braking and RC package-contract repairs
-are included. This exact source has a hash-named playtest package, but its full
-RC gate is red and it has not been deployed.
+contact package. The accepted fixes after the historical `1ecabcc5` checkpoint
+service Journey authority frames and input/exfil lifecycles, make portal and
+Noise-listener truth explicit, and give salvage one player-owned,
+product-selected target with invalid-target rebinding. This exact source has a
+hash-named package, but its RC gate remains red on the representative Journey's
+natural wreck-approach timeout and it has not been deployed.
 
 `main` remains the v0.2 demo and stabilization line for small fixes, Deck
 deploys, and weekend-build polish. Do not merge, cherry-pick, or rebase v0.2
@@ -31,8 +34,9 @@ The last checksum-verified physical Deck preview remains historical build
 `0.3.1.dd9e5149`; it is not evidence for the current checkpoint. Current-source
 RC closure, ordinary play, movement feel, visual/readability, authored audio,
 physical Deck controls/suspend-resume, and explicit promotion remain open
-gates. Current build `0.3.1.1ecabcc5` is a package-green playtest artifact, not
-an RC, Deck, or public-release claim.
+gates. Current build `0.3.1.b584350e` is a package-green playtest artifact, not
+an RC, Deck, or public-release claim. The `1ecabcc5` receipt remains preserved
+as historical evidence in `RC-GATE.md`.
 
 ## Release Thesis
 

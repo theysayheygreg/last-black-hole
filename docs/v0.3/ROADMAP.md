@@ -12,7 +12,7 @@
 the version promotion.
 
 **Current product source:**
-`1ecabcc521aabebb9b2c63265b0a01d978464194` is the recovered v0.3.1
+`b584350e2469ca5af96a57dfcf7ebe6aa7ab075b` is the current v0.3.1
 integration checkpoint. It retains the accepted Ballpark/protocol/product-loop
 architecture and adds the complete Endless Sky Phase 1 replacement program:
 
@@ -25,16 +25,20 @@ architecture and adds the complete Endless Sky Phase 1 replacement program:
   rim presentation replace one-off spatial HUD paths.
 
 The same line integrates Palette's world-art guide, Timbre's authored-audio
-direction, and Mosaic's generated map-contact family, followed by condition
-provider, Journey launch, braking, package-contract, and reverse-braking
-fixes. The focused receipts attached to those commits remain accepted.
+direction, and Mosaic's generated map-contact family. Since the historical
+`1ecabcc5` receipt, accepted fixes service Journey authority frames and input,
+portal, extraction, and Noise-listener lifecycles; establish player-owned,
+product-selected salvage targeting; and rebind invalidated targets.
 
-The exact-head full RC ran 170 suite processes and remains red on
-`AuthorityCadence` and `JourneyRepresentative`; `KeyboardMouse` passed only on
-its allowed second attempt. A separate package run passed the fast lane, built
-all five targets, passed `release:status`, and passed `test:package` authority
-boot as `0.3.1.1ecabcc5`. This is a package-green playtest artifact, not an
-RC-green or deployed build.
+The current RC is red only because Gate 5's representative Journey naturally
+timed out while approaching selected `wreck-3`. The authority player remained
+alive, continued delivering thrust, and had hazard assist; this is a real
+navigation/playable-path failure rather than missing authority. A separate
+package run passed the 105-suite fast lane, built all five targets, passed
+`release:status`, and passed `test:package` as `0.3.1.b584350e`. This is a
+package-green playtest artifact, not an RC-green or deployed build. The prior
+`1ecabcc5` cadence, Journey-player-loss, and Keyboard retry findings remain
+historical rather than current blockers.
 
 The last checksum-verified physical Deck preview remains historical
 source/build `dd9e5149` / `0.3.1.dd9e5149`. The current package has not been

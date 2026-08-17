@@ -5,7 +5,41 @@
 
 ## Current Verdict
 
-### `1ecabcc5` Current Source: RC Red, Package Green
+### `b584350e` Current Source: RC Red, Package Green
+
+Exact product source `b584350e2469ca5af96a57dfcf7ebe6aa7ab075b` on
+`codex/v0.3-ballpark-roadmap` includes accepted fixes after `1ecabcc5` for
+Journey authority-frame servicing, input and extraction lifecycles, truthful
+portal availability, pilot-local Noise ecology, player-owned product-selected
+salvage targeting, and invalid-target rebinding.
+
+The current RC has one red gate. Gate 5's representative
+`agent.salvage-noise-extract` Journey naturally timed out approaching selected
+`wreck-3`. At the receipt boundary the authoritative pilot was alive,
+`hazardAssist` was active, accepted thrust was still being delivered, delta-v
+was 59.12/60, Heat was 1.47%, and canonical target distance was 1.35947. The
+failure is therefore a current navigation/playable-path blocker, not dead-player
+recovery, missing input authority, or an invalid target. Exact receipt:
+`/private/tmp/lbh-v03-gate5-b584350e-20260817T140725/receipt.json`.
+
+The supported release path passed its 105-suite fast lane, built all five
+targets (web, iPad, macOS arm64, Windows x64, and Linux x64), and passed
+`release:status` plus `test:package`. Preserved artifacts are:
+
+- build root: `builds/v0.3.1.b584350e`;
+- build manifest: `builds/v0.3.1.b584350e/BUILD-MANIFEST.json` (SHA-256
+  `612d8a1954f9370121cc50944d36b08b0386655d9f355b04122a08712a163769`);
+- playtest archive:
+  `builds/last-singularity-playtest-v0.3.1.b584350e.zip` (442,294,167 bytes;
+  SHA-256 `12e1d9c5f10485929d5cd01698fe980b08f2d1f50a962216eb54c11e0e4c004c`);
+- macOS, Windows, and Linux `app.asar` payloads share SHA-256
+  `478ec6e7f5c593972cdbb58b9131a5c1abcb391e6ef912bd7580b033a4ce48e2`.
+
+Treat `0.3.1.b584350e` as package-green playtest evidence only. The Steam Deck
+is offline and this build is not deployed. Greg's movement, route, visual,
+audio, physical Deck, and explicit `main` promotion gates remain open.
+
+### Historical `1ecabcc5` Source: RC Red, Package Green
 
 Exact product source `1ecabcc521aabebb9b2c63265b0a01d978464194` on
 `codex/v0.3-ballpark-roadmap` contains the accepted Endless Sky Phase 1 system
@@ -50,7 +84,7 @@ That proves the older artifact's package identity and boot path only; it does
 not prove the current movement, Journey, spatial HUD, Palette, Timbre, or
 Mosaic changes.
 
-Remaining gates:
+Historical remaining gates recorded at that checkpoint were:
 
 - close and re-evaluate the AuthorityCadence and JourneyRepresentative paths,
   including the KeyboardMouse retry caveat;

@@ -18,7 +18,7 @@ does not erase newer committed work.
 
 **Current source status:** `codex/v0.3-ballpark-roadmap` is the v0.3.1
 integration and release-candidate lineage. Exact product source
-`1ecabcc521aabebb9b2c63265b0a01d978464194` contains the accepted Ballpark,
+`b584350e2469ca5af96a57dfcf7ebe6aa7ab075b` contains the accepted Ballpark,
 Noise, Heat, slingshot, Inhibitor ecology, extraction, Pilot Delete, master
 mute, audible-contact, and fabric-readability work plus:
 
@@ -28,25 +28,39 @@ mute, audible-contact, and fabric-readability work plus:
 - Palette's world-art direction, Timbre's audio direction, and Mosaic's
   generated map-contact package;
 - follow-up condition-provider, Journey launch, braking, package-contract, and
-  reverse-braking corrections.
+  reverse-braking corrections;
+- accepted Journey authority-frame/input/exfil/portal/Noise lifecycle repairs
+  and one player-owned, product-selected salvage target with invalid-target
+  rebinding.
 
-**Current RC status:** red. The exact-head full lane ran 170 suite processes;
-`AuthorityCadence` failed at 9.51 Hz on Shallows and
-`JourneyRepresentative` lost its live authority player during salvage
-approach. `KeyboardMouse` also required one retry before its 6/6 pass. This is
-real current-source evidence, not a pending or unrun gate.
+**Current RC status:** red on one current gate. Gate 5's representative Journey
+naturally timed out while approaching the product-selected `wreck-3`; the
+authority pilot remained alive with hazard assist and delivered thrust. This
+is a current navigation/playable-path failure. The earlier `1ecabcc5` cadence,
+lost-player, and Keyboard retry findings remain historical evidence, not
+current blockers.
 
-**Current package status:** green for playtest build `0.3.1.1ecabcc5`.
+**Current package status:** green for playtest build `0.3.1.b584350e`.
 `release:internal` passed its 105-suite fast lane, built web, iPad, macOS arm64,
 Windows x64, and Linux x64, and passed `release:status` plus `test:package`.
 The preserved archive is
-`/private/tmp/lbh-v03-ballpark-integration-residue-20260817T120156/builds/last-singularity-playtest-v0.3.1.1ecabcc5.zip`
-(442,278,610 bytes; SHA-256
-`8c45427449bca6873304e9e8306258f01481ddd6970684c9cf3cf9c59a4f70a6`).
-Its build root is the adjacent `v0.3.1.1ecabcc5` directory. This is
+`/private/tmp/lbh-v03-ballpark-integration/builds/last-singularity-playtest-v0.3.1.b584350e.zip`
+(442,294,167 bytes; SHA-256
+`12e1d9c5f10485929d5cd01698fe980b08f2d1f50a962216eb54c11e0e4c004c`).
+Its build root is the adjacent `v0.3.1.b584350e` directory. The macOS, Windows,
+and Linux `app.asar` payloads share SHA-256
+`478ec6e7f5c593972cdbb58b9131a5c1abcb391e6ef912bd7580b033a4ce48e2`.
+The build manifest SHA-256 is
+`612d8a1954f9370121cc50944d36b08b0386655d9f355b04122a08712a163769`.
+This is
 package-green/playtest-only: no current-source Deck deployment, human
 acceptance, RC-green claim, or promotion follows from it. See
 `docs/v0.3/RC-GATE.md` for the red paths and evidence boundary.
+
+**Historical `1ecabcc5` package status:** its 105-suite package path was green
+and its preserved archive remains in the recovered residue directory. Its
+two RC failures and Keyboard retry caveat are historical and do not replace
+the current `b584350e` Gate 5 receipt.
 
 **Historical package status:** green for source `dd9e5149`, build
 `0.3.1.dd9e5149`.
