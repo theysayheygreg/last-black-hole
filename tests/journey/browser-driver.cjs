@@ -8,6 +8,14 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function serviceAuthorityFrame(page) {
+  await page.evaluate(() => window.__TEST_API?.stepFrameForTest?.(1 / 60));
+  // Headless Chrome can suspend ambient requestAnimationFrame delivery. The
+  // frame above starts the ordinary browser-owned snapshot request; yield so
+  // that request can settle before Journey reads authenticated authority.
+  await sleep(20);
+}
+
 function comparison(query, actual) {
   if ('equals' in query) return Object.is(actual, query.equals);
   if ('gt' in query) return actual > query.gt;
@@ -106,6 +114,7 @@ class BrowserJourneyConditionReader {
   }
 
   async snapshot() {
+    await serviceAuthorityFrame(this.page);
     return this.page.evaluate((names) => {
       const api = window.__TEST_API;
       const network = api?.getNetworkState?.() || {};
@@ -184,7 +193,12 @@ class BrowserJourneyDriver {
     this.policy = policy;
   }
 
+  async serviceAuthorityFrame() {
+    await serviceAuthorityFrame(this.page);
+  }
+
   async snapshot() {
+    await this.serviceAuthorityFrame();
     const state = await this.page.evaluate(() => {
       const api = window.__TEST_API;
       return {
@@ -389,13 +403,15 @@ class BrowserJourneyDriver {
       const expectedSignature = args.signature || (action === 'launch' ? this.expectedRunRules.signature : null);
       const deadline = Date.now() + 15_000;
       while (Date.now() < deadline) {
+        await this.serviceAuthorityFrame();
         const state = await this.page.evaluate(() => ({
           phase: window.__TEST_API?.getGamePhase?.(),
           authority: window.__TEST_API?.getNetworkState?.()?.remoteAuthorityActive,
           signatureId: window.__TEST_API?.getNetworkState?.()?.remoteSignature?.id || null,
+          tick: window.__TEST_API?.getNetworkState?.()?.remoteTick ?? null,
           playerStatus: window.__TEST_API?.getJourneyState?.()?.player?.status || null,
         }));
-        if (state.phase === 'playing' && state.authority && state.playerStatus === 'alive') {
+        if (state.phase === 'playing' && state.authority && state.tick > 0 && state.playerStatus === 'alive') {
           if (expectedSignature && state.signatureId !== expectedSignature) {
             throw new Error(`Journey run rule signature mismatch: expected ${expectedSignature}, got ${state.signatureId}`);
           }
@@ -534,6 +550,7 @@ class BrowserJourneyDriver {
     }
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
+      await this.serviceAuthorityFrame();
       const events = await this.page.evaluate(() => window.__TEST_API?.getJourneyState?.()?.authorityEvents || []);
       const match = events.find((event) => Number(event.seq || 0) > this.eventCursor && event.type === type);
       if (match) {

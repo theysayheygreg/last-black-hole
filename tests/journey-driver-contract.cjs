@@ -1,7 +1,12 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { BrowserJourneyDriver, buildNavigationSnapshot, evaluateValues } = require('./journey/browser-driver.cjs');
+const {
+  BrowserJourneyConditionReader,
+  BrowserJourneyDriver,
+  buildNavigationSnapshot,
+  evaluateValues,
+} = require('./journey/browser-driver.cjs');
 
 const driverPath = path.join(__dirname, 'journey', 'browser-driver.cjs');
 const source = fs.readFileSync(driverPath, 'utf8');
@@ -51,6 +56,10 @@ assert(source.includes("value === 'loading' || value === 'playing'"),
   'Journey map confirmation must remain held until the real launch transition consumes it');
 assert(source.includes("state.playerStatus === 'alive'"),
   'Journey launch must wait for the browser-owned authoritative player before navigation');
+assert(source.includes('serviceAuthorityFrame') && source.includes('stepFrameForTest'),
+  'Journey must service the ordinary browser frame and snapshot-poll owner in headless runs');
+assert(source.includes('state.tick > 0'),
+  'Journey launch must observe advancing authority before starting navigation');
 
 const navigationEvidence = buildNavigationSnapshot({
   snapshot: {
@@ -97,6 +106,7 @@ async function probeDriverPolicies() {
 }
 
 async function probeAuthenticatedSnapshot() {
+  let servicedFrames = 0;
   const authorityState = {
     session: { runId: 'run-1', worldScale: 3 },
     tick: 12,
@@ -105,13 +115,59 @@ async function probeAuthenticatedSnapshot() {
     world: { wrecks: [{ id: 'wreck-1', wx: 1.1, wy: 1.1 }] },
     recentEvents: [{ seq: 1, type: 'player.joined' }],
   };
-  const page = { evaluate: async () => ({ ...authorityState, lastRemoteInput: { seq: 12, thrust: 0.72 } }) };
+  const page = {
+    evaluate: async (fn) => {
+      if (String(fn).includes('stepFrameForTest')) {
+        servicedFrames += 1;
+        return null;
+      }
+      return { ...authorityState, lastRemoteInput: { seq: 12, thrust: 0.72 } };
+    },
+  };
   const driver = new BrowserJourneyDriver({ page, artifactRoot: '/tmp' });
   const snapshot = await driver.snapshot();
+  assert.strictEqual(servicedFrames, 1, 'Authenticated snapshot reads must service one browser authority frame');
   assert.strictEqual(snapshot.players[0].clientId, 'browser-player');
   assert.strictEqual(snapshot.session.runId, 'run-1');
   assert.strictEqual(snapshot.world.wrecks[0].id, 'wreck-1');
   assert.strictEqual(snapshot.lastRemoteInput.seq, 12);
+}
+
+async function probeConditionReaderServicesAuthority() {
+  let servicedFrames = 0;
+  const page = {
+    evaluate: async (fn) => {
+      if (String(fn).includes('stepFrameForTest')) {
+        servicedFrames += 1;
+        return null;
+      }
+      return { 'run.map.id': 'shallows' };
+    },
+  };
+  const reader = new BrowserJourneyConditionReader({
+    page,
+    conditionNames: ['run.map.id'],
+    validateConditionQuery: (query) => query,
+  });
+  await reader.snapshot();
+  assert.strictEqual(servicedFrames, 1, 'Condition reads must service the browser authority frame');
+}
+
+async function probeEventReaderServicesAuthority() {
+  let servicedFrames = 0;
+  const page = {
+    evaluate: async (fn) => {
+      if (String(fn).includes('stepFrameForTest')) {
+        servicedFrames += 1;
+        return null;
+      }
+      return [{ seq: 4, type: 'player.loot' }];
+    },
+  };
+  const driver = new BrowserJourneyDriver({ page, artifactRoot: '/tmp' });
+  const event = await driver.waitForEvent('player.loot', { timeoutMs: 1_000 });
+  assert.strictEqual(event.seq, 4);
+  assert.strictEqual(servicedFrames, 1, 'Event reads must service the browser authority frame');
 }
 
 async function probeFramePolledMenuTransition() {
@@ -134,7 +190,40 @@ async function probeFramePolledMenuTransition() {
   assert.strictEqual(frames, 2, 'Home input must step once held and once released before the next edge');
 }
 
-Promise.all([probeDriverPolicies(), probeAuthenticatedSnapshot(), probeFramePolledMenuTransition()]).then(() => {
+async function probeLaunchWaitsForAdvancingAuthority() {
+  let servicedFrames = 0;
+  const page = {
+    evaluate: async (fn) => {
+      if (String(fn).includes('stepFrameForTest')) {
+        servicedFrames += 1;
+        return null;
+      }
+      return {
+        phase: 'playing',
+        authority: true,
+        signatureId: 'signal_storm',
+        tick: servicedFrames - 1,
+        playerStatus: 'alive',
+      };
+    },
+  };
+  const driver = new BrowserJourneyDriver({ page, artifactRoot: '/tmp' });
+  driver.enterRunThroughMenus = async () => {};
+  driver.expectedRunRules = { signature: 'signal_storm' };
+  await driver.dispatchAction('launch');
+  assert.strictEqual(servicedFrames, 2,
+    'Journey launch must not start navigation from the joined-but-unadvanced tick-zero snapshot');
+  assert(driver.getAuthorityEvents().some((event) => event.type === 'run.started'));
+}
+
+Promise.all([
+  probeDriverPolicies(),
+  probeAuthenticatedSnapshot(),
+  probeConditionReaderServicesAuthority(),
+  probeEventReaderServicesAuthority(),
+  probeFramePolledMenuTransition(),
+  probeLaunchWaitsForAdvancingAuthority(),
+]).then(() => {
   console.log('JourneyDriverContract: real input and shared movement owner PASS');
 }).catch((error) => {
   console.error(error);
