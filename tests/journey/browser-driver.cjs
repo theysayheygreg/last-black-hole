@@ -79,7 +79,7 @@ function buildNavigationSnapshot({ snapshot, player, target, policy, arrivalRadi
   const dx = wrappedDelta(player.wx, target.wx, worldScale);
   const dy = wrappedDelta(player.wy, target.wy, worldScale);
   const affordance = player.movementAffordance ? { ...player.movementAffordance } : null;
-  const rawInput = navigationInput(snapshot?.lastRemoteInput);
+  const clientLastSentInput = navigationInput(snapshot?.lastRemoteInput);
   return {
     source: 'browser-authenticated-authority',
     tick: finiteOrNull(snapshot?.tick),
@@ -100,12 +100,23 @@ function buildNavigationSnapshot({ snapshot, player, target, policy, arrivalRadi
       radius: finiteOrNull(target.radius),
     },
     canonicalDistance: wrappedDistance(player.wx, player.wy, target.wx, target.wy, worldScale),
-    rawInput,
+    clientLastSentInput,
     authorityShapedIntent: {
+      acceptedInputSeq: finiteOrNull(player.lastInputSeq),
       facing: finiteOrNull(player.facing),
       deliveredThrust: finiteOrNull(player.deliveredThrust),
       deliveredBrake: finiteOrNull(player.deliveredBrake),
       movementAffordance: affordance,
+    },
+    propulsionState: {
+      deltaV: finiteOrNull(player.deltaV),
+      deltaVMax: finiteOrNull(player.deltaVMax),
+      heatRatio: finiteOrNull(player.heatRatio),
+      overheatRemaining: finiteOrNull(player.overheatRemaining),
+      pendingInputCount: finiteOrNull(snapshot?.networkMetrics?.pendingInputCount),
+      lastAcceptedSeq: finiteOrNull(snapshot?.networkMetrics?.lastAcceptedSeq),
+      lastInputAckRttMs: finiteOrNull(snapshot?.networkMetrics?.lastInputAckRttMs),
+      lastInputToSnapshotMs: finiteOrNull(snapshot?.networkMetrics?.lastInputToSnapshotMs),
     },
     stoppingState: {
       assistActive: affordance?.stoppingAssist === true,
@@ -226,6 +237,7 @@ class BrowserJourneyDriver {
       return {
         ...(api?.getJourneyState?.() || {}),
         lastRemoteInput: api?.getNetworkState?.()?.lastRemoteInput || null,
+        networkMetrics: api?.getNetworkState?.()?.networkMetrics || null,
       };
     });
     if (!state?.session || !state?.world) {
@@ -239,6 +251,7 @@ class BrowserJourneyDriver {
       world: state.world,
       recentEvents: state.recentEvents || [],
       lastRemoteInput: state.lastRemoteInput || null,
+      networkMetrics: state.networkMetrics || null,
     };
   }
 

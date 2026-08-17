@@ -74,10 +74,12 @@ const navigationEvidence = buildNavigationSnapshot({
   snapshot: {
     session: { worldScale: 3 }, tick: 44, simTime: 2.933,
     lastRemoteInput: { seq: 9, moveX: 1, moveY: 0, thrust: 0.72, brake: 0, approachTargetId: 'wreck-7', commandCredential: 'do-not-record' },
+    networkMetrics: { pendingInputCount: 1, lastAcceptedSeq: 8, lastInputAckRttMs: 12, lastInputToSnapshotMs: 70 },
   },
   player: {
     status: 'alive', wx: 2.98, wy: 1, vx: 0.12, vy: -0.02, facing: 0.1,
-    deliveredThrust: 0.4, deliveredBrake: 0, lastInputBrake: 0,
+    deltaV: 42, deltaVMax: 60, heatRatio: 0.3, overheatRemaining: 0,
+    lastInputSeq: 8, deliveredThrust: 0.4, deliveredBrake: 0, lastInputBrake: 0,
     movementAffordance: { requestedHeading: 0.2, stoppingAssist: true, hazardAssist: false },
   },
   target: { id: 'wreck-7', wx: 0.04, wy: 1.1, radius: 0.02 },
@@ -85,8 +87,20 @@ const navigationEvidence = buildNavigationSnapshot({
 });
 assert.strictEqual(navigationEvidence.source, 'browser-authenticated-authority');
 assert.ok(navigationEvidence.canonicalDistance < 0.13, 'Navigation evidence must use canonical wrapped distance');
-assert.strictEqual(navigationEvidence.rawInput.approachTargetId, 'wreck-7');
-assert(!('commandCredential' in navigationEvidence.rawInput), 'Navigation receipts must not persist credentials');
+assert.strictEqual(navigationEvidence.clientLastSentInput.approachTargetId, 'wreck-7');
+assert(!('commandCredential' in navigationEvidence.clientLastSentInput), 'Navigation receipts must not persist credentials');
+assert.strictEqual(navigationEvidence.authorityShapedIntent.acceptedInputSeq, 8,
+  'Navigation receipts must distinguish authority-accepted input from the client last-sent packet');
+assert.deepStrictEqual(navigationEvidence.propulsionState, {
+  deltaV: 42,
+  deltaVMax: 60,
+  heatRatio: 0.3,
+  overheatRemaining: 0,
+  pendingInputCount: 1,
+  lastAcceptedSeq: 8,
+  lastInputAckRttMs: 12,
+  lastInputToSnapshotMs: 70,
+}, 'Navigation receipts must expose propulsion and input-transport truth together');
 assert.strictEqual(navigationEvidence.authorityShapedIntent.movementAffordance.stoppingAssist, true);
 assert.strictEqual(navigationEvidence.stoppingState.assistActive, true);
 assert.strictEqual(navigationEvidence.steeringWaypoint.targetId, 'wreck-7');
