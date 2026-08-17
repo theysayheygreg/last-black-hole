@@ -6,6 +6,7 @@ const {
   BrowserJourneyDriver,
   buildNavigationSnapshot,
   evaluateValues,
+  productAimClientPoint,
 } = require('./journey/browser-driver.cjs');
 
 const driverPath = path.join(__dirname, 'journey', 'browser-driver.cjs');
@@ -24,6 +25,8 @@ assert(source.includes('approachTargetId: target.id'),
   'Journey approach must pass explicit target intent into shared Phase 1A movement');
 assert(source.includes('sendRemoteInput'),
   'Journey gameplay actions must use the ordinary remote input seam');
+assert(source.includes('applyProductApproachInput') && source.includes("setHeldProductKey('Enter', approach === true)"),
+  'Journey exfil approach must hold the real browser-owned extraction input instead of racing the ambient input loop');
 assert(!source.includes('startRemoteGameNow'),
   'Journey launch must use the ordinary title/profile/Home/map-select input path');
 assert(source.includes('keyboard.down(code)') && source.includes('keyboard.up(code)') && source.includes('holdMs = 70'),
@@ -82,6 +85,15 @@ assert.strictEqual(navigationEvidence.authorityShapedIntent.movementAffordance.s
 assert.strictEqual(navigationEvidence.stoppingState.assistActive, true);
 assert.strictEqual(navigationEvidence.steeringWaypoint.targetId, 'wreck-7');
 assert.strictEqual(navigationEvidence.hazardClearance.assistActive, false);
+
+assert.deepStrictEqual(productAimClientPoint({
+  ship: { x: 640, y: 360 },
+  rect: { left: 10, top: 20, width: 640, height: 360, renderWidth: 1280, renderHeight: 720 },
+  moveX: 0,
+  moveY: 1,
+}), { x: 330, y: 290 }, 'Product aim must map render-space intent through the letterboxed canvas rectangle');
+assert.strictEqual(productAimClientPoint({ ship: null, rect: {}, moveX: 1, moveY: 0 }), null,
+  'Product aim must fail closed without canonical ship/canvas geometry');
 
 async function probeDriverPolicies() {
   const sent = [];

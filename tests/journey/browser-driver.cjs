@@ -41,6 +41,19 @@ function finiteOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function productAimClientPoint({ ship, rect, moveX, moveY, radius = 180 }) {
+  const magnitude = Math.hypot(Number(moveX) || 0, Number(moveY) || 0);
+  if (!ship || !rect || magnitude <= 1e-9 || !(rect.width > 0) || !(rect.height > 0)) return null;
+  const nx = (Number(moveX) || 0) / magnitude;
+  const ny = (Number(moveY) || 0) / magnitude;
+  const renderWidth = Math.max(1, Number(rect.renderWidth) || rect.width);
+  const renderHeight = Math.max(1, Number(rect.renderHeight) || rect.height);
+  return Object.freeze({
+    x: rect.left + ((Number(ship.x) + nx * radius) / renderWidth) * rect.width,
+    y: rect.top + ((Number(ship.y) + ny * radius) / renderHeight) * rect.height,
+  });
+}
+
 function navigationInput(input) {
   if (!input) return null;
   return {
@@ -158,6 +171,7 @@ class BrowserJourneyDriver {
     this.expectedRunRules = {};
     this.slingshotEdge = 0;
     this.lastNavigationSnapshot = null;
+    this.heldProductKeys = new Set();
   }
 
   async configureSetup(setup) {
@@ -335,6 +349,46 @@ class BrowserJourneyDriver {
     return response;
   }
 
+  async setHeldProductKey(code, held) {
+    if (held && !this.heldProductKeys.has(code)) {
+      await this.page.keyboard.down(code);
+      this.heldProductKeys.add(code);
+    } else if (!held && this.heldProductKeys.has(code)) {
+      await this.page.keyboard.up(code);
+      this.heldProductKeys.delete(code);
+    }
+  }
+
+  async applyProductApproachInput({ moveX, moveY, thrust = 0, brake = 0, approach = false }) {
+    const geometry = await this.page.evaluate(() => {
+      const canvas = document.getElementById('fluid-canvas');
+      const rect = canvas?.getBoundingClientRect?.();
+      const ship = window.__TEST_API?.getShipScreenPos?.();
+      if (!canvas || !rect || !ship) return null;
+      return {
+        ship,
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          renderWidth: canvas.width,
+          renderHeight: canvas.height,
+        },
+      };
+    });
+    const aim = productAimClientPoint({ ...geometry, moveX, moveY });
+    if (!aim) throw new Error('Journey product input has no ship/canvas aim geometry');
+    await this.page.mouse.move(aim.x, aim.y);
+    await this.setHeldProductKey('Space', Number(thrust) > 0.01);
+    await this.setHeldProductKey('ControlLeft', Number(brake) > 0.01);
+    await this.setHeldProductKey('Enter', approach === true);
+  }
+
+  async releaseProductApproachInput() {
+    for (const code of ['Space', 'ControlLeft', 'Enter']) await this.setHeldProductKey(code, false);
+  }
+
   async navigate(args = {}) {
     if (Number(args.durationMs) > 0 && !args.targetId && !args.targetPolicy) {
       const deadline = Date.now() + Math.max(100, Number(args.durationMs));
@@ -348,53 +402,71 @@ class BrowserJourneyDriver {
     const arrivalRadius = Math.max(0.01, Number(args.arrivalRadius) || (args.targetKind === 'portal' ? 0.05 : 0.07));
     const arrivalSpeed = Number(args.arrivalSpeed) || 0.08;
     this.lastNavigationSnapshot = null;
-    while (Date.now() < deadline) {
-      const snapshot = await this.snapshot();
-      const player = await this.player(snapshot);
-      if (!player || player.status !== 'alive') {
-        if (args.allowTerminal && player && player.status !== 'alive') return { terminal: player.status };
-        throw new Error('Journey navigation requires a live authoritative player');
-      }
-      const target = this.findTarget(snapshot, player, args);
-      if (!target) throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
-      this.activeTarget = target.id;
-      const worldScale = snapshot.session.worldScale;
-      const dx = wrappedDelta(player.wx, target.wx, worldScale);
-      const dy = wrappedDelta(player.wy, target.wy, worldScale);
-      const distance = Math.hypot(dx, dy);
-      const speed = Math.hypot(player.vx, player.vy);
-      const navigationPolicy = String(args.policy || 'straight-line');
-      this.lastNavigationSnapshot = buildNavigationSnapshot({
-        snapshot,
-        player,
-        target,
-        policy: navigationPolicy,
-        arrivalRadius,
-        arrivalSpeed,
-      });
-      if (navigationPolicy === 'slingshot' && distance <= (Number(args.arrivalRadius) || 0.12) && speed >= 0.08) {
-        return { targetId: target.id, distance, speed, policy: navigationPolicy };
-      }
-      if (distance <= arrivalRadius && speed <= arrivalSpeed) {
-        if (navigationPolicy === 'well-intercept') {
-          await this.sendInput({ moveX: dx / Math.max(1e-9, distance), moveY: dy / Math.max(1e-9, distance), thrust: 0.9 });
-          await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
-          continue;
+    const productExfil = String(args.targetPolicy || '').includes('exfil')
+      || String(args.targetPolicy || '').includes('portal');
+    try {
+      while (Date.now() < deadline) {
+        const snapshot = await this.snapshot();
+        const player = await this.player(snapshot);
+        if (!player || player.status !== 'alive') {
+          if (args.allowTerminal && player && player.status !== 'alive') return { terminal: player.status };
+          throw new Error('Journey navigation requires a live authoritative player');
         }
-        await this.sendInput({ brake: 1, approachTargetId: target.id });
-        return { targetId: target.id, distance, speed };
+        const target = this.findTarget(snapshot, player, args);
+        if (!target) throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
+        this.activeTarget = target.id;
+        const worldScale = snapshot.session.worldScale;
+        const dx = wrappedDelta(player.wx, target.wx, worldScale);
+        const dy = wrappedDelta(player.wy, target.wy, worldScale);
+        const distance = Math.hypot(dx, dy);
+        const speed = Math.hypot(player.vx, player.vy);
+        const navigationPolicy = String(args.policy || 'straight-line');
+        this.lastNavigationSnapshot = buildNavigationSnapshot({
+          snapshot,
+          player,
+          target,
+          policy: navigationPolicy,
+          arrivalRadius,
+          arrivalSpeed,
+        });
+        if (navigationPolicy === 'slingshot' && distance <= (Number(args.arrivalRadius) || 0.12) && speed >= 0.08) {
+          return { targetId: target.id, distance, speed, policy: navigationPolicy };
+        }
+        if (distance <= arrivalRadius && speed <= arrivalSpeed) {
+          if (navigationPolicy === 'well-intercept') {
+            await this.sendInput({ moveX: dx / Math.max(1e-9, distance), moveY: dy / Math.max(1e-9, distance), thrust: 0.9 });
+            await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
+            continue;
+          }
+          if (productExfil) {
+            await this.applyProductApproachInput({ moveX: dx, moveY: dy, brake: 1, approach: true });
+            await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
+          } else {
+            await this.sendInput({ brake: 1, approachTargetId: target.id });
+          }
+          return { targetId: target.id, distance, speed };
+        }
+        const magnitude = Math.max(1e-9, Math.hypot(dx, dy));
+        const movement = {
+          moveX: dx / magnitude,
+          moveY: dy / magnitude,
+          thrust: Math.max(0, Math.min(1, Number(args.thrust) || (navigationPolicy === 'slingshot' ? 0.88 : 0.72))),
+          brake: 0,
+        };
+        if (productExfil) {
+          await this.applyProductApproachInput({ ...movement, approach: true });
+        } else {
+          await this.sendInput({
+            ...movement,
+            approachTargetId: String(args.targetPolicy || '').includes('well') ? null : target.id,
+          });
+        }
+        await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
       }
-      const magnitude = Math.max(1e-9, Math.hypot(dx, dy));
-      await this.sendInput({
-        moveX: dx / magnitude,
-        moveY: dy / magnitude,
-        thrust: Math.max(0, Math.min(1, Number(args.thrust) || (navigationPolicy === 'slingshot' ? 0.88 : 0.72))),
-        brake: 0,
-        approachTargetId: String(args.targetPolicy || '').includes('well') ? null : target.id,
-      });
-      await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
+      throw new Error(`Journey navigation timed out for ${this.activeTarget || args.targetKind || 'target'}`);
+    } finally {
+      if (productExfil) await this.releaseProductApproachInput();
     }
-    throw new Error(`Journey navigation timed out for ${this.activeTarget || args.targetKind || 'target'}`);
   }
 
   async dispatchAction(action, args = {}) {
@@ -570,4 +642,10 @@ class BrowserJourneyDriver {
   getArtifactManifest() { return []; }
 }
 
-module.exports = { BrowserJourneyConditionReader, BrowserJourneyDriver, buildNavigationSnapshot, evaluateValues };
+module.exports = {
+  BrowserJourneyConditionReader,
+  BrowserJourneyDriver,
+  buildNavigationSnapshot,
+  evaluateValues,
+  productAimClientPoint,
+};
