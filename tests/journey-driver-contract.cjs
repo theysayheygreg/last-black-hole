@@ -41,6 +41,10 @@ assert(source.includes('journeySeq') && source.includes('syntheticEventCursor'),
   'Journey synthetic events must be consumed in sequence across relaunches');
 assert(source.includes("navigationPolicy === 'slingshot'") && source.includes("navigationPolicy === 'well-intercept'"),
   'Journey movement policies must have executable shared-input behavior');
+assert(source.includes("String(args.targetPolicy || '') === 'next-available-exfil'"),
+  'The next-available-exfil policy must wait through honest closed-aperture intervals');
+assert(source.includes('this.heldProductKeys.size > 0') && source.includes('await this.releaseProductApproachInput()'),
+  'Waiting between exfil windows must not keep stale product thrust or interaction input held');
 assert(!source.includes('arrivalRadius * 2') && source.includes('approachTargetId: String(args.targetPolicy'),
   'Journey must delegate hazard clearance and stopping to shared explicit-target movement');
 assert(!source.includes('/debug/player-state'),

@@ -14,7 +14,7 @@ function run() {
   const runtime = {
     session: { status: "running", runDurationSeconds: 600 },
     simTime: 150,
-    mapState: { portals: [{ id: "exit-1", type: "exit", alive: true }] },
+    mapState: { portals: [{ id: "optional-1", type: "standard", alive: true }] },
     players: new Map(),
   };
   const player = {
@@ -46,6 +46,9 @@ function run() {
   assert.strictEqual(store.read("run.hull.integrity", context), 0.75);
   assert.strictEqual(store.read("run.heat.ratio", context), 0.4);
   assert.strictEqual(store.read("run.extraction.state", context), "available");
+  runtime.mapState.portals[0].alive = false;
+  assert.strictEqual(store.read("run.extraction.state", context), "unavailable");
+  runtime.mapState.portals[0].alive = true;
   assert.strictEqual(store.read("run.map.cycleProgress", context), 0.25);
   assert.strictEqual(store.read("run.contacts.count", context), 2);
   assert.strictEqual(store.read("run.noise.radiusMeters", context), 12);

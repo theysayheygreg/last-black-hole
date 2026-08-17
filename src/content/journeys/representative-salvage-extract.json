@@ -27,6 +27,7 @@
     { "id": "emit-noise", "action": "emitPulse", "args": {} },
     { "id": "noise-consequence", "waitForCondition": { "condition": "run.noise.radiusMeters", "gt": 0 }, "timeoutMs": 10000, "pollMs": 100 },
     { "id": "contact-consequence", "waitForCondition": { "condition": "run.contacts.count", "gte": 1 }, "timeoutMs": 30000, "pollMs": 200 },
+    { "id": "exfil-available", "waitForCondition": { "condition": "run.extraction.state", "equals": "available" }, "timeoutMs": 120000, "pollMs": 200 },
     { "id": "approach-exfil", "routine": "approach", "args": { "targetPolicy": "next-available-exfil" }, "target": { "policy": "next-available-exfil" } },
     { "id": "exfil-confirmable", "waitForCondition": { "condition": "run.extraction.state", "equals": "confirmable" }, "timeoutMs": 60000, "pollMs": 100 },
     { "id": "extract", "routine": "extract", "args": {} },

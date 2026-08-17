@@ -4,7 +4,6 @@ const {
   getConditionDefinition,
   validateConditionValue,
 } = require("../../src/conditions/index.js");
-const { isExfilPortal } = require("./public-snapshot.cjs");
 
 function clamp(value, minimum, maximum) {
   const numeric = Number(value);
@@ -42,8 +41,12 @@ function extractionState({ runtime, player }) {
   if (player?.status && player.status !== "alive") return "expired";
   if (player?.portalInteraction?.ready) return "confirmable";
   if (player?.portalInteraction) return "approaching";
-  const hasExfil = (runtime.mapState?.portals || []).some(isExfilPortal);
-  return hasExfil ? "available" : "unavailable";
+  // Every live portal is an extraction aperture. `isExfilPortal` is the
+  // narrower audible/final-EXFIL presentation classification and must not
+  // hide ordinary optional exits from product availability truth.
+  const hasAvailablePortal = (runtime.mapState?.portals || [])
+    .some((portal) => portal && portal.alive !== false);
+  return hasAvailablePortal ? "available" : "unavailable";
 }
 
 function createSimDerivedConditionProviders({ getRuntime } = {}) {

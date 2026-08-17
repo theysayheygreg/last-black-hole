@@ -451,7 +451,14 @@ class BrowserJourneyDriver {
           throw new Error('Journey navigation requires a live authoritative player');
         }
         const target = this.findTarget(snapshot, player, args);
-        if (!target) throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
+        if (!target) {
+          if (String(args.targetPolicy || '') === 'next-available-exfil') {
+            if (this.heldProductKeys.size > 0) await this.releaseProductApproachInput();
+            await sleep(Math.max(50, Number(this.policy?.inputCadenceMs) || 120));
+            continue;
+          }
+          throw new Error(`Journey target unavailable: ${args.targetId || args.targetKind || 'nearest'}`);
+        }
         this.activeTarget = target.id;
         const worldScale = snapshot.session.worldScale;
         const dx = wrappedDelta(player.wx, target.wx, worldScale);

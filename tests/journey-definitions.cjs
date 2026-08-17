@@ -41,7 +41,9 @@ async function main() {
   assert(representative?.knownFailure, 'Natural representative route must carry an explicit known-failure record');
   assert(representative.steps.some((step) => step.waitForCondition?.condition === 'run.cargo.count'));
   assert(representative.steps.some((step) => step.waitForCondition?.condition === 'run.noise.radiusMeters'));
-  assert(representative.steps.some((step) => step.waitForCondition?.condition === 'run.extraction.state'));
+  const extractionWaits = representative.steps.filter((step) => step.waitForCondition?.condition === 'run.extraction.state');
+  assert.deepStrictEqual(extractionWaits.map((step) => step.waitForCondition.equals), ['available', 'confirmable'],
+    'Representative route must wait for a real aperture before approaching, then for authority confirmation');
   assert(representative.steps.some((step) => step.assertCondition?.condition === 'pilot.chronicle.cargoExtracted'));
 
   for (const mapId of ['shallows', 'expanse', 'deep-field']) {
