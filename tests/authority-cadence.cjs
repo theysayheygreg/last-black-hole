@@ -44,6 +44,18 @@ async function postJson(path, payload) {
   return { status: response.status, body: await response.json() };
 }
 
+async function parkCadencePilot(clientId, anchor) {
+  const parked = await postJson("/debug/player-state", {
+    clientId,
+    wx: anchor.wx,
+    wy: anchor.wy,
+    vx: 0,
+    vy: 0,
+  });
+  assert(parked.status === 200 && parked.body.ok,
+    `${clientId}: expected cadence fixture pilot hold`);
+}
+
 async function measure(mapId, seed) {
   await startSimServer(SIM_PORT, { keepAlive: true });
   try {
@@ -62,6 +74,13 @@ async function measure(mapId, seed) {
     });
     assert(join.status === 200 && join.body.ok, `${mapId}: expected authority join`);
 
+    // Cadence is a scheduler receipt, not an autonomous-survival journey.
+    // Keep the joined human at its authority-selected safe spawn so gravity
+    // cannot end the bounded session halfway through the wall-clock sample.
+    const clientId = `cadence-${mapId}`;
+    const anchor = { wx: join.body.player.wx, wy: join.body.player.wy };
+    await parkCadencePilot(clientId, anchor);
+
     await sleep(750);
     const baseline = await getJson("/health");
     const tickStart = baseline.body.tick;
@@ -72,9 +91,13 @@ async function measure(mapId, seed) {
     let lastHealth = baseline;
 
     for (let index = 0; index < SAMPLE_COUNT; index += 1) {
+      await parkCadencePilot(clientId, anchor);
       const snapshot = await getJson("/snapshot");
       const health = await getJson("/health");
       assert(snapshot.status === 200 && health.status === 200, `${mapId}: authority endpoints must stay healthy`);
+      const pilot = snapshot.body.players?.find((player) => player.clientId === clientId);
+      assert(snapshot.body.session?.status === "running" && pilot?.status === "alive",
+        `${mapId}: cadence fixture session ended before the timing sample completed`);
       snapshotLatencyMs.push(snapshot.elapsedMs);
       snapshotBytes.push(snapshot.bytes);
       ballparkSyncMs.push(Number(health.body.ballpark?.lastRebuildMs) || 0);
